@@ -1,7 +1,9 @@
+use std::cmp::max;
+use std::cmp::min;
+
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
-use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
@@ -17,7 +19,6 @@ use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::PropagationStatusCP;
-use pumpkin_core::state::propagator_conflict;
 use pumpkin_core::variables::IntegerVariable;
 
 declare_inference_label!(IntegerMultiplication);
@@ -71,9 +72,7 @@ where
     }
 }
 
-/// A propagator for maintaining the constraint `a * b = c`. The propagator
-/// (currently) only propagates the signs of the variables, the case where a, b, c >= 0, and detects
-/// a conflict if the variables are fixed.
+/// A bounds-consistent propagator for the constraint `a * b = c`.
 #[derive(Clone, Debug)]
 pub struct IntegerMultiplicationPropagator<VA, VB, VC> {
     a: VA,
@@ -113,106 +112,544 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     c: &VC,
     inference_code: &InferenceCode,
 ) -> PropagationStatusCP {
-    // First we propagate the signs
+    // First the propagation of the signs
     propagate_signs(&mut context, a, b, c, inference_code)?;
 
-    let a_min = context.lower_bound(a);
-    let a_max = context.upper_bound(a);
-    let b_min = context.lower_bound(b);
-    let b_max = context.upper_bound(b);
-    let c_min = context.lower_bound(c);
-    let c_max = context.upper_bound(c);
+    let mut a_min = context.lower_bound(a);
+    let mut a_max = context.upper_bound(a);
+    let mut b_min = context.lower_bound(b);
+    let mut b_max = context.upper_bound(b);
 
-    if a_min >= 0 && b_min >= 0 {
-        let new_max_c = a_max.saturating_mul(b_max);
-        let new_min_c = a_min.saturating_mul(b_min);
-
-        // c is smaller than the maximum value that a * b can take
-        //
-        // We need the lower-bounds in the explanation as well because the reasoning does not
-        // hold in the case of a negative lower-bound
-        context.post(
-            predicate![c <= new_max_c],
-            (
-                conjunction!([a >= 0] & [a <= a_max] & [b >= 0] & [b <= b_max]),
-                inference_code,
-            ),
-        )?;
-
-        // c is larger than the minimum value that a * b can take
-        context.post(
-            predicate![c >= new_min_c],
-            (conjunction!([a >= a_min] & [b >= b_min]), inference_code),
-        )?;
-    }
-
-    if b_min >= 0 && b_max >= 1 && c_min >= 1 {
-        // a >= ceil(c.min / b.max)
-        let bound = div_ceil_pos(c_min, b_max);
-        context.post(
-            predicate![a >= bound],
-            (
-                conjunction!([c >= c_min] & [b >= 0] & [b <= b_max]),
-                inference_code,
-            ),
-        )?;
-    }
-
-    if b_min >= 1 && c_min >= 0 && c_max >= 1 {
-        // a <= floor(c.max / b.min)
-        let bound = c_max / b_min;
-        context.post(
-            predicate![a <= bound],
-            (
-                conjunction!([c >= 0] & [c <= c_max] & [b >= b_min]),
-                inference_code,
-            ),
-        )?;
-    }
-
-    if a_min >= 1 && c_min >= 0 && c_max >= 1 {
-        // b <= floor(c.max / a.min)
-        let bound = c_max / a_min;
-        context.post(
-            predicate![b <= bound],
-            (
-                conjunction!([c >= 0] & [c <= c_max] & [a >= a_min]),
-                inference_code,
-            ),
-        )?;
-    }
-
-    // b >= ceil(c.min / a.max)
-    if a_min >= 0 && a_max >= 1 && c_min >= 1 {
-        let bound = div_ceil_pos(c_min, a_max);
-
-        context.post(
-            predicate![b >= bound],
-            (
-                conjunction!([c >= c_min] & [a >= 0] & [a <= a_max]),
-                inference_code,
-            ),
-        )?;
-    }
-
-    if let Some(fixed_a) = context.fixed_value(a)
-        && let Some(fixed_b) = context.fixed_value(b)
-        && let Some(fixed_c) = context.fixed_value(c)
-        && (fixed_a * fixed_b) != fixed_c
-    {
-        // All variables are assigned but the resulting value is not correct, so we report a
-        // conflict
-        return propagator_conflict(
-            conjunction!(
-                [a == context.lower_bound(a)]
-                    & [b == context.lower_bound(b)]
-                    & [c == context.lower_bound(c)]
-            ),
+    // In achieving bounds consistency, the easier part is to propagate from a, b -> c
+    // because c is bounded by all four corners using lower and upper bounds from a and b
+    // c_ub <= max(a_lb * b_lb, a_lb * b_ub, a_ub * b_lb, a_ub * b_ub) and
+    // c_lb >= min(a_lb * b_lb, a_lb * b_ub, a_ub * b_lb, a_ub * b_ub)
+    context.post(
+        predicate![
+            c <= max(
+                max(a_min.saturating_mul(b_min), a_min.saturating_mul(b_max)),
+                max(a_max.saturating_mul(b_min), a_max.saturating_mul(b_max))
+            )
+        ],
+        (
+            conjunction!([a >= a_min] & [a <= a_max] & [b >= b_min] & [b <= b_max]),
             inference_code,
-        );
+        ),
+    )?;
+    context.post(
+        predicate![
+            c >= min(
+                min(a_min.saturating_mul(b_min), a_min.saturating_mul(b_max)),
+                min(a_max.saturating_mul(b_min), a_max.saturating_mul(b_max))
+            )
+        ],
+        (
+            conjunction!([a >= a_min] & [a <= a_max] & [b >= b_min] & [b <= b_max]),
+            inference_code,
+        ),
+    )?;
+
+    // avoiding stale reads
+    let mut c_min = context.lower_bound(c);
+    let mut c_max = context.upper_bound(c);
+
+    // For going c, b -> a division needs to be used which makes it less trivial.
+
+    // If they both contain 0, skip propagation from c, b -> a because
+    // it is impossible to bound `a` in this scenario because `0 * x = 0` for any `x`.
+    if !((b_min <= 0 && b_max >= 0) && (c_min <= 0 && c_max >= 0)) {
+        // need to check if b_min or b_max is exactly 0 to prevent division by zero.
+        // this is possible because in this if block it is known c can't be 0.
+        if b_min == 0 {
+            context.post(
+                predicate![b >= 1],
+                (
+                    conjunction!([b >= b_min] & [c >= c_min] & [c <= c_max]),
+                    inference_code,
+                ),
+            )?;
+        }
+        if b_max == 0 {
+            context.post(
+                predicate![b <= -1],
+                (
+                    conjunction!([b <= b_max] & [c >= c_min] & [c <= c_max]),
+                    inference_code,
+                ),
+            )?;
+        }
+
+        // need to re-read it to make sure to prevent division by 0
+        b_min = context.lower_bound(b);
+        b_max = context.upper_bound(b);
+
+        // if b does not contain 0 it is trivial, just the same idea with some care with rounding
+        if b_min > 0 || b_max < 0 {
+            context.post(
+                predicate![
+                    a <= max(
+                        max(floor_div(c_min, b_min), floor_div(c_min, b_max)),
+                        max(floor_div(c_max, b_min), floor_div(c_max, b_max))
+                    )
+                ],
+                (
+                    conjunction!([c >= c_min] & [c <= c_max] & [b >= b_min] & [b <= b_max]),
+                    inference_code,
+                ),
+            )?;
+            context.post(
+                predicate![
+                    a >= min(
+                        min(ceil_div(c_min, b_min), ceil_div(c_min, b_max)),
+                        min(ceil_div(c_max, b_min), ceil_div(c_max, b_max))
+                    )
+                ],
+                (
+                    conjunction!([c >= c_min] & [c <= c_max] & [b >= b_min] & [b <= b_max]),
+                    inference_code,
+                ),
+            )?;
+        }
+        // If b contains 0 but c does not, just using the four endpoint divisions can over-prune.
+        // Values close to 0 (-1 or 1 in this case because this propagator uses integers) can
+        // give the actual min/max, so they need to be considered separately.
+        else {
+            let initial_max = max(
+                max(floor_div(c_min, b_min), floor_div(c_min, b_max)),
+                max(floor_div(c_max, b_min), floor_div(c_max, b_max)),
+            );
+            let other_possible_max = max(
+                max(c_min, c_min.saturating_mul(-1)),
+                max(c_max, c_max.saturating_mul(-1)),
+            );
+            context.post(
+                predicate![a <= max(initial_max, other_possible_max)],
+                (
+                    conjunction!([c >= c_min] & [c <= c_max] & [b >= b_min] & [b <= b_max]),
+                    inference_code,
+                ),
+            )?;
+
+            let initial_min = min(
+                min(ceil_div(c_min, b_min), ceil_div(c_min, b_max)),
+                min(ceil_div(c_max, b_min), ceil_div(c_max, b_max)),
+            );
+            let other_possible_min = min(
+                min(c_min, c_min.saturating_mul(-1)),
+                min(c_max, c_max.saturating_mul(-1)),
+            );
+            context.post(
+                predicate![a >= min(initial_min, other_possible_min)],
+                (
+                    conjunction!([c >= c_min] & [c <= c_max] & [b >= b_min] & [b <= b_max]),
+                    inference_code,
+                ),
+            )?;
+        }
     }
 
+    // avoiding stale read again
+    a_min = context.lower_bound(a);
+    a_max = context.upper_bound(a);
+
+    // Now going from c, a -> b the exact same as c, b -> a
+    // only difference is variable renaming
+    if !((a_min <= 0 && a_max >= 0) && (c_min <= 0 && c_max >= 0)) {
+        if a_min == 0 {
+            context.post(
+                predicate![a >= 1],
+                (
+                    conjunction!([a >= a_min] & [c >= c_min] & [c <= c_max]),
+                    inference_code,
+                ),
+            )?;
+        }
+        if a_max == 0 {
+            context.post(
+                predicate![a <= -1],
+                (
+                    conjunction!([a <= a_max] & [c >= c_min] & [c <= c_max]),
+                    inference_code,
+                ),
+            )?;
+        }
+
+        a_min = context.lower_bound(a);
+        a_max = context.upper_bound(a);
+
+        if a_min > 0 || a_max < 0 {
+            context.post(
+                predicate![
+                    b <= max(
+                        max(floor_div(c_min, a_min), floor_div(c_min, a_max)),
+                        max(floor_div(c_max, a_min), floor_div(c_max, a_max))
+                    )
+                ],
+                (
+                    conjunction!([c >= c_min] & [c <= c_max] & [a >= a_min] & [a <= a_max]),
+                    inference_code,
+                ),
+            )?;
+            context.post(
+                predicate![
+                    b >= min(
+                        min(ceil_div(c_min, a_min), ceil_div(c_min, a_max)),
+                        min(ceil_div(c_max, a_min), ceil_div(c_max, a_max))
+                    )
+                ],
+                (
+                    conjunction!([c >= c_min] & [c <= c_max] & [a >= a_min] & [a <= a_max]),
+                    inference_code,
+                ),
+            )?;
+        } else {
+            let initial_max = max(
+                max(floor_div(c_min, a_min), floor_div(c_min, a_max)),
+                max(floor_div(c_max, a_min), floor_div(c_max, a_max)),
+            );
+            let other_possible_max = max(
+                max(c_min, c_min.saturating_mul(-1)),
+                max(c_max, c_max.saturating_mul(-1)),
+            );
+            context.post(
+                predicate![b <= max(initial_max, other_possible_max)],
+                (
+                    conjunction!([c >= c_min] & [c <= c_max] & [a >= a_min] & [a <= a_max]),
+                    inference_code,
+                ),
+            )?;
+
+            let initial_min = min(
+                min(ceil_div(c_min, a_min), ceil_div(c_min, a_max)),
+                min(ceil_div(c_max, a_min), ceil_div(c_max, a_max)),
+            );
+            let other_possible_min = min(
+                min(c_min, c_min.saturating_mul(-1)),
+                min(c_max, c_max.saturating_mul(-1)),
+            );
+            context.post(
+                predicate![b >= min(initial_min, other_possible_min)],
+                (
+                    conjunction!([c >= c_min] & [c <= c_max] & [a >= a_min] & [a <= a_max]),
+                    inference_code,
+                ),
+            )?;
+        }
+    }
+
+    // b posted so read it to avoid stale read again
+    b_min = context.lower_bound(b);
+    b_max = context.upper_bound(b);
+
+    // Bound points might not be in the result set, hence additional checks are needed.
+    // The checks use a linear scan inward until a support is found, this can be costly in
+    // some edge cases where the scan searches for a support for a big prime number.
+    // This is a brute-force way of finding supports but it works cleanly for
+    // most numbers because the initial pruning eliminates most of the possible values.
+
+    // for lower bound of a
+    while (a_min <= a_max) && (!has_support_for_fixed_factor(a_min, b_min, b_max, c_min, c_max)) {
+        if a_min == i32::MAX {
+            context.post(
+                predicate![a != a_min],
+                (
+                    conjunction!(
+                        [a == a_min] & [b >= b_min] & [b <= b_max] & [c >= c_min] & [c <= c_max]
+                    ),
+                    inference_code,
+                ),
+            )?;
+        } else {
+            context.post(
+                predicate![a >= a_min.saturating_add(1)],
+                (
+                    conjunction!(
+                        [a >= a_min] & [b >= b_min] & [b <= b_max] & [c >= c_min] & [c <= c_max]
+                    ),
+                    inference_code,
+                ),
+            )?;
+        }
+
+        a_min = context.lower_bound(a);
+        a_max = context.upper_bound(a);
+    }
+
+    // for upper bound of a
+    while (a_min <= a_max) && (!has_support_for_fixed_factor(a_max, b_min, b_max, c_min, c_max)) {
+        if a_max == i32::MIN {
+            context.post(
+                predicate![a != a_max],
+                (
+                    conjunction!(
+                        [a == a_max] & [b >= b_min] & [b <= b_max] & [c >= c_min] & [c <= c_max]
+                    ),
+                    inference_code,
+                ),
+            )?;
+        } else {
+            context.post(
+                predicate![a <= a_max.saturating_sub(1)],
+                (
+                    conjunction!(
+                        [a <= a_max] & [b >= b_min] & [b <= b_max] & [c >= c_min] & [c <= c_max]
+                    ),
+                    inference_code,
+                ),
+            )?;
+        }
+
+        a_min = context.lower_bound(a);
+        a_max = context.upper_bound(a);
+    }
+
+    // for lower bound of b
+    while (b_min <= b_max) && !has_support_for_fixed_factor(b_min, a_min, a_max, c_min, c_max) {
+        if b_min == i32::MAX {
+            context.post(
+                predicate![b != b_min],
+                (
+                    conjunction!(
+                        [b == b_min] & [a >= a_min] & [a <= a_max] & [c >= c_min] & [c <= c_max]
+                    ),
+                    inference_code,
+                ),
+            )?;
+        } else {
+            context.post(
+                predicate![b >= b_min.saturating_add(1)],
+                (
+                    conjunction!(
+                        [b >= b_min] & [a >= a_min] & [a <= a_max] & [c >= c_min] & [c <= c_max]
+                    ),
+                    inference_code,
+                ),
+            )?;
+        }
+
+        b_min = context.lower_bound(b);
+        b_max = context.upper_bound(b);
+    }
+
+    // for upper bound of b
+    while (b_min <= b_max) && !has_support_for_fixed_factor(b_max, a_min, a_max, c_min, c_max) {
+        if b_max == i32::MIN {
+            context.post(
+                predicate![b != b_max],
+                (
+                    conjunction!(
+                        [b == b_max] & [a >= a_min] & [a <= a_max] & [c >= c_min] & [c <= c_max]
+                    ),
+                    inference_code,
+                ),
+            )?;
+        } else {
+            context.post(
+                predicate![b <= b_max.saturating_sub(1)],
+                (
+                    conjunction!(
+                        [b <= b_max] & [a >= a_min] & [a <= a_max] & [c >= c_min] & [c <= c_max]
+                    ),
+                    inference_code,
+                ),
+            )?;
+        }
+
+        b_min = context.lower_bound(b);
+        b_max = context.upper_bound(b);
+    }
+
+    // for lower bound of c
+    while (c_min <= c_max) && (!has_support_for_c_bound(c_min, a_min, a_max, b_min, b_max)) {
+        if c_min == i32::MAX {
+            context.post(
+                predicate![c != c_min],
+                (
+                    conjunction!(
+                        [c == c_min] & [a >= a_min] & [a <= a_max] & [b >= b_min] & [b <= b_max]
+                    ),
+                    inference_code,
+                ),
+            )?;
+        } else {
+            context.post(
+                predicate![c >= c_min.saturating_add(1)],
+                (
+                    conjunction!(
+                        [c >= c_min] & [a >= a_min] & [a <= a_max] & [b >= b_min] & [b <= b_max]
+                    ),
+                    inference_code,
+                ),
+            )?;
+        }
+
+        c_min = context.lower_bound(c);
+        c_max = context.upper_bound(c);
+    }
+
+    // for upper bound of c
+    while (c_min <= c_max) && (!has_support_for_c_bound(c_max, a_min, a_max, b_min, b_max)) {
+        if c_max == i32::MIN {
+            context.post(
+                predicate![c != c_max],
+                (
+                    conjunction!(
+                        [c == c_max] & [a >= a_min] & [a <= a_max] & [b >= b_min] & [b <= b_max]
+                    ),
+                    inference_code,
+                ),
+            )?;
+        } else {
+            context.post(
+                predicate![c <= c_max.saturating_sub(1)],
+                (
+                    conjunction!(
+                        [c <= c_max] & [a >= a_min] & [a <= a_max] & [b >= b_min] & [b <= b_max]
+                    ),
+                    inference_code,
+                ),
+            )?;
+        }
+
+        c_min = context.lower_bound(c);
+        c_max = context.upper_bound(c);
+    }
     Ok(())
+}
+
+/// Computes ceiling of integer division `num / den`.
+/// Handles `num == i32::MIN && den == -1` by returning `i32::MAX` to avoid overflow.
+fn ceil_div(num: i32, den: i32) -> i32 {
+    // Edge case check
+    if num == i32::MIN && den == -1 {
+        return i32::MAX;
+    }
+
+    let mut ans = num.saturating_div(den);
+    let remainder = num % den;
+
+    if remainder != 0 && ((num > 0 && den > 0) || (num < 0 && den < 0)) {
+        ans = ans.saturating_add(1);
+    }
+
+    ans
+}
+
+/// Computes floor of integer division `num / den`.
+/// Handles `num == i32::MIN && den == -1` by returning `i32::MAX` to avoid overflow.
+fn floor_div(num: i32, den: i32) -> i32 {
+    // Edge case check
+    if num == i32::MIN && den == -1 {
+        return i32::MAX;
+    }
+
+    let mut ans = num.saturating_div(den);
+    let remainder = num % den;
+
+    if remainder != 0 && ((num < 0 && den > 0) || (num > 0 && den < 0)) {
+        ans = ans.saturating_sub(1);
+    }
+
+    ans
+}
+
+/// Checks if a fixed value of a or b can produce a product inside `[c_min, c_max]`
+/// with some value in `[other_min, other_max]` to ensure bounds-consistency.
+fn has_support_for_fixed_factor(
+    fixed_value: i32,
+    other_min: i32,
+    other_max: i32,
+    c_min: i32,
+    c_max: i32,
+) -> bool {
+    if fixed_value == 0 {
+        return c_min <= 0 && c_max >= 0;
+    }
+
+    let mut lower_bound_with_fixed_value = ceil_div(c_min, fixed_value);
+    let mut upper_bound_with_fixed_value = floor_div(c_max, fixed_value);
+    if fixed_value < 0 {
+        lower_bound_with_fixed_value = ceil_div(c_max, fixed_value);
+        upper_bound_with_fixed_value = floor_div(c_min, fixed_value);
+    }
+
+    // If this interval is empty, the fixed value cannot be supported.
+    if lower_bound_with_fixed_value > upper_bound_with_fixed_value {
+        return false;
+    }
+
+    if (other_min <= lower_bound_with_fixed_value && other_max >= lower_bound_with_fixed_value)
+        || (other_max >= upper_bound_with_fixed_value && other_min <= upper_bound_with_fixed_value)
+        || (other_min >= lower_bound_with_fixed_value && other_max <= upper_bound_with_fixed_value)
+    {
+        return true;
+    }
+
+    false
+}
+
+/// Checks if a candidate value of c can be achieved by some `a_val * b_val`
+/// where `a_val` is in `[a_min, a_max]` and `b_val` is in `[b_min, b_max]`.
+/// Scans the smaller of the two factor intervals to find a divisor.
+/// This is a brute-force way of ensuring the support but it works sufficiently
+/// because the initial pruning eliminates most possible values and the iteration
+/// is made through the smaller interval.
+fn has_support_for_c_bound(c_value: i32, a_min: i32, a_max: i32, b_min: i32, b_max: i32) -> bool {
+    if c_value == 0 {
+        // this can happen if at least one has 0 in their domain
+        return (a_min <= 0 && a_max >= 0) || (b_min <= 0 && b_max >= 0);
+    }
+
+    // i64 is used here because it can overflow if the upper bound is
+    // very large and the lower bound is very small
+    let a_size = (a_max as i64) - (a_min as i64);
+    let b_size = (b_max as i64) - (b_min as i64);
+
+    if a_size <= b_size {
+        let mut ctr = a_min;
+
+        while ctr <= a_max {
+            // Edge case check
+            if ctr != 0 && !(c_value == i32::MIN && ctr == -1) && c_value % ctr == 0 {
+                // no ceil or floor needed because it is an exact division here
+                let is_this_in_the_set = c_value / ctr;
+                if is_this_in_the_set >= b_min && is_this_in_the_set <= b_max {
+                    return true;
+                }
+            }
+
+            // Avoid infinite loops
+            if ctr == i32::MAX {
+                break;
+            }
+
+            ctr = ctr.saturating_add(1);
+        }
+    }
+    // Else case is nearly the same, just variable changes
+    else {
+        let mut ctr = b_min;
+
+        while ctr <= b_max {
+            // Edge case check again
+            if ctr != 0 && !(c_value == i32::MIN && ctr == -1) && c_value % ctr == 0 {
+                // No ceil or floor needed because it is an exact division here
+                let is_this_in_the_set = c_value / ctr;
+                if is_this_in_the_set >= a_min && is_this_in_the_set <= a_max {
+                    return true;
+                }
+            }
+
+            // Avoid infinite loops
+            if ctr == i32::MAX {
+                break;
+            }
+
+            ctr = ctr.saturating_add(1);
+        }
+    }
+
+    false
 }
 
 /// Propagates the signs of the variables, it performs the following propagations:
@@ -356,18 +793,6 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     Ok(())
 }
 
-/// Compute `ceil(numerator / denominator)`.
-///
-/// Assumes `numerator, denominator > 0`.
-#[inline]
-fn div_ceil_pos(numerator: i32, denominator: i32) -> i32 {
-    pumpkin_assert_simple!(
-        numerator > 0 && denominator > 0,
-        "Either the numerator {numerator} was non-positive or the denominator {denominator} was non-positive"
-    );
-    numerator / denominator + (numerator % denominator).signum()
-}
-
 #[derive(Clone, Debug)]
 pub struct IntegerMultiplicationChecker<VA, VB, VC> {
     pub a: VA,
@@ -409,7 +834,108 @@ where
         let computed_c_lower = x1y1.min(x1y2).min(x2y1).min(x2y2);
         let computed_c_upper = x1y1.max(x1y2).max(x2y1).max(x2y2);
 
-        computed_c_upper < c_lower || computed_c_lower > c_upper
+        if computed_c_upper < c_lower || computed_c_lower > c_upper {
+            return true;
+        }
+
+        // The corner check above can miss a conflict when one of the factors crosses 0.
+        // When that happens the interval arithmetic can become -inf to +inf which always
+        // intersects with c even if the negative and positive parts are both impossible.
+        // To prevent that, it splits the crossed boundary to negative, positive and the 0 part
+        let zero = pumpkin_checking::IntExt::Int(0);
+        let neg_one = pumpkin_checking::IntExt::Int(-1);
+        let one = pumpkin_checking::IntExt::Int(1);
+
+        // Checks if the interval [lo, hi] is completely outside c's current interval.
+        let intervals_disjoint = |lo: pumpkin_checking::IntExt,
+                                  hi: pumpkin_checking::IntExt,
+                                  c_lo: pumpkin_checking::IntExt,
+                                  c_hi: pumpkin_checking::IntExt|
+         -> bool { hi < c_lo || lo > c_hi };
+
+        // First try the case where b crosses 0.
+        if y1 < zero && y2 > zero {
+            // If c can still be 0 then b = 0 is a possible support, so this split
+            // is not enough to prove a conflict.
+            let zero_is_supported = c_lower <= zero && c_upper >= zero;
+            if !zero_is_supported {
+                // Check b in [blow, -1]
+                let corners_neg = [x1 * y1, x1 * neg_one, x2 * y1, x2 * neg_one];
+                let neg_lo = corners_neg.iter().copied().min().unwrap();
+                let neg_hi = corners_neg.iter().copied().max().unwrap();
+
+                // Check b in [1, bhigh]
+                let corners_pos = [x1 * one, x1 * y2, x2 * one, x2 * y2];
+                let pos_lo = corners_pos.iter().copied().min().unwrap();
+                let pos_hi = corners_pos.iter().copied().max().unwrap();
+
+                // If neither side can overlap c, and b = 0 was already impossible,
+                // then that means there is a conflict.
+                if intervals_disjoint(neg_lo, neg_hi, c_lower, c_upper)
+                    && intervals_disjoint(pos_lo, pos_hi, c_lower, c_upper)
+                {
+                    return true;
+                }
+            }
+        }
+
+        // Same thing, but now for the case where a crosses 0.
+        if x1 < zero && x2 > zero {
+            let zero_is_supported = c_lower <= zero && c_upper >= zero;
+            if !zero_is_supported {
+                let corners_neg = [x1 * y1, x1 * y2, neg_one * y1, neg_one * y2];
+                let neg_lo = corners_neg.iter().copied().min().unwrap();
+                let neg_hi = corners_neg.iter().copied().max().unwrap();
+
+                let corners_pos = [one * y1, one * y2, x2 * y1, x2 * y2];
+                let pos_lo = corners_pos.iter().copied().min().unwrap();
+                let pos_hi = corners_pos.iter().copied().max().unwrap();
+
+                if intervals_disjoint(neg_lo, neg_hi, c_lower, c_upper)
+                    && intervals_disjoint(pos_lo, pos_hi, c_lower, c_upper)
+                {
+                    return true;
+                }
+            }
+        }
+
+        // If a bound is not mentioned in the reason, the checker sees it as
+        // unbounded. Solver integer variables are i32-bounded, so map those
+        // infinities to the full i32 range before using the support helpers.
+        let to_i32 = |v: pumpkin_checking::IntExt| -> i32 {
+            match v {
+                pumpkin_checking::IntExt::Int(i) => i,
+                pumpkin_checking::IntExt::NegativeInf => i32::MIN,
+                pumpkin_checking::IntExt::PositiveInf => i32::MAX,
+            }
+        };
+        let x1_conv = to_i32(x1);
+        let x2_conv = to_i32(x2);
+        let y1_conv = to_i32(y1);
+        let y2_conv = to_i32(y2);
+        let c_lower_conv = to_i32(c_lower);
+        let c_upper_conv = to_i32(c_upper);
+
+        // Also check that fixed bounds actually have support.
+        if x1_conv == x2_conv
+            && !has_support_for_fixed_factor(x1_conv, y1_conv, y2_conv, c_lower_conv, c_upper_conv)
+        {
+            return true;
+        }
+
+        if y1_conv == y2_conv
+            && !has_support_for_fixed_factor(y1_conv, x1_conv, x2_conv, c_lower_conv, c_upper_conv)
+        {
+            return true;
+        }
+
+        if c_lower_conv == c_upper_conv
+            && !has_support_for_c_bound(c_lower_conv, x1_conv, x2_conv, y1_conv, y2_conv)
+        {
+            return true;
+        }
+
+        false
     }
 }
 
@@ -462,7 +988,7 @@ mod tests {
         );
         let reason_ub: PropositionalConjunction = reason_buffer.into();
         assert_eq!(
-            conjunction!([a >= 0] & [a <= 3] & [b >= 0] & [b <= 4]),
+            conjunction!([a >= 1] & [a <= 3] & [b >= 0] & [b <= 4]),
             reason_ub
         );
     }
@@ -504,7 +1030,10 @@ mod tests {
             CurrentNogood::empty(),
         );
         let reason_ub: PropositionalConjunction = reason_buffer.into();
-        assert_eq!(conjunction!([a >= 2] & [c >= 0] & [c <= 12]), reason_ub);
+        assert_eq!(
+            conjunction!([a >= 2] & [a <= 3] & [c >= 2] & [c <= 12]),
+            reason_ub
+        );
     }
 
     #[test]
@@ -544,7 +1073,134 @@ mod tests {
             CurrentNogood::empty(),
         );
         let reason_ub: PropositionalConjunction = reason_buffer.into();
-        assert_eq!(conjunction!([b >= 3] & [c >= 0] & [c <= 12]), reason_ub);
+        assert_eq!(
+            conjunction!([b >= 3] & [b <= 6] & [c >= 3] & [c <= 12]),
+            reason_ub
+        );
+    }
+
+    #[test]
+    fn bounds_consistency_prunes_unsupported_c_lower_bound_prime() {
+        let mut state = State::default();
+        let a = state.new_interval_variable(2, 10, None);
+        let b = state.new_interval_variable(2, 10, None);
+        let c = state.new_interval_variable(5, 100, None);
+
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(IntegerMultiplicationArgs {
+            a,
+            b,
+            c,
+            constraint_tag,
+        });
+
+        state.propagate_to_fixed_point().expect("no empty domains");
+
+        state.assert_bounds(c, 6, 100);
+    }
+
+    #[test]
+    fn bounds_consistency_prunes_unsupported_c_upper_bound() {
+        let mut state = State::default();
+        let a = state.new_interval_variable(2, 10, None);
+        let b = state.new_interval_variable(2, 10, None);
+        let c = state.new_interval_variable(4, 99, None);
+
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(IntegerMultiplicationArgs {
+            a,
+            b,
+            c,
+            constraint_tag,
+        });
+
+        state.propagate_to_fixed_point().expect("no empty domains");
+
+        state.assert_bounds(c, 4, 90);
+    }
+
+    #[test]
+    fn bounds_consistency_detects_fixed_unsupported_product() {
+        let mut state = State::default();
+        let a = state.new_interval_variable(2, 3, None);
+        let b = state.new_interval_variable(2, 3, None);
+        let c = state.new_interval_variable(5, 5, None);
+
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(IntegerMultiplicationArgs {
+            a,
+            b,
+            c,
+            constraint_tag,
+        });
+
+        assert!(state.propagate_to_fixed_point().is_err());
+    }
+
+    #[test]
+    fn bounds_consistency_prunes_unsupported_a_lower_bound() {
+        let mut state = State::default();
+        let a = state.new_interval_variable(2, 10, None);
+        let b = state.new_interval_variable(4, 4, None);
+        let c = state.new_interval_variable(20, 40, None);
+
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(IntegerMultiplicationArgs {
+            a,
+            b,
+            c,
+            constraint_tag,
+        });
+
+        state.propagate_to_fixed_point().expect("no empty domains");
+
+        state.assert_bounds(a, 5, 10);
+    }
+
+    #[test]
+    fn bounds_consistency_prunes_unsupported_b_upper_bound() {
+        let mut state = State::default();
+        let a = state.new_interval_variable(5, 5, None);
+        let b = state.new_interval_variable(1, 10, None);
+        let c = state.new_interval_variable(12, 27, None);
+
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(IntegerMultiplicationArgs {
+            a,
+            b,
+            c,
+            constraint_tag,
+        });
+
+        state.propagate_to_fixed_point().expect("no empty domains");
+
+        state.assert_bounds(b, 3, 5);
+    }
+
+    #[test]
+    fn bounds_consistency_handles_negative_supported_c_bound() {
+        let mut state = State::default();
+        let a = state.new_interval_variable(-5, -2, None);
+        let b = state.new_interval_variable(2, 5, None);
+        let c = state.new_interval_variable(-11, -4, None);
+
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(IntegerMultiplicationArgs {
+            a,
+            b,
+            c,
+            constraint_tag,
+        });
+
+        state.propagate_to_fixed_point().expect("no empty domains");
+
+        state.assert_bounds(c, -10, -4);
     }
 
     #[test]
