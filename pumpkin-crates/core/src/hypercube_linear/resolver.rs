@@ -1438,4 +1438,47 @@ mod tests {
         );
         assert_eq!(result.linear, linear_inequality!(-1 y + 1 z <= 1));
     }
+
+    #[test_log::test]
+    fn middling_resh_works_with_opposite_signs_on_weight() {
+        let mut trail_builder = FakeTrail::builder();
+
+        let x = trail_builder.domain(-5, 5);
+        let y = trail_builder.domain(-5, 5);
+        let z = trail_builder.domain(-5, 5);
+
+        let mut trail = trail_builder
+            .decide(predicate![z >= 1])
+            .decide(predicate![z >= 1])
+            .decide(predicate![y <= -3])
+            .propagate(
+                predicate![z >= 12],
+                HypercubeLinear {
+                    hypercube: Hypercube::new(conjunction!([y <= -3] & [z <= 11]))
+                        .expect("not inconsistent"),
+                    linear: LinearInequality::trivially_false(),
+                },
+            )
+            .propagate(
+                predicate![x >= 1],
+                HypercubeLinear {
+                    hypercube: Hypercube::from_single_predicate(predicate![x <= 0]),
+                    linear: linear_inequality!(-4 y + 5 z <= 15),
+                },
+            )
+            .build();
+
+        let mut resolver = HypercubeLinearResolver::with_middling_resh(Trace::discard());
+        let result = resolver.run_resolution(
+            &mut trail,
+            conjunction!([x >= 1]),
+            linear_inequality!(1 y + 2 z <= 17),
+        );
+
+        assert_eq!(
+            result.hypercube,
+            Hypercube::from_single_predicate(predicate![y <= -3]),
+        );
+        assert_eq!(result.linear, linear_inequality!(2 z <= 22));
+    }
 }

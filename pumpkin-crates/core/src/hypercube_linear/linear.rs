@@ -65,7 +65,7 @@ impl LinearInequality {
     }
 
     /// Iterate over the terms in the linear inequality.
-    pub fn terms(&self) -> impl Iterator<Item = AffineView<DomainId>> + '_ {
+    pub fn terms(&self) -> impl ExactSizeIterator<Item = AffineView<DomainId>> + '_ {
         self.terms.iter().copied()
     }
 
@@ -146,6 +146,13 @@ impl LinearInequality {
         };
 
         self.weaken(bound, term.scale.abs())
+    }
+
+    /// Get a term with the given index.
+    ///
+    /// Panics if the index is larger than the number of terms in the linear.
+    pub fn term_by_index(&self, idx: usize) -> AffineView<DomainId> {
+        self.terms[idx]
     }
 }
 

@@ -14,6 +14,8 @@ use crate::predicate;
 use crate::predicates::Predicate;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
+use crate::variables::AffineView;
+use crate::variables::DomainId;
 
 pub(crate) trait ResHStrategy: DynClone + std::fmt::Debug {
     fn apply(
@@ -141,103 +143,315 @@ impl ResHStrategy for MiddlingResH {
 
         let explanation_linear = explanation.linear().expect("explanation was not a clause");
 
-        let mut linear_terms: Vec<_> = state
-            .conflicting_linear
-            .terms()
-            .map(|term| {
-                (
-                    NonZero::new(term.scale).expect("scale is non zero"),
-                    term.inner,
-                    TermSource::Conflict,
-                )
-            })
-            .merge_by(
-                explanation_linear.terms().map(|term| {
-                    (
-                        NonZero::new(term.scale).expect("scale is non zero"),
-                        term.inner,
-                        TermSource::Explanation,
-                    )
-                }),
-                |(_, x1, _), (_, x2, _)| x1 <= x2,
-            )
-            .collect();
-
         let mut weakened_conflict_bound = state.conflicting_linear.bound();
         let mut weakened_explanation_bound = explanation_linear.bound();
 
-        for i in 0..linear_terms.len() - 1 {
-            let (w1, x1, s1) = linear_terms[i];
-            let (w2, x2, s2) = linear_terms[i + 1];
+        let num_conflict_terms = state.conflicting_linear.terms().len();
+        let num_explanation_terms = explanation_linear.terms().len();
+        let mut conflict_index = 0;
+        let mut explanation_index = 0;
+        let mut linear_terms = vec![];
 
-            if x1 != x2 {
-                continue;
+        let mut weaken = |count: u32, predicate: Predicate, bound: &mut i32| {
+            self.additional_predicates_buffer.push(predicate);
+
+            if predicate.is_lower_bound_predicate() {
+                *bound += -(count as i32) * predicate.get_right_hand_side();
+            } else {
+                *bound += (count as i32) * predicate.get_right_hand_side();
+            }
+        };
+
+        while conflict_index < num_conflict_terms && explanation_index < num_explanation_terms {
+            let conflict_term = state.conflicting_linear.term_by_index(conflict_index);
+            let explanation_term = explanation_linear.term_by_index(explanation_index);
+
+            let predicate_to_weaken_conflict_on = if conflict_term.scale.is_positive() {
+                let bound =
+                    trail.lower_bound_at_trail_position(conflict_term.inner, trail_position);
+                predicate![conflict_term.inner >= bound]
+            } else {
+                let bound =
+                    trail.upper_bound_at_trail_position(conflict_term.inner, trail_position);
+                predicate![conflict_term.inner <= bound]
+            };
+
+            let predicate_to_weaken_explanation_on = if explanation_term.scale.is_positive() {
+                let bound =
+                    trail.lower_bound_at_trail_position(explanation_term.inner, trail_position);
+                predicate![explanation_term.inner >= bound]
+            } else {
+                let bound =
+                    trail.upper_bound_at_trail_position(explanation_term.inner, trail_position);
+                predicate![explanation_term.inner <= bound]
+            };
+
+            match conflict_term.inner.cmp(&explanation_term.inner) {
+                std::cmp::Ordering::Equal => {
+                    conflict_index += 1;
+                    explanation_index += 1;
+
+                    if conflict_term.scale.is_positive() != explanation_term.scale.is_positive() {
+                        // If the weights do not have the same sign, both must be weakened to zero.
+                        weaken(
+                            explanation_term.scale.unsigned_abs(),
+                            predicate_to_weaken_explanation_on,
+                            &mut weakened_explanation_bound,
+                        );
+                        weaken(
+                            conflict_term.scale.unsigned_abs(),
+                            predicate_to_weaken_conflict_on,
+                            &mut weakened_conflict_bound,
+                        );
+                        continue;
+                    }
+                }
+                std::cmp::Ordering::Less => {
+                    weaken(
+                        conflict_term.scale.unsigned_abs(),
+                        predicate_to_weaken_conflict_on,
+                        &mut weakened_conflict_bound,
+                    );
+                    conflict_index += 1;
+                    continue;
+                }
+                std::cmp::Ordering::Greater => {
+                    weaken(
+                        explanation_term.scale.unsigned_abs(),
+                        predicate_to_weaken_explanation_on,
+                        &mut weakened_explanation_bound,
+                    );
+                    explanation_index += 1;
+                    continue;
+                }
             }
 
-            assert_ne!(
-                s1, s2,
-                "a linear inequality never yields multiple terms for the same variable"
+            assert_eq!(
+                conflict_term.scale.is_positive(),
+                explanation_term.scale.is_positive()
             );
 
-            if w1 == w2 {
-                // If both weights are equal, then we do not need to weaken.
-                continue;
+            let target_weight = conflict_term.scale.abs().min(explanation_term.scale.abs());
+
+            if conflict_term.scale != target_weight {
+                assert!(conflict_term.scale > target_weight);
+
+                let weaken_count = conflict_term.scale.abs_diff(target_weight);
+                weaken(
+                    weaken_count,
+                    predicate_to_weaken_conflict_on,
+                    &mut weakened_conflict_bound,
+                );
             }
 
-            let (
-                target_weight,
-                variable,
-                actual_weight,
-                source_to_weaken,
-                index_to_weaken_in_terms,
-            ) = if w1.abs() > w2.abs() {
-                (w2.get(), x1, w1.get(), s1, i)
+            if explanation_term.scale != target_weight {
+                assert!(explanation_term.scale > target_weight);
+
+                let weaken_count = explanation_term.scale.abs_diff(target_weight);
+                weaken(
+                    weaken_count,
+                    predicate_to_weaken_explanation_on,
+                    &mut weakened_explanation_bound,
+                );
+            }
+
+            linear_terms.push((NonZero::new(target_weight).unwrap(), conflict_term.inner));
+        }
+
+        while conflict_index < num_conflict_terms {
+            let conflict_term = state.conflicting_linear.term_by_index(conflict_index);
+            let explanation_term = explanation_linear.term_by_index(explanation_index - 1);
+
+            let predicate_to_weaken_conflict_on = if conflict_term.scale.is_positive() {
+                let bound =
+                    trail.lower_bound_at_trail_position(conflict_term.inner, trail_position);
+                predicate![conflict_term.inner >= bound]
             } else {
-                (w1.get(), x1, w2.get(), s2, i + 1)
+                let bound =
+                    trail.upper_bound_at_trail_position(conflict_term.inner, trail_position);
+                predicate![conflict_term.inner <= bound]
             };
 
-            assert!(target_weight.abs() < actual_weight.abs());
-            assert_eq!(target_weight.is_positive(), actual_weight.is_positive());
-
-            // Determine what predicate will be weakened on.
-            let predicate_to_weaken_on = if target_weight.is_positive() {
-                let bound = trail.lower_bound_at_trail_position(variable, trail_position);
-                predicate![variable >= bound]
+            let predicate_to_weaken_explanation_on = if explanation_term.scale.is_positive() {
+                let bound =
+                    trail.lower_bound_at_trail_position(explanation_term.inner, trail_position);
+                predicate![explanation_term.inner >= bound]
             } else {
-                let bound = trail.upper_bound_at_trail_position(variable, trail_position);
-                predicate![variable <= bound]
+                let bound =
+                    trail.upper_bound_at_trail_position(explanation_term.inner, trail_position);
+                predicate![explanation_term.inner <= bound]
             };
 
-            // Make sure the predicate is added to the final hypercube.
-            self.additional_predicates_buffer
-                .push(predicate_to_weaken_on);
+            match conflict_term.inner.cmp(&explanation_term.inner) {
+                std::cmp::Ordering::Equal => {
+                    conflict_index += 1;
 
-            let weaken_bound_by = if predicate_to_weaken_on.is_lower_bound_predicate() {
-                -predicate_to_weaken_on.get_right_hand_side()
-                    * (actual_weight.abs() - target_weight.abs())
-            } else {
-                predicate_to_weaken_on.get_right_hand_side()
-                    * (actual_weight.abs() - target_weight.abs())
-            };
-
-            linear_terms[index_to_weaken_in_terms].0 =
-                NonZero::new(target_weight).expect("all weights are non-zero");
-
-            match source_to_weaken {
-                TermSource::Conflict => {
-                    weakened_conflict_bound += weaken_bound_by;
+                    if conflict_term.scale.is_positive() != explanation_term.scale.is_positive() {
+                        // If the weights do not have the same sign, both must be weakened to zero.
+                        weaken(
+                            explanation_term.scale.unsigned_abs(),
+                            predicate_to_weaken_explanation_on,
+                            &mut weakened_explanation_bound,
+                        );
+                        weaken(
+                            conflict_term.scale.unsigned_abs(),
+                            predicate_to_weaken_conflict_on,
+                            &mut weakened_conflict_bound,
+                        );
+                        continue;
+                    }
                 }
-                TermSource::Explanation => {
-                    weakened_explanation_bound += weaken_bound_by;
+                std::cmp::Ordering::Less => {
+                    weaken(
+                        conflict_term.scale.unsigned_abs(),
+                        predicate_to_weaken_conflict_on,
+                        &mut weakened_conflict_bound,
+                    );
+                    conflict_index += 1;
+                    continue;
+                }
+                std::cmp::Ordering::Greater => {
+                    todo!("unclear");
+                    // weaken(
+                    //     explanation_term.scale.unsigned_abs(),
+                    //     predicate_to_weaken_explanation_on,
+                    //     &mut weakened_explanation_bound,
+                    // );
+                    // explanation_index += 1;
+                    // continue;
                 }
             }
+
+            assert_eq!(
+                conflict_term.scale.is_positive(),
+                explanation_term.scale.is_positive()
+            );
+
+            let target_weight = conflict_term.scale.abs().min(explanation_term.scale.abs());
+
+            if conflict_term.scale != target_weight {
+                assert!(conflict_term.scale > target_weight);
+
+                let weaken_count = conflict_term.scale.abs_diff(target_weight);
+                weaken(
+                    weaken_count,
+                    predicate_to_weaken_conflict_on,
+                    &mut weakened_conflict_bound,
+                );
+            }
+
+            if explanation_term.scale != target_weight {
+                assert!(explanation_term.scale > target_weight);
+
+                let weaken_count = explanation_term.scale.abs_diff(target_weight);
+                weaken(
+                    weaken_count,
+                    predicate_to_weaken_explanation_on,
+                    &mut weakened_explanation_bound,
+                );
+            }
+
+            linear_terms.push((NonZero::new(target_weight).unwrap(), conflict_term.inner));
+        }
+
+        while explanation_index < num_explanation_terms {
+            let conflict_term = state.conflicting_linear.term_by_index(conflict_index - 1);
+            let explanation_term = explanation_linear.term_by_index(explanation_index);
+
+            let predicate_to_weaken_conflict_on = if conflict_term.scale.is_positive() {
+                let bound =
+                    trail.lower_bound_at_trail_position(conflict_term.inner, trail_position);
+                predicate![conflict_term.inner >= bound]
+            } else {
+                let bound =
+                    trail.upper_bound_at_trail_position(conflict_term.inner, trail_position);
+                predicate![conflict_term.inner <= bound]
+            };
+
+            let predicate_to_weaken_explanation_on = if explanation_term.scale.is_positive() {
+                let bound =
+                    trail.lower_bound_at_trail_position(explanation_term.inner, trail_position);
+                predicate![explanation_term.inner >= bound]
+            } else {
+                let bound =
+                    trail.upper_bound_at_trail_position(explanation_term.inner, trail_position);
+                predicate![explanation_term.inner <= bound]
+            };
+
+            match conflict_term.inner.cmp(&explanation_term.inner) {
+                std::cmp::Ordering::Equal => {
+                    explanation_index += 1;
+
+                    if conflict_term.scale.is_positive() != explanation_term.scale.is_positive() {
+                        // If the weights do not have the same sign, both must be weakened to zero.
+                        weaken(
+                            explanation_term.scale.unsigned_abs(),
+                            predicate_to_weaken_explanation_on,
+                            &mut weakened_explanation_bound,
+                        );
+                        weaken(
+                            conflict_term.scale.unsigned_abs(),
+                            predicate_to_weaken_conflict_on,
+                            &mut weakened_conflict_bound,
+                        );
+                        continue;
+                    }
+                }
+                std::cmp::Ordering::Less => {
+                    todo!("unclear")
+                    // weaken(
+                    //     conflict_term.scale.unsigned_abs(),
+                    //     predicate_to_weaken_conflict_on,
+                    //     &mut weakened_conflict_bound,
+                    // );
+                    // conflict_index += 1;
+                    // continue;
+                }
+                std::cmp::Ordering::Greater => {
+                    weaken(
+                        explanation_term.scale.unsigned_abs(),
+                        predicate_to_weaken_explanation_on,
+                        &mut weakened_explanation_bound,
+                    );
+                    explanation_index += 1;
+                    continue;
+                }
+            }
+
+            assert_eq!(
+                conflict_term.scale.is_positive(),
+                explanation_term.scale.is_positive()
+            );
+
+            let target_weight = conflict_term.scale.abs().min(explanation_term.scale.abs());
+
+            if conflict_term.scale != target_weight {
+                assert!(conflict_term.scale > target_weight);
+
+                let weaken_count = conflict_term.scale.abs_diff(target_weight);
+                weaken(
+                    weaken_count,
+                    predicate_to_weaken_conflict_on,
+                    &mut weakened_conflict_bound,
+                );
+            }
+
+            if explanation_term.scale != target_weight {
+                assert!(explanation_term.scale > target_weight);
+
+                let weaken_count = explanation_term.scale.abs_diff(target_weight);
+                weaken(
+                    weaken_count,
+                    predicate_to_weaken_explanation_on,
+                    &mut weakened_explanation_bound,
+                );
+            }
+
+            linear_terms.push((NonZero::new(target_weight).unwrap(), conflict_term.inner));
         }
 
         let new_conflicting_linear = LinearInequality::new(
-            linear_terms
-                .into_iter()
-                .map(|(weight, domain, _)| (weight, domain))
-                .dedup(),
+            linear_terms,
             weakened_explanation_bound.max(weakened_conflict_bound),
         )
         .expect("propositional resolution keeps linear conflicting");
@@ -259,13 +473,6 @@ impl ResHStrategy for MiddlingResH {
     fn log_statistics(&self, logger: StatisticLogger) {
         self.backup.log_statistics(logger.clone());
     }
-}
-
-/// From which HL does a term come from.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum TermSource {
-    Conflict,
-    Explanation,
 }
 
 fn compute_linear_slack_at_trail_position(
