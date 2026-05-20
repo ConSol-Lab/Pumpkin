@@ -1,4 +1,5 @@
-use pumpkin_core::checkers::BoundsConsistencyChecker;
+use pumpkin_core::checkers::StrongConsistency;
+use pumpkin_core::checkers::StrongConsistencyChecker;
 use pumpkin_core::checkers::support::SupportsValue;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
@@ -46,11 +47,14 @@ where
                 (super::ID_B, &self.b),
                 (super::ID_C, &self.c),
             ),
-            BoundsConsistencyChecker::new(IntegerMultiplicationChecker {
-                a: self.a.clone(),
-                b: self.b.clone(),
-                c: self.c.clone(),
-            }),
+            StrongConsistencyChecker::new(
+                StrongConsistency::Bounds,
+                IntegerMultiplicationChecker {
+                    a: self.a.clone(),
+                    b: self.b.clone(),
+                    c: self.c.clone(),
+                },
+            ),
         );
     }
 

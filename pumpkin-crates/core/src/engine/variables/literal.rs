@@ -10,6 +10,8 @@ use super::IntegerVariable;
 use super::TransformableVariable;
 use crate::checkers::Scope;
 use crate::checkers::ScopeItem;
+use crate::checkers::support::Support;
+use crate::checkers::support::SupportsValue;
 use crate::checkers::support::UnpackUnsupportedValue;
 use crate::checkers::support::UnsupportedValue;
 use crate::engine::Assignments;
@@ -87,6 +89,16 @@ impl ScopeItem for Literal {
 impl UnpackUnsupportedValue for Literal {
     fn unpack(&self, unsupported_value: UnsupportedValue) -> i32 {
         self.integer_variable.unpack(unsupported_value)
+    }
+}
+
+impl SupportsValue for Literal {
+    fn assign(&self, value: i32, support: &mut Support<i32>) {
+        self.integer_variable.assign(value, support)
+    }
+
+    fn support_value(&self, support: &Support<i32>) -> i32 {
+        self.integer_variable.support_value(support)
     }
 }
 

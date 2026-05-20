@@ -1,14 +1,14 @@
-mod bounds_consistency;
 mod scope;
 mod store;
+mod strong_consistency;
 pub mod support;
 
 use std::fmt::Debug;
 
-pub use bounds_consistency::*;
 use dyn_clone::DynClone;
 pub use scope::*;
 pub use store::*;
+pub use strong_consistency::*;
 
 use crate::propagation::Domains;
 

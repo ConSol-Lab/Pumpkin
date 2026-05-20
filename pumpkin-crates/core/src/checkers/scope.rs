@@ -22,24 +22,27 @@ impl Scope {
     }
 }
 
-impl<VA, VB, VC> From<((LocalId, &VA), (LocalId, &VB), (LocalId, &VC))> for Scope
-where
-    VA: ScopeItem,
-    VB: ScopeItem,
-    VC: ScopeItem,
-{
-    fn from(
-        ((la, va), (lb, vb), (lc, vc)): ((LocalId, &VA), (LocalId, &VB), (LocalId, &VC)),
-    ) -> Self {
-        let mut scope = Scope::default();
+macro_rules! impl_scope_from_tuple {
+    ($($lid_name:ident,$var_name:ident : $ty_name:ident),+) => {
+        impl<$($ty_name),+> From<($((LocalId, &$ty_name)),+)> for Scope
+        where
+            $($ty_name: ScopeItem),+
+        {
+            fn from(
+                ($(($lid_name, $var_name)),+): ($((LocalId, &$ty_name)),+),
+            ) -> Self {
+                let mut scope = Scope::default();
 
-        va.add_to_scope(&mut scope, la);
-        vb.add_to_scope(&mut scope, lb);
-        vc.add_to_scope(&mut scope, lc);
+                $($var_name.add_to_scope(&mut scope, $lid_name);)+
 
-        scope
-    }
+                scope
+            }
+        }
+    };
 }
+
+impl_scope_from_tuple!(la,va: VA, lb,vb: VB);
+impl_scope_from_tuple!(la,va: VA, lb,vb: VB, lc,vc: VC);
 
 pub trait ScopeItem {
     /// Adds self to the given scope with the given [`LocalId`].

@@ -117,7 +117,7 @@ pub trait UnpackUnsupportedValue {
     fn unpack(&self, unsupported_value: UnsupportedValue) -> i32;
 }
 
-pub trait SupportsValue<Value>: UnpackUnsupportedValue {
+pub trait SupportsValue<Value = i32>: UnpackUnsupportedValue {
     /// Add the assignment `self = value` to the `support`.
     fn assign(&self, value: Value, support: &mut Support<Value>);
 

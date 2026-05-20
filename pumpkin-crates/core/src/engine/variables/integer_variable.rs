@@ -5,6 +5,7 @@ use pumpkin_checking::CheckerVariable;
 
 use super::TransformableVariable;
 use crate::checkers::ScopeItem;
+use crate::checkers::support::SupportsValue;
 use crate::engine::Assignments;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
@@ -21,6 +22,7 @@ pub trait IntegerVariable:
     + Debug
     + CheckerVariable<Predicate>
     + ScopeItem
+    + SupportsValue
 {
     type AffineView: IntegerVariable;
 

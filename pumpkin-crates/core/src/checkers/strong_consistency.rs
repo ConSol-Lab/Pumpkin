@@ -9,17 +9,26 @@ use crate::propagation::Domains;
 use crate::propagation::ReadDomains;
 use crate::variables::DomainId;
 
+/// The consistency level advertised by the propagator.
+#[derive(Clone, Copy, Debug)]
+pub enum StrongConsistency {
+    Domain,
+    Bounds,
+}
+
 #[derive(Clone, Debug)]
-pub struct BoundsConsistencyChecker<Supports: SupportGenerator> {
+pub struct StrongConsistencyChecker<Supports: SupportGenerator> {
     supports: Supports,
     supported_values: HashSet<(DomainId, i32)>,
+    consistency_level: StrongConsistency,
 
     support: Support<Supports::Value>,
 }
 
-impl<Supports: SupportGenerator> BoundsConsistencyChecker<Supports> {
-    pub fn new(supports: Supports) -> Self {
-        BoundsConsistencyChecker {
+impl<Supports: SupportGenerator> StrongConsistencyChecker<Supports> {
+    pub fn new(consistency_level: StrongConsistency, supports: Supports) -> Self {
+        StrongConsistencyChecker {
+            consistency_level,
             supports,
             supported_values: HashSet::default(),
             support: Support::default(),
@@ -27,12 +36,22 @@ impl<Supports: SupportGenerator> BoundsConsistencyChecker<Supports> {
     }
 }
 
-impl<Supports: SupportGenerator> ConsistencyChecker for BoundsConsistencyChecker<Supports> {
+impl<Supports: SupportGenerator> ConsistencyChecker for StrongConsistencyChecker<Supports> {
     fn check_consistency(&mut self, scope: &Scope, mut domains: Domains<'_>) -> bool {
         self.supported_values.clear();
 
         for (local_id, domain) in scope.domains() {
-            let values_to_support = [domains.lower_bound(&domain), domains.upper_bound(&domain)];
+            let values_to_support = match self.consistency_level {
+                StrongConsistency::Domain => itertools::Either::Left(
+                    domains
+                        .iterate_domain(&domain)
+                        .collect::<Vec<_>>()
+                        .into_iter(),
+                ),
+                StrongConsistency::Bounds => itertools::Either::Right(
+                    [domains.lower_bound(&domain), domains.upper_bound(&domain)].into_iter(),
+                ),
+            };
 
             for value in values_to_support {
                 if self.supported_values.contains(&(domain, value)) {
@@ -56,9 +75,8 @@ impl<Supports: SupportGenerator> ConsistencyChecker for BoundsConsistencyChecker
     }
 }
 
-impl<Supports: SupportGenerator> BoundsConsistencyChecker<Supports> {
+impl<Supports: SupportGenerator> StrongConsistencyChecker<Supports> {
     fn process_support(&mut self, mut domains: Domains<'_>) -> bool {
-        // TODO: Check that the support is a solution.
         if !self.supports.is_solution(&self.support) {
             log::error!("Support is not a solution");
             return false;
