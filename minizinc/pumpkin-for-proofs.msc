@@ -1,5 +1,5 @@
 {
-    "name": "Pumpkin",
+    "name": "PumpkinProof",
     "id": "nl.tudelft.algorithmics.pumpkin",
     "version": "0.1",
     "executable": "../target/release/pumpkin-solver",
