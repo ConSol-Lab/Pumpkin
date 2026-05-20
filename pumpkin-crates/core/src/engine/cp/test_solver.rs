@@ -6,9 +6,9 @@ use pumpkin_checking::InferenceChecker;
 
 use super::PropagatorQueue;
 use crate::containers::KeyGenerator;
+use crate::engine::ConflictResolverType;
 use crate::engine::EmptyDomain;
 use crate::engine::State;
-use crate::engine::constraint_satisfaction_solver::AnalysisMode;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
@@ -44,7 +44,7 @@ impl Default for TestSolver {
         let handle = state.add_propagator(NogoodPropagatorConstructor::new(
             0,
             LearningOptions::default(),
-            AnalysisMode::OneUIP,
+            ConflictResolverType::OneUIP,
         ));
         let mut solver = Self {
             state,

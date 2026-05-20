@@ -7,7 +7,7 @@ use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_core::containers::KeyValueHeap;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::create_statistics_struct;
-use pumpkin_core::options::AnalysisMode;
+use pumpkin_core::options::ConflictResolverType;
 use pumpkin_core::predicates::Lbd;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateIdGenerator;
@@ -31,9 +31,10 @@ use crate::minimisers::SemanticMinimiser;
 /// in the solver. This new nogood is added as a constraint to the solver, and the solver
 /// backtracks to the decision level at which the new constraint propagates.
 ///
-/// The [`ResolutionResolver`] can be used in two [`AnalysisMode`]s:
-/// - [`AnalysisMode::OneUIP`] - Resolves until finding the unit implication point.
-/// - [AnalysisMode::AllDecision] - Resolves until the learned nogood contains only decisions.
+/// The [`ResolutionResolver`] can be used in two [`ConflictResolverType`]s:
+/// - [`ConflictResolverType::OneUIP`] - Resolves until finding the unit implication point.
+/// - [ConflictResolverType::AllDecision] - Resolves until the learned nogood contains only
+///   decisions.
 ///
 /// For an in-depth explanation and overview of CDCL and UIP, see \[1\].
 ///
@@ -55,7 +56,7 @@ pub struct ResolutionResolver {
     /// minimisation.
     processed_nogood_predicates: Vec<Predicate>,
     /// Whether the resolver employs 1-UIP or all-decision learning.
-    mode: AnalysisMode,
+    mode: ConflictResolverType,
     /// Re-usable buffer which reasons are written into.
     reason_buffer: Vec<Predicate>,
     /// Computes the LBD for nogoods.
@@ -72,7 +73,7 @@ pub struct ResolutionResolver {
 
 impl Default for ResolutionResolver {
     fn default() -> Self {
-        ResolutionResolver::new(AnalysisMode::OneUIP, true)
+        ResolutionResolver::new(ConflictResolverType::OneUIP, true)
     }
 }
 
@@ -131,7 +132,7 @@ impl ConflictResolver for ResolutionResolver {
 }
 
 impl ResolutionResolver {
-    pub fn new(mode: AnalysisMode, should_minimise: bool) -> Self {
+    pub fn new(mode: ConflictResolverType, should_minimise: bool) -> Self {
         Self {
             mode,
             to_process_heap: Default::default(),
@@ -176,16 +177,16 @@ impl ResolutionResolver {
         // level, and both will be decisions. This is accounted for below.
         while {
             match self.mode {
-                AnalysisMode::OneUIP | AnalysisMode::HalfExtendedUIP => {
+                ConflictResolverType::OneUIP | ConflictResolverType::ExtendedOneUIP => {
                     // We wait until there is only a single element from the current decision level
                     // left.
                     self.to_process_heap.num_nonremoved_elements() > 1
                 }
-                AnalysisMode::AllDecision => {
+                ConflictResolverType::AllDecision => {
                     // We wait until there are only decisions left.
                     self.to_process_heap.num_nonremoved_elements() > 0
                 }
-                AnalysisMode::ExtendedUIP => {
+                ConflictResolverType::ExtendedCPIP => {
                     // We wait until there are only elements over a single variable left.
                     //
                     // TODO: compute this incrementally
@@ -200,7 +201,7 @@ impl ResolutionResolver {
                         .count()
                         > 1
                 }
-                AnalysisMode::BoundsExtendedUIP => {
+                ConflictResolverType::BoundsExtendedCPIP => {
                     // We wait until extended nogood propagation can propagate a bound.
                     //
                     // Firstly, there should be only elements over a single element.
@@ -256,6 +257,7 @@ impl ResolutionResolver {
                             || equalities > 0)
                     }
                 }
+                ConflictResolverType::NoLearning => unreachable!(),
             }
         } {
             // Replace the predicate from the nogood that has been assigned last on the trail.
@@ -299,7 +301,7 @@ impl ResolutionResolver {
     fn add_predicate_to_conflict_nogood(
         &mut self,
         predicate: Predicate,
-        mode: AnalysisMode,
+        mode: ConflictResolverType,
         context: &mut ConflictAnalysisContext,
     ) {
         let dec_level = context
@@ -323,11 +325,12 @@ impl ResolutionResolver {
         // If the variables are not decisions then we want to potentially add them to the heap,
         // otherwise we add it to the decision predicates which have been discovered previously
         else if match mode {
-            AnalysisMode::OneUIP
-            | AnalysisMode::ExtendedUIP
-            | AnalysisMode::HalfExtendedUIP
-            | AnalysisMode::BoundsExtendedUIP => dec_level == context.get_checkpoint(),
-            AnalysisMode::AllDecision => !context.is_decision_predicate(predicate),
+            ConflictResolverType::OneUIP
+            | ConflictResolverType::ExtendedCPIP
+            | ConflictResolverType::ExtendedOneUIP
+            | ConflictResolverType::BoundsExtendedCPIP => dec_level == context.get_checkpoint(),
+            ConflictResolverType::AllDecision => !context.is_decision_predicate(predicate),
+            ConflictResolverType::NoLearning => unreachable!(),
         } {
             let predicate_id = self.predicate_id_generator.get_id(predicate);
             // The first time we encounter the predicate, we initialise its value in the
@@ -415,7 +418,7 @@ impl ResolutionResolver {
         // Depending on what mode we are in, we first remove the elements which are remaining in
         // the heap.
         match self.mode {
-            AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
+            ConflictResolverType::ExtendedCPIP | ConflictResolverType::BoundsExtendedCPIP => {
                 // When using extended UIP, we need to ensure that all of the remaining predicates
                 // are added to the domain.
                 pumpkin_assert_simple!(
@@ -448,17 +451,20 @@ impl ResolutionResolver {
                     self.processed_nogood_predicates.push(predicate);
                 }
             }
-            AnalysisMode::OneUIP | AnalysisMode::AllDecision | AnalysisMode::HalfExtendedUIP => {
+            ConflictResolverType::OneUIP
+            | ConflictResolverType::AllDecision
+            | ConflictResolverType::ExtendedOneUIP => {
                 if self.to_process_heap.num_nonremoved_elements() > 0 {
                     let last_predicate = self.pop_predicate_from_conflict_nogood();
                     self.processed_nogood_predicates.push(last_predicate);
                 } else {
                     pumpkin_assert_simple!(
-                        matches!(self.mode, AnalysisMode::AllDecision),
+                        matches!(self.mode, ConflictResolverType::AllDecision),
                         "If the heap is empty when extracting the final nogood then we should be performing all decision learning"
                     )
                 }
             }
+            ConflictResolverType::NoLearning => unreachable!(),
         }
 
         // First we minimise the nogood using semantic minimisation to remove duplicates but we
@@ -513,7 +519,7 @@ impl ResolutionResolver {
     fn update_statistics(&mut self, context: &ConflictAnalysisContext) {
         // If we are using extended UIP then we update some statistics
         match self.mode {
-            AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
+            ConflictResolverType::ExtendedCPIP | ConflictResolverType::BoundsExtendedCPIP => {
                 if !self.processed_nogood_predicates.is_empty() {
                     let propagating_predicate = self
                         .processed_nogood_predicates
@@ -536,7 +542,10 @@ impl ResolutionResolver {
                     }
                 }
             }
-            AnalysisMode::OneUIP | AnalysisMode::AllDecision | AnalysisMode::HalfExtendedUIP => {}
+            ConflictResolverType::OneUIP
+            | ConflictResolverType::AllDecision
+            | ConflictResolverType::ExtendedOneUIP => {}
+            ConflictResolverType::NoLearning => unreachable!(),
         }
     }
 }

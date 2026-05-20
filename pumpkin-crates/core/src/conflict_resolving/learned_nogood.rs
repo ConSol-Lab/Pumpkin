@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use crate::conflict_resolving::ConflictAnalysisContext;
-use crate::engine::AnalysisMode;
+use crate::engine::ConflictResolverType;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_moderate;
 
@@ -32,13 +32,13 @@ impl LearnedNogood {
     /// This method automatically ensures that the invariants of nogoods hold; see [`LearnedNogood`]
     /// for more details on these invariants.
     ///
-    /// When using [`AnalysisMode::ExtendedUIP`], it is ensured that the [`Predicate`] at the the
-    /// 1-st position is the one with the highest decision level concerning a different domain than
-    /// the propagating domain
+    /// When using [`ConflictResolverType::ExtendedUIP`], it is ensured that the [`Predicate`] at
+    /// the the 1-st position is the one with the highest decision level concerning a different
+    /// domain than the propagating domain
     pub(crate) fn create_from_vec(
         mut clean_nogood: Vec<Predicate>,
         context: &ConflictAnalysisContext,
-        analysis_mode: AnalysisMode,
+        analysis_mode: ConflictResolverType,
     ) -> Self {
         if clean_nogood.is_empty() {
             return Self {
@@ -55,7 +55,7 @@ impl LearnedNogood {
         // currently propagating; this is to correctly put the predicates in the right place.
         let propagating_domain = if matches!(
             analysis_mode,
-            AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP
+            ConflictResolverType::ExtendedCPIP | ConflictResolverType::BoundsExtendedCPIP
         ) {
             Some(
                 clean_nogood

@@ -66,7 +66,6 @@ pub mod options {
     #[cfg(doc)]
     use crate::Solver;
     pub use crate::basic_types::sequence_generators::SequenceGeneratorType;
-    pub use crate::engine::AnalysisMode;
     pub use crate::engine::ConflictResolverType;
     pub use crate::engine::RestartOptions;
     pub use crate::engine::SatisfactionSolverOptions as SolverOptions;

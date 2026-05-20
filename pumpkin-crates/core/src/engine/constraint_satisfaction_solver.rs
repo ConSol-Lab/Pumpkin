@@ -116,27 +116,6 @@ impl Default for ConstraintSatisfactionSolver {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-/// Determines which type of learning is performed by the resolver.
-pub enum AnalysisMode {
-    #[default]
-    /// Stanard conflict analysis which returns as soon as the first unit implication point is
-    /// found (i.e. when a nogood is created which only contains a single predicate from the
-    /// current decision level)
-    OneUIP,
-    /// An alternative to 1-UIP which stops as soon as the learned nogood only creates decision
-    /// predicates.
-    AllDecision,
-    /// Extended conflict analysis which propagates when all predicates in the nogood concern one
-    /// literal (i.e. when all other predicates are satisfied).
-    ExtendedUIP,
-    /// Perform learning using 1UIP and propagation using extended UIP propagation.
-    HalfExtendedUIP,
-    /// Perform extended conflict analysis, but resolve until you can propagate a bound (or it is a
-    /// UIP)
-    BoundsExtendedUIP,
-}
-
 /// The result of [`ConstraintSatisfactionSolver::extract_clausal_core`]; there are 2 cases:
 /// 1. In the case of [`CoreExtractionResult::ConflictingAssumption`], two assumptions have been
 ///    given which directly conflict with one another; e.g. if the assumptions `[x, !x]` have been
@@ -165,10 +144,24 @@ pub enum CoreExtractionResult {
 pub enum ConflictResolverType {
     NoLearning,
     #[default]
-    UIP,
-    ExtendedUIP,
-    HalfExtendedUIP,
-    BoundsExtendedUIP,
+    /// Standard conflict analysis which returns as soon as the first unit implication point is
+    /// found (i.e. when a nogood is created which only contains a single predicate from the
+    /// current decision level).
+    OneUIP,
+    /// An alternative to 1-UIP which stops as soon as the learned nogood only creates decision
+    /// predicates.
+    AllDecision,
+    /// Learns CPIP nogoods (i.e., nogoods which only have predicates from the current decision
+    /// level which reason over a single variable when learning) in combination with extended nogood
+    /// propagation.
+    ExtendedCPIP,
+    /// Learns 1UIP nogoods in combination with extended nogood and applies extended nogood
+    /// propagation whenever possible.
+    ExtendedOneUIP,
+    /// Learns CPIP nogoods in combination with extended nogood propagation but rather than stopping
+    /// at the first point where extended nogood propagation can take place, it stops when
+    /// extended nogood propagation can adjust a bound upon learning.
+    BoundsExtendedCPIP,
 }
 
 /// Options for the [`Solver`] which determine how it behaves.
@@ -186,7 +179,7 @@ pub struct SatisfactionSolverOptions {
     pub learning_options: LearningOptions,
     /// The number of MBs which are preallocated by the nogood propagator.
     pub memory_preallocated: usize,
-    pub analysis_mode: AnalysisMode,
+    pub analysis_mode: ConflictResolverType,
 }
 
 impl Default for SatisfactionSolverOptions {
@@ -198,7 +191,7 @@ impl Default for SatisfactionSolverOptions {
             proof_log: ProofLog::default(),
             learning_options: LearningOptions::default(),
             memory_preallocated: 50,
-            analysis_mode: AnalysisMode::default(),
+            analysis_mode: ConflictResolverType::default(),
         }
     }
 }

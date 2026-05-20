@@ -9,8 +9,8 @@ use crate::branching::branchers::autonomous_search::AutonomousSearch;
 use crate::conflict_resolving::ConflictResolver;
 use crate::conflict_resolving::LearnedNogood;
 use crate::containers::HashMap;
-use crate::engine::AnalysisMode;
 use crate::engine::Assignments;
+use crate::engine::ConflictResolverType;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::EmptyDomainConflict;
 use crate::engine::RestartStrategy;
@@ -270,7 +270,7 @@ impl ConflictAnalysisContext<'_> {
         &mut self,
         learned_nogood_predicates: Vec<Predicate>,
         lbd: u32,
-        analysis_mode: AnalysisMode,
+        analysis_mode: ConflictResolverType,
     ) -> usize {
         // important to notify about the conflict _before_ backtracking removes literals from
         // the trail -> although in the current version this does nothing but notify that a

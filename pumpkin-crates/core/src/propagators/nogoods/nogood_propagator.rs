@@ -14,10 +14,10 @@ use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
+use crate::engine::ConflictResolverType;
 use crate::engine::Lbd;
 use crate::engine::PropagationStatusCP;
 use crate::engine::PropagatorConflict;
-use crate::engine::constraint_satisfaction_solver::AnalysisMode;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
@@ -93,7 +93,7 @@ pub struct NogoodPropagator {
     #[allow(unused, reason = "Will be reintroduced with database management")]
     handle: PropagatorHandle<NogoodPropagator>,
 
-    analysis_mode: AnalysisMode,
+    analysis_mode: ConflictResolverType,
     statistics: NogoodPropagatorStatistics,
 
     semantic_minimiser: SemanticMinimiser,
@@ -115,14 +115,14 @@ pub(crate) struct NogoodPropagatorConstructor {
     /// How many [`PredicateId`]s to preallocate to the [`ArenaAllocator`].
     capacity: usize,
     parameters: LearningOptions,
-    analysis_mode: AnalysisMode,
+    analysis_mode: ConflictResolverType,
 }
 
 impl NogoodPropagatorConstructor {
     pub(crate) fn new(
         capacity: usize,
         parameters: LearningOptions,
-        analysis_mode: AnalysisMode,
+        analysis_mode: ConflictResolverType,
     ) -> Self {
         Self {
             capacity,
@@ -350,9 +350,9 @@ impl Propagator for NogoodPropagator {
                         None | Some(false)
                             if matches!(
                                 self.analysis_mode,
-                                AnalysisMode::OneUIP
-                                    | AnalysisMode::AllDecision
-                                    | AnalysisMode::HalfExtendedUIP
+                                ConflictResolverType::OneUIP
+                                    | ConflictResolverType::AllDecision
+                                    | ConflictResolverType::ExtendedOneUIP
                             ) || context.get_predicate(nogood_predicates[i]).get_domain()
                                 != context.get_predicate(nogood_predicates[0]).get_domain() =>
                         {
@@ -411,7 +411,7 @@ impl Propagator for NogoodPropagator {
                     }
                 }
 
-                if matches!(self.analysis_mode, AnalysisMode::HalfExtendedUIP) {
+                if matches!(self.analysis_mode, ConflictResolverType::ExtendedOneUIP) {
                     // We find all of the unasssigned predicates and get their domains
                     //
                     // If there is a falsified predicate then we do not propagate; also,
@@ -479,7 +479,8 @@ impl Propagator for NogoodPropagator {
 
                 // Now we perform the propagation
                 match self.analysis_mode {
-                    AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
+                    ConflictResolverType::ExtendedCPIP
+                    | ConflictResolverType::BoundsExtendedCPIP => {
                         let propagated_domain =
                             context.get_predicate(nogood_predicates[0]).get_domain();
                         NogoodPropagator::propagate_extended_nogood(
@@ -492,9 +493,9 @@ impl Propagator for NogoodPropagator {
 
                         index += 1;
                     }
-                    AnalysisMode::OneUIP
-                    | AnalysisMode::AllDecision
-                    | AnalysisMode::HalfExtendedUIP => {
+                    ConflictResolverType::OneUIP
+                    | ConflictResolverType::AllDecision
+                    | ConflictResolverType::ExtendedOneUIP => {
                         self.statistics.num_unit_propagations += 1;
 
                         // There are two scenarios:
@@ -509,6 +510,9 @@ impl Propagator for NogoodPropagator {
                             return Err(e.into());
                         }
                         index += 1;
+                    }
+                    ConflictResolverType::NoLearning => {
+                        unreachable!()
                     }
                 }
             }
@@ -1027,7 +1031,7 @@ impl NogoodPropagator {
         }
 
         match self.analysis_mode {
-            AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
+            ConflictResolverType::ExtendedCPIP | ConflictResolverType::BoundsExtendedCPIP => {
                 info!("Adding nogood: {nogood:?}");
 
                 // We maintain the invariant that the first two predicates in a learned clause
@@ -1134,7 +1138,9 @@ impl NogoodPropagator {
                     self.learned_nogood_ids.mid_lbd.push(nogood_id);
                 }
             }
-            AnalysisMode::OneUIP | AnalysisMode::AllDecision | AnalysisMode::HalfExtendedUIP => {
+            ConflictResolverType::OneUIP
+            | ConflictResolverType::AllDecision
+            | ConflictResolverType::ExtendedOneUIP => {
                 // Skip the zero-th predicate since it is unassigned,
                 // but will be assigned at the level of the predicate at index one.
                 let lbd = self
@@ -1194,6 +1200,9 @@ impl NogoodPropagator {
                 } else {
                     self.learned_nogood_ids.mid_lbd.push(nogood_id);
                 }
+            }
+            ConflictResolverType::NoLearning => {
+                unreachable!()
             }
         }
     }
@@ -1316,7 +1325,7 @@ impl NogoodPropagator {
         // The preprocessing ensures that all predicates are unassigned.
         else {
             match self.analysis_mode {
-                AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
+                ConflictResolverType::ExtendedCPIP | ConflictResolverType::BoundsExtendedCPIP => {
                     // We try to find a predicate with a different domain than the 0-th predicate;
                     // this is the invariant that we maintain for the watchers
                     let other = nogood
@@ -1381,9 +1390,9 @@ impl NogoodPropagator {
                         Ok(())
                     }
                 }
-                AnalysisMode::OneUIP
-                | AnalysisMode::AllDecision
-                | AnalysisMode::HalfExtendedUIP => {
+                ConflictResolverType::OneUIP
+                | ConflictResolverType::AllDecision
+                | ConflictResolverType::ExtendedOneUIP => {
                     #[cfg(feature = "check-propagations")]
                     let nogood = input_nogood
                         .iter()
@@ -1426,6 +1435,9 @@ impl NogoodPropagator {
                     );
 
                     Ok(())
+                }
+                ConflictResolverType::NoLearning => {
+                    unreachable!()
                 }
             }
         }
@@ -1487,7 +1499,7 @@ impl NogoodPropagator {
     ) {
         if matches!(
             self.analysis_mode,
-            AnalysisMode::ExtendedUIP | AnalysisMode::HalfExtendedUIP
+            ConflictResolverType::ExtendedCPIP | ConflictResolverType::ExtendedOneUIP
         ) {
             // TODO: implement for extended nogood propagation
             return;
@@ -1960,9 +1972,9 @@ impl NogoodPropagator {
         }
 
         match self.analysis_mode {
-            AnalysisMode::ExtendedUIP
-            | AnalysisMode::BoundsExtendedUIP
-            | AnalysisMode::HalfExtendedUIP => {
+            ConflictResolverType::ExtendedCPIP
+            | ConflictResolverType::BoundsExtendedCPIP
+            | ConflictResolverType::ExtendedOneUIP => {
                 // We find all of the unasssigned predicates and get their domains
                 //
                 // If there is a falsified predicate then we do not propagate; also, if
@@ -1995,7 +2007,10 @@ impl NogoodPropagator {
                     )?;
                 }
             }
-            AnalysisMode::OneUIP | AnalysisMode::AllDecision => {}
+            ConflictResolverType::OneUIP | ConflictResolverType::AllDecision => {}
+            ConflictResolverType::NoLearning => {
+                unreachable!()
+            }
         }
 
         let num_satisfied_predicates = nogood
@@ -2064,7 +2079,7 @@ impl NogoodPropagator {
     fn debug_is_properly_watched(&self) -> bool {
         if matches!(
             self.analysis_mode,
-            AnalysisMode::ExtendedUIP | AnalysisMode::HalfExtendedUIP
+            ConflictResolverType::ExtendedCPIP | ConflictResolverType::ExtendedOneUIP
         ) {
             // TODO: implement for extended nogood propagation
             return true;
