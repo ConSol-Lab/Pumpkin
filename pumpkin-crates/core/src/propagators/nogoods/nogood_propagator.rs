@@ -319,91 +319,98 @@ impl Propagator for NogoodPropagator {
                     index += 1;
                     continue;
                 }
+
+                // We start updating the watchers.
+                //
+                // Look for another nonsatisfied predicate to replace the watched predicate.
+                let mut found_new_watch = false;
+
+                // In the case of extended nogood propagation, we need to track more information.
+                //
+                // If there is a falsified predicate over the same variable as the 0th
+                // predicate, then we need to replace it.
+                let mut falsified_zeroth = None;
+
+                // Start from index 2 since we are skipping watched predicates.
+                for i in 2..nogood_predicates.len() {
+                    // We try to find a predicate to replace the current (satisfied)
+                    // watcher with.
+                    //
+                    // There are two things to keep in mind when using CPIP nogoods:
+                    // 1. We are looking for a predicate over a domain which is different than the
+                    //    domain of the 0-th watcher.
+                    // 2. If we find a falsified predicate, which reasons over the same domain as
+                    //    the 0-th watcher, then we need to replace the predicate at position 0 with
+                    //    that one.
+                    //
+                    // We start by matching on the status of the predicate
+                    match context.evaluate_predicate_id(nogood_predicates[i]) {
+                        None | Some(false)
+                            if matches!(
+                                self.analysis_mode,
+                                AnalysisMode::OneUIP
+                                    | AnalysisMode::AllDecision
+                                    | AnalysisMode::HalfExtendedUIP
+                            ) || context.get_predicate(nogood_predicates[i]).get_domain()
+                                != context.get_predicate(nogood_predicates[0]).get_domain() =>
+                        {
+                            // We found a predicate that is either unassigned or falsified
+                            // (but reasoning about a different domain than that of the
+                            // 0-th predicate)
+                            //
+                            // Now we swap that watcher
+                            found_new_watch = true;
+
+                            // Replace the current watcher with the new predicate
+                            // watcher.
+                            nogood_predicates.swap(1, i);
+                            // Add this nogood to the watch list of the new watcher.
+                            Self::add_watcher(
+                                &mut context,
+                                nogood_predicates[1],
+                                watcher,
+                                &mut self.watch_lists,
+                            );
+
+                            // No propagation is taking place, go to the next nogood.
+                            break;
+                        }
+                        Some(false)
+                            if context.get_predicate(nogood_predicates[i]).get_domain()
+                                == context.get_predicate(nogood_predicates[0]).get_domain() =>
+                        {
+                            // We have found a predicate which reasons over the same
+                            // variable as the 0-th predicate *and* is falsified
+                            //
+                            // We swap the two predicates and mark that the current
+                            // nogood id should be removed from the watchlist of the 0-th
+                            // predicate (before swapping)
+                            falsified_zeroth = Some(nogood_predicates[0]);
+
+                            // Replace the current watcher with the new predicate
+                            // watcher.
+                            nogood_predicates.swap(0, i);
+                            // Add this nogood to the watch list of the new watcher.
+                            Self::add_watcher(
+                                &mut context,
+                                nogood_predicates[0],
+                                watcher,
+                                &mut self.watch_lists,
+                            );
+
+                            // We also update the cached predicate
+                            self.watch_lists[predicate_id][index].cached_predicate =
+                                nogood_predicates[0];
+
+                            // Note that we do not break, since we still want to find a new
+                            // watcher for the other predicate
+                        }
+                        _ => {}
+                    }
+                }
+
                 match self.analysis_mode {
                     AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
-                        // If there is a falsified predicate over the same variable as the 0th
-                        // predicate, then we need to replace it
-                        let mut falsified_zeroth = None;
-                        // Look for another nonsatisfied predicate
-                        // to replace the watched predicate.
-                        let mut found_new_watch = false;
-                        // Start from index 2 since we are skipping watched predicates.
-                        for i in 2..nogood_predicates.len() {
-                            // We try to find a predicate to replace the current (satisfied)
-                            // watcher with
-                            //
-                            // There are two things to keep in mind:
-                            // 1. We are looking for a predicate over a domain which is different
-                            //    than the domain of the 0-th watcher
-                            // 2. If we find a falsified predicate, which reasons over the same
-                            //    domain as the 0-th watcher, then we need to replace the predicate
-                            //    at position 0 with that one
-                            //
-                            // We start by matching on the status of the predicate
-                            match context.evaluate_predicate_id(nogood_predicates[i]) {
-                                Some(false)
-                                    if context.get_predicate(nogood_predicates[i]).get_domain()
-                                        == context
-                                            .get_predicate(nogood_predicates[0])
-                                            .get_domain() =>
-                                {
-                                    // We have found a predicate which reasons over the same
-                                    // variable as the 0-th predicate *and* is falsified
-                                    //
-                                    // We store swap the two predicates and mark that the current
-                                    // nogood id should be removed from the watchlist of the 0-th
-                                    // predicate (before swapping)
-                                    falsified_zeroth = Some(nogood_predicates[0]);
-
-                                    // Replace the current watcher with the new predicate
-                                    // watcher.
-                                    nogood_predicates.swap(0, i);
-                                    // Add this nogood to the watch list of the new watcher.
-                                    Self::add_watcher(
-                                        &mut context,
-                                        nogood_predicates[0],
-                                        watcher,
-                                        &mut self.watch_lists,
-                                    );
-
-                                    // We also update the cached predicate
-                                    self.watch_lists[predicate_id][index].cached_predicate =
-                                        nogood_predicates[0];
-
-                                    // Note that we do not break, since we still want to find a new
-                                    // watcher for the other predicate
-                                }
-                                None | Some(false)
-                                    if context.get_predicate(nogood_predicates[i]).get_domain()
-                                        != context
-                                            .get_predicate(nogood_predicates[0])
-                                            .get_domain() =>
-                                {
-                                    // We found a predicate that is either unassigned or falsified
-                                    // (but reasoning about a different domain than that of the
-                                    // 0-th predicate)
-                                    //
-                                    // Now we swap that watcher
-                                    found_new_watch = true;
-
-                                    // Replace the current watcher with the new predicate
-                                    // watcher.
-                                    nogood_predicates.swap(1, i);
-                                    // Add this nogood to the watch list of the new watcher.
-                                    Self::add_watcher(
-                                        &mut context,
-                                        nogood_predicates[1],
-                                        watcher,
-                                        &mut self.watch_lists,
-                                    );
-
-                                    // No propagation is taking place, go to the next nogood.
-                                    break;
-                                }
-                                _ => {}
-                            }
-                        } // end iterating through the nogood
-
                         if found_new_watch {
                             // We remove the current watcher
                             let _ = self.watch_lists[predicate_id].swap_remove(index);
@@ -463,34 +470,6 @@ impl Propagator for NogoodPropagator {
                     AnalysisMode::OneUIP
                     | AnalysisMode::AllDecision
                     | AnalysisMode::HalfExtendedUIP => {
-                        // Look for another nonsatisfied predicate
-                        // to replace the watched predicate.
-                        let mut found_new_watch = false;
-                        // Start from index 2 since we are skipping watched predicates.
-                        for i in 2..nogood_predicates.len() {
-                            // Find a predicate that is either false or unassigned,
-                            // i.e., not assigned true.
-                            if !context.is_predicate_id_satisfied(nogood_predicates[i]) {
-                                // Found another predicate that can be the watcher.
-                                found_new_watch = true;
-                                // todo: does it make sense to replace the cached predicate with
-                                // this new predicate?
-
-                                // Replace the current watcher with the new predicate watcher.
-                                nogood_predicates.swap(1, i);
-                                // Add this nogood to the watch list of the new watcher.
-                                Self::add_watcher(
-                                    &mut context,
-                                    nogood_predicates[1],
-                                    watcher,
-                                    &mut self.watch_lists,
-                                );
-
-                                // No propagation is taking place, go to the next nogood.
-                                break;
-                            }
-                        } // end iterating through the nogood
-
                         if matches!(self.analysis_mode, AnalysisMode::HalfExtendedUIP) {
                             // We find all of the unasssigned predicates and get their domains
                             //
@@ -748,10 +727,16 @@ impl NogoodPropagator {
         }
 
         if is_falsified {
+            // The nogood is already falsified
             return Ok(());
         }
 
         if num_describing_domain == 0 {
+            // We could not find another watcher (i.e., all predicats over other variables are
+            // satisfied). However, we could not find a predicate in the nogood which is over
+            // `propgating_domain` *and* unsatisfied.
+            //
+            // This means that there is a conflict which should be reported.
             let reason = nogood
                 .iter()
                 .filter_map(|predicate_id| {
@@ -770,24 +755,11 @@ impl NogoodPropagator {
             .average_num_predicates_describing_domain_when_propagating_extended
             .add_term(num_describing_domain);
 
-        // We perform the standard unit propagation
+        // We perform the standard unit propagation if possible
+        //
+        // TODO: Could use a lazy explanation here
         if num_describing_domain == 1 {
             statistics.num_unit_propagations += 1;
-            info!(
-                "Unit propagating nogood: {:?}",
-                nogood
-                    .iter()
-                    .map(|predicate_id| {
-                        let predicate = context.get_predicate(*predicate_id);
-                        (
-                            predicate,
-                            context
-                                .evaluate_predicate(predicate)
-                                .and_then(|_| context.get_checkpoint_for_predicate(predicate)),
-                        )
-                    })
-                    .collect::<Vec<_>>()
-            );
             let reason = nogood
                 .iter()
                 .filter_map(|predicate_id| {
@@ -801,22 +773,7 @@ impl NogoodPropagator {
                 .map_err(|e| e.into());
         }
 
-        info!(
-            "Propagating nogood: {:?}",
-            nogood
-                .iter()
-                .map(|predicate_id| {
-                    let predicate = context.get_predicate(*predicate_id);
-                    (
-                        predicate,
-                        context
-                            .evaluate_predicate(predicate)
-                            .and_then(|_| context.get_checkpoint_for_predicate(predicate)),
-                    )
-                })
-                .collect::<Vec<_>>()
-        );
-
+        // Now we get the minimum and maximum exception values for propagation
         let (min_exception, max_exception) =
             exceptions
                 .iter()
@@ -854,11 +811,11 @@ impl NogoodPropagator {
             || max_exception.unwrap(),
             |predicate| predicate.get_right_hand_side(),
         );
-        assert!(lb <= ub);
+        pumpkin_assert_simple!(lb <= ub);
 
         // Now we check whether we can do any bound propagation
         if upper_bound.is_none() {
-            assert!(
+            pumpkin_assert_simple!(
                 exceptions.len() > 1
                     || (!exceptions.is_empty()
                         && lower_bound.is_some()
