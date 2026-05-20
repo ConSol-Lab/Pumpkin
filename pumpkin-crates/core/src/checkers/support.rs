@@ -25,7 +25,7 @@ pub trait SupportGenerator: Clone + Debug {
         support: &mut Support<Self::Value>,
         local_id: LocalId,
         value: UnsupportedValue,
-        domains: Domains<'_>,
+        domains: &Domains<'_>,
     );
 
     /// Returns true if the support is a solution to the constraint.
@@ -34,7 +34,7 @@ pub trait SupportGenerator: Clone + Debug {
 
 /// A value that may be used in a [`Support`].
 pub trait SupportValue: Clone + Debug {
-    fn is_in(&self, domain: DomainId, domains: Domains<'_>) -> bool;
+    fn is_in(&self, domain: DomainId, domains: &Domains<'_>) -> bool;
 
     /// If the value is an integer, we can cache it to prevent recreating supports for the same
     /// value.
@@ -42,7 +42,7 @@ pub trait SupportValue: Clone + Debug {
 }
 
 impl SupportValue for i32 {
-    fn is_in(&self, domain: DomainId, domains: Domains<'_>) -> bool {
+    fn is_in(&self, domain: DomainId, domains: &Domains<'_>) -> bool {
         domains.contains(&domain, *self)
     }
 
@@ -52,7 +52,7 @@ impl SupportValue for i32 {
 }
 
 impl SupportValue for f32 {
-    fn is_in(&self, domain: DomainId, domains: Domains<'_>) -> bool {
+    fn is_in(&self, domain: DomainId, domains: &Domains<'_>) -> bool {
         let lb = domains.lower_bound(&domain) as f32;
         let ub = domains.upper_bound(&domain) as f32;
 

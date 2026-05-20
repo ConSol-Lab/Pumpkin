@@ -68,7 +68,7 @@ where
         support: &mut Support<Self::Value>,
         local_id: LocalId,
         unsupported_value: UnsupportedValue,
-        domains: Domains<'_>,
+        domains: &Domains<'_>,
     ) {
         let a_min = domains.lower_bound(&self.a) as f32;
         let a_max = domains.upper_bound(&self.a) as f32;

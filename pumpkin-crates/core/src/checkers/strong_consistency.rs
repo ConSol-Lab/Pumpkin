@@ -37,17 +37,14 @@ impl<Supports: SupportGenerator> StrongConsistencyChecker<Supports> {
 }
 
 impl<Supports: SupportGenerator> ConsistencyChecker for StrongConsistencyChecker<Supports> {
-    fn check_consistency(&mut self, scope: &Scope, mut domains: Domains<'_>) -> bool {
+    fn check_consistency(&mut self, scope: &Scope, domains: Domains<'_>) -> bool {
         self.supported_values.clear();
 
         for (local_id, domain) in scope.domains() {
             let values_to_support = match self.consistency_level {
-                StrongConsistency::Domain => itertools::Either::Left(
-                    domains
-                        .iterate_domain(&domain)
-                        .collect::<Vec<_>>()
-                        .into_iter(),
-                ),
+                StrongConsistency::Domain => {
+                    itertools::Either::Left(domains.iterate_domain(&domain))
+                }
                 StrongConsistency::Bounds => itertools::Either::Right(
                     [domains.lower_bound(&domain), domains.upper_bound(&domain)].into_iter(),
                 ),
@@ -62,10 +59,10 @@ impl<Supports: SupportGenerator> ConsistencyChecker for StrongConsistencyChecker
                     &mut self.support,
                     local_id,
                     UnsupportedValue(value),
-                    domains.reborrow(),
+                    &domains,
                 );
 
-                if !self.process_support(domains.reborrow()) {
+                if !self.process_support(&domains) {
                     return false;
                 }
             }
@@ -76,14 +73,14 @@ impl<Supports: SupportGenerator> ConsistencyChecker for StrongConsistencyChecker
 }
 
 impl<Supports: SupportGenerator> StrongConsistencyChecker<Supports> {
-    fn process_support(&mut self, mut domains: Domains<'_>) -> bool {
+    fn process_support(&mut self, domains: &Domains<'_>) -> bool {
         if !self.supports.is_solution(&self.support) {
             log::error!("Support is not a solution");
             return false;
         }
 
         for (domain, value) in self.support.drain() {
-            if !value.is_in(domain, domains.reborrow()) {
+            if !value.is_in(domain, &domains) {
                 log::error!("Support value is not in the domain");
                 return false;
             }

@@ -63,7 +63,7 @@ where
         support: &mut Support<Self::Value>,
         local_id: LocalId,
         value: UnsupportedValue,
-        _: Domains<'_>,
+        _: &Domains<'_>,
     ) {
         let value = match local_id {
             super::ID_LHS => self.lhs.unpack(value),
