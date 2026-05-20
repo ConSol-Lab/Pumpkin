@@ -2,6 +2,12 @@ use enumset::EnumSet;
 use pumpkin_checking::CheckerVariable;
 
 use super::TransformableVariable;
+use crate::checkers::Scope;
+use crate::checkers::ScopeItem;
+use crate::checkers::support::Support;
+use crate::checkers::support::SupportsValue;
+use crate::checkers::support::UnpackUnsupportedValue;
+use crate::checkers::support::UnsupportedValue;
 use crate::containers::StorageKey;
 use crate::engine::Assignments;
 use crate::engine::notifications::DomainEvent;
@@ -12,6 +18,7 @@ use crate::engine::variables::IntegerVariable;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateConstructor;
 use crate::predicates::PredicateType;
+use crate::propagation::LocalId;
 use crate::pumpkin_assert_simple;
 
 /// A structure which represents the most basic [`IntegerVariable`]; it is simply the id which links
@@ -29,6 +36,38 @@ impl DomainId {
 
     pub fn id(&self) -> u32 {
         self.id
+    }
+}
+
+impl ScopeItem for DomainId {
+    fn add_to_scope(&self, scope: &mut Scope, local_id: LocalId) {
+        scope.add_domain(local_id, *self);
+    }
+}
+
+impl UnpackUnsupportedValue for DomainId {
+    fn unpack(&self, UnsupportedValue(value): UnsupportedValue) -> i32 {
+        value
+    }
+}
+
+impl SupportsValue<i32> for DomainId {
+    fn assign(&self, value: i32, support: &mut Support<i32>) {
+        support.with_assignment(*self, value);
+    }
+
+    fn support_value(&self, support: &Support<i32>) -> i32 {
+        support.assignment(*self)
+    }
+}
+
+impl SupportsValue<f32> for DomainId {
+    fn assign(&self, value: f32, support: &mut Support<f32>) {
+        support.with_assignment(*self, value);
+    }
+
+    fn support_value(&self, support: &Support<f32>) -> f32 {
+        support.assignment(*self)
     }
 }
 

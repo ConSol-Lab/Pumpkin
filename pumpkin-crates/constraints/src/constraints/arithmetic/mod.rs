@@ -3,6 +3,7 @@ mod inequality;
 
 pub use equality::*;
 pub use inequality::*;
+use pumpkin_core::checkers::support::SupportsValue;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
@@ -23,9 +24,9 @@ pub fn plus<Var: IntegerVariable + 'static>(
 
 /// Creates the [`Constraint`] `a * b = c`.
 pub fn times(
-    a: impl IntegerVariable + 'static,
-    b: impl IntegerVariable + 'static,
-    c: impl IntegerVariable + 'static,
+    a: impl IntegerVariable + SupportsValue<f32> + 'static,
+    b: impl IntegerVariable + SupportsValue<f32> + 'static,
+    c: impl IntegerVariable + SupportsValue<f32> + 'static,
     constraint_tag: ConstraintTag,
 ) -> impl Constraint {
     IntegerMultiplicationArgs {

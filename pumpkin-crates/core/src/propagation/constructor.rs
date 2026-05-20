@@ -12,6 +12,8 @@ use super::PropagatorVarId;
 use crate::Solver;
 use crate::basic_types::PredicateId;
 use crate::basic_types::RefOrOwned;
+use crate::checkers::BoxedConsistencyChecker;
+use crate::checkers::Scope;
 use crate::engine::Assignments;
 use crate::engine::State;
 use crate::engine::TrailedValues;
@@ -21,6 +23,7 @@ use crate::engine::variables::AffineView;
 #[cfg(doc)]
 use crate::engine::variables::DomainId;
 use crate::predicates::Predicate;
+use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
@@ -59,7 +62,7 @@ pub struct InferenceCheckers<'state> {
 }
 
 impl<'state> InferenceCheckers<'state> {
-    #[cfg(feature = "check-propagations")]
+    #[cfg(any(feature = "check-propagations", feature = "check-consistency"))]
     pub(crate) fn new(state: &'state mut State) -> Self {
         InferenceCheckers {
             state,
@@ -69,6 +72,17 @@ impl<'state> InferenceCheckers<'state> {
 }
 
 impl InferenceCheckers<'_> {
+    /// Add a consistency checker for the given constraint and scope.
+    pub fn add_consistency_checker(
+        &mut self,
+        constraint_tag: ConstraintTag,
+        scope: impl Into<Scope>,
+        checker: impl Into<BoxedConsistencyChecker>,
+    ) {
+        self.state
+            .add_consistency_checker(constraint_tag, scope, checker);
+    }
+
     /// Forwards to [`State::add_inference_checker`].
     pub fn add_inference_checker(
         &mut self,

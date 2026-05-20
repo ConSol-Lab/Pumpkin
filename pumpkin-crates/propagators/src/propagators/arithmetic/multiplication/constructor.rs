@@ -1,3 +1,5 @@
+use pumpkin_core::checkers::BoundsConsistencyChecker;
+use pumpkin_core::checkers::support::SupportsValue;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
@@ -8,7 +10,7 @@ use pumpkin_core::variables::IntegerVariable;
 
 use crate::arithmetic::IntegerMultiplicationPropagator;
 use crate::arithmetic::multiplication::IntegerMultiplication;
-use crate::arithmetic::multiplication::inference_checker::IntegerMultiplicationChecker;
+use crate::arithmetic::multiplication::checker::IntegerMultiplicationChecker;
 
 /// The [`PropagatorConstructor`] for [`IntegerMultiplicationPropagator`].
 #[derive(Clone, Debug)]
@@ -21,9 +23,9 @@ pub struct IntegerMultiplicationArgs<VA, VB, VC> {
 
 impl<VA, VB, VC> PropagatorConstructor for IntegerMultiplicationArgs<VA, VB, VC>
 where
-    VA: IntegerVariable + 'static,
-    VB: IntegerVariable + 'static,
-    VC: IntegerVariable + 'static,
+    VA: IntegerVariable + SupportsValue<f32> + 'static,
+    VB: IntegerVariable + SupportsValue<f32> + 'static,
+    VC: IntegerVariable + SupportsValue<f32> + 'static,
 {
     type PropagatorImpl = IntegerMultiplicationPropagator<VA, VB, VC>;
 
@@ -39,7 +41,11 @@ where
 
         checkers.add_consistency_checker(
             self.constraint_tag,
-            [&self.a, &self.b, &self.c],
+            (
+                (super::ID_A, &self.a),
+                (super::ID_B, &self.b),
+                (super::ID_C, &self.c),
+            ),
             BoundsConsistencyChecker::new(IntegerMultiplicationChecker {
                 a: self.a.clone(),
                 b: self.b.clone(),

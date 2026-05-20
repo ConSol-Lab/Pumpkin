@@ -5,6 +5,9 @@ use pumpkin_checking::InferenceChecker;
 #[cfg(feature = "check-propagations")]
 use pumpkin_checking::VariableState;
 
+use crate::checkers::BoxedConsistencyChecker;
+use crate::checkers::ConsistencyCheckerStore;
+use crate::checkers::Scope;
 use crate::containers::HashMap;
 use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
@@ -28,7 +31,7 @@ use crate::proof::InferenceCode;
 use crate::propagation::CurrentNogood;
 use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
-#[cfg(feature = "check-propagations")]
+#[cfg(any(feature = "check-propagations", feature = "check-consistency"))]
 use crate::propagation::InferenceCheckers;
 use crate::propagation::NotificationContext;
 use crate::propagation::PropagationContext;
@@ -82,6 +85,7 @@ pub struct State {
 
     /// Inference checkers to run in the propagation loop.
     checkers: HashMap<InferenceCode, Vec<BoxedChecker<Predicate>>>,
+    consistency_checkers: ConsistencyCheckerStore,
 }
 
 create_statistics_struct!(StateStatistics {
@@ -112,6 +116,7 @@ impl Default for State {
             statistics: StateStatistics::default(),
             constraint_tags: KeyGenerator::default(),
             checkers: HashMap::default(),
+            consistency_checkers: Default::default(),
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are
@@ -333,7 +338,7 @@ impl State {
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
-        #[cfg(feature = "check-propagations")]
+        #[cfg(any(feature = "check-propagations", feature = "check-consistency"))]
         constructor.add_inference_checkers(InferenceCheckers::new(self));
 
         let original_handle: PropagatorHandle<Constructor::PropagatorImpl> =
@@ -375,6 +380,17 @@ impl State {
     ) {
         let checkers = self.checkers.entry(inference_code).or_default();
         checkers.push(BoxedChecker::from(checker));
+    }
+
+    /// Add a consistency checker for the given constraint and scope.
+    pub fn add_consistency_checker(
+        &mut self,
+        _constraint_tag: ConstraintTag,
+        scope: impl Into<Scope>,
+        checker: impl Into<BoxedConsistencyChecker>,
+    ) {
+        self.consistency_checkers
+            .register(scope.into(), checker.into());
     }
 }
 
@@ -618,6 +634,9 @@ impl State {
         #[cfg(feature = "check-propagations")]
         self.check_propagations(num_trail_entries_before);
 
+        #[cfg(feature = "check-consistency")]
+        self.enqueue_consistency_checkers(num_trail_entries_before);
+
         match propagation_status {
             Ok(_) => {
                 // Notify other propagators of the propagations and continue.
@@ -718,6 +737,16 @@ impl State {
         }
     }
 
+    #[cfg(feature = "check-consistency")]
+    fn enqueue_consistency_checkers(&mut self, first_propagation_index: usize) {
+        for trail_index in first_propagation_index..self.assignments.num_trail_entries() {
+            let entry = self.assignments.get_trail_entry(trail_index);
+
+            self.consistency_checkers
+                .on_domain_event(entry.predicate.get_domain());
+        }
+    }
+
     /// Performs fixed-point propagation using the propagators defined in the [`State`].
     ///
     /// The posted [`Predicate`]s (using [`State::post`]) and added propagators (using
@@ -744,6 +773,13 @@ impl State {
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
         while let Some(propagator_id) = self.propagator_queue.pop() {
             self.propagate(propagator_id)?;
+        }
+
+        if cfg!(feature = "check-consistency") {
+            assert!(
+                self.consistency_checkers
+                    .run_enqueued(Domains::new(&self.assignments, &mut self.trailed_values))
+            );
         }
 
         // Only check fixed point propagation if there was no reported conflict,

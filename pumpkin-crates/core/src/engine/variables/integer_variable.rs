@@ -4,6 +4,7 @@ use enumset::EnumSet;
 use pumpkin_checking::CheckerVariable;
 
 use super::TransformableVariable;
+use crate::checkers::ScopeItem;
 use crate::engine::Assignments;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
@@ -19,6 +20,7 @@ pub trait IntegerVariable:
     + TransformableVariable<Self::AffineView>
     + Debug
     + CheckerVariable<Predicate>
+    + ScopeItem
 {
     type AffineView: IntegerVariable;
 
