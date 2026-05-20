@@ -40,7 +40,6 @@ use crate::propagators::nogoods::arena_allocator::ArenaAllocator;
 use crate::propagators::nogoods::arena_allocator::NogoodIndex;
 use crate::propagators::nogoods::semantic_minimiser::SemanticMinimiser;
 use crate::pumpkin_assert_advanced;
-use crate::pumpkin_assert_eq_moderate;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
@@ -269,71 +268,59 @@ impl Propagator for NogoodPropagator {
         reason = "Will run into borrow issues otherwise"
     )]
     fn propagate(&mut self, mut context: PropagationContext) -> Result<(), Conflict> {
-        // TODO: cannot do learned nogood management easily when using extended UIP, disabled for
-        // everything for now
-        // First we clean up the nogood database
-        // self.clean_up_learned_nogoods_if_needed(
-        //     context.assignments,
-        //     context.reason_store,
-        //     context.notification_engine,
-        // );
-        match self.analysis_mode {
-            AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
-                if self.watch_lists.len() <= context.num_predicate_ids() {
-                    self.watch_lists
-                        .resize(context.num_predicate_ids() + 1, Vec::default());
+        pumpkin_assert_advanced!(self.debug_is_properly_watched());
+
+        // First we perform nogood management to ensure that the database does not grow excessively
+        // large with "bad" nogoods
+        self.clean_up_learned_nogoods_if_needed(
+            context.assignments,
+            context.reason_store,
+            context.notification_engine,
+        );
+
+        if self.watch_lists.len() <= context.num_predicate_ids() {
+            self.watch_lists
+                .resize(context.num_predicate_ids() + 1, Vec::default());
+        }
+        for predicate_id in self.updated_predicate_ids.drain(..) {
+            pumpkin_assert_moderate!(
+                {
+                    let predicate = context.get_predicate(predicate_id);
+                    context.evaluate_predicate(predicate) == Some(true)
+                },
+                "The predicate {} with id {predicate_id:?} should be satisfied but was not",
+                context.get_predicate(predicate_id),
+            );
+            let mut index = 0;
+            while index < self.watch_lists[predicate_id].len() {
+                let watcher = self.watch_lists[predicate_id][index];
+                // We first check whether the cached predicate might already make the nogood
+                // satisfied
+                if context.is_predicate_id_falsified(watcher.cached_predicate) {
+                    index += 1;
+                    continue;
+                }
+                let inference_code = &self.inference_codes
+                    [self.nogood_predicates.get_nogood_index(&watcher.nogood_id)];
+                let nogood_predicates = &mut self.nogood_predicates[watcher.nogood_id];
+
+                // Place the watched predicate at position 1 for simplicity.
+                if nogood_predicates[0] == predicate_id {
+                    nogood_predicates.swap(0, 1);
                 }
 
-                // TODO: should drop all elements afterwards
-                for predicate_id in self.updated_predicate_ids.drain(..) {
-                    pumpkin_assert_moderate!(
-                        {
-                            let predicate = context.get_predicate(predicate_id);
-                            context.evaluate_predicate(predicate) == Some(true)
-                        },
-                        "The predicate {} with id {predicate_id:?} should be satisfied but was not",
-                        context.get_predicate(predicate_id),
-                    );
+                pumpkin_assert_moderate!(context.is_predicate_id_satisfied(nogood_predicates[1]));
 
-                    let mut index = 0;
-                    while index < self.watch_lists[predicate_id].len() {
-                        let watcher = self.watch_lists[predicate_id][index];
-
-                        // We first check whether the cached predicate might already make the nogood
-                        // satisfied
-                        if context.is_predicate_id_falsified(watcher.cached_predicate) {
-                            index += 1;
-                            continue;
-                        }
-
-                        let inference_code = &self.inference_codes
-                            [self.nogood_predicates.get_nogood_index(&watcher.nogood_id)];
-                        let nogood_predicates = &mut self.nogood_predicates[watcher.nogood_id];
-
-                        // Place the watched predicate at position 1 for simplicity.
-                        if nogood_predicates[0] == predicate_id {
-                            nogood_predicates.swap(0, 1);
-                        }
-
-                        pumpkin_assert_eq_moderate!(predicate_id, nogood_predicates[1]);
-                        pumpkin_assert_moderate!(
-                            context.is_predicate_id_satisfied(nogood_predicates[1])
-                        );
-
-                        // Check the other watched predicate is already falsified, in which case
-                        // no propagation can take place. Recall that the other watched
-                        // predicate is at position 0 due to previous code.
-                        if context.is_predicate_id_falsified(nogood_predicates[0]) {
-                            self.watch_lists[predicate_id][index].cached_predicate =
-                                nogood_predicates[0];
-                            index += 1;
-                            continue;
-                        }
-
-                        pumpkin_assert_moderate!(
-                            !context.is_predicate_id_falsified(nogood_predicates[1])
-                        );
-
+                // Check the other watched predicate is already falsified, in which case
+                // no propagation can take place. Recall that the other watched
+                // predicate is at position 0 due to previous code.
+                if context.is_predicate_id_falsified(nogood_predicates[0]) {
+                    self.watch_lists[predicate_id][index].cached_predicate = nogood_predicates[0];
+                    index += 1;
+                    continue;
+                }
+                match self.analysis_mode {
+                    AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
                         // If there is a falsified predicate over the same variable as the 0th
                         // predicate, then we need to replace it
                         let mut falsified_zeroth = None;
@@ -473,63 +460,9 @@ impl Propagator for NogoodPropagator {
 
                         index += 1;
                     }
-                }
-
-                Ok(())
-            }
-            AnalysisMode::OneUIP | AnalysisMode::AllDecision | AnalysisMode::HalfExtendedUIP => {
-                pumpkin_assert_advanced!(self.debug_is_properly_watched());
-
-                if self.watch_lists.len() <= context.num_predicate_ids() {
-                    self.watch_lists
-                        .resize(context.num_predicate_ids() + 1, Vec::default());
-                }
-
-                // TODO: should drop all elements afterwards
-                for predicate_id in self.updated_predicate_ids.drain(..) {
-                    pumpkin_assert_moderate!(
-                        {
-                            let predicate = context.get_predicate(predicate_id);
-                            context.evaluate_predicate(predicate) == Some(true)
-                        },
-                        "The predicate {} with id {predicate_id:?} should be satisfied but was not",
-                        context.get_predicate(predicate_id),
-                    );
-
-                    let mut index = 0;
-                    while index < self.watch_lists[predicate_id].len() {
-                        let watcher = self.watch_lists[predicate_id][index];
-
-                        // We first check whether the cached predicate might already make the nogood
-                        // satisfied
-                        if context.is_predicate_id_falsified(watcher.cached_predicate) {
-                            index += 1;
-                            continue;
-                        }
-
-                        let inference_code = &self.inference_codes
-                            [self.nogood_predicates.get_nogood_index(&watcher.nogood_id)];
-                        let nogood_predicates = &mut self.nogood_predicates[watcher.nogood_id];
-
-                        // Place the watched predicate at position 1 for simplicity.
-                        if nogood_predicates[0] == predicate_id {
-                            nogood_predicates.swap(0, 1);
-                        }
-
-                        pumpkin_assert_moderate!(
-                            context.is_predicate_id_satisfied(nogood_predicates[1])
-                        );
-
-                        // Check the other watched predicate is already falsified, in which case
-                        // no propagation can take place. Recall that the other watched
-                        // predicate is at position 0 due to previous code.
-                        if context.is_predicate_id_falsified(nogood_predicates[0]) {
-                            self.watch_lists[predicate_id][index].cached_predicate =
-                                nogood_predicates[0];
-                            index += 1;
-                            continue;
-                        }
-
+                    AnalysisMode::OneUIP
+                    | AnalysisMode::AllDecision
+                    | AnalysisMode::HalfExtendedUIP => {
                         // Look for another nonsatisfied predicate
                         // to replace the watched predicate.
                         let mut found_new_watch = false;
@@ -561,8 +494,9 @@ impl Propagator for NogoodPropagator {
                         if matches!(self.analysis_mode, AnalysisMode::HalfExtendedUIP) {
                             // We find all of the unasssigned predicates and get their domains
                             //
-                            // If there is a falsified predicate then we do not propagate; also, if
-                            // the nogood can be unit propagated, then
+                            // If there is a falsified predicate then we do not propagate; also,
+                            // if the nogood can be unit
+                            // propagated, then
                             // we do not propagate
                             let mut is_falsified = false;
                             let mut num_unassigned = 0;
@@ -624,12 +558,9 @@ impl Propagator for NogoodPropagator {
                         index += 1;
                     }
                 }
-
-                pumpkin_assert_advanced!(self.debug_is_properly_watched());
-
-                Ok(())
             }
         }
+        Ok(())
     }
 
     fn synchronise(&mut self, _context: NotificationContext<'_>) {
@@ -1623,6 +1554,13 @@ impl NogoodPropagator {
         reason_store: &mut ReasonStore,
         notification_engine: &mut NotificationEngine,
     ) {
+        if matches!(
+            self.analysis_mode,
+            AnalysisMode::ExtendedUIP | AnalysisMode::HalfExtendedUIP
+        ) {
+            // TODO: implement for extended nogood propagation
+            return;
+        }
         // The clean-up procedure is divided into four stages (for simplicity of implementation).
         //
         // For each tier, if the number of nogoods exceeds the predefined threshold for that tier:
@@ -2193,6 +2131,13 @@ impl NogoodPropagator {
 
     /// Checks for each nogood whether the first two predicates in the nogood are being watched
     fn debug_is_properly_watched(&self) -> bool {
+        if matches!(
+            self.analysis_mode,
+            AnalysisMode::ExtendedUIP | AnalysisMode::HalfExtendedUIP
+        ) {
+            // TODO: implement for extended nogood propagation
+            return true;
+        }
         let is_watching = |predicate_id: PredicateId, nogood_id: NogoodId| -> bool {
             self.watch_lists[predicate_id]
                 .iter()
