@@ -336,7 +336,9 @@ impl Propagator for NogoodPropagator {
                     // We try to find a predicate to replace the current (satisfied)
                     // watcher with.
                     //
-                    // There are two things to keep in mind when using CPIP nogoods:
+                    // In the case of 1UIP nogoods, we simply look for an unsatisfied predicate.
+                    //
+                    // In the case of CPIP nogoods, there are two things to keep in mind:
                     // 1. We are looking for a predicate over a domain which is different than the
                     //    domain of the 0-th watcher.
                     // 2. If we find a falsified predicate, which reasons over the same domain as
@@ -409,52 +411,75 @@ impl Propagator for NogoodPropagator {
                     }
                 }
 
+                if matches!(self.analysis_mode, AnalysisMode::HalfExtendedUIP) {
+                    // We find all of the unasssigned predicates and get their domains
+                    //
+                    // If there is a falsified predicate then we do not propagate; also,
+                    // if the nogood can be unit
+                    // propagated, then
+                    // we do not propagate
+                    let mut is_falsified = false;
+                    let mut num_unassigned = 0;
+                    let mut unassigned_domains = HashSet::new();
+                    for predicate_id in nogood_predicates.iter() {
+                        if context.is_predicate_id_falsified(*predicate_id) {
+                            is_falsified = true;
+                            break;
+                        } else if context.is_predicate_id_satisfied(*predicate_id) {
+                            continue;
+                        } else {
+                            num_unassigned += 1;
+                            let predicate = context.get_predicate(*predicate_id);
+                            let _ = unassigned_domains.insert(predicate.get_domain());
+                        }
+                    }
+
+                    if num_unassigned > 1 && !is_falsified && unassigned_domains.len() == 1 {
+                        NogoodPropagator::propagate_extended_nogood(
+                            &mut context,
+                            nogood_predicates,
+                            *unassigned_domains.iter().next().unwrap(),
+                            inference_code,
+                            &mut self.statistics,
+                        )?;
+                    }
+                }
+
+                if found_new_watch {
+                    // We remove the current watcher
+                    let _ = self.watch_lists[predicate_id].swap_remove(index);
+
+                    if self.watch_lists[predicate_id].is_empty() {
+                        context.unregister_predicate(predicate_id);
+                    }
+                }
+                if let Some(to_remove) = falsified_zeroth {
+                    // We have replaced `to_remove` with a predicate that has been
+                    // falsified; we now remove this nogood from the watchlist of
+                    // `to_remove`
+                    let index_in_zeroth_watchlist = self.watch_lists[to_remove]
+                        .iter()
+                        .position(|zero_watcher| zero_watcher.nogood_id == watcher.nogood_id)
+                        .expect("Expected to be able to retrieve watcher");
+                    let _ = self.watch_lists[to_remove].swap_remove(index_in_zeroth_watchlist);
+
+                    if self.watch_lists[to_remove].is_empty() {
+                        context.unregister_predicate(to_remove);
+                    }
+                }
+                if found_new_watch || falsified_zeroth.is_some() {
+                    // We have either found a new watcher, or we have found a falsified
+                    // predicate; no propagation can take place in either case, so we
+                    // continue
+                    pumpkin_assert_moderate!(nogood_predicates.iter().skip(2).all(
+                        |predicate_id| { !self.watch_lists[predicate_id].contains(&watcher) }
+                    ),);
+                    continue;
+                }
+
+                // Now we perform the propagation
                 match self.analysis_mode {
                     AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
-                        if found_new_watch {
-                            // We remove the current watcher
-                            let _ = self.watch_lists[predicate_id].swap_remove(index);
-                            pumpkin_assert_moderate!(
-                                !self.watch_lists[predicate_id].contains(&watcher)
-                            );
-
-                            if self.watch_lists[predicate_id].is_empty() {
-                                context.unregister_predicate(predicate_id);
-                            }
-                        }
-
-                        if let Some(to_remove) = falsified_zeroth {
-                            // We have replaced `to_remove` with a predicate that has been
-                            // falsified; we now remove this nogood from the watchlist of
-                            // `to_remove`
-                            let index_in_zeroth_watchlist = self.watch_lists[to_remove]
-                                .iter()
-                                .position(|zero_watcher| {
-                                    zero_watcher.nogood_id == watcher.nogood_id
-                                })
-                                .expect("Expected to be able to retrieve watcher");
-                            let _ =
-                                self.watch_lists[to_remove].swap_remove(index_in_zeroth_watchlist);
-
-                            if self.watch_lists[to_remove].is_empty() {
-                                context.unregister_predicate(to_remove);
-                            }
-                        }
-
-                        if found_new_watch || falsified_zeroth.is_some() {
-                            // We have either found a new watcher, or we have found a falsified
-                            // predicate; no propagation can take place in either case, so we
-                            // continue
-                            pumpkin_assert_moderate!(nogood_predicates.iter().skip(2).all(
-                                |predicate_id| {
-                                    !self.watch_lists[predicate_id].contains(&watcher)
-                                }
-                            ),);
-                            continue;
-                        }
-
-                        // We can now propagate!
-
                         let propagated_domain =
                             context.get_predicate(nogood_predicates[0]).get_domain();
                         NogoodPropagator::propagate_extended_nogood(
@@ -470,58 +495,7 @@ impl Propagator for NogoodPropagator {
                     AnalysisMode::OneUIP
                     | AnalysisMode::AllDecision
                     | AnalysisMode::HalfExtendedUIP => {
-                        if matches!(self.analysis_mode, AnalysisMode::HalfExtendedUIP) {
-                            // We find all of the unasssigned predicates and get their domains
-                            //
-                            // If there is a falsified predicate then we do not propagate; also,
-                            // if the nogood can be unit
-                            // propagated, then
-                            // we do not propagate
-                            let mut is_falsified = false;
-                            let mut num_unassigned = 0;
-                            let mut unassigned_domains = HashSet::new();
-                            for predicate_id in nogood_predicates.iter() {
-                                if context.is_predicate_id_falsified(*predicate_id) {
-                                    is_falsified = true;
-                                    break;
-                                } else if context.is_predicate_id_satisfied(*predicate_id) {
-                                    continue;
-                                } else {
-                                    num_unassigned += 1;
-                                    let predicate = context.get_predicate(*predicate_id);
-                                    let _ = unassigned_domains.insert(predicate.get_domain());
-                                }
-                            }
-
-                            if num_unassigned > 1 && !is_falsified && unassigned_domains.len() == 1
-                            {
-                                NogoodPropagator::propagate_extended_nogood(
-                                    &mut context,
-                                    nogood_predicates,
-                                    *unassigned_domains.iter().next().unwrap(),
-                                    inference_code,
-                                    &mut self.statistics,
-                                )?;
-                            }
-                        }
-
-                        if found_new_watch {
-                            // We remove the current watcher
-                            let _ = self.watch_lists[predicate_id].swap_remove(index);
-                            if self.watch_lists[predicate_id].is_empty() {
-                                context.unregister_predicate(predicate_id);
-                            }
-
-                            continue;
-                        }
-
                         self.statistics.num_unit_propagations += 1;
-
-                        // At this point, nonwatched predicates and nogood[1] are falsified.
-                        pumpkin_assert_advanced!(nogood_predicates.iter().skip(1).all(|p| {
-                            let predicate = context.get_predicate(*p);
-                            context.evaluate_predicate(predicate) == Some(true)
-                        }));
 
                         // There are two scenarios:
                         // nogood[0] is unassigned -> propagate the predicate to false
