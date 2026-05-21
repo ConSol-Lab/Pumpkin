@@ -8,10 +8,10 @@ use crate::basic_types::ConstraintOperationError;
 use crate::branching::Brancher;
 use crate::branching::branchers::autonomous_search::AutonomousSearch;
 use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-use crate::branching::value_selection::InDomainMin;
+use crate::branching::value_selection::RandomSplitter;
 #[cfg(doc)]
 use crate::branching::value_selection::ValueSelector;
-use crate::branching::variable_selection::InputOrder;
+use crate::branching::variable_selection::RandomSelector;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
 use crate::conflict_resolving::ConflictAnalysisContext;
@@ -621,4 +621,4 @@ impl Solver {
 /// value-selection heuristic to simulate local search behavior in complete solvers’, in the
 /// proceedings of the Principles and Practice of Constraint Programming (CP 2018).
 pub type DefaultBrancher =
-    AutonomousSearch<IndependentVariableValueBrancher<DomainId, InputOrder<DomainId>, InDomainMin>>;
+    AutonomousSearch<IndependentVariableValueBrancher<DomainId, RandomSelector, RandomSplitter>>;
