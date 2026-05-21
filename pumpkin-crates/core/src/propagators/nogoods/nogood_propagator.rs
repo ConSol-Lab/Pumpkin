@@ -441,6 +441,7 @@ impl Propagator for NogoodPropagator {
                             *unassigned_domains.iter().next().unwrap(),
                             inference_code,
                             &mut self.statistics,
+                            Some(watcher.nogood_id),
                         )?;
                     }
                 }
@@ -489,6 +490,7 @@ impl Propagator for NogoodPropagator {
                             propagated_domain,
                             inference_code,
                             &mut self.statistics,
+                            Some(watcher.nogood_id),
                         )?;
 
                         index += 1;
@@ -634,6 +636,7 @@ impl NogoodPropagator {
         propagated_domain: DomainId,
         inference_code: &InferenceCode,
         statistics: &mut NogoodPropagatorStatistics,
+        nogood_id: Option<NogoodId>,
     ) -> Result<(), Conflict> {
         statistics.num_extended_propagation_calls += 1;
         info!(
@@ -734,20 +737,27 @@ impl NogoodPropagator {
             .add_term(num_describing_domain);
 
         // We perform the standard unit propagation if possible
-        //
-        // TODO: Could use a lazy explanation here
         if num_describing_domain == 1 {
             statistics.num_unit_propagations += 1;
-            let reason = nogood
-                .iter()
-                .filter_map(|predicate_id| {
-                    (context.is_predicate_id_satisfied(*predicate_id))
-                        .then(|| context.get_predicate(*predicate_id))
-                })
-                .collect::<PropositionalConjunction>();
+            let reason = if let Some(nogood_id) = nogood_id {
+                Reason::DynamicLazy(nogood_id.id as u64)
+            } else {
+                (
+                    nogood
+                        .iter()
+                        .filter_map(|predicate_id| {
+                            (context.is_predicate_id_satisfied(*predicate_id))
+                                .then(|| context.get_predicate(*predicate_id))
+                        })
+                        .collect::<PropositionalConjunction>()
+                        .clone(),
+                    inference_code,
+                )
+                    .into()
+            };
 
             return context
-                .post(!last_describing_predicate, (reason.clone(), inference_code))
+                .post(!last_describing_predicate, reason)
                 .map_err(|e| e.into());
         }
 
@@ -1066,15 +1076,6 @@ impl NogoodPropagator {
                                 .unwrap())
                             .max()
                             .unwrap_or(0),
-                    "Backtrack level: {} - {:?}",
-                    context.get_checkpoint(),
-                    nogood
-                        .iter()
-                        .map(|predicate| (
-                            predicate,
-                            context.get_checkpoint_for_predicate(*predicate)
-                        ))
-                        .collect::<Vec<_>>()
                 );
 
                 let nogood = nogood
@@ -1126,6 +1127,7 @@ impl NogoodPropagator {
                     propagated_domain,
                     inference_code,
                     &mut self.statistics,
+                    Some(watcher.nogood_id),
                 );
                 pumpkin_assert_simple!(result.is_ok());
 
@@ -1385,6 +1387,7 @@ impl NogoodPropagator {
                             first_domain,
                             &inference_code,
                             &mut self.statistics,
+                            None,
                         )?;
 
                         Ok(())
@@ -2004,6 +2007,7 @@ impl NogoodPropagator {
                         *unassigned_predicate_ids.iter().next().unwrap(),
                         inference_code,
                         &mut NogoodPropagatorStatistics::default(),
+                        Some(nogood_id),
                     )?;
                 }
             }
