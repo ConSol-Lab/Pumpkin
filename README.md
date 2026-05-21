@@ -104,11 +104,11 @@ This will add Pumpkin and PumpkinProof (which uses a flattening library specific
 Pumpkin consists of several different components:
 
 - The crates contained in [pumpkin-crates](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates):
- - [pumpkin-core](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/core); defines the API through which the solver can be used via Rust.
- - [pumpkin-propagators](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/propagators); contains (most of) the propagators used by Pumpkin.
- - [pumpkin-constraints](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/constraints); contains constraints that can be added to Pumpkin.
- - [pumpkin-conflict-resolvers](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/conflict-resolvers); contains the conflict resolvers (e.g., 1UIP or All-Decision conflit resolvers) used by Pumpkin.
- - [pumpkin-checking](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/checking); contains the types used for checking in pumpkin-core and pumpkin-checker.
+    - [pumpkin-core](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/core); defines the API through which the solver can be used via Rust.
+    - [pumpkin-propagators](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/propagators); contains (most of) the propagators used by Pumpkin.
+    - [pumpkin-constraints](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/constraints); contains constraints that can be added to Pumpkin.
+    - [pumpkin-conflict-resolvers](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/conflict-resolvers); contains the conflict resolvers (e.g., 1UIP or All-Decision conflit resolvers) used by Pumpkin.
+    - [pumpkin-checking](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/checking); contains the types used for checking in pumpkin-core and pumpkin-checker.
 - The CLI contained in [pumpkin-solver](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver); defines the usage of Pumpkin through a command line.
 - The python bindings contained in [pumpkin-solver-py](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver-py); defines the python interface for Pumpkin.
 - The proof logging contained in [drcp-format](https://github.com/ConSol-Lab/Pumpkin/tree/main/drcp-format); defines proof logging which can be used in combination with Pumpkin.
