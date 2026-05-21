@@ -599,6 +599,49 @@ impl Propagator for NogoodPropagator {
         code: u64,
         mut context: ExplanationContext,
     ) -> LazyExplanation<'_> {
+        if (code >> 32) > 0 {
+            let id = NogoodId { id: code as u32 };
+            let nogood = &self.nogood_predicates[id];
+            let info_id = self.nogood_predicates.get_nogood_index(&id);
+            let propagated_domain = context.get_predicate(nogood[0]).get_domain();
+
+            let predicate_type = (code >> 32) as u8 - 1;
+
+            match PredicateType::from_bits(predicate_type) {
+                PredicateType::LowerBound => {
+                    let lb = context.lower_bound_at_trail_position(
+                        &propagated_domain,
+                        context.get_trail_position() + 1,
+                    );
+
+                    self.temp_nogood_reason = nogood
+                        .iter()
+                        .filter_map(|predicate_id| {
+                            let predicate = context.get_predicate(*predicate_id);
+
+                            (context.evaluate_predicate_at_trail_position(
+                                predicate,
+                                context.get_trail_position(),
+                            ) == Some(true)
+                                && (predicate.get_domain() != propagated_domain
+                                    || predicate.is_lower_bound_predicate()
+                                    || (predicate.is_not_equal_predicate()
+                                        && predicate.get_right_hand_side() < lb)))
+                                .then_some(predicate)
+                        })
+                        .collect();
+                }
+                PredicateType::NotEqual => todo!(),
+                PredicateType::Equal => todo!(),
+                PredicateType::UpperBound => todo!(),
+            }
+
+            return LazyExplanation {
+                predicates: &self.temp_nogood_reason,
+                inference_code: self.inference_codes[info_id].clone(),
+            };
+        }
+
         let id = NogoodId { id: code as u32 };
 
         self.temp_nogood_reason = self.nogood_predicates[id][1..]
@@ -965,29 +1008,33 @@ impl NogoodPropagator {
                 //    last two are satisfied; then the fact that [x != 10] is true,
                 //    does not matter for the propagation of [x >= 7] to hold, but
                 //    [x != 5] is required in the explanation
-                let reason = nogood
-                    .iter()
-                    .filter_map(|predicate_id| {
-                        let predicate = context.get_predicate(*predicate_id);
-
-                        (context.is_predicate_id_satisfied(*predicate_id)
-                            && (predicate.get_domain() != propagated_domain
-                                || predicate.is_lower_bound_predicate()
-                                || (predicate.is_not_equal_predicate()
-                                    && predicate.get_right_hand_side() < lb)))
-                            .then_some(predicate)
-                    })
-                    .collect::<PropositionalConjunction>();
-
                 statistics.num_extended_lower_bound_propagations += 1;
-                info!(
-                    "\tPosting {reason:?} -> {:?}",
-                    predicate!(propagated_domain >= lb)
-                );
-                let result = context.post(
-                    predicate!(propagated_domain >= lb),
-                    (reason.clone(), inference_code),
-                );
+                let reason = if let Some(nogood_id) = nogood_id {
+                    // Add +1 so we can differentiate between these types of reason codes and
+                    // others.
+                    let predicate_type = PredicateType::LowerBound as u8 + 1;
+                    Reason::DynamicLazy((nogood_id.id as u64) | ((predicate_type as u64) << 32))
+                } else {
+                    (
+                        nogood
+                            .iter()
+                            .filter_map(|predicate_id| {
+                                let predicate = context.get_predicate(*predicate_id);
+
+                                (context.is_predicate_id_satisfied(*predicate_id)
+                                    && (predicate.get_domain() != propagated_domain
+                                        || predicate.is_lower_bound_predicate()
+                                        || (predicate.is_not_equal_predicate()
+                                            && predicate.get_right_hand_side() < lb)))
+                                    .then_some(predicate)
+                            })
+                            .collect::<PropositionalConjunction>(),
+                        inference_code,
+                    )
+                        .into()
+                };
+
+                let result = context.post(predicate!(propagated_domain >= lb), reason);
 
                 if result.is_err() {
                     statistics.num_variables_propagated += 1;
