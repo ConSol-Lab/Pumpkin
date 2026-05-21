@@ -216,25 +216,51 @@ impl NogoodPropagator {
         reason_store: &ReasonStore,
         id: NogoodId,
         notification_engine: &mut NotificationEngine,
+        analysis_mode: ConflictResolverType,
     ) -> bool {
-        if notification_engine.is_predicate_id_falsified(nogood[0], assignments) {
-            let trail_position = assignments
-                .get_trail_position(&!notification_engine.get_predicate(nogood[0]))
-                .unwrap();
-            let trail_entry = assignments.get_trail_entry(trail_position);
-            if let Some(reason_ref) = trail_entry.reason {
-                let propagator_id = reason_store.get_propagator(reason_ref);
-                let code = reason_store.get_lazy_code(reason_ref);
+        match analysis_mode {
+            ConflictResolverType::ExtendedCPIP
+            | ConflictResolverType::BoundsExtendedCPIP
+            | ConflictResolverType::ExtendedOneUIP => {
+                let potential_domain = notification_engine.get_predicate(nogood[0]).get_domain();
+                for predicate_id in nogood {
+                    let predicate = notification_engine.get_predicate(*predicate_id);
+                    if predicate.get_domain() == potential_domain {
+                        continue;
+                    }
 
-                // We check whether the predicate was propagated by the nogood propagator first
-                let propagated_by_nogood_propagator = propagator_id == handle.propagator_id();
-                // Then we check whether the lazy reason for the propagation was this particular
-                // nogood
-                let code_matches_id = code.is_none() || *code.unwrap() == id.id as u64;
-                return propagated_by_nogood_propagator && code_matches_id;
+                    if notification_engine.evaluate_predicate_id(*predicate_id, assignments)
+                        != Some(true)
+                    {
+                        return false;
+                    }
+                }
+                true
             }
+            ConflictResolverType::OneUIP | ConflictResolverType::AllDecision => {
+                if notification_engine.is_predicate_id_falsified(nogood[0], assignments) {
+                    let trail_position = assignments
+                        .get_trail_position(&!notification_engine.get_predicate(nogood[0]))
+                        .unwrap();
+                    let trail_entry = assignments.get_trail_entry(trail_position);
+                    if let Some(reason_ref) = trail_entry.reason {
+                        let propagator_id = reason_store.get_propagator(reason_ref);
+                        let code = reason_store.get_lazy_code(reason_ref);
+
+                        // We check whether the predicate was propagated by the nogood propagator
+                        // first
+                        let propagated_by_nogood_propagator =
+                            propagator_id == handle.propagator_id();
+                        // Then we check whether the lazy reason for the propagation was this
+                        // particular nogood
+                        let code_matches_id = code.is_none() || *code.unwrap() == id.id as u64;
+                        return propagated_by_nogood_propagator && code_matches_id;
+                    }
+                }
+                false
+            }
+            ConflictResolverType::NoLearning => unreachable!(),
         }
-        false
     }
 }
 
@@ -1640,13 +1666,6 @@ impl NogoodPropagator {
         reason_store: &mut ReasonStore,
         notification_engine: &mut NotificationEngine,
     ) {
-        if matches!(
-            self.analysis_mode,
-            ConflictResolverType::ExtendedCPIP | ConflictResolverType::ExtendedOneUIP
-        ) {
-            // TODO: implement for extended nogood propagation
-            return;
-        }
         // The clean-up procedure is divided into four stages (for simplicity of implementation).
         //
         // For each tier, if the number of nogoods exceeds the predefined threshold for that tier:
@@ -1692,6 +1711,7 @@ impl NogoodPropagator {
                 assignments,
                 reason_store,
                 notification_engine,
+                self.analysis_mode,
             );
         }
 
@@ -1715,6 +1735,7 @@ impl NogoodPropagator {
                 assignments,
                 reason_store,
                 notification_engine,
+                self.analysis_mode,
             );
         }
 
@@ -1736,6 +1757,7 @@ impl NogoodPropagator {
                 assignments,
                 reason_store,
                 notification_engine,
+                self.analysis_mode,
             );
         }
 
@@ -1881,6 +1903,10 @@ impl NogoodPropagator {
     // A nogood is not removed if it is currently propagating at a non-root level.
     // This means that the function may remove some nogoods from the first half if
     // some of the bottom nogoods are currently propagating.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Will run into borrow-issues when passing it by itself"
+    )]
     fn remove_roughly_worst_half_nogood_ids(
         handle: PropagatorHandle<NogoodPropagator>,
         nogood_ids: &mut Vec<NogoodId>,
@@ -1889,6 +1915,7 @@ impl NogoodPropagator {
         assignments: &Assignments,
         reason_store: &mut ReasonStore,
         notification_engine: &mut NotificationEngine,
+        analysis_mode: ConflictResolverType,
     ) -> bool {
         // The removal is done in two phases.
         // 1. Nogoods are deleted in the database, but the IDs are not removed from `nogood_ids`.
@@ -1918,10 +1945,16 @@ impl NogoodPropagator {
                 reason_store,
                 id,
                 notification_engine,
-            ) && assignments
+                analysis_mode,
+            ) && (matches!(
+                analysis_mode,
+                ConflictResolverType::ExtendedCPIP
+                    | ConflictResolverType::ExtendedOneUIP
+                    | ConflictResolverType::BoundsExtendedCPIP
+            ) || assignments
                 .get_checkpoint_for_predicate(&!notification_engine.get_predicate(nogoods[id][0]))
                 .expect("A propagating predicate must have a decision level.")
-                > 0
+                > 0)
             {
                 continue;
             }
