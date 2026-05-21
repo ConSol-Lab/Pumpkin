@@ -23,10 +23,10 @@ A unique feature of Pumpkin is that it can produce a certificate of unsatisfiabi
 
 The solver currently supports integer variables and a number of (global) constraints:
 
-- [Cumulative global constraint](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/core/src/propagators/cumulative).
-- [Disjunctive global constraint](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/core/src/propagators/disjunctive)
-- [Element global constraint](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/element.rs).
-- [Arithmetic constraints](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/core/src/propagators/arithmetic): [linear integer (in)equalities](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/linear_less_or_equal.rs), [integer division](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/integer_division.rs), [integer multiplication](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/integer_multiplication.rs), [maximum](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/maximum.rs), [absolute value](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/absolute_value.rs).
+- [Cumulative global constraint](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/propagators/src/propagators/cumulative).
+- [Disjunctive global constraint](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/propagators/src/propagators/disjunctive)
+- [Element global constraint](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/propagators/src/propagators/element.rs).
+- [Arithmetic constraints](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/propagators/src/propagators/arithmetic): [linear integer (in)equalities](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/propagators/src/propagators/arithmetic/linear_less_or_equal.rs), [integer division](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/propagators/src/propagators/arithmetic/integer_division.rs), [integer multiplication](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/propagators/src/propagators/arithmetic/integer_multiplication.rs), [maximum](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/propagators/src/propagators/arithmetic/maximum.rs), [absolute value](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/propagators/src/propagators/arithmetic/absolute_value.rs).
 - Clausal constraints.
 
 We are actively developing Pumpkin and would be happy to hear from you should you have any questions or feature requests!
@@ -98,13 +98,22 @@ To use it as such a backend, follow the following steps:
 - Step 3: Add the following to the `MZN_SOLVER_PATH` environment variable: `<path_to_pumpkin>/minizinc` (see [this thread](https://askubuntu.com/questions/58814/how-do-i-add-environment-variables) on how to do this using a shell).
 - Step 4: Check whether the installation worked using the command `minizinc --help pumpkin`.
 
-## Components
-Pumpkin consists of 3 different crates:
+This will add Pumpkin and PumpkinProof (which uses a flattening library specific for proof logging).
 
-- The library contained in [core](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/core); defines the API through which the solver can be used via Rust.
-- The CLI contained in [pumpkin-solver](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/src/bin/pumpkin-solver); defines the usage of Pumpkin through a command line.
+## Components
+Pumpkin consists of several different components:
+
+- The crates contained in [pumpkin-crates](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates):
+ - [pumpkin-core](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/core); defines the API through which the solver can be used via Rust.
+ - [pumpkin-propagators](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/propagators); contains (most of) the propagators used by Pumpkin.
+ - [pumpkin-constraints](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/constraints); contains constraints that can be added to Pumpkin.
+ - [pumpkin-conflict-resolvers](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/conflict-resolvers); contains the conflict resolvers (e.g., 1UIP or All-Decision conflit resolvers) used by Pumpkin.
+ - [pumpkin-checking](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/checking); contains the types used for checking in pumpkin-core and pumpkin-checker.
+- The CLI contained in [pumpkin-solver](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver); defines the usage of Pumpkin through a command line.
+- The python bindings contained in [pumpkin-solver-py](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver-py); defines the python interface for Pumpkin.
 - The proof logging contained in [drcp-format](https://github.com/ConSol-Lab/Pumpkin/tree/main/drcp-format); defines proof logging which can be used in combination with Pumpkin.
-- The python bindings contained in [pumpkin-solver-py](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver-py); defines the python interface for Pumpkin
+- The (unverified) proof processor contained in [pumpkin-proof-processor](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-proof-processor).
+- A debugger for DRCP proofs contained in [drcp-debugger](https://github.com/ConSol-Lab/Pumpkin/tree/main/drcp-debugger).
 
 The easiest way to get to know the different modules is through the documentation. This documentation can be created automatically using the command:
 ```sh
