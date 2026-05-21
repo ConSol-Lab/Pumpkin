@@ -48,6 +48,9 @@ fn determine_git_hash() {
         .to_owned();
 
     println!("cargo:rustc-env=GIT_SHA={}", git_sha);
+
+    // Rerun if HEAD changes (new commits, branch switches, etc.)
+    println!("cargo:rerun-if-changed=../.git/HEAD");
 }
 
 fn compile_c_binary<Source: AsRef<Path>>(
