@@ -689,6 +689,9 @@ impl State {
                 #[cfg(feature = "check-propagations")]
                 self.check_conflict(&conflict);
 
+                #[cfg(feature = "check-propagations")]
+                self.consistency_checkers.clear_queue();
+
                 self.statistics.num_conflicts += 1;
                 if let Conflict::Propagator(inner) = &conflict {
                     pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(

@@ -1,9 +1,13 @@
+#[cfg(feature = "check-propagations")]
 use pumpkin_checking::BoxedChecker;
 use pumpkin_checking::InferenceChecker;
 
 use crate::basic_types::PredicateId;
 use crate::checkers::BoxedConsistencyChecker;
+#[cfg(feature = "check-consistency")]
+use crate::checkers::ConsistencyCheckerStore;
 use crate::checkers::Scope;
+#[cfg(feature = "check-propagations")]
 use crate::containers::HashMap;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;

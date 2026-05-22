@@ -54,17 +54,17 @@ pub trait PropagatorConstructor {
 /// of variables and to retrieve the current bounds of variables.
 #[derive(Debug)]
 pub struct PropagatorConstructorContext<'a> {
-    pub(crate) state: &'a mut State,
+    state: &'a mut State,
     pub(crate) propagator_id: PropagatorId,
 
     /// A [`LocalId`] that is guaranteed not to be used to register any variables yet. This is
     /// either a reference or an owned value, to support
     /// [`PropagatorConstructorContext::reborrow`].
-    pub(crate) next_local_id: RefOrOwned<'a, LocalId>,
+    next_local_id: RefOrOwned<'a, LocalId>,
 
     /// Marker to indicate whether the constructor registered for at least one domain event or
     /// predicate becoming assigned. If not, the [`Drop`] implementation will cause a panic.
-    pub(crate) did_register: RefOrOwned<'a, bool>,
+    did_register: RefOrOwned<'a, bool>,
 
     /// Pending consistency checkers to be registered into [`State`] when this context is dropped.
     #[cfg(feature = "check-consistency")]
@@ -216,6 +216,7 @@ impl PropagatorConstructorContext<'_> {
         self.pending_consistency_checkers
             .push((scope.into(), checker.into()));
 
+        // Avoid unused variable warning.
         #[cfg(not(feature = "check-consistency"))]
         {
             let _ = scope;
@@ -235,6 +236,7 @@ impl PropagatorConstructorContext<'_> {
         self.pending_inference_checkers
             .push((inference_code, checker));
 
+        // Avoid unused variable warning.
         #[cfg(not(feature = "check-propagations"))]
         {
             let _ = inference_code;
@@ -272,12 +274,12 @@ impl Drop for PropagatorConstructorContext<'_> {
         }
 
         #[cfg(feature = "check-consistency")]
-        for (scope, checker) in std::mem::take(&mut *self.pending_consistency_checkers) {
+        for (scope, checker) in self.pending_consistency_checkers.drain(..) {
             self.state.add_consistency_checker(scope, checker);
         }
 
         #[cfg(feature = "check-propagations")]
-        for (inference_code, checker) in std::mem::take(&mut *self.pending_inference_checkers) {
+        for (inference_code, checker) in self.pending_inference_checkers.drain(..) {
             self.state.add_inference_checker(inference_code, checker);
         }
     }

@@ -33,8 +33,6 @@ use crate::proof::InferenceCode;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
 use crate::propagation::LazyExplanation;
-#[cfg(feature = "check-consistency")]
-use crate::propagation::LocalId;
 use crate::propagation::NotificationContext;
 use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
@@ -494,7 +492,7 @@ impl NogoodPropagator {
         #[cfg(feature = "check-consistency")]
         {
             let flag = Arc::new(AtomicBool::new(false));
-            let _ = self.deletion_flags.push(flag.clone());
+            let _ = self.deletion_flags.push(Arc::clone(&flag));
             let scope = NogoodPropagator::build_nogood_scope(&checker_predicates);
             context.add_consistency_checker(
                 scope,
@@ -509,14 +507,12 @@ impl NogoodPropagator {
         }
 
         #[cfg(feature = "check-propagations")]
-        {
-            context.add_inference_checker(
-                inference_code,
-                Box::new(super::NogoodChecker {
-                    nogood: checker_predicates,
-                }),
-            );
-        }
+        context.add_inference_checker(
+            inference_code,
+            Box::new(super::NogoodChecker {
+                nogood: checker_predicates,
+            }),
+        );
 
         let watcher = Watcher {
             nogood_id,
@@ -701,7 +697,7 @@ impl NogoodPropagator {
             #[cfg(feature = "check-consistency")]
             {
                 let flag = Arc::new(AtomicBool::new(false));
-                let _ = self.deletion_flags.push(flag.clone());
+                let _ = self.deletion_flags.push(Arc::clone(&flag));
                 let scope = NogoodPropagator::build_nogood_scope(&checker_predicates);
                 context.add_consistency_checker(
                     scope,
@@ -716,14 +712,12 @@ impl NogoodPropagator {
             }
 
             #[cfg(feature = "check-propagations")]
-            {
-                context.add_inference_checker(
-                    inference_code,
-                    Box::new(super::NogoodChecker {
-                        nogood: checker_predicates,
-                    }),
-                );
-            }
+            context.add_inference_checker(
+                inference_code,
+                Box::new(super::NogoodChecker {
+                    nogood: checker_predicates,
+                }),
+            );
 
             let watcher = Watcher {
                 nogood_id,
@@ -752,20 +746,25 @@ impl NogoodPropagator {
 #[cfg(any(feature = "check-consistency", feature = "check-propagations"))]
 impl NogoodPropagator {
     /// Build a [`Scope`] for a nogood by extracting unique [`DomainId`]s from its predicates.
+    ///
+    /// Avoids multiple enqueuing of the consistency checker if the nogood contains multiple
+    /// predicates over the same variable.
     #[cfg(feature = "check-consistency")]
     fn build_nogood_scope(predicates: &[Predicate]) -> Scope {
-        use crate::containers::HashSet;
+        use crate::containers::{HashSet, KeyGenerator};
+        use crate::variables::DomainId;
 
         let mut scope = Scope::default();
-        let mut seen: HashSet<crate::variables::DomainId> = HashSet::default();
-        let mut next_id = 0u32;
+        let mut seen: HashSet<DomainId> = HashSet::default();
+        let mut id_generator = KeyGenerator::default();
+
         for predicate in predicates {
             let domain = predicate.get_domain();
             if seen.insert(domain) {
-                scope.add_domain(LocalId::from(next_id), domain);
-                next_id += 1;
+                scope.add_domain(id_generator.next_key(), domain);
             }
         }
+
         scope
     }
 }

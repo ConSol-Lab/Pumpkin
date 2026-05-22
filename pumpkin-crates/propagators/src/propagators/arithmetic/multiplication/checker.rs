@@ -77,18 +77,12 @@ where
         let c_min = domains.lower_bound(&self.c) as f32;
         let c_max = domains.upper_bound(&self.c) as f32;
 
-        dbg!((&self.a, &self.b, &self.c));
-        dbg!((a_min, a_max));
-        dbg!((b_min, b_max));
-        dbg!((c_min, c_max));
-
         let (value_a, value_b, value_c) = match local_id {
             super::ID_A => {
                 let value_a = self.a.unpack(unsupported_value) as f32;
 
                 let Some((value_b, value_c)) = [b_min, b_max].into_iter().find_map(|value_b| {
                     let value_c = value_a * value_b;
-                    dbg!((value_a, value_b, value_c));
                     if c_min <= value_c && value_c <= c_max {
                         Some((value_b, value_c))
                     } else {
@@ -105,7 +99,6 @@ where
 
                 let Some((value_a, value_c)) = [a_min, a_max].into_iter().find_map(|value_a| {
                     let value_c = value_a * value_b;
-                    dbg!((value_a, value_b, value_c));
                     if c_min <= value_c && value_c <= c_max {
                         Some((value_a, value_c))
                     } else {
@@ -122,7 +115,6 @@ where
 
                 let Some(values) = [a_min, a_max].into_iter().find_map(|value_a| {
                     let value_b = value_c / value_a;
-                    dbg!((value_a, value_b, value_c));
 
                     if b_min <= value_b && value_b <= b_max {
                         Some((value_a, value_b, value_c))

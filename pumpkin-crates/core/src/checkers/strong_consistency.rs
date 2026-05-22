@@ -16,12 +16,18 @@ pub enum StrongConsistency {
     Bounds,
 }
 
+/// A [`ConsistencyChecker`] that enforces a strong consistency property.
+///
+/// The level of consistency is configured via [`StrongConsistency`].
 #[derive(Clone, Debug)]
 pub struct StrongConsistencyChecker<Supports: SupportGenerator> {
+    /// The generator of supports.
     supports: Supports,
+    /// A cache of domain-value pairs that are supported.
     supported_values: HashSet<(DomainId, i32)>,
+    /// The consistency level to test for.
     consistency_level: StrongConsistency,
-
+    /// Re-usable buffer of the current support that is operated on.
     support: Support<Supports::Value>,
 }
 
@@ -38,6 +44,8 @@ impl<Supports: SupportGenerator> StrongConsistencyChecker<Supports> {
 
 impl<Supports: SupportGenerator> ConsistencyChecker for StrongConsistencyChecker<Supports> {
     fn check_consistency(&mut self, scope: &Scope, domains: Domains<'_>) -> bool {
+        // Make sure to clear the cache of supported values. At the beginning, no values are
+        // supported.
         self.supported_values.clear();
 
         for (local_id, domain) in scope.domains() {
@@ -52,9 +60,12 @@ impl<Supports: SupportGenerator> ConsistencyChecker for StrongConsistencyChecker
 
             for value in values_to_support {
                 if self.supported_values.contains(&(domain, value)) {
+                    // If this domain-value pair is already supported in this check
+                    // then there is no need to generate a new support for it.
                     continue;
                 }
 
+                // Generate the support for this domain-value pair.
                 self.supports.support(
                     &mut self.support,
                     local_id,
@@ -63,16 +74,23 @@ impl<Supports: SupportGenerator> ConsistencyChecker for StrongConsistencyChecker
                 );
 
                 if !self.process_support(&domains) {
+                    // The support was incomplete or not a solution. Either way, the
+                    // consistency check fails.
                     return false;
                 }
             }
         }
 
+        // All required values are successfully supported, so the check passes.
         true
     }
 }
 
 impl<Supports: SupportGenerator> StrongConsistencyChecker<Supports> {
+    /// Tests whether the [`StrongConsistencyChecker::support`] is a valid support.
+    ///
+    /// Drains the support in the process, so it can be used again by subsequent calls to
+    /// [`SupportGenerator::support`].
     fn process_support(&mut self, domains: &Domains<'_>) -> bool {
         if !self.supports.is_solution(&self.support) {
             log::error!("Support is not a solution");

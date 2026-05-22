@@ -4,6 +4,7 @@ use bit_set::BitSet;
 
 use crate::containers::StorageKey;
 
+/// A bit-set for types that implement [`StorageKey`].
 #[derive(Debug)]
 pub struct KeyedBitSet<Key> {
     bitset: BitSet,
@@ -28,6 +29,11 @@ impl<Key: StorageKey> KeyedBitSet<Key> {
     /// Get all keys in the set and remove them.
     pub fn drain(&self) -> impl Iterator<Item = Key> {
         self.bitset.iter().map(Key::create_from_index)
+    }
+
+    /// Remove all keys in the set.
+    pub fn clear(&mut self) {
+        self.bitset.make_empty();
     }
 }
 

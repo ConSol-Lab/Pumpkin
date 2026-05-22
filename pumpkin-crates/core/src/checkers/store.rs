@@ -6,29 +6,25 @@ use crate::containers::StorageKey;
 use crate::propagation::Domains;
 use crate::variables::DomainId;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct CheckerId(u32);
-
-impl StorageKey for CheckerId {
-    fn index(&self) -> usize {
-        self.0 as usize
-    }
-
-    fn create_from_index(index: usize) -> Self {
-        CheckerId(index as u32)
-    }
-}
-
+/// Holds the consistency checkers in the solver.
+///
+/// Also responsible for enqueueing the checkers and dispatching them when instructed via
+/// [`ConsistencyCheckerStore::run_enqueued`].
 #[derive(Clone, Debug, Default)]
 pub struct ConsistencyCheckerStore {
+    /// The checkers in the store.
     store: KeyedVec<CheckerId, (Scope, BoxedConsistencyChecker)>,
+    /// Map from [`DomainId`] to the relevant checkers via their ID.
     watch_list: KeyedVec<DomainId, Vec<CheckerId>>,
-
+    /// The checkers to run the next time.
     queue: Vec<CheckerId>,
+    /// Marks which checkers are enqueued to prevent duplicate checkers in
+    /// [`ConsistencyCheckerStore::queue`].
     enqueued: KeyedBitSet<CheckerId>,
 }
 
 impl ConsistencyCheckerStore {
+    /// Add a new `checker` to the store with the given `scope`.
     pub fn register(&mut self, scope: Scope, checker: BoxedConsistencyChecker) {
         let checker_slot = self.store.new_slot();
 
@@ -70,5 +66,25 @@ impl ConsistencyCheckerStore {
         }
 
         true
+    }
+
+    /// Clear the queue of consistency checkers.
+    pub fn clear_queue(&mut self) {
+        self.queue.clear();
+        self.enqueued.clear();
+    }
+}
+
+/// An identifier for added checkers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct CheckerId(u32);
+
+impl StorageKey for CheckerId {
+    fn index(&self) -> usize {
+        self.0 as usize
+    }
+
+    fn create_from_index(index: usize) -> Self {
+        CheckerId(index as u32)
     }
 }
