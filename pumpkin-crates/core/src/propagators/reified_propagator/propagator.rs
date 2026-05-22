@@ -1,15 +1,6 @@
-use pumpkin_checking::AtomicConstraint;
-use pumpkin_checking::BoxedChecker;
-use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
-
-use crate::checkers::BoxedConsistencyChecker;
-use crate::checkers::ConsistencyChecker;
-use crate::checkers::Scope;
 use crate::engine::PropagationStatusCP;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::predicates::Predicate;
-use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
@@ -19,99 +10,10 @@ use crate::propagation::NotificationContext;
 use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
-use crate::propagation::PropagatorConstructor;
-use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_simple;
 use crate::state::Conflict;
 use crate::variables::Literal;
-
-/// A [`PropagatorConstructor`] for the reified propagator.
-#[derive(Clone, Debug)]
-pub struct ReifiedPropagatorArgs<WrappedArgs> {
-    pub propagator: WrappedArgs,
-    pub reification_literal: Literal,
-}
-
-impl<WrappedArgs, WrappedPropagator> PropagatorConstructor for ReifiedPropagatorArgs<WrappedArgs>
-where
-    WrappedArgs: PropagatorConstructor<PropagatorImpl = WrappedPropagator>,
-    WrappedPropagator: Propagator + Clone,
-{
-    type PropagatorImpl = ReifiedPropagator<WrappedPropagator>;
-
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        let ReifiedPropagatorArgs {
-            propagator,
-            reification_literal,
-        } = self;
-
-        let propagator = propagator.create(context.reborrow());
-
-        let reification_literal_id = context.get_next_local_id();
-
-        context.register(
-            reification_literal,
-            DomainEvents::BOUNDS,
-            reification_literal_id,
-        );
-
-        #[cfg(feature = "check-propagations")]
-        wrap_inference_checkers(&mut context, reification_literal);
-
-        #[cfg(feature = "check-consistency")]
-        wrap_consistency_checkers(&mut context, reification_literal, reification_literal_id);
-
-        let name = format!("Reified({})", propagator.name());
-
-        ReifiedPropagator {
-            propagator,
-            reification_literal,
-            reification_literal_id,
-            name,
-            reason_buffer: vec![],
-        }
-    }
-}
-
-/// Wrap inference checkers: the literal is already known, no local id needed.
-#[cfg(feature = "check-propagations")]
-fn wrap_inference_checkers(
-    context: &mut PropagatorConstructorContext<'_>,
-    reification_literal: Literal,
-) {
-    for (_, checker) in context.pending_inference_checkers.iter_mut() {
-        replace_with::replace_with_or_abort(checker, |inner_checker| {
-            Box::new(ReifiedChecker {
-                inner: BoxedChecker::from(inner_checker),
-                reification_literal,
-            })
-        });
-    }
-}
-
-/// Wrap consistency checkers: add the reification literal to each scope with the now-known
-/// local id, then wrap the checker.
-#[cfg(feature = "check-consistency")]
-fn wrap_consistency_checkers(
-    context: &mut PropagatorConstructorContext<'_>,
-    reification_literal: Literal,
-    reification_literal_id: LocalId,
-) {
-    use crate::checkers::ScopeItem;
-
-    for (scope, checker) in context.pending_consistency_checkers.iter_mut() {
-        reification_literal.add_to_scope(scope, reification_literal_id);
-
-        replace_with::replace_with_or_abort(checker, |inner_checker| {
-            BoxedConsistencyChecker::from(ReifiedConsistencyChecker {
-                inner: inner_checker,
-                reification_literal,
-                reification_literal_id,
-            })
-        });
-    }
-}
 
 /// Propagator for the constraint `r -> p`, where `r` is a Boolean literal and `p` is an arbitrary
 /// propagator.
@@ -122,16 +24,16 @@ fn wrap_consistency_checkers(
 /// propagated to false.
 #[derive(Clone, Debug)]
 pub struct ReifiedPropagator<WrappedPropagator> {
-    propagator: WrappedPropagator,
-    reification_literal: Literal,
+    pub(super) propagator: WrappedPropagator,
+    pub(super) reification_literal: Literal,
     /// The formatted name of the propagator.
-    name: String,
+    pub(super) name: String,
     /// The `LocalId` of the reification literal. Is guaranteed to be a larger ID than any of the
     /// registered ids of the wrapped propagator.
-    reification_literal_id: LocalId,
+    pub(super) reification_literal_id: LocalId,
 
     /// Holds the lazy explanations.
-    reason_buffer: Vec<Predicate>,
+    pub(super) reason_buffer: Vec<Predicate>,
 }
 
 impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<WrappedPropagator> {
@@ -270,60 +172,6 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
         }
 
         EnqueueDecision::Skip
-    }
-}
-
-/// A [`ConsistencyChecker`] wrapper that skips the inner check when the reification literal is
-/// not assigned to true.
-#[derive(Debug, Clone)]
-pub struct ReifiedConsistencyChecker {
-    pub inner: BoxedConsistencyChecker,
-    pub reification_literal: Literal,
-    /// The [`LocalId`] of the reification literal in the scope, used to strip it before passing
-    /// the scope to the inner checker.
-    pub reification_literal_id: LocalId,
-}
-
-impl ConsistencyChecker for ReifiedConsistencyChecker {
-    fn check_consistency(&mut self, scope: &Scope, domains: Domains<'_>) -> bool {
-        let check_inner = domains.evaluate_literal(self.reification_literal) == Some(true);
-        if !check_inner {
-            return true;
-        }
-
-        let inner_scope = scope.without(self.reification_literal_id);
-        self.inner.check_consistency(&inner_scope, domains)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ReifiedChecker<Atomic: AtomicConstraint, Var> {
-    pub inner: BoxedChecker<Atomic>,
-    pub reification_literal: Var,
-}
-
-impl<Atomic: AtomicConstraint + Clone, Var: CheckerVariable<Atomic>> InferenceChecker<Atomic>
-    for ReifiedChecker<Atomic, Var>
-{
-    fn check(
-        &self,
-        state: pumpkin_checking::VariableState<Atomic>,
-        premises: &[Atomic],
-        consequent: Option<&Atomic>,
-    ) -> bool {
-        if self.reification_literal.induced_domain_contains(&state, 0) {
-            return false;
-        }
-
-        if let Some(consequent) = consequent
-            && self
-                .reification_literal
-                .does_atomic_constrain_self(consequent)
-        {
-            self.inner.check(state, premises, None)
-        } else {
-            self.inner.check(state, premises, consequent)
-        }
     }
 }
 

@@ -2,7 +2,7 @@
 use crate::ConstraintOperationError;
 use crate::Solver;
 use crate::propagation::PropagatorConstructor;
-use crate::propagators::reified_propagator::ReifiedPropagatorArgs;
+use crate::propagators::ReifiedPropagatorArgs;
 use crate::variables::Literal;
 
 mod constraint_poster;

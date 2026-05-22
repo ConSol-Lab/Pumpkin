@@ -58,7 +58,11 @@ where
 
         context.add_inference_checker(
             InferenceCode::new(constraint_tag, Element),
-            Box::new(ElementChecker::new(array.clone(), index.clone(), rhs.clone())),
+            Box::new(ElementChecker::new(
+                array.clone(),
+                index.clone(),
+                rhs.clone(),
+            )),
         );
 
         for (i, x_i) in array.iter().enumerate() {
