@@ -1,7 +1,6 @@
-use itertools::Itertools;
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
-use pumpkin_core::asserts::pumpkin_assert_simple;
+use pumpkin_core::conflict_resolving::AnalysisMode;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_core::containers::KeyValueHeap;
@@ -10,7 +9,6 @@ use pumpkin_core::create_statistics_struct;
 use pumpkin_core::predicates::Lbd;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateIdGenerator;
-use pumpkin_core::predicates::PredicateType;
 use pumpkin_core::propagation::PredicateId;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::CurrentNogood;
@@ -67,212 +65,6 @@ pub struct ResolutionResolver {
     statistics: LearnedNogoodStatistics,
 
     should_minimise: bool,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum AnalysisMode {
-    /// Standard conflict analysis which returns as soon as the first unit implication point is
-    /// found (i.e. when a nogood is created which only contains a single predicate from the
-    /// current decision level).
-    OneUIP,
-    /// An alternative to 1-UIP which stops as soon as the learned nogood only creates decision
-    /// predicates.
-    AllDecision,
-    /// Learns CPIP nogoods (i.e., nogoods which only have predicates from the current decision
-    /// level which reason over a single variable when learning) in combination with extended nogood
-    /// propagation.
-    ExtendedCPIP,
-    /// Learns 1UIP nogoods in combination with extended nogood and applies extended nogood
-    /// propagation whenever possible.
-    ExtendedOneUIP,
-    /// Learns CPIP nogoods in combination with extended nogood propagation but rather than stopping
-    /// at the first point where extended nogood propagation can take place, it stops when
-    /// extended nogood propagation can adjust a bound upon learning.
-    BoundsExtendedCPIP,
-}
-
-impl AnalysisMode {
-    fn uses_cpip(&self) -> bool {
-        matches!(
-            self,
-            AnalysisMode::ExtendedCPIP | AnalysisMode::BoundsExtendedCPIP
-        )
-    }
-
-    fn predicate_should_be_processed(
-        &self,
-        predicate: Predicate,
-        decision_level: usize,
-        context: &ConflictAnalysisContext,
-    ) -> bool {
-        match self {
-            AnalysisMode::OneUIP
-            | AnalysisMode::ExtendedCPIP
-            | AnalysisMode::ExtendedOneUIP
-            | AnalysisMode::BoundsExtendedCPIP => decision_level == context.get_checkpoint(),
-            AnalysisMode::AllDecision => !context.is_decision_predicate(predicate),
-        }
-    }
-
-    fn should_continue_resolving(
-        &self,
-        to_process_heap: &KeyValueHeap<PredicateId, u32>,
-        predicate_id_generator: &mut PredicateIdGenerator,
-    ) -> bool {
-        match self {
-            AnalysisMode::OneUIP | AnalysisMode::ExtendedOneUIP => {
-                // We wait until there is only a single element from the current decision level
-                // left.
-                to_process_heap.num_nonremoved_elements() > 1
-            }
-            AnalysisMode::AllDecision => {
-                // We wait until there are only decisions left.
-                to_process_heap.num_nonremoved_elements() > 0
-            }
-            AnalysisMode::ExtendedCPIP => {
-                // We wait until there are only elements over a single variable left.
-                //
-                // TODO: compute this incrementally
-                to_process_heap
-                    .keys()
-                    .map(|predicate_id| {
-                        predicate_id_generator
-                            .get_predicate(predicate_id)
-                            .get_domain()
-                    })
-                    .unique()
-                    .count()
-                    > 1
-            }
-            AnalysisMode::BoundsExtendedCPIP => {
-                // We wait until extended nogood propagation can propagate a bound.
-                //
-                // Firstly, there should be only elements over a single element.
-                // Secondly, one of the following should hold:
-                // - There is a lower-bound present but no upper-bound OR there is an upper-bound
-                //   present but no lower-bound
-                // - There are only holes present
-                // - There is an equality present (would necessarily lead to a single predicate due
-                //   to semantic minimisation)
-                let present_domain_ids = to_process_heap
-                    .keys()
-                    .map(|predicate_id| {
-                        predicate_id_generator
-                            .get_predicate(predicate_id)
-                            .get_domain()
-                    })
-                    .unique()
-                    .collect::<Vec<_>>();
-                if present_domain_ids.len() > 1 {
-                    true
-                } else {
-                    // We calculate the number of predicate types from the current decision
-                    // level (note that they are necessarily over a
-                    // single variable) to determine when bound
-                    // propagation can take place.
-                    let (mut lower_bounds, mut upper_bounds, mut _disequalities, mut equalities) =
-                        (0, 0, 0, 0);
-                    for predicate_id in to_process_heap.keys() {
-                        let predicate = predicate_id_generator.get_predicate(predicate_id);
-                        match predicate.get_predicate_type() {
-                            PredicateType::LowerBound => lower_bounds += 1,
-                            PredicateType::NotEqual => _disequalities += 1,
-                            PredicateType::Equal => equalities += 1,
-                            PredicateType::UpperBound => upper_bounds += 1,
-                        }
-                    }
-                    // We return true if we cannot propagate any bounds
-                    //
-                    // We can propagate bounds in the following situations:
-                    // - There is a lower-bound present but no upper-bound OR there is an
-                    //   upper-bound present but no lower-bound
-                    // - There are only holes present
-                    // - There is an equality present (would necessarily lead to a single
-                    // predicate due to semantic minimisation)
-                    !((lower_bounds > 0 && upper_bounds == 0)
-                        || (lower_bounds == 0 && upper_bounds > 0)
-                        || (lower_bounds == 0 && upper_bounds == 0)
-                        || equalities > 0)
-                }
-            }
-        }
-    }
-
-    fn remove_final_predicates(
-        &self,
-        to_process_heap: &mut KeyValueHeap<PredicateId, u32>,
-        predicate_id_generator: &mut PredicateIdGenerator,
-        processed_nogood_predicates: &mut Vec<Predicate>,
-        statistics: &mut LearnedNogoodStatistics,
-    ) {
-        match self {
-            AnalysisMode::ExtendedCPIP | AnalysisMode::BoundsExtendedCPIP => {
-                // When using extended UIP, we need to ensure that all of the remaining predicates
-                // are added to the domain.
-                pumpkin_assert_simple!(
-                    to_process_heap.num_nonremoved_elements() > 0,
-                    "There should be at least one element in the final nogood"
-                );
-                pumpkin_assert_moderate!(
-                    to_process_heap
-                        .keys()
-                        .map(|predicate_id| predicate_id_generator
-                            .get_predicate(predicate_id)
-                            .get_domain())
-                        .unique()
-                        .count()
-                        == 1,
-                    "There should be only one variable in the final nogood from teh current decision level"
-                );
-
-                let propagating_domain = predicate_id_generator
-                    .get_predicate(*to_process_heap.peek_max().unwrap().0)
-                    .get_domain();
-
-                statistics
-                    .average_number_of_predicates_describing_domain_when_extended
-                    .add_term(to_process_heap.num_nonremoved_elements());
-                if to_process_heap.num_nonremoved_elements() == 1 {
-                    statistics.num_regular_nogood_learned += 1;
-                } else {
-                    statistics.num_extended_nogood_learned += 1;
-                }
-
-                // We need to add all of the remaining predicates to the nogood; due to the way in
-                // which the extended UIP is calculated, this could be multiple elements.
-                while to_process_heap.num_nonremoved_elements() > 0 {
-                    let predicate = Self::pop_predicate_from_conflict_nogood(
-                        to_process_heap,
-                        predicate_id_generator,
-                    );
-                    pumpkin_assert_simple!(predicate.get_domain() == propagating_domain);
-                    processed_nogood_predicates.push(predicate);
-                }
-            }
-            AnalysisMode::OneUIP | AnalysisMode::AllDecision | AnalysisMode::ExtendedOneUIP => {
-                if to_process_heap.num_nonremoved_elements() > 0 {
-                    let last_predicate = Self::pop_predicate_from_conflict_nogood(
-                        to_process_heap,
-                        predicate_id_generator,
-                    );
-                    processed_nogood_predicates.push(last_predicate);
-                } else {
-                    pumpkin_assert_simple!(
-                        matches!(self, AnalysisMode::AllDecision),
-                        "If the heap is empty when extracting the final nogood then we should be performing all decision learning"
-                    )
-                }
-            }
-        }
-    }
-
-    fn pop_predicate_from_conflict_nogood(
-        to_process_heap: &mut KeyValueHeap<PredicateId, u32>,
-        predicate_id_generator: &mut PredicateIdGenerator,
-    ) -> Predicate {
-        let next_predicate_id = to_process_heap.pop_max().unwrap();
-        predicate_id_generator.get_predicate(next_predicate_id)
-    }
 }
 
 impl Default for ResolutionResolver {
@@ -533,12 +325,20 @@ impl ResolutionResolver {
 
         // Depending on what mode we are in, we first remove the elements which are remaining in
         // the heap.
-        self.mode.remove_final_predicates(
+        let num_removed = self.mode.remove_final_predicates(
             &mut self.to_process_heap,
             &mut self.predicate_id_generator,
             &mut self.processed_nogood_predicates,
-            &mut self.statistics,
         );
+
+        self.statistics
+            .average_number_of_predicates_describing_domain_when_extended
+            .add_term(num_removed);
+        if num_removed == 1 {
+            self.statistics.num_regular_nogood_learned += 1;
+        } else {
+            self.statistics.num_extended_nogood_learned += 1;
+        }
 
         // First we minimise the nogood using semantic minimisation to remove duplicates but we
         // avoid equality merging (since some of these literals could potentailly be removed by

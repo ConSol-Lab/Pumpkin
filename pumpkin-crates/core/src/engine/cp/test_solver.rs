@@ -5,8 +5,8 @@ use std::fmt::Debug;
 use pumpkin_checking::InferenceChecker;
 
 use super::PropagatorQueue;
+use crate::conflict_resolving::AnalysisMode;
 use crate::containers::KeyGenerator;
-use crate::engine::ConflictResolverType;
 use crate::engine::EmptyDomain;
 use crate::engine::State;
 use crate::engine::predicates::predicate::Predicate;
@@ -44,7 +44,7 @@ impl Default for TestSolver {
         let handle = state.add_propagator(NogoodPropagatorConstructor::new(
             0,
             LearningOptions::default(),
-            ConflictResolverType::OneUIP,
+            AnalysisMode::OneUIP,
         ));
         let mut solver = Self {
             state,

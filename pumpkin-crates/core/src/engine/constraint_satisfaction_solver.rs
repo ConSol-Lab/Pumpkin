@@ -27,6 +27,7 @@ use crate::basic_types::StoredConflictInfo;
 use crate::basic_types::time::Instant;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
+use crate::conflict_resolving::AnalysisMode;
 use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::conflict_resolving::ConflictResolver;
 use crate::containers::HashMap;
@@ -273,7 +274,14 @@ impl ConstraintSatisfactionSolver {
         let handle = state.add_propagator(NogoodPropagatorConstructor::new(
             (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
             solver_options.learning_options,
-            solver_options.analysis_mode,
+            match solver_options.analysis_mode {
+                ConflictResolverType::OneUIP => AnalysisMode::OneUIP,
+                ConflictResolverType::AllDecision => AnalysisMode::AllDecision,
+                ConflictResolverType::ExtendedCPIP => AnalysisMode::ExtendedCPIP,
+                ConflictResolverType::ExtendedOneUIP => AnalysisMode::ExtendedOneUIP,
+                ConflictResolverType::BoundsExtendedCPIP => AnalysisMode::BoundsExtendedCPIP,
+                _ => AnalysisMode::OneUIP,
+            },
         ));
 
         ConstraintSatisfactionSolver {
