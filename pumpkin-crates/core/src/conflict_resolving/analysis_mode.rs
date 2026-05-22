@@ -4,13 +4,19 @@ use crate::basic_types::PredicateId;
 use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::containers::HashSet;
 use crate::containers::KeyValueHeap;
+use crate::engine::Reason;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateIdGenerator;
 use crate::predicates::PredicateType;
+use crate::proof::InferenceCode;
 use crate::propagation::PropagationContext;
 use crate::propagation::ReadDomains;
+use crate::propagators::nogoods::NogoodId;
+use crate::propagators::nogoods::NogoodPropagator;
+use crate::propagators::nogoods::NogoodPropagatorStatistics;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::state::PropagationStatusCP;
 use crate::variables::DomainId;
 
 #[derive(Debug, Clone, Copy)]
@@ -300,6 +306,46 @@ impl AnalysisMode {
 
         (num_unassigned > 1 && !is_falsified && unassigned_domains.len() == 1)
             .then(|| *unassigned_domains.iter().next().unwrap())
+    }
+
+    pub(crate) fn perform_propagation(
+        &self,
+        context: &mut PropagationContext,
+        nogood_predicates: &[PredicateId],
+        inference_code: &InferenceCode,
+        nogood_id: NogoodId,
+        statistics: &mut NogoodPropagatorStatistics,
+    ) -> PropagationStatusCP {
+        match self {
+            AnalysisMode::ExtendedCPIP | AnalysisMode::BoundsExtendedCPIP => {
+                let propagated_domain = context.get_predicate(nogood_predicates[0]).get_domain();
+                NogoodPropagator::propagate_extended_nogood(
+                    context,
+                    nogood_predicates,
+                    propagated_domain,
+                    inference_code,
+                    statistics,
+                    Some(nogood_id),
+                )?;
+            }
+            AnalysisMode::OneUIP | AnalysisMode::AllDecision | AnalysisMode::ExtendedOneUIP => {
+                statistics.num_unit_propagations += 1;
+
+                // There are two scenarios:
+                // nogood[0] is unassigned -> propagate the predicate to false
+                // nogood[0] is assigned true -> conflict.
+                let reason = Reason::DynamicLazy(nogood_id.id as u64);
+
+                let predicate = !context.get_predicate(nogood_predicates[0]);
+                let result = context.post(predicate, reason);
+                // If the propagation lead to a conflict.
+                if let Err(e) = result {
+                    return Err(e.into());
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

@@ -503,40 +503,15 @@ impl Propagator for NogoodPropagator {
                 }
 
                 // Now we perform the propagation
-                match self.analysis_mode {
-                    AnalysisMode::ExtendedCPIP | AnalysisMode::BoundsExtendedCPIP => {
-                        let propagated_domain =
-                            context.get_predicate(nogood_predicates[0]).get_domain();
-                        NogoodPropagator::propagate_extended_nogood(
-                            &mut context,
-                            nogood_predicates,
-                            propagated_domain,
-                            inference_code,
-                            &mut self.statistics,
-                            Some(watcher.nogood_id),
-                        )?;
+                self.analysis_mode.perform_propagation(
+                    &mut context,
+                    nogood_predicates,
+                    inference_code,
+                    watcher.nogood_id,
+                    &mut self.statistics,
+                )?;
 
-                        index += 1;
-                    }
-                    AnalysisMode::OneUIP
-                    | AnalysisMode::AllDecision
-                    | AnalysisMode::ExtendedOneUIP => {
-                        self.statistics.num_unit_propagations += 1;
-
-                        // There are two scenarios:
-                        // nogood[0] is unassigned -> propagate the predicate to false
-                        // nogood[0] is assigned true -> conflict.
-                        let reason = Reason::DynamicLazy(watcher.nogood_id.id as u64);
-
-                        let predicate = !context.get_predicate(nogood_predicates[0]);
-                        let result = context.post(predicate, reason);
-                        // If the propagation lead to a conflict.
-                        if let Err(e) = result {
-                            return Err(e.into());
-                        }
-                        index += 1;
-                    }
-                }
+                index += 1;
             }
         }
 
@@ -718,7 +693,7 @@ impl NogoodPropagator {
     /// For this nogood to be satisfied, we can see that [x <= 5] \/ [x >= 16] \/ [x == 12].
     /// Based on this reasoning, we can remove the values {6, 7, 8, 9, 10, 11, 13, 14, 15} from the
     /// domain of `x`.
-    fn propagate_extended_nogood(
+    pub(crate) fn propagate_extended_nogood(
         context: &mut PropagationContext,
         nogood: &[PredicateId],
         propagated_domain: DomainId,
