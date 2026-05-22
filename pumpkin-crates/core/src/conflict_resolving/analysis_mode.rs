@@ -20,6 +20,7 @@ use crate::pumpkin_assert_simple;
 use crate::state::PropagationStatusCP;
 use crate::variables::DomainId;
 
+/// Determines the different type of resolution-based analysis modes that are supported.
 #[derive(Debug, Clone, Copy)]
 pub enum AnalysisMode {
     /// Standard conflict analysis which returns as soon as the first unit implication point is
@@ -43,6 +44,7 @@ pub enum AnalysisMode {
 }
 
 impl AnalysisMode {
+    /// Returns whether CPIP nogoods are created by the [`AnalysisMode`].
     pub fn uses_cpip(&self) -> bool {
         matches!(
             self,
@@ -50,6 +52,10 @@ impl AnalysisMode {
         )
     }
 
+    /// Returns whether the provided [`Predicate`] (which became true at `decision_level`) should
+    /// be processed further.
+    ///
+    /// If false is returned, then the provided [`Predicate`] is added directly to the nogood.
     pub fn predicate_should_be_processed(
         &self,
         predicate: Predicate,
@@ -60,11 +66,19 @@ impl AnalysisMode {
             AnalysisMode::OneUIP
             | AnalysisMode::ExtendedCPIP
             | AnalysisMode::ExtendedOneUIP
-            | AnalysisMode::BoundsExtendedCPIP => decision_level == context.get_checkpoint(),
-            AnalysisMode::AllDecision => !context.is_decision_predicate(predicate),
+            | AnalysisMode::BoundsExtendedCPIP => {
+                // The predicate should be processed further if it is not from the current decision
+                // level
+                decision_level == context.get_checkpoint()
+            }
+            AnalysisMode::AllDecision => {
+                // The predicate should be processed further if it is not a decision
+                !context.is_decision_predicate(predicate)
+            }
         }
     }
 
+    /// Returns whether to continue resolving.
     pub fn should_continue_resolving(
         &self,
         to_process_heap: &KeyValueHeap<PredicateId, u32>,
@@ -149,6 +163,10 @@ impl AnalysisMode {
         }
     }
 
+    /// Removes the left-over predicates in `to_process_heap` after
+    /// [`AnalysisMode::should_continue_resolving`] returned false (e.g., when finding the 1UIP, the
+    /// `to_process_heap` will contain the asserting predicate) and returns the number of
+    /// elements which were left in the `to_process_heap`.
     pub fn remove_final_predicates(
         &self,
         to_process_heap: &mut KeyValueHeap<PredicateId, u32>,
@@ -211,6 +229,8 @@ impl AnalysisMode {
         num_removed
     }
 
+    /// Removes the element with the highest value from `to_process_heap` and returns the
+    /// corresponding [`Predicate`].
     pub fn pop_predicate_from_conflict_nogood(
         to_process_heap: &mut KeyValueHeap<PredicateId, u32>,
         predicate_id_generator: &mut PredicateIdGenerator,
@@ -219,6 +239,8 @@ impl AnalysisMode {
         predicate_id_generator.get_predicate(next_predicate_id)
     }
 
+    /// Returns a [`WatcherProcessingStatus`] based on the [`Predicate`] pointed to by `index` in
+    /// `nogood_predicates`.
     pub(crate) fn process_potential_watcher(
         &self,
         context: &mut PropagationContext,
@@ -269,6 +291,8 @@ impl AnalysisMode {
                 }
             }
             AnalysisMode::OneUIP | AnalysisMode::AllDecision | AnalysisMode::ExtendedOneUIP => {
+                // Standard case, we check whether the atomic constraint is not satisfied and
+                // replace it if we have found such a predicate.
                 if !context.is_predicate_id_satisfied(nogood_predicates[index]) {
                     WatcherProcessingStatus::FoundNewWatch
                 } else {
@@ -278,6 +302,7 @@ impl AnalysisMode {
         }
     }
 
+    /// Computes from scratch whether extended nogood propagation can take place.
     pub fn can_perform_extended_nogood_propagation(
         &self,
         context: &mut PropagationContext,
@@ -309,6 +334,10 @@ impl AnalysisMode {
             .then(|| *unassigned_domains.iter().next().unwrap())
     }
 
+    /// Performs unit propagation or extended nogood propagation depending on what types of nogoods
+    /// are being learned.
+    ///
+    /// Note that this method does *not* check whether the propagation conditions have been met.
     pub(crate) fn perform_propagation(
         &self,
         context: &mut PropagationContext,
@@ -349,6 +378,8 @@ impl AnalysisMode {
         Ok(())
     }
 
+    /// Returns whether the provided `nogood` can be added as a permanent nogood (i.e., whether it
+    /// would propagate at the root level).
     pub(crate) fn can_be_added_as_permanent(
         &self,
         context: &PropagationContext,
@@ -393,6 +424,7 @@ impl AnalysisMode {
         false
     }
 
+    /// Calculates the LBD.
     pub(crate) fn calculate_lbd(
         &self,
         context: &PropagationContext,
@@ -418,10 +450,26 @@ impl AnalysisMode {
     }
 }
 
+/// The result of [`AnalysisMode::process_potential_watcher`] indicating what should happen to the
+/// watchers of the nogood.
 #[derive(Debug, Clone, Copy)]
-pub enum WatcherProcessingStatus {
+pub(crate) enum WatcherProcessingStatus {
+    /// No new watcher has been found, we should simply move to the next potential watcher.
     Continue,
+    /// A new watcher has been found and it can replace the satisfied watcher.
     FoundNewWatch,
+    /// **Only applicable when learning CPIP nogoods** - Indicates that a [`Predicate`] reasoning
+    /// over the same variable as the other watcher (i.e., the watcher for which a new watcher
+    /// is currently *not* being looked for) has been found which is falsified.
+    ///
+    /// This return value ensures that the watcher at index 0 is replaced with the currently
+    /// processed predicate.
     FalsifiedZeroth,
+    /// **Only applicable when learning CPIP nogoods** - Indicates that an unsatisfied [`Predicate`]
+    /// has been found but that it reasons over the same variable as the other watcher.
+    ///
+    /// This return value ensures that the watcher at index 0 is replaced with the currently
+    /// processed predicate to ensure that during unit propagation the propagating predicate is
+    /// always placed at position 0.
     FoundNewWatchButContinue,
 }

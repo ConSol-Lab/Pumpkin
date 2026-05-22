@@ -6,7 +6,7 @@ mod conflict_resolver;
 mod learned_nogood;
 
 pub use analysis_mode::AnalysisMode;
-pub use analysis_mode::WatcherProcessingStatus;
+pub(crate) use analysis_mode::WatcherProcessingStatus;
 pub use conflict_analysis_context::ConflictAnalysisContext;
 pub use conflict_resolver::ConflictResolver;
 pub(crate) use learned_nogood::LearnedNogood;
