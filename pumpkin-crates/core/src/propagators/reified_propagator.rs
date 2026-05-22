@@ -3,6 +3,9 @@ use pumpkin_checking::BoxedChecker;
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
 
+use crate::checkers::BoxedConsistencyChecker;
+use crate::checkers::ConsistencyChecker;
+use crate::checkers::Scope;
 use crate::engine::PropagationStatusCP;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::predicates::Predicate;
@@ -10,7 +13,6 @@ use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
-use crate::propagation::InferenceCheckers;
 use crate::propagation::LazyExplanation;
 use crate::propagation::LocalId;
 use crate::propagation::NotificationContext;
@@ -45,13 +47,20 @@ where
         } = self;
 
         let propagator = propagator.create(context.reborrow());
+
         let reification_literal_id = context.get_next_local_id();
 
         context.register(
-            self.reification_literal,
+            reification_literal,
             DomainEvents::BOUNDS,
             reification_literal_id,
         );
+
+        #[cfg(feature = "check-propagations")]
+        wrap_inference_checkers(&mut context, reification_literal);
+
+        #[cfg(feature = "check-consistency")]
+        wrap_consistency_checkers(&mut context, reification_literal, reification_literal_id);
 
         let name = format!("Reified({})", propagator.name());
 
@@ -63,11 +72,44 @@ where
             reason_buffer: vec![],
         }
     }
+}
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.with_reification_literal(self.reification_literal);
+/// Wrap inference checkers: the literal is already known, no local id needed.
+#[cfg(feature = "check-propagations")]
+fn wrap_inference_checkers(
+    context: &mut PropagatorConstructorContext<'_>,
+    reification_literal: Literal,
+) {
+    for (_, checker) in context.pending_inference_checkers.iter_mut() {
+        replace_with::replace_with_or_abort(checker, |inner_checker| {
+            Box::new(ReifiedChecker {
+                inner: BoxedChecker::from(inner_checker),
+                reification_literal,
+            })
+        });
+    }
+}
 
-        self.propagator.add_inference_checkers(checkers);
+/// Wrap consistency checkers: add the reification literal to each scope with the now-known
+/// local id, then wrap the checker.
+#[cfg(feature = "check-consistency")]
+fn wrap_consistency_checkers(
+    context: &mut PropagatorConstructorContext<'_>,
+    reification_literal: Literal,
+    reification_literal_id: LocalId,
+) {
+    use crate::checkers::ScopeItem;
+
+    for (scope, checker) in context.pending_consistency_checkers.iter_mut() {
+        reification_literal.add_to_scope(scope, reification_literal_id);
+
+        replace_with::replace_with_or_abort(checker, |inner_checker| {
+            BoxedConsistencyChecker::from(ReifiedConsistencyChecker {
+                inner: inner_checker,
+                reification_literal,
+                reification_literal_id,
+            })
+        });
     }
 }
 
@@ -228,6 +270,29 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
         }
 
         EnqueueDecision::Skip
+    }
+}
+
+/// A [`ConsistencyChecker`] wrapper that skips the inner check when the reification literal is
+/// not assigned to true.
+#[derive(Debug, Clone)]
+pub struct ReifiedConsistencyChecker {
+    pub inner: BoxedConsistencyChecker,
+    pub reification_literal: Literal,
+    /// The [`LocalId`] of the reification literal in the scope, used to strip it before passing
+    /// the scope to the inner checker.
+    pub reification_literal_id: LocalId,
+}
+
+impl ConsistencyChecker for ReifiedConsistencyChecker {
+    fn check_consistency(&mut self, scope: &Scope, domains: Domains<'_>) -> bool {
+        let check_inner = domains.evaluate_literal(self.reification_literal) == Some(true);
+        if !check_inner {
+            return true;
+        }
+
+        let inner_scope = scope.without(self.reification_literal_id);
+        self.inner.check_consistency(&inner_scope, domains)
     }
 }
 

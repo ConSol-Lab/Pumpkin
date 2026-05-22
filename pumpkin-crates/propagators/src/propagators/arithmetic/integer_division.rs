@@ -9,7 +9,6 @@ use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -51,6 +50,15 @@ where
             constraint_tag,
         } = self;
 
+        context.add_inference_checker(
+            InferenceCode::new(constraint_tag, Division),
+            Box::new(IntegerDivisionChecker {
+                numerator: numerator.clone(),
+                denominator: denominator.clone(),
+                rhs: rhs.clone(),
+            }),
+        );
+
         pumpkin_assert_simple!(
             !context.contains(&denominator, 0),
             "Denominator cannot contain 0"
@@ -68,17 +76,6 @@ where
             rhs,
             inference_code,
         }
-    }
-
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, Division),
-            Box::new(IntegerDivisionChecker {
-                numerator: self.numerator.clone(),
-                denominator: self.denominator.clone(),
-                rhs: self.rhs.clone(),
-            }),
-        );
     }
 }
 

@@ -11,7 +11,6 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::EnqueueDecision;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
@@ -100,8 +99,8 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
 impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPointPropagator<Var> {
     type PropagatorImpl = Self;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
+    fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        context.add_inference_checker(
             InferenceCode::new(self.constraint_tag, TimeTable),
             Box::new(TimeTableChecker {
                 tasks: self
@@ -117,9 +116,6 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPoint
                 capacity: self.parameters.capacity,
             }),
         );
-    }
-
-    fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         self.updatable_structures
             .initialise_bounds_and_remove_fixed(context.domains(), &self.parameters);
         register_tasks(&self.parameters.tasks, context.reborrow(), false);

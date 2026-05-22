@@ -8,7 +8,6 @@ use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -35,22 +34,20 @@ where
 {
     type PropagatorImpl = AbsoluteValuePropagator<VA, VB>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, AbsoluteValue),
-            Box::new(AbsoluteValueChecker {
-                signed: self.signed.clone(),
-                absolute: self.absolute.clone(),
-            }),
-        );
-    }
-
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let AbsoluteValueArgs {
             signed,
             absolute,
             constraint_tag,
         } = self;
+
+        context.add_inference_checker(
+            InferenceCode::new(constraint_tag, AbsoluteValue),
+            Box::new(AbsoluteValueChecker {
+                signed: signed.clone(),
+                absolute: absolute.clone(),
+            }),
+        );
 
         context.register(signed.clone(), DomainEvents::BOUNDS, LocalId::from(0));
         context.register(absolute.clone(), DomainEvents::BOUNDS, LocalId::from(1));

@@ -18,7 +18,6 @@ use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
@@ -50,22 +49,20 @@ where
 {
     type PropagatorImpl = LinearNotEqualPropagator<Var>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, LinearNotEquals),
-            Box::new(LinearNotEqualChecker {
-                terms: self.terms.as_ref().into(),
-                bound: self.rhs,
-            }),
-        );
-    }
-
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let LinearNotEqualPropagatorArgs {
             terms,
             rhs,
             constraint_tag,
         } = self;
+
+        context.add_inference_checker(
+            InferenceCode::new(constraint_tag, LinearNotEquals),
+            Box::new(LinearNotEqualChecker {
+                terms: terms.as_ref().into(),
+                bound: rhs,
+            }),
+        );
 
         for (i, x_i) in terms.iter().enumerate() {
             context.register(x_i.clone(), DomainEvents::ASSIGN, LocalId::from(i as u32));

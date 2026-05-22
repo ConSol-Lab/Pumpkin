@@ -8,7 +8,6 @@ use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
@@ -80,6 +79,20 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
     type PropagatorImpl = DisjunctivePropagator<Var>;
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        context.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, DisjunctiveEdgeFinding),
+            Box::new(DisjunctiveEdgeFindingChecker {
+                tasks: self
+                    .tasks
+                    .iter()
+                    .map(|task| ArgDisjunctiveTask {
+                        start_time: task.start_time.clone(),
+                        processing_time: task.processing_time,
+                    })
+                    .collect(),
+            }),
+        );
+
         let tasks = self
             .tasks
             .into_iter()
@@ -105,22 +118,6 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
 
             inference_code,
         }
-    }
-
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, DisjunctiveEdgeFinding),
-            Box::new(DisjunctiveEdgeFindingChecker {
-                tasks: self
-                    .tasks
-                    .iter()
-                    .map(|task| ArgDisjunctiveTask {
-                        start_time: task.start_time.clone(),
-                        processing_time: task.processing_time,
-                    })
-                    .collect(),
-            }),
-        );
     }
 }
 

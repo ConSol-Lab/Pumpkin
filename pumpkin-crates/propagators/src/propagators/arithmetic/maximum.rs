@@ -9,7 +9,6 @@ use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -36,22 +35,20 @@ where
 {
     type PropagatorImpl = MaximumPropagator<ElementVar, Rhs>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, Maximum),
-            Box::new(MaximumChecker {
-                array: self.array.clone(),
-                rhs: self.rhs.clone(),
-            }),
-        );
-    }
-
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let MaximumArgs {
             array,
             rhs,
             constraint_tag,
         } = self;
+
+        context.add_inference_checker(
+            InferenceCode::new(constraint_tag, Maximum),
+            Box::new(MaximumChecker {
+                array: array.clone(),
+                rhs: rhs.clone(),
+            }),
+        );
 
         for (idx, var) in array.iter().enumerate() {
             context.register(var.clone(), DomainEvents::BOUNDS, LocalId::from(idx as u32));

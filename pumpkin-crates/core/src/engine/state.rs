@@ -31,8 +31,6 @@ use crate::proof::InferenceCode;
 use crate::propagation::CurrentNogood;
 use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
-#[cfg(any(feature = "check-propagations", feature = "check-consistency"))]
-use crate::propagation::InferenceCheckers;
 use crate::propagation::NotificationContext;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
@@ -338,9 +336,6 @@ impl State {
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
-        #[cfg(any(feature = "check-propagations", feature = "check-consistency"))]
-        constructor.add_inference_checkers(InferenceCheckers::new(self));
-
         let original_handle: PropagatorHandle<Constructor::PropagatorImpl> =
             self.propagators.new_propagator().key();
 
@@ -382,10 +377,9 @@ impl State {
         checkers.push(BoxedChecker::from(checker));
     }
 
-    /// Add a consistency checker for the given constraint and scope.
+    /// Add a consistency checker for the scope.
     pub fn add_consistency_checker(
         &mut self,
-        _constraint_tag: ConstraintTag,
         scope: impl Into<Scope>,
         checker: impl Into<BoxedConsistencyChecker>,
     ) {

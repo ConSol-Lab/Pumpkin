@@ -23,14 +23,11 @@ use crate::engine::variables::AffineView;
 #[cfg(doc)]
 use crate::engine::variables::DomainId;
 use crate::predicates::Predicate;
-use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
-use crate::propagators::reified_propagator::ReifiedChecker;
 use crate::variables::IntegerVariable;
-use crate::variables::Literal;
 
 /// A propagator constructor creates a fully initialized instance of a [`Propagator`].
 ///
@@ -38,72 +35,16 @@ use crate::variables::Literal;
 /// 1) Indicating on which [`DomainEvent`]s the propagator should be enqueued (via the
 ///    [`PropagatorConstructorContext`]).
 /// 2) Initialising the [`PropagatorConstructor::PropagatorImpl`] and its structures.
+///
+/// Inference checkers and consistency checkers should be registered inside [`Self::create`] via
+/// [`PropagatorConstructorContext::add_inference_checker`] and
+/// [`PropagatorConstructorContext::add_consistency_checker`].
 pub trait PropagatorConstructor {
     /// The propagator that is produced by this constructor.
     type PropagatorImpl: Propagator + Clone;
 
-    /// Add inference checkers to the solver if applicable.
-    ///
-    /// If the `check-propagations` feature is turned on, then the inference checker will be used
-    /// to verify the propagations done by this propagator are correct.
-    ///
-    /// See [`InferenceChecker`] for more information.
-    fn add_inference_checkers(&self, _checkers: InferenceCheckers<'_>) {}
-
     /// Create the propagator instance from `Self`.
     fn create(self, context: PropagatorConstructorContext) -> Self::PropagatorImpl;
-}
-
-/// Interface used to add [`InferenceChecker`]s to the [`State`].
-#[derive(Debug)]
-pub struct InferenceCheckers<'state> {
-    state: &'state mut State,
-    reification_literal: Option<Literal>,
-}
-
-impl<'state> InferenceCheckers<'state> {
-    #[cfg(any(feature = "check-propagations", feature = "check-consistency"))]
-    pub(crate) fn new(state: &'state mut State) -> Self {
-        InferenceCheckers {
-            state,
-            reification_literal: None,
-        }
-    }
-}
-
-impl InferenceCheckers<'_> {
-    /// Add a consistency checker for the given constraint and scope.
-    pub fn add_consistency_checker(
-        &mut self,
-        constraint_tag: ConstraintTag,
-        scope: impl Into<Scope>,
-        checker: impl Into<BoxedConsistencyChecker>,
-    ) {
-        self.state
-            .add_consistency_checker(constraint_tag, scope, checker);
-    }
-
-    /// Forwards to [`State::add_inference_checker`].
-    pub fn add_inference_checker(
-        &mut self,
-        inference_code: InferenceCode,
-        checker: Box<dyn InferenceChecker<Predicate>>,
-    ) {
-        if let Some(reification_literal) = self.reification_literal {
-            let reification_checker = ReifiedChecker {
-                inner: checker.into(),
-                reification_literal,
-            };
-            self.state
-                .add_inference_checker(inference_code, Box::new(reification_checker));
-        } else {
-            self.state.add_inference_checker(inference_code, checker);
-        }
-    }
-
-    pub fn with_reification_literal(&mut self, literal: Literal) {
-        self.reification_literal = Some(literal)
-    }
 }
 
 /// [`PropagatorConstructorContext`] is used when [`Propagator`]s are initialised after creation.
@@ -113,17 +54,26 @@ impl InferenceCheckers<'_> {
 /// of variables and to retrieve the current bounds of variables.
 #[derive(Debug)]
 pub struct PropagatorConstructorContext<'a> {
-    state: &'a mut State,
+    pub(crate) state: &'a mut State,
     pub(crate) propagator_id: PropagatorId,
 
     /// A [`LocalId`] that is guaranteed not to be used to register any variables yet. This is
     /// either a reference or an owned value, to support
     /// [`PropagatorConstructorContext::reborrow`].
-    next_local_id: RefOrOwned<'a, LocalId>,
+    pub(crate) next_local_id: RefOrOwned<'a, LocalId>,
 
     /// Marker to indicate whether the constructor registered for at least one domain event or
     /// predicate becoming assigned. If not, the [`Drop`] implementation will cause a panic.
-    did_register: RefOrOwned<'a, bool>,
+    pub(crate) did_register: RefOrOwned<'a, bool>,
+
+    /// Pending consistency checkers to be registered into [`State`] when this context is dropped.
+    #[cfg(feature = "check-consistency")]
+    pub(crate) pending_consistency_checkers: RefOrOwned<'a, Vec<(Scope, BoxedConsistencyChecker)>>,
+
+    /// Pending inference checkers to be registered into [`State`] when this context is dropped.
+    #[cfg(feature = "check-propagations")]
+    pub(crate) pending_inference_checkers:
+        RefOrOwned<'a, Vec<(InferenceCode, Box<dyn InferenceChecker<Predicate>>)>>,
 }
 
 impl PropagatorConstructorContext<'_> {
@@ -136,6 +86,10 @@ impl PropagatorConstructorContext<'_> {
             propagator_id,
             state,
             did_register: RefOrOwned::Owned(false),
+            #[cfg(feature = "check-consistency")]
+            pending_consistency_checkers: RefOrOwned::Owned(vec![]),
+            #[cfg(feature = "check-propagations")]
+            pending_inference_checkers: RefOrOwned::Owned(vec![]),
         }
     }
 
@@ -239,19 +193,49 @@ impl PropagatorConstructorContext<'_> {
             next_local_id: self.next_local_id.reborrow(),
             did_register: self.did_register.reborrow(),
             state: self.state,
+            #[cfg(feature = "check-consistency")]
+            pending_consistency_checkers: self.pending_consistency_checkers.reborrow(),
+            #[cfg(feature = "check-propagations")]
+            pending_inference_checkers: self.pending_inference_checkers.reborrow(),
+        }
+    }
+
+    /// Add a consistency checker for the given constraint and scope.
+    ///
+    /// If the `check-consistency` feature is not enabled, this is a no-op.
+    pub fn add_consistency_checker(
+        &mut self,
+        scope: impl Into<Scope>,
+        checker: impl Into<BoxedConsistencyChecker>,
+    ) {
+        #[cfg(feature = "check-consistency")]
+        self.pending_consistency_checkers
+            .push((scope.into(), checker.into()));
+
+        #[cfg(not(feature = "check-consistency"))]
+        {
+            let _ = scope;
+            let _ = checker;
         }
     }
 
     /// Add an inference checker for inferences produced by the propagator.
     ///
-    /// If the `check-propagations` feature is not enabled, adding an [`InferenceChecker`] will not
-    /// do anything.
+    /// If the `check-propagations` feature is not enabled, this is a no-op.
     pub fn add_inference_checker(
         &mut self,
         inference_code: InferenceCode,
         checker: Box<dyn InferenceChecker<Predicate>>,
     ) {
-        self.state.add_inference_checker(inference_code, checker);
+        #[cfg(feature = "check-propagations")]
+        self.pending_inference_checkers
+            .push((inference_code, checker));
+
+        #[cfg(not(feature = "check-propagations"))]
+        {
+            let _ = inference_code;
+            let _ = checker;
+        }
     }
 
     /// Set the next local id to be at least one more than the largest encountered local id.
@@ -270,7 +254,8 @@ impl Drop for PropagatorConstructorContext<'_> {
         }
 
         let did_register = match self.did_register {
-            // If we are in a reborrowed context, we do not want to enforce registration.
+            // If we are in a reborrowed context, we do not want to enforce registration or drain
+            // pending checkers (the root context handles this).
             RefOrOwned::Ref(_) => return,
 
             RefOrOwned::Owned(did_register) => did_register,
@@ -280,6 +265,16 @@ impl Drop for PropagatorConstructorContext<'_> {
             panic!(
                 "Propagator did not register to be enqueued. If this is intentional, call PropagatorConstructorContext::will_not_register_any_events()."
             );
+        }
+
+        #[cfg(feature = "check-consistency")]
+        for (scope, checker) in std::mem::take(&mut *self.pending_consistency_checkers) {
+            self.state.add_consistency_checker(scope, checker);
+        }
+
+        #[cfg(feature = "check-propagations")]
+        for (inference_code, checker) in std::mem::take(&mut *self.pending_inference_checkers) {
+            self.state.add_inference_checker(inference_code, checker);
         }
     }
 }

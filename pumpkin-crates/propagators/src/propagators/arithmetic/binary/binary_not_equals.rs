@@ -8,7 +8,6 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -37,22 +36,20 @@ where
 {
     type PropagatorImpl = BinaryNotEqualsPropagator<AVar, BVar>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, BinaryNotEquals),
-            Box::new(BinaryNotEqualsChecker {
-                lhs: self.a.clone(),
-                rhs: self.b.clone(),
-            }),
-        );
-    }
-
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let BinaryNotEqualsPropagatorArgs {
             a,
             b,
             constraint_tag,
         } = self;
+
+        context.add_inference_checker(
+            InferenceCode::new(constraint_tag, BinaryNotEquals),
+            Box::new(BinaryNotEqualsChecker {
+                lhs: a.clone(),
+                rhs: b.clone(),
+            }),
+        );
 
         // We only care about the case where one of the two is assigned
         context.register(a.clone(), DomainEvents::ASSIGN, LocalId::from(0));

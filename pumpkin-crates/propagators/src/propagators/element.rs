@@ -18,7 +18,6 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::ExplanationContext;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
@@ -49,17 +48,6 @@ where
 {
     type PropagatorImpl = ElementPropagator<VX, VI, VE>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, Element),
-            Box::new(ElementChecker::new(
-                self.array.clone(),
-                self.index.clone(),
-                self.rhs.clone(),
-            )),
-        );
-    }
-
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let ElementArgs {
             array,
@@ -67,6 +55,11 @@ where
             rhs,
             constraint_tag,
         } = self;
+
+        context.add_inference_checker(
+            InferenceCode::new(constraint_tag, Element),
+            Box::new(ElementChecker::new(array.clone(), index.clone(), rhs.clone())),
+        );
 
         for (i, x_i) in array.iter().enumerate() {
             context.register(

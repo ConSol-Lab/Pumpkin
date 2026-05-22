@@ -14,7 +14,6 @@ use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::ExplanationContext;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
@@ -46,22 +45,17 @@ where
 {
     type PropagatorImpl = LinearLessOrEqualPropagator<Var>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, LinearBounds),
-            Box::new(LinearLessOrEqualInferenceChecker::new(
-                self.x.clone(),
-                self.c,
-            )),
-        );
-    }
-
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let LinearLessOrEqualPropagatorArgs {
             x,
             c,
             constraint_tag,
         } = self;
+
+        context.add_inference_checker(
+            InferenceCode::new(constraint_tag, LinearBounds),
+            Box::new(LinearLessOrEqualInferenceChecker::new(x.clone(), c)),
+        );
 
         let mut lower_bound_left_hand_side = 0_i64;
         let mut current_bounds = vec![];

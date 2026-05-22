@@ -20,6 +20,13 @@ impl Scope {
     pub fn domains(&self) -> impl ExactSizeIterator<Item = (LocalId, DomainId)> {
         self.domains.iter().map(|(lid, did)| (*lid, *did))
     }
+
+    /// Returns a copy of this scope with the entry for `local_id` removed.
+    pub fn without(&self, local_id: LocalId) -> Scope {
+        let mut scope = self.clone();
+        let _ = scope.domains.remove(&local_id);
+        scope
+    }
 }
 
 macro_rules! impl_scope_from_tuple {
