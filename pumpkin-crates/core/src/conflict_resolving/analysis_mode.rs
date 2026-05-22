@@ -6,6 +6,7 @@ use crate::containers::KeyValueHeap;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateIdGenerator;
 use crate::predicates::PredicateType;
+use crate::propagation::PropagationContext;
 use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -208,4 +209,71 @@ impl AnalysisMode {
         let next_predicate_id = to_process_heap.pop_max().unwrap();
         predicate_id_generator.get_predicate(next_predicate_id)
     }
+
+    pub(crate) fn process_potential_watcher(
+        &self,
+        context: &mut PropagationContext,
+        nogood_predicates: &[PredicateId],
+        index: usize,
+    ) -> WatcherProcessingStatus {
+        match self {
+            AnalysisMode::ExtendedCPIP | AnalysisMode::BoundsExtendedCPIP => {
+                // In the case of CPIP nogoods, we split into cases dependent on whether the
+                // predicate which we are processing reasons over the same domain.
+                //
+                // First, we store whether the current predicate reasons over the same domain as
+                // the predicate for which we are finding a new watcher.
+                let reasons_over_same_domain =
+                    context.get_predicate(nogood_predicates[index]).get_domain()
+                        == context.get_predicate(nogood_predicates[0]).get_domain();
+
+                // Next we split into several cases depending on the states of the to process
+                // predicate.
+                match context.evaluate_predicate_id(nogood_predicates[index]) {
+                    None => {
+                        if !reasons_over_same_domain {
+                            // If the predicate is unassigned and does not reason over the same
+                            // domain as the 0-th predicate, then we have found a new watch.
+                            WatcherProcessingStatus::FoundNewWatch
+                        } else {
+                            // Otherwise, we have found a new watcher, but, since it reasons over
+                            // the same variable as the 0-th predicate, we need to re-use it.
+                            //
+                            // Note that we replace the 0-th predicate with the predicate we are
+                            // currently processing to ensure that during unit propagation the 0-th
+                            // predicate is the one being propagated.
+                            WatcherProcessingStatus::FoundNewWatchButContinue
+                        }
+                    }
+                    Some(false) => {
+                        if !reasons_over_same_domain {
+                            // If the predicate is falsified and does not reason over the same
+                            // domain as the 0-th predicate, then we have found a new watch.
+                            WatcherProcessingStatus::FoundNewWatch
+                        } else {
+                            // Otherwise, we have found a falsified predicate, and we need to
+                            // update the zero-th predicate with this predicate.
+                            WatcherProcessingStatus::FalsifiedZeroth
+                        }
+                    }
+                    _ => WatcherProcessingStatus::Continue,
+                }
+            }
+            AnalysisMode::OneUIP | AnalysisMode::AllDecision | AnalysisMode::ExtendedOneUIP => {
+                if !context.is_predicate_id_satisfied(nogood_predicates[index]) {
+                    WatcherProcessingStatus::FoundNewWatch
+                } else {
+                    WatcherProcessingStatus::Continue
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum WatcherProcessingStatus {
+    Continue,
+    FoundNewWatch,
+    FalsifiedZeroth,
+    FoundNewWatchButContinue,
 }

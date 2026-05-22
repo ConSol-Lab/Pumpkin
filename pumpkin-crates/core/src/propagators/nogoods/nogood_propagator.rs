@@ -9,6 +9,7 @@ use super::NogoodInfo;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PropositionalConjunction;
 use crate::conflict_resolving::AnalysisMode;
+use crate::conflict_resolving::WatcherProcessingStatus;
 use crate::containers::HashSet;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
@@ -363,38 +364,18 @@ impl Propagator for NogoodPropagator {
 
                 // Start from index 2 since we are skipping watched predicates.
                 for i in 2..nogood_predicates.len() {
-                    // We try to find a predicate to replace the current (satisfied)
-                    // watcher with.
-                    //
-                    // In the case of 1UIP nogoods, we simply look for an unsatisfied predicate.
-                    //
-                    // In the case of CPIP nogoods, there are two things to keep in mind:
-                    // 1. We are looking for a predicate over a domain which is different than the
-                    //    domain of the 0-th watcher.
-                    // 2. If we find a falsified predicate, which reasons over the same domain as
-                    //    the 0-th watcher, then we need to replace the predicate at position 0 with
-                    //    that one.
-                    //
-                    // We start by matching on the status of the predicate
-                    match context.evaluate_predicate_id(nogood_predicates[i]) {
-                        None | Some(false)
-                            if matches!(
-                                self.analysis_mode,
-                                AnalysisMode::OneUIP
-                                    | AnalysisMode::AllDecision
-                                    | AnalysisMode::ExtendedOneUIP
-                            ) || context.get_predicate(nogood_predicates[i]).get_domain()
-                                != context.get_predicate(nogood_predicates[0]).get_domain() =>
-                        {
-                            // We found a predicate that is either unassigned or falsified
-                            // (but reasoning about a different domain than that of the
-                            // 0-th predicate)
-                            //
-                            // Now we swap that watcher
+                    // We process the watcher based on the analysis mode that we are in
+                    match self.analysis_mode.process_potential_watcher(
+                        &mut context,
+                        nogood_predicates,
+                        i,
+                    ) {
+                        WatcherProcessingStatus::Continue => continue,
+                        WatcherProcessingStatus::FoundNewWatch => {
+                            // Found another predicate that can be the watcher.
                             found_new_watch = true;
 
-                            // Replace the current watcher with the new predicate
-                            // watcher.
+                            // Replace the current watcher with the new predicate watcher.
                             nogood_predicates.swap(1, i);
                             // Add this nogood to the watch list of the new watcher.
                             Self::add_watcher(
@@ -407,10 +388,7 @@ impl Propagator for NogoodPropagator {
                             // No propagation is taking place, go to the next nogood.
                             break;
                         }
-                        Some(false)
-                            if context.get_predicate(nogood_predicates[i]).get_domain()
-                                == context.get_predicate(nogood_predicates[0]).get_domain() =>
-                        {
+                        WatcherProcessingStatus::FalsifiedZeroth => {
                             // We have found a predicate which reasons over the same
                             // variable as the 0-th predicate *and* is falsified
                             //
@@ -437,13 +415,8 @@ impl Propagator for NogoodPropagator {
                             // Note that we do not break, since we still want to find a new
                             // watcher for the other predicate
                         }
-                        None if has_not_replaced
-                            && falsified_zeroth.is_none()
-                            && matches!(
-                                self.analysis_mode,
-                                AnalysisMode::ExtendedCPIP | AnalysisMode::BoundsExtendedCPIP /* TODO:
-                                                                                               * double-check */
-                            ) =>
+                        WatcherProcessingStatus::FoundNewWatchButContinue
+                            if has_not_replaced && falsified_zeroth.is_none() =>
                         {
                             // We need to keep the invariant of lazy unit propagation explanations
                             // that the propagating predicate is always at position 0.
