@@ -1,5 +1,11 @@
 use std::cmp::max;
 use std::ops::Not;
+#[cfg(feature = "check-consistency")]
+use std::sync::Arc;
+#[cfg(feature = "check-consistency")]
+use std::sync::atomic::AtomicBool;
+#[cfg(feature = "check-consistency")]
+use std::sync::atomic::Ordering;
 
 use log::warn;
 
@@ -8,6 +14,10 @@ use super::NogoodId;
 use super::NogoodInfo;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PropositionalConjunction;
+#[cfg(feature = "check-consistency")]
+use crate::checkers::Scope;
+#[cfg(feature = "check-consistency")]
+use crate::checkers::SelfDisablingChecker;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::Assignments;
@@ -23,6 +33,8 @@ use crate::proof::InferenceCode;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
 use crate::propagation::LazyExplanation;
+#[cfg(feature = "check-consistency")]
+use crate::propagation::LocalId;
 use crate::propagation::NotificationContext;
 use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
@@ -79,6 +91,13 @@ pub struct NogoodPropagator {
     /// current subtree. To test for that, we compare this handle with the propagator ID of a
     /// proapgated literal to see if this propagator propagated a predicate.
     handle: PropagatorHandle<NogoodPropagator>,
+
+    /// Flags shared with consistency checkers to signal that a nogood has been deleted.
+    ///
+    /// When clause management deletes a nogood, the corresponding flag is set to `true`, causing
+    /// the checker to become a no-op.
+    #[cfg(feature = "check-consistency")]
+    deletion_flags: KeyedVec<NogoodIndex, Arc<AtomicBool>>,
 }
 
 /// [`PropagatorConstructor`] for constructing a new instance of the [`NogoodPropagator`] with the
@@ -117,6 +136,8 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             lbd_helper: Default::default(),
             bumped_nogoods: Default::default(),
             temp_nogood_reason: Default::default(),
+            #[cfg(feature = "check-consistency")]
+            deletion_flags: Default::default(),
         }
     }
 }
@@ -452,6 +473,10 @@ impl NogoodPropagator {
             .lbd_helper
             .compute_lbd(&nogood.as_slice()[1..], context);
 
+        // Capture checker predicates before conversion to PredicateIds.
+        #[cfg(any(feature = "check-consistency", feature = "check-propagations"))]
+        let checker_predicates: Box<[Predicate]> = nogood.clone().into();
+
         let nogood = nogood
             .iter()
             .map(|predicate| context.get_id(*predicate))
@@ -464,7 +489,34 @@ impl NogoodPropagator {
         let _ = self
             .nogood_info
             .push(NogoodInfo::new_learned_nogood_info(lbd));
-        let _ = self.inference_codes.push(inference_code);
+        let _ = self.inference_codes.push(inference_code.clone());
+
+        #[cfg(feature = "check-consistency")]
+        {
+            let flag = Arc::new(AtomicBool::new(false));
+            let _ = self.deletion_flags.push(flag.clone());
+            let scope = NogoodPropagator::build_nogood_scope(&checker_predicates);
+            context.add_consistency_checker(
+                scope,
+                SelfDisablingChecker {
+                    inner: super::NogoodChecker {
+                        nogood: checker_predicates.clone(),
+                    }
+                    .into(),
+                    is_deleted: flag,
+                },
+            );
+        }
+
+        #[cfg(feature = "check-propagations")]
+        {
+            context.add_inference_checker(
+                inference_code,
+                Box::new(super::NogoodChecker {
+                    nogood: checker_predicates,
+                }),
+            );
+        }
 
         let watcher = Watcher {
             nogood_id,
@@ -619,6 +671,10 @@ impl NogoodPropagator {
         //
         // The preprocessing ensures that all predicates are unassigned.
         else {
+            // Capture the checker predicates before conversion to PredicateIds.
+            #[cfg(any(feature = "check-consistency", feature = "check-propagations"))]
+            let checker_predicates: Box<[Predicate]> = input_nogood.clone().into();
+
             #[cfg(feature = "check-propagations")]
             let nogood = input_nogood
                 .iter()
@@ -638,9 +694,36 @@ impl NogoodPropagator {
             let _ = self
                 .nogood_info
                 .push(NogoodInfo::new_permanent_nogood_info());
-            let _ = self.inference_codes.push(inference_code);
+            let _ = self.inference_codes.push(inference_code.clone());
 
             self.permanent_nogood_ids.push(nogood_id);
+
+            #[cfg(feature = "check-consistency")]
+            {
+                let flag = Arc::new(AtomicBool::new(false));
+                let _ = self.deletion_flags.push(flag.clone());
+                let scope = NogoodPropagator::build_nogood_scope(&checker_predicates);
+                context.add_consistency_checker(
+                    scope,
+                    SelfDisablingChecker {
+                        inner: super::NogoodChecker {
+                            nogood: checker_predicates.clone(),
+                        }
+                        .into(),
+                        is_deleted: flag,
+                    },
+                );
+            }
+
+            #[cfg(feature = "check-propagations")]
+            {
+                context.add_inference_checker(
+                    inference_code,
+                    Box::new(super::NogoodChecker {
+                        nogood: checker_predicates,
+                    }),
+                );
+            }
 
             let watcher = Watcher {
                 nogood_id,
@@ -661,6 +744,43 @@ impl NogoodPropagator {
             );
 
             Ok(())
+        }
+    }
+}
+
+/// Methods concerning checkers
+#[cfg(any(feature = "check-consistency", feature = "check-propagations"))]
+impl NogoodPropagator {
+    /// Build a [`Scope`] for a nogood by extracting unique [`DomainId`]s from its predicates.
+    #[cfg(feature = "check-consistency")]
+    fn build_nogood_scope(predicates: &[Predicate]) -> Scope {
+        use crate::containers::HashSet;
+
+        let mut scope = Scope::default();
+        let mut seen: HashSet<crate::variables::DomainId> = HashSet::default();
+        let mut next_id = 0u32;
+        for predicate in predicates {
+            let domain = predicate.get_domain();
+            if seen.insert(domain) {
+                scope.add_domain(LocalId::from(next_id), domain);
+                next_id += 1;
+            }
+        }
+        scope
+    }
+}
+
+#[cfg(feature = "check-consistency")]
+impl NogoodPropagator {
+    /// Set the deletion flag for every nogood that has been marked as deleted in `nogood_info`.
+    ///
+    /// Called after clause management removes nogoods so that consistency checkers self-disable.
+    fn signal_deleted_checker_flags(&self) {
+        for idx in 0..self.nogood_info.len() {
+            let idx = NogoodIndex::create_from_index(idx);
+            if self.nogood_info[idx].is_deleted {
+                self.deletion_flags[idx].store(true, Ordering::Relaxed);
+            }
         }
     }
 }
@@ -810,6 +930,8 @@ impl NogoodPropagator {
         }
 
         if removed_at_least_one_nogood {
+            #[cfg(feature = "check-consistency")]
+            self.signal_deleted_checker_flags();
             self.remove_deleted_nogoods_from_watchers(assignments, notification_engine);
         }
     }

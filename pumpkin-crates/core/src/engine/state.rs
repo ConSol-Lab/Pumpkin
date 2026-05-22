@@ -82,8 +82,8 @@ pub struct State {
     statistics: StateStatistics,
 
     /// Inference checkers to run in the propagation loop.
-    checkers: HashMap<InferenceCode, Vec<BoxedChecker<Predicate>>>,
-    consistency_checkers: ConsistencyCheckerStore,
+    pub(crate) checkers: HashMap<InferenceCode, Vec<BoxedChecker<Predicate>>>,
+    pub(crate) consistency_checkers: ConsistencyCheckerStore,
 }
 
 create_statistics_struct!(StateStatistics {
@@ -422,16 +422,31 @@ impl State {
         &mut self,
         handle: PropagatorHandle<P>,
     ) -> (Option<&mut P>, PropagationContext<'_>) {
-        (
-            self.propagators.get_propagator_mut(handle),
-            PropagationContext::new(
-                &mut self.trailed_values,
-                &mut self.assignments,
-                &mut self.reason_store,
-                &mut self.notification_engine,
-                handle.propagator_id(),
-            ),
-        )
+        let Self {
+            propagators,
+            trailed_values,
+            assignments,
+            reason_store,
+            notification_engine,
+            #[cfg(feature = "check-consistency")]
+            consistency_checkers,
+            #[cfg(feature = "check-propagations")]
+            checkers,
+            ..
+        } = self;
+        let propagator = propagators.get_propagator_mut(handle);
+        let context = PropagationContext::new(
+            trailed_values,
+            assignments,
+            reason_store,
+            notification_engine,
+            handle.propagator_id(),
+            #[cfg(feature = "check-consistency")]
+            consistency_checkers,
+            #[cfg(feature = "check-propagations")]
+            checkers,
+        );
+        (propagator, context)
     }
 }
 
@@ -614,13 +629,29 @@ impl State {
         let num_trail_entries_before = self.assignments.num_trail_entries();
 
         let propagation_status = {
-            let propagator = &mut self.propagators[propagator_id];
+            let Self {
+                propagators,
+                trailed_values,
+                assignments,
+                reason_store,
+                notification_engine,
+                #[cfg(feature = "check-consistency")]
+                consistency_checkers,
+                #[cfg(feature = "check-propagations")]
+                checkers,
+                ..
+            } = self;
+            let propagator = &mut propagators[propagator_id];
             let context = PropagationContext::new(
-                &mut self.trailed_values,
-                &mut self.assignments,
-                &mut self.reason_store,
-                &mut self.notification_engine,
+                trailed_values,
+                assignments,
+                reason_store,
+                notification_engine,
                 propagator_id,
+                #[cfg(feature = "check-consistency")]
+                consistency_checkers,
+                #[cfg(feature = "check-propagations")]
+                checkers,
             );
             propagator.propagate(context)
         };
@@ -1172,12 +1203,27 @@ impl State {
     }
 
     pub fn get_propagation_context(&mut self) -> PropagationContext<'_> {
+        let Self {
+            trailed_values,
+            assignments,
+            reason_store,
+            notification_engine,
+            #[cfg(feature = "check-consistency")]
+            consistency_checkers,
+            #[cfg(feature = "check-propagations")]
+            checkers,
+            ..
+        } = self;
         PropagationContext::new(
-            &mut self.trailed_values,
-            &mut self.assignments,
-            &mut self.reason_store,
-            &mut self.notification_engine,
+            trailed_values,
+            assignments,
+            reason_store,
+            notification_engine,
             PropagatorId(0),
+            #[cfg(feature = "check-consistency")]
+            consistency_checkers,
+            #[cfg(feature = "check-propagations")]
+            checkers,
         )
     }
 }

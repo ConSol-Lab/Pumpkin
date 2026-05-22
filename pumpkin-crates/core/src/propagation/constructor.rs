@@ -72,6 +72,10 @@ pub struct PropagatorConstructorContext<'a> {
 
     /// Pending inference checkers to be registered into [`State`] when this context is dropped.
     #[cfg(feature = "check-propagations")]
+    #[allow(
+        clippy::type_complexity,
+        reason = "it's not clear where the type alias would live"
+    )]
     pub(crate) pending_inference_checkers:
         RefOrOwned<'a, Vec<(InferenceCode, Box<dyn InferenceChecker<Predicate>>)>>,
 }

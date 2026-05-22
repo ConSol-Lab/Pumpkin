@@ -1,4 +1,10 @@
+use pumpkin_checking::BoxedChecker;
+use pumpkin_checking::InferenceChecker;
+
 use crate::basic_types::PredicateId;
+use crate::checkers::BoxedConsistencyChecker;
+use crate::checkers::Scope;
+use crate::containers::HashMap;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::EmptyDomainConflict;
@@ -10,6 +16,7 @@ use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::reason::StoredReason;
 use crate::engine::variables::Literal;
+use crate::proof::InferenceCode;
 use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
 use crate::propagation::HasAssignments;
@@ -84,6 +91,11 @@ pub struct PropagationContext<'a> {
     pub(crate) propagator_id: PropagatorId,
     pub(crate) notification_engine: &'a mut NotificationEngine,
     reification_literal: Option<Literal>,
+
+    #[cfg(feature = "check-consistency")]
+    pub(crate) consistency_checkers: &'a mut ConsistencyCheckerStore,
+    #[cfg(feature = "check-propagations")]
+    pub(crate) inference_checkers: &'a mut HashMap<InferenceCode, Vec<BoxedChecker<Predicate>>>,
 }
 
 impl<'a> HasAssignments for PropagationContext<'a> {
@@ -107,6 +119,11 @@ impl<'a> PropagationContext<'a> {
         reason_store: &'a mut ReasonStore,
         notification_engine: &'a mut NotificationEngine,
         propagator_id: PropagatorId,
+        #[cfg(feature = "check-consistency")] consistency_checkers: &'a mut ConsistencyCheckerStore,
+        #[cfg(feature = "check-propagations")] inference_checkers: &'a mut HashMap<
+            InferenceCode,
+            Vec<BoxedChecker<Predicate>>,
+        >,
     ) -> Self {
         PropagationContext {
             trailed_values,
@@ -115,6 +132,62 @@ impl<'a> PropagationContext<'a> {
             propagator_id,
             notification_engine,
             reification_literal: None,
+            #[cfg(feature = "check-consistency")]
+            consistency_checkers,
+            #[cfg(feature = "check-propagations")]
+            inference_checkers,
+        }
+    }
+
+    /// Add a consistency checker for the given constraint and scope.
+    ///
+    /// If the `check-consistency` feature is not enabled, this is a no-op.
+    pub fn add_consistency_checker(
+        &mut self,
+        scope: impl Into<Scope>,
+        checker: impl Into<BoxedConsistencyChecker>,
+    ) {
+        pumpkin_assert_simple!(
+            self.reification_literal.is_none(),
+            "Cannot add consistency checkers from within a reified propagation context."
+        );
+
+        #[cfg(feature = "check-consistency")]
+        self.consistency_checkers
+            .register(scope.into(), checker.into());
+
+        // Use variables to avoid unused warnings.
+        #[cfg(not(feature = "check-consistency"))]
+        {
+            let _ = scope;
+            let _ = checker;
+        }
+    }
+
+    /// Add an inference checker for inferences produced by the propagator.
+    ///
+    /// If the `check-propagations` feature is not enabled, this is a no-op.
+    pub fn add_inference_checker(
+        &mut self,
+        inference_code: InferenceCode,
+        checker: Box<dyn InferenceChecker<Predicate>>,
+    ) {
+        pumpkin_assert_simple!(
+            self.reification_literal.is_none(),
+            "Cannot add inference checkers from within a reified propagation context."
+        );
+
+        #[cfg(feature = "check-propagations")]
+        self.inference_checkers
+            .entry(inference_code)
+            .or_default()
+            .push(BoxedChecker::from(checker));
+
+        // Use variables to avoid unused warnings.
+        #[cfg(not(feature = "check-propagations"))]
+        {
+            let _ = inference_code;
+            let _ = checker;
         }
     }
 
@@ -224,6 +297,10 @@ impl<'a> PropagationContext<'a> {
             propagator_id: self.propagator_id,
             notification_engine: self.notification_engine,
             reification_literal: self.reification_literal,
+            #[cfg(feature = "check-consistency")]
+            consistency_checkers: self.consistency_checkers,
+            #[cfg(feature = "check-propagations")]
+            inference_checkers: self.inference_checkers,
         }
     }
 }
