@@ -455,39 +455,19 @@ impl Propagator for NogoodPropagator {
                     }
                 }
 
-                if matches!(self.analysis_mode, AnalysisMode::ExtendedOneUIP) {
-                    // We find all of the unasssigned predicates and get their domains
-                    //
-                    // If there is a falsified predicate then we do not propagate; also,
-                    // if the nogood can be unit
-                    // propagated, then
-                    // we do not propagate
-                    let mut is_falsified = false;
-                    let mut num_unassigned = 0;
-                    let mut unassigned_domains = HashSet::new();
-                    for predicate_id in nogood_predicates.iter() {
-                        if context.is_predicate_id_falsified(*predicate_id) {
-                            is_falsified = true;
-                            break;
-                        } else if context.is_predicate_id_satisfied(*predicate_id) {
-                            continue;
-                        } else {
-                            num_unassigned += 1;
-                            let predicate = context.get_predicate(*predicate_id);
-                            let _ = unassigned_domains.insert(predicate.get_domain());
-                        }
-                    }
-
-                    if num_unassigned > 1 && !is_falsified && unassigned_domains.len() == 1 {
-                        NogoodPropagator::propagate_extended_nogood(
-                            &mut context,
-                            nogood_predicates,
-                            *unassigned_domains.iter().next().unwrap(),
-                            inference_code,
-                            &mut self.statistics,
-                            Some(watcher.nogood_id),
-                        )?;
-                    }
+                if matches!(self.analysis_mode, AnalysisMode::ExtendedOneUIP)
+                    && let Some(propagated_domain) = self
+                        .analysis_mode
+                        .can_perform_extended_nogood_propagation(&mut context, nogood_predicates)
+                {
+                    NogoodPropagator::propagate_extended_nogood(
+                        &mut context,
+                        nogood_predicates,
+                        propagated_domain,
+                        inference_code,
+                        &mut self.statistics,
+                        Some(watcher.nogood_id),
+                    )?;
                 }
 
                 if found_new_watch {

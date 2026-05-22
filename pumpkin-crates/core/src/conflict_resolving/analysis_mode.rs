@@ -2,6 +2,7 @@ use itertools::Itertools;
 
 use crate::basic_types::PredicateId;
 use crate::conflict_resolving::ConflictAnalysisContext;
+use crate::containers::HashSet;
 use crate::containers::KeyValueHeap;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateIdGenerator;
@@ -10,6 +11,7 @@ use crate::propagation::PropagationContext;
 use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::variables::DomainId;
 
 #[derive(Debug, Clone, Copy)]
 pub enum AnalysisMode {
@@ -267,6 +269,37 @@ impl AnalysisMode {
                 }
             }
         }
+    }
+
+    pub fn can_perform_extended_nogood_propagation(
+        &self,
+        context: &mut PropagationContext,
+        nogood_predicates: &[PredicateId],
+    ) -> Option<DomainId> {
+        // We find all of the unasssigned predicates and get their domains
+        //
+        // If there is a falsified predicate then we do not propagate; also,
+        // if the nogood can be unit
+        // propagated, then
+        // we do not propagate
+        let mut is_falsified = false;
+        let mut num_unassigned = 0;
+        let mut unassigned_domains = HashSet::new();
+        for predicate_id in nogood_predicates.iter() {
+            if context.is_predicate_id_falsified(*predicate_id) {
+                is_falsified = true;
+                break;
+            } else if context.is_predicate_id_satisfied(*predicate_id) {
+                continue;
+            } else {
+                num_unassigned += 1;
+                let predicate = context.get_predicate(*predicate_id);
+                let _ = unassigned_domains.insert(predicate.get_domain());
+            }
+        }
+
+        (num_unassigned > 1 && !is_falsified && unassigned_domains.len() == 1)
+            .then(|| *unassigned_domains.iter().next().unwrap())
     }
 }
 
