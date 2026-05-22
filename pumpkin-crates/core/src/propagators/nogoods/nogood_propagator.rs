@@ -1113,186 +1113,73 @@ impl NogoodPropagator {
         inference_code: InferenceCode,
         context: &mut PropagationContext,
     ) {
-        // We treat unit nogoods in a special way by adding it as a permanent nogood at the
-        // root-level; this is essentially the same as adding a predicate at the root level
-        if nogood.len() == 1 {
-            pumpkin_assert_moderate!(
-                context.get_checkpoint() == 0,
-                "A unit nogood should have backtracked to the root-level"
-            );
+        if self
+            .analysis_mode
+            .can_be_added_as_permanent(context, &nogood)
+        {
             self.add_permanent_nogood(nogood, inference_code, context)
                 .expect("Unit learned nogoods cannot fail.");
             return;
         }
 
-        match self.analysis_mode {
-            AnalysisMode::ExtendedCPIP | AnalysisMode::BoundsExtendedCPIP => {
-                // We maintain the invariant that the first two predicates in a learned clause
-                // point to different variables; if this does not hold, then it is a "unit" nogood
-                if nogood[0].get_domain() == nogood[1].get_domain() {
-                    pumpkin_assert_moderate!(
-                        context.get_checkpoint() == 0,
-                        "A unit nogood should have backtracked to the root-level"
-                    );
-                    self.add_permanent_nogood(nogood, inference_code, context)
-                        .expect("Unit learned nogoods cannot fail.");
-                    return;
-                }
+        let lbd = self
+            .analysis_mode
+            .calculate_lbd(context, &nogood, &mut self.lbd_helper);
 
-                let lbd = self.lbd_helper.compute_lbd(
-                    &nogood
-                        .iter()
-                        .filter(|predicate| context.evaluate_predicate(**predicate).is_some())
-                        .copied()
-                        .collect::<Vec<_>>(),
-                    context,
-                );
+        let nogood = nogood
+            .iter()
+            .map(|predicate| context.get_id(*predicate))
+            .collect::<Vec<_>>();
 
-                pumpkin_assert_moderate!(
-                    context.get_checkpoint_for_predicate(nogood[1]).unwrap()
-                        >= nogood
-                            .iter()
-                            .skip(2)
-                            .filter(|predicate| predicate.get_domain() != nogood[0].get_domain())
-                            .map(|predicate| context
-                                .get_checkpoint_for_predicate(*predicate)
-                                .unwrap())
-                            .max()
-                            .unwrap_or(0),
-                    "Backtrack level: {} - {:?}",
-                    context.get_checkpoint(),
-                    nogood
-                        .iter()
-                        .map(|predicate| (
-                            predicate,
-                            context.get_checkpoint_for_predicate(*predicate)
-                        ))
-                        .collect::<Vec<_>>()
-                );
+        // Add the nogood to the database.
+        //
+        // Currently we always allocate a fresh ID
+        let nogood_id = self.nogood_predicates.insert(nogood);
+        let _ = self
+            .nogood_info
+            .push(NogoodInfo::new_learned_nogood_info(lbd));
+        let _ = self.inference_codes.push(inference_code);
 
-                let nogood = nogood
-                    .iter()
-                    .map(|predicate| context.get_id(*predicate))
-                    .collect::<Vec<_>>();
+        let watcher = Watcher {
+            nogood_id,
+            cached_predicate: self.nogood_predicates[nogood_id][0],
+        };
 
-                let propagated_predicate = context.get_predicate(nogood[0]);
-                let propagated_domain = propagated_predicate.get_domain();
+        // Now we add two watchers to the first two predicates in the nogood; we are
+        // guaranteed that these are different predicates
+        NogoodPropagator::add_watcher(
+            context,
+            self.nogood_predicates[nogood_id][0],
+            watcher,
+            &mut self.watch_lists,
+        );
+        NogoodPropagator::add_watcher(
+            context,
+            self.nogood_predicates[nogood_id][1],
+            watcher,
+            &mut self.watch_lists,
+        );
 
-                // Add the nogood to the database.
-                //
-                // Currently we always allocate a fresh ID
-                let nogood_id = self.nogood_predicates.insert(nogood);
-                let _ = self
-                    .nogood_info
-                    .push(NogoodInfo::new_learned_nogood_info(lbd));
-                let _ = self.inference_codes.push(inference_code);
+        let inference_code =
+            &self.inference_codes[self.nogood_predicates.get_nogood_index(&nogood_id)];
 
-                let watcher = Watcher {
-                    nogood_id,
-                    cached_predicate: self.nogood_predicates[nogood_id][0],
-                };
+        self.analysis_mode
+            .perform_propagation(
+                context,
+                &self.nogood_predicates[nogood_id],
+                inference_code,
+                nogood_id,
+                &mut self.statistics,
+            )
+            .expect("Asserting nogood cannot fail");
 
-                // Now we add two watchers to the first two predicates in the nogood; we are
-                // guaranteed that these are different predicates
-                NogoodPropagator::add_watcher(
-                    context,
-                    self.nogood_predicates[nogood_id][0],
-                    watcher,
-                    &mut self.watch_lists,
-                );
-                NogoodPropagator::add_watcher(
-                    context,
-                    self.nogood_predicates[nogood_id][1],
-                    watcher,
-                    &mut self.watch_lists,
-                );
-
-                let inference_code =
-                    &self.inference_codes[self.nogood_predicates.get_nogood_index(&nogood_id)];
-
-                // Then we perform propagation; note that due to the nature of extended UIP, it
-                // could be the case that none of the predicates are assigned as a
-                // result of this propagation
-                let result = Self::propagate_extended_nogood(
-                    context,
-                    &self.nogood_predicates[nogood_id],
-                    propagated_domain,
-                    inference_code,
-                    &mut self.statistics,
-                    Some(watcher.nogood_id),
-                );
-                pumpkin_assert_simple!(result.is_ok());
-
-                // We then assign the nogood to the correct tier based on its LBD
-                if lbd >= self.parameters.lbd_threshold_high {
-                    self.learned_nogood_ids.high_lbd.push(nogood_id);
-                } else if lbd <= self.parameters.lbd_threshold_low {
-                    self.learned_nogood_ids.low_lbd.push(nogood_id);
-                } else {
-                    self.learned_nogood_ids.mid_lbd.push(nogood_id);
-                }
-            }
-            AnalysisMode::OneUIP | AnalysisMode::AllDecision | AnalysisMode::ExtendedOneUIP => {
-                // Skip the zero-th predicate since it is unassigned,
-                // but will be assigned at the level of the predicate at index one.
-                let lbd = self
-                    .lbd_helper
-                    .compute_lbd(&nogood.as_slice()[1..], context);
-
-                let nogood = nogood
-                    .iter()
-                    .map(|predicate| context.get_id(*predicate))
-                    .collect::<Vec<_>>();
-
-                // Add the nogood to the database.
-                //
-                // Currently we always allocate a fresh ID
-                let nogood_id = self.nogood_predicates.insert(nogood);
-                let _ = self
-                    .nogood_info
-                    .push(NogoodInfo::new_learned_nogood_info(lbd));
-                let _ = self.inference_codes.push(inference_code);
-
-                let watcher = Watcher {
-                    nogood_id,
-                    cached_predicate: self.nogood_predicates[nogood_id][0],
-                };
-
-                // Now we add two watchers to the first two predicates in the nogood
-                NogoodPropagator::add_watcher(
-                    context,
-                    self.nogood_predicates[nogood_id][0],
-                    watcher,
-                    &mut self.watch_lists,
-                );
-                NogoodPropagator::add_watcher(
-                    context,
-                    self.nogood_predicates[nogood_id][1],
-                    watcher,
-                    &mut self.watch_lists,
-                );
-
-                // Then we propagate the asserting predicate and as the reason we give the index to
-                // the asserting nogood such that we can re-create the reason when
-                // asked for it
-                let reason = Reason::DynamicLazy(nogood_id.id as u64);
-
-                let predicate = !context
-                    .notification_engine
-                    .get_predicate(self.nogood_predicates[nogood_id][0]);
-                context
-                    .post(predicate, reason)
-                    .expect("Cannot fail to add the asserting predicate.");
-
-                // We then assign the nogood to the correct tier based on its LBD
-                if lbd >= self.parameters.lbd_threshold_high {
-                    self.learned_nogood_ids.high_lbd.push(nogood_id);
-                } else if lbd <= self.parameters.lbd_threshold_low {
-                    self.learned_nogood_ids.low_lbd.push(nogood_id);
-                } else {
-                    self.learned_nogood_ids.mid_lbd.push(nogood_id);
-                }
-            }
+        // We then assign the nogood to the correct tier based on its LBD
+        if lbd >= self.parameters.lbd_threshold_high {
+            self.learned_nogood_ids.high_lbd.push(nogood_id);
+        } else if lbd <= self.parameters.lbd_threshold_low {
+            self.learned_nogood_ids.low_lbd.push(nogood_id);
+        } else {
+            self.learned_nogood_ids.mid_lbd.push(nogood_id);
         }
     }
 

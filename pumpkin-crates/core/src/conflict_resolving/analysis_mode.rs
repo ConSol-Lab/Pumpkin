@@ -4,6 +4,7 @@ use crate::basic_types::PredicateId;
 use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::containers::HashSet;
 use crate::containers::KeyValueHeap;
+use crate::engine::Lbd;
 use crate::engine::Reason;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateIdGenerator;
@@ -346,6 +347,74 @@ impl AnalysisMode {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn can_be_added_as_permanent(
+        &self,
+        context: &PropagationContext,
+        nogood: &[Predicate],
+    ) -> bool {
+        // We treat unit nogoods in a special way by adding it as a permanent nogood at the
+        // root-level; this is essentially the same as adding a predicate at the root level
+        if nogood.len() == 1 {
+            pumpkin_assert_moderate!(
+                context.get_checkpoint() == 0,
+                "A unit nogood should have backtracked to the root-level"
+            );
+            return true;
+        }
+        match self {
+            AnalysisMode::ExtendedCPIP | AnalysisMode::BoundsExtendedCPIP => {
+                // We maintain the invariant that the first two predicates in a learned clause
+                // point to different variables; if this does not hold, then it is a "unit" nogood
+                pumpkin_assert_moderate!(
+                    context.get_checkpoint_for_predicate(nogood[1]).unwrap()
+                        >= nogood
+                            .iter()
+                            .skip(2)
+                            .filter(|predicate| predicate.get_domain() != nogood[0].get_domain())
+                            .map(|predicate| context
+                                .get_checkpoint_for_predicate(*predicate)
+                                .unwrap())
+                            .max()
+                            .unwrap_or(0),
+                );
+                if nogood[0].get_domain() == nogood[1].get_domain() {
+                    pumpkin_assert_moderate!(
+                        context.get_checkpoint() == 0,
+                        "A unit nogood should have backtracked to the root-level"
+                    );
+                    return true;
+                }
+            }
+            AnalysisMode::OneUIP | AnalysisMode::AllDecision | AnalysisMode::ExtendedOneUIP => {}
+        }
+
+        false
+    }
+
+    pub(crate) fn calculate_lbd(
+        &self,
+        context: &PropagationContext,
+        nogood: &[Predicate],
+        lbd_helper: &mut Lbd,
+    ) -> u32 {
+        match self {
+            AnalysisMode::ExtendedCPIP | AnalysisMode::BoundsExtendedCPIP => lbd_helper
+                .compute_lbd(
+                    &nogood
+                        .iter()
+                        .filter(|predicate| context.evaluate_predicate(**predicate).is_some())
+                        .copied()
+                        .collect::<Vec<_>>(),
+                    context,
+                ),
+            AnalysisMode::OneUIP | AnalysisMode::AllDecision | AnalysisMode::ExtendedOneUIP => {
+                // Skip the zero-th predicate since it is unassigned,
+                // but will be assigned at the level of the predicate at index one.
+                lbd_helper.compute_lbd(&nogood[1..], context)
+            }
+        }
     }
 }
 
