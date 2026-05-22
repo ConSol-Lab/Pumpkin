@@ -187,6 +187,10 @@ mod tests {
     use crate::predicates::PropositionalConjunction;
     use crate::proof::ConstraintTag;
     use crate::proof::InferenceCode;
+    use crate::propagation::DomainEvents;
+    use crate::propagation::PropagatorConstructor;
+    use crate::propagation::PropagatorConstructorContext;
+    use crate::propagators::ReifiedPropagatorArgs;
     use crate::variables::DomainId;
 
     #[test]

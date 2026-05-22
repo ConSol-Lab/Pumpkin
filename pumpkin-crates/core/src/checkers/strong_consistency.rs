@@ -80,7 +80,7 @@ impl<Supports: SupportGenerator> StrongConsistencyChecker<Supports> {
         }
 
         for (domain, value) in self.support.drain() {
-            if !value.is_in(domain, &domains) {
+            if !value.is_in(domain, domains) {
                 log::error!("Support value is not in the domain");
                 return false;
             }
