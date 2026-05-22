@@ -261,6 +261,42 @@ impl NogoodPropagator {
             }
         }
     }
+
+    fn replace_watcher(
+        context: &mut PropagationContext<'_>,
+        watcher: Watcher,
+        nogood_predicates: &mut [PredicateId],
+        i: usize,
+        watcher_to_replace: usize,
+        watch_lists: &mut KeyedVec<PredicateId, Vec<Watcher>>,
+    ) {
+        // Replace the current watcher with the new predicate watcher.
+        nogood_predicates.swap(watcher_to_replace, i);
+        // Add this nogood to the watch list of the new watcher.
+        Self::add_watcher(
+            context,
+            nogood_predicates[watcher_to_replace],
+            watcher,
+            watch_lists,
+        );
+    }
+
+    fn remove_watcher(
+        context: &mut PropagationContext<'_>,
+        watcher: Watcher,
+        predicate_id: PredicateId,
+        watch_lists: &mut KeyedVec<PredicateId, Vec<Watcher>>,
+    ) {
+        let index_in_zeroth_watchlist = watch_lists[predicate_id]
+            .iter()
+            .position(|other_watcher| other_watcher.nogood_id == watcher.nogood_id)
+            .expect("Expected to be able to retrieve watcher");
+        let _ = watch_lists[predicate_id].swap_remove(index_in_zeroth_watchlist);
+
+        if watch_lists[predicate_id].is_empty() {
+            context.unregister_predicate(predicate_id);
+        }
+    }
 }
 
 impl Propagator for NogoodPropagator {
@@ -375,13 +411,12 @@ impl Propagator for NogoodPropagator {
                             // Found another predicate that can be the watcher.
                             found_new_watch = true;
 
-                            // Replace the current watcher with the new predicate watcher.
-                            nogood_predicates.swap(1, i);
-                            // Add this nogood to the watch list of the new watcher.
-                            Self::add_watcher(
+                            Self::replace_watcher(
                                 &mut context,
-                                nogood_predicates[1],
                                 watcher,
+                                nogood_predicates,
+                                i,
+                                1,
                                 &mut self.watch_lists,
                             );
 
@@ -397,20 +432,14 @@ impl Propagator for NogoodPropagator {
                             // predicate (before swapping)
                             falsified_zeroth = Some(nogood_predicates[0]);
 
-                            // Replace the current watcher with the new predicate
-                            // watcher.
-                            nogood_predicates.swap(0, i);
-                            // Add this nogood to the watch list of the new watcher.
-                            Self::add_watcher(
+                            Self::replace_watcher(
                                 &mut context,
-                                nogood_predicates[0],
                                 watcher,
+                                nogood_predicates,
+                                i,
+                                0,
                                 &mut self.watch_lists,
                             );
-
-                            // We also update the cached predicate
-                            self.watch_lists[predicate_id][index].cached_predicate =
-                                nogood_predicates[0];
 
                             // Note that we do not break, since we still want to find a new
                             // watcher for the other predicate
@@ -427,29 +456,21 @@ impl Propagator for NogoodPropagator {
 
                             has_not_replaced = false;
 
-                            // Replace the current watcher with the new predicate
-                            // watcher.
-                            nogood_predicates.swap(0, i);
-                            // Add this nogood to the watch list of the new watcher.
-                            Self::add_watcher(
+                            Self::replace_watcher(
                                 &mut context,
-                                nogood_predicates[0],
                                 watcher,
+                                nogood_predicates,
+                                i,
+                                0,
                                 &mut self.watch_lists,
                             );
 
-                            let index_in_zeroth_watchlist = self.watch_lists[nogood_predicates[i]]
-                                .iter()
-                                .position(|zero_watcher| {
-                                    zero_watcher.nogood_id == watcher.nogood_id
-                                })
-                                .expect("Expected to be able to retrieve watcher");
-                            let _ = self.watch_lists[nogood_predicates[i]]
-                                .swap_remove(index_in_zeroth_watchlist);
-
-                            if self.watch_lists[nogood_predicates[i]].is_empty() {
-                                context.unregister_predicate(nogood_predicates[i]);
-                            }
+                            Self::remove_watcher(
+                                &mut context,
+                                watcher,
+                                nogood_predicates[i],
+                                &mut self.watch_lists,
+                            );
                         }
                         _ => {}
                     }
@@ -482,15 +503,7 @@ impl Propagator for NogoodPropagator {
                     // We have replaced `to_remove` with a predicate that has been
                     // falsified; we now remove this nogood from the watchlist of
                     // `to_remove`
-                    let index_in_zeroth_watchlist = self.watch_lists[to_remove]
-                        .iter()
-                        .position(|zero_watcher| zero_watcher.nogood_id == watcher.nogood_id)
-                        .expect("Expected to be able to retrieve watcher");
-                    let _ = self.watch_lists[to_remove].swap_remove(index_in_zeroth_watchlist);
-
-                    if self.watch_lists[to_remove].is_empty() {
-                        context.unregister_predicate(to_remove);
-                    }
+                    Self::remove_watcher(&mut context, watcher, to_remove, &mut self.watch_lists);
                 }
                 if found_new_watch || falsified_zeroth.is_some() {
                     // We have either found a new watcher, or we have found a falsified
