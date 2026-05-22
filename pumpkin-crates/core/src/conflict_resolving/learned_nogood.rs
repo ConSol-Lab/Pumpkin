@@ -1,7 +1,6 @@
 use std::ops::Deref;
 
 use crate::conflict_resolving::ConflictAnalysisContext;
-use crate::engine::ConflictResolverType;
 use crate::predicates::Predicate;
 
 /// A structure which stores a learned nogood
@@ -37,7 +36,7 @@ impl LearnedNogood {
     pub(crate) fn create_from_vec(
         mut clean_nogood: Vec<Predicate>,
         context: &ConflictAnalysisContext,
-        analysis_mode: ConflictResolverType,
+        uses_cpip: bool,
     ) -> Self {
         if clean_nogood.is_empty() {
             return Self {
@@ -52,10 +51,7 @@ impl LearnedNogood {
 
         // If we are performing extended conflict analysis, then we find the domain that is
         // currently propagating; this is to correctly put the predicates in the right place.
-        let propagating_domain = if matches!(
-            analysis_mode,
-            ConflictResolverType::ExtendedCPIP | ConflictResolverType::BoundsExtendedCPIP
-        ) {
+        let propagating_domain = if uses_cpip {
             Some(
                 clean_nogood
                     .iter()

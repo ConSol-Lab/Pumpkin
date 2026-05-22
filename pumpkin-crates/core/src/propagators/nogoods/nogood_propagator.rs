@@ -1,7 +1,6 @@
 use std::cmp::max;
 use std::ops::Not;
 
-use log::info;
 use log::warn;
 
 use super::LearningOptions;
@@ -781,11 +780,6 @@ impl NogoodPropagator {
         nogood_id: Option<NogoodId>,
     ) -> Result<(), Conflict> {
         statistics.num_extended_propagation_calls += 1;
-        info!(
-            "Propagating {propagated_domain:?} in extended nogood with bounds [{}, {}]",
-            context.lower_bound(&propagated_domain),
-            context.upper_bound(&propagated_domain)
-        );
 
         // We keep track of the holes in the domains which are posted; these can be seen as
         // "exceptions" to the removals of the domain
@@ -1126,7 +1120,6 @@ impl NogoodPropagator {
         //
         // Hence, we iterate over the range that we have created, removing the values while *not*
         // removing the values for which there is an inequality predicate.
-        info!("Iterating from [{lb}, {ub}]");
 
         // The reason consists of:
         // 1) All predicates which reason over a different domain than the propagated predicate
@@ -1199,8 +1192,6 @@ impl NogoodPropagator {
 
         match self.analysis_mode {
             ConflictResolverType::ExtendedCPIP | ConflictResolverType::BoundsExtendedCPIP => {
-                info!("Adding nogood: {nogood:?}");
-
                 // We maintain the invariant that the first two predicates in a learned clause
                 // point to different variables; if this does not hold, then it is a "unit" nogood
                 if nogood[0].get_domain() == nogood[1].get_domain() {

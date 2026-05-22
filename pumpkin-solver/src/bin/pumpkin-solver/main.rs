@@ -24,6 +24,7 @@ use maxsat::PseudoBooleanEncoding;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
 use parsers::dimacs::parse_cnf;
+use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
 use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
@@ -632,7 +633,7 @@ fn run() -> PumpkinResult<()> {
                     verbose: args.verbose,
                 },
                 ResolutionResolver::new(
-                    ConflictResolverType::OneUIP,
+                    AnalysisMode::OneUIP,
                     !args.no_learning_clause_minimisation,
                 ),
             )?,
@@ -654,10 +655,7 @@ fn run() -> PumpkinResult<()> {
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
                 },
-                ResolutionResolver::new(
-                    ConflictResolverType::ExtendedCPIP,
-                    should_minimise_nogoods,
-                ),
+                ResolutionResolver::new(AnalysisMode::ExtendedCPIP, should_minimise_nogoods),
             )?,
             ConflictResolverType::ExtendedOneUIP => flatzinc::solve(
                 Solver::with_options(solver_options),
@@ -677,10 +675,7 @@ fn run() -> PumpkinResult<()> {
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
                 },
-                ResolutionResolver::new(
-                    ConflictResolverType::ExtendedOneUIP,
-                    should_minimise_nogoods,
-                ),
+                ResolutionResolver::new(AnalysisMode::ExtendedOneUIP, should_minimise_nogoods),
             )?,
             ConflictResolverType::BoundsExtendedCPIP => flatzinc::solve(
                 Solver::with_options(solver_options),
@@ -700,10 +695,7 @@ fn run() -> PumpkinResult<()> {
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
                 },
-                ResolutionResolver::new(
-                    ConflictResolverType::BoundsExtendedCPIP,
-                    should_minimise_nogoods,
-                ),
+                ResolutionResolver::new(AnalysisMode::BoundsExtendedCPIP, should_minimise_nogoods),
             )?,
             ConflictResolverType::AllDecision => flatzinc::solve(
                 Solver::with_options(solver_options),
@@ -723,7 +715,7 @@ fn run() -> PumpkinResult<()> {
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
                 },
-                ResolutionResolver::new(ConflictResolverType::AllDecision, should_minimise_nogoods),
+                ResolutionResolver::new(AnalysisMode::AllDecision, should_minimise_nogoods),
             )?,
         },
     }
