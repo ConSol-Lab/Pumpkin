@@ -48,3 +48,56 @@ impl ConsistencyChecker for NogoodChecker<Predicate> {
             .any(|&predicate| domains.evaluate_predicate(predicate) == Some(false))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::conjunction;
+    use crate::propagation::LocalId;
+    use crate::state::State;
+
+    #[test]
+    fn a_nogood_with_multiple_untrue_predicates_is_consistent() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(1, 5, Some("x".into()));
+        let y = state.new_interval_variable(1, 5, Some("y".into()));
+
+        let mut checker = NogoodChecker {
+            nogood: conjunction!([x >= 4] & [y <= 2]).into(),
+        };
+
+        let scope = Scope::from_iter([(LocalId::from(0), x), (LocalId::from(1), y)]);
+        assert!(checker.check_consistency(&scope, state.get_domains()));
+    }
+
+    #[test]
+    fn a_nogood_with_one_untrue_predicates_and_no_false_predicates_is_inconsistent() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(1, 5, Some("x".into()));
+        let y = state.new_interval_variable(1, 5, Some("y".into()));
+
+        let mut checker = NogoodChecker {
+            nogood: conjunction!([x >= 4] & [y <= 5]).into(),
+        };
+
+        let scope = Scope::from_iter([(LocalId::from(0), x), (LocalId::from(1), y)]);
+        assert!(!checker.check_consistency(&scope, state.get_domains()));
+    }
+
+    #[test]
+    fn a_nogood_with_any_false_predicates_is_consistent() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(1, 3, Some("x".into()));
+        let y = state.new_interval_variable(1, 5, Some("y".into()));
+
+        let mut checker = NogoodChecker {
+            nogood: conjunction!([x >= 4] & [y <= 2]).into(),
+        };
+
+        let scope = Scope::from_iter([(LocalId::from(0), x), (LocalId::from(1), y)]);
+        assert!(checker.check_consistency(&scope, state.get_domains()));
+    }
+}

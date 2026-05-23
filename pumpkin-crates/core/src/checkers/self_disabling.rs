@@ -2,7 +2,6 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
-use super::BoxedConsistencyChecker;
 use super::ConsistencyChecker;
 use super::Scope;
 use crate::propagation::Domains;
@@ -13,12 +12,29 @@ use crate::propagation::Domains;
 /// The deletion flag is shared with the constraint owner (e.g. the nogood propagator). Setting the
 /// flag to `true` causes the checker to become a permanent no-op.
 #[derive(Debug, Clone)]
-pub struct SelfDisablingChecker {
-    pub inner: BoxedConsistencyChecker,
-    pub is_deleted: Arc<AtomicBool>,
+pub struct SelfDisablingChecker<T> {
+    inner: T,
+    is_deleted: Arc<AtomicBool>,
 }
 
-impl ConsistencyChecker for SelfDisablingChecker {
+impl<T> SelfDisablingChecker<T> {
+    /// Create a new self-disabling checker.
+    ///
+    /// The deletion flag can be obtained with [`SelfDisablingChecker::deletion_flag`].
+    pub fn new(checker: T) -> Self {
+        SelfDisablingChecker {
+            inner: checker,
+            is_deleted: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    /// The deletion flag for this self-disabling checker.
+    pub fn deletion_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.is_deleted)
+    }
+}
+
+impl<T: ConsistencyChecker + Clone> ConsistencyChecker for SelfDisablingChecker<T> {
     fn check_consistency(&mut self, scope: &Scope, domains: Domains<'_>) -> bool {
         if self.is_deleted.load(Ordering::Relaxed) {
             return true;

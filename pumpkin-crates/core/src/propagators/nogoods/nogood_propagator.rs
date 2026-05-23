@@ -490,21 +490,7 @@ impl NogoodPropagator {
         let _ = self.inference_codes.push(inference_code.clone());
 
         #[cfg(feature = "check-consistency")]
-        {
-            let flag = Arc::new(AtomicBool::new(false));
-            let _ = self.deletion_flags.push(Arc::clone(&flag));
-            let scope = NogoodPropagator::build_nogood_scope(&checker_predicates);
-            context.add_consistency_checker(
-                scope,
-                SelfDisablingChecker {
-                    inner: super::NogoodChecker {
-                        nogood: checker_predicates.clone(),
-                    }
-                    .into(),
-                    is_deleted: flag,
-                },
-            );
-        }
+        self.add_consistency_checker(checker_predicates.clone(), context);
 
         #[cfg(feature = "check-propagations")]
         context.add_inference_checker(
@@ -695,21 +681,7 @@ impl NogoodPropagator {
             self.permanent_nogood_ids.push(nogood_id);
 
             #[cfg(feature = "check-consistency")]
-            {
-                let flag = Arc::new(AtomicBool::new(false));
-                let _ = self.deletion_flags.push(Arc::clone(&flag));
-                let scope = NogoodPropagator::build_nogood_scope(&checker_predicates);
-                context.add_consistency_checker(
-                    scope,
-                    SelfDisablingChecker {
-                        inner: super::NogoodChecker {
-                            nogood: checker_predicates.clone(),
-                        }
-                        .into(),
-                        is_deleted: flag,
-                    },
-                );
-            }
+            self.add_consistency_checker(checker_predicates.clone(), context);
 
             #[cfg(feature = "check-propagations")]
             context.add_inference_checker(
@@ -740,33 +712,43 @@ impl NogoodPropagator {
             Ok(())
         }
     }
+
+    /// Add a consistency checker for the given nogood predicates.
+    #[cfg(feature = "check-consistency")]
+    fn add_consistency_checker(
+        &mut self,
+        nogood: Box<[Predicate]>,
+        context: &mut PropagationContext,
+    ) {
+        let scope = build_nogood_scope(&nogood);
+        let checker = SelfDisablingChecker::new(super::NogoodChecker { nogood });
+        let _ = self.deletion_flags.push(checker.deletion_flag());
+        context.add_consistency_checker(scope, checker);
+    }
 }
 
-/// Methods concerning checkers
-#[cfg(any(feature = "check-consistency", feature = "check-propagations"))]
-impl NogoodPropagator {
-    /// Build a [`Scope`] for a nogood by extracting unique [`DomainId`]s from its predicates.
-    ///
-    /// Avoids multiple enqueuing of the consistency checker if the nogood contains multiple
-    /// predicates over the same variable.
-    #[cfg(feature = "check-consistency")]
-    fn build_nogood_scope(predicates: &[Predicate]) -> Scope {
-        use crate::containers::{HashSet, KeyGenerator};
-        use crate::variables::DomainId;
+/// Build a [`Scope`] for a nogood by extracting unique [`DomainId`]s from its predicates.
+///
+/// Avoids multiple enqueuing of the consistency checker if the nogood contains multiple
+/// predicates over the same variable.
+#[cfg(feature = "check-consistency")]
+fn build_nogood_scope(predicates: &[Predicate]) -> Scope {
+    use crate::containers::HashSet;
+    use crate::containers::KeyGenerator;
+    use crate::variables::DomainId;
 
-        let mut scope = Scope::default();
-        let mut seen: HashSet<DomainId> = HashSet::default();
-        let mut id_generator = KeyGenerator::default();
+    let mut scope = Scope::default();
+    let mut seen: HashSet<DomainId> = HashSet::default();
+    let mut id_generator = KeyGenerator::default();
 
-        for predicate in predicates {
-            let domain = predicate.get_domain();
-            if seen.insert(domain) {
-                scope.add_domain(id_generator.next_key(), domain);
-            }
+    for predicate in predicates {
+        let domain = predicate.get_domain();
+        if seen.insert(domain) {
+            scope.add_domain(id_generator.next_key(), domain);
         }
-
-        scope
     }
+
+    scope
 }
 
 #[cfg(feature = "check-consistency")]

@@ -8,6 +8,14 @@ pub struct Scope {
     domains: HashMap<LocalId, DomainId>,
 }
 
+impl FromIterator<(LocalId, DomainId)> for Scope {
+    fn from_iter<T: IntoIterator<Item = (LocalId, DomainId)>>(iter: T) -> Self {
+        Scope {
+            domains: iter.into_iter().collect(),
+        }
+    }
+}
+
 impl Scope {
     /// Add a new domain to the scope with the given local id.
     ///

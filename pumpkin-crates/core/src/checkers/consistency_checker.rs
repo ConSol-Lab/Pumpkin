@@ -2,7 +2,8 @@ use std::fmt::Debug;
 
 use dyn_clone::DynClone;
 
-use crate::{checkers::Scope, propagation::Domains};
+use crate::checkers::Scope;
+use crate::propagation::Domains;
 
 /// A runtime verifier of the consistency of a propagator.
 pub trait ConsistencyChecker: Debug + DynClone {

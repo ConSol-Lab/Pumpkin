@@ -21,6 +21,12 @@ impl Deref for PropositionalConjunction {
     }
 }
 
+impl Into<Box<[Predicate]>> for PropositionalConjunction {
+    fn into(self) -> Box<[Predicate]> {
+        self.predicates_in_conjunction.into()
+    }
+}
+
 impl PropositionalConjunction {
     pub fn new(predicates_in_conjunction: Vec<Predicate>) -> Self {
         PropositionalConjunction {
