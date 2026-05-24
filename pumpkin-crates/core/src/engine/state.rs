@@ -2,11 +2,10 @@ use std::sync::Arc;
 
 use pumpkin_checking::BoxedChecker;
 use pumpkin_checking::InferenceChecker;
-#[cfg(feature = "check-propagations")]
-use pumpkin_checking::VariableState;
 
 use crate::checkers::BoxedRetentionChecker;
 use crate::checkers::ConsistencyCheckerStore;
+use crate::checkers::PropagationChecker;
 use crate::checkers::Scope;
 use crate::containers::HashMap;
 use crate::containers::KeyGenerator;
@@ -82,7 +81,7 @@ pub struct State {
     statistics: StateStatistics,
 
     /// Inference checkers to run in the propagation loop.
-    pub(crate) checkers: HashMap<InferenceCode, Vec<BoxedChecker<Predicate>>>,
+    pub(crate) propagation_checkers: HashMap<InferenceCode, Vec<PropagationChecker>>,
     pub(crate) consistency_checkers: ConsistencyCheckerStore,
 }
 
@@ -113,7 +112,7 @@ impl Default for State {
             notification_engine: NotificationEngine::default(),
             statistics: StateStatistics::default(),
             constraint_tags: KeyGenerator::default(),
-            checkers: HashMap::default(),
+            propagation_checkers: HashMap::default(),
             consistency_checkers: Default::default(),
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
@@ -373,8 +372,8 @@ impl State {
         inference_code: InferenceCode,
         checker: Box<dyn InferenceChecker<Predicate>>,
     ) {
-        let checkers = self.checkers.entry(inference_code).or_default();
-        checkers.push(BoxedChecker::from(checker));
+        let checkers = self.propagation_checkers.entry(inference_code).or_default();
+        checkers.push(PropagationChecker::new(BoxedChecker::from(checker)));
     }
 
     /// Add a consistency checker for the scope.
@@ -431,7 +430,7 @@ impl State {
             #[cfg(feature = "check-consistency")]
             consistency_checkers,
             #[cfg(feature = "check-propagations")]
-            checkers,
+                propagation_checkers: checkers,
             ..
         } = self;
         let propagator = propagators.get_propagator_mut(handle);
@@ -638,7 +637,7 @@ impl State {
                 #[cfg(feature = "check-consistency")]
                 consistency_checkers,
                 #[cfg(feature = "check-propagations")]
-                checkers,
+                    propagation_checkers: checkers,
                 ..
             } = self;
             let propagator = &mut propagators[propagator_id];
@@ -827,7 +826,7 @@ impl State {
 impl State {
     /// Run the checker for the given inference code on the given inference.
     fn run_checker(
-        &self,
+        &mut self,
         premises: impl IntoIterator<Item = Predicate>,
         consequent: Option<Predicate>,
         inference_code: &InferenceCode,
@@ -835,7 +834,7 @@ impl State {
         let premises: Vec<_> = premises.into_iter().collect();
 
         let checkers = self
-            .checkers
+            .propagation_checkers
             .get(inference_code)
             .map(|vec| vec.as_slice())
             .unwrap_or(&[]);
@@ -846,18 +845,13 @@ impl State {
         );
 
         let any_checker_accepts_inference = checkers.iter().any(|checker| {
-            // Construct the variable state for the conflict check.
-            let variable_state = VariableState::prepare_for_conflict_check(
-                premises.clone(),
-                consequent,
-            )
-            .unwrap_or_else(|domain| {
-                panic!(
-                    "inconsistent atomics over domain {domain:?} in inference by {inference_code:?}"
+            checker
+                .check(
+                    &premises,
+                    consequent,
+                    Domains::new(&self.assignments, &mut self.trailed_values),
                 )
-            });
-
-            checker.check(variable_state, &premises, consequent.as_ref())
+                .is_ok()
         });
 
         assert!(
@@ -1214,7 +1208,7 @@ impl State {
             #[cfg(feature = "check-consistency")]
             consistency_checkers,
             #[cfg(feature = "check-propagations")]
-            checkers,
+                propagation_checkers: checkers,
             ..
         } = self;
         PropagationContext::new(

@@ -6,6 +6,8 @@ use crate::basic_types::PredicateId;
 use crate::checkers::BoxedRetentionChecker;
 #[cfg(feature = "check-consistency")]
 use crate::checkers::ConsistencyCheckerStore;
+#[cfg(feature = "check-propagations")]
+use crate::checkers::PropagationChecker;
 use crate::checkers::Scope;
 #[cfg(feature = "check-propagations")]
 use crate::containers::HashMap;
@@ -99,7 +101,7 @@ pub struct PropagationContext<'a> {
     #[cfg(feature = "check-consistency")]
     pub(crate) consistency_checkers: &'a mut ConsistencyCheckerStore,
     #[cfg(feature = "check-propagations")]
-    pub(crate) inference_checkers: &'a mut HashMap<InferenceCode, Vec<BoxedChecker<Predicate>>>,
+    pub(crate) inference_checkers: &'a mut HashMap<InferenceCode, Vec<PropagationChecker>>,
 }
 
 impl<'a> HasAssignments for PropagationContext<'a> {
@@ -126,7 +128,7 @@ impl<'a> PropagationContext<'a> {
         #[cfg(feature = "check-consistency")] consistency_checkers: &'a mut ConsistencyCheckerStore,
         #[cfg(feature = "check-propagations")] inference_checkers: &'a mut HashMap<
             InferenceCode,
-            Vec<BoxedChecker<Predicate>>,
+            Vec<PropagationChecker>,
         >,
     ) -> Self {
         PropagationContext {
@@ -185,7 +187,7 @@ impl<'a> PropagationContext<'a> {
         self.inference_checkers
             .entry(inference_code)
             .or_default()
-            .push(BoxedChecker::from(checker));
+            .push(PropagationChecker::new(BoxedChecker::from(checker)));
 
         // Use variables to avoid unused warnings.
         #[cfg(not(feature = "check-propagations"))]

@@ -241,7 +241,7 @@ impl TestSolver {
             #[cfg(feature = "check-consistency")]
             consistency_checkers,
             #[cfg(feature = "check-propagations")]
-            checkers,
+            propagation_checkers,
             ..
         } = &mut self.state;
 
@@ -254,7 +254,7 @@ impl TestSolver {
             #[cfg(feature = "check-consistency")]
             consistency_checkers,
             #[cfg(feature = "check-propagations")]
-            checkers,
+            propagation_checkers,
         );
 
         propagators[propagator].propagate(context)
@@ -278,7 +278,7 @@ impl TestSolver {
                     #[cfg(feature = "check-consistency")]
                     consistency_checkers,
                     #[cfg(feature = "check-propagations")]
-                    checkers,
+                    propagation_checkers,
                     ..
                 } = &mut self.state;
 
@@ -291,7 +291,7 @@ impl TestSolver {
                     #[cfg(feature = "check-consistency")]
                     consistency_checkers,
                     #[cfg(feature = "check-propagations")]
-                    checkers,
+                    propagation_checkers,
                 );
 
                 propagators[propagator].propagate(context)?;
