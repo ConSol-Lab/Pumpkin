@@ -1,5 +1,5 @@
 use super::Scope;
-use crate::checkers::ConsistencyChecker;
+use crate::checkers::RetentionChecker;
 use crate::checkers::support::Support;
 use crate::checkers::support::SupportGenerator;
 use crate::checkers::support::SupportValue;
@@ -20,7 +20,7 @@ pub enum StrongConsistency {
 ///
 /// The level of consistency is configured via [`StrongConsistency`].
 #[derive(Clone, Debug)]
-pub struct StrongConsistencyChecker<Supports: SupportGenerator> {
+pub struct StrongRetentionChecker<Supports: SupportGenerator> {
     /// The generator of supports.
     supports: Supports,
     /// A cache of domain-value pairs that are supported.
@@ -31,9 +31,9 @@ pub struct StrongConsistencyChecker<Supports: SupportGenerator> {
     support: Support<Supports::Value>,
 }
 
-impl<Supports: SupportGenerator> StrongConsistencyChecker<Supports> {
+impl<Supports: SupportGenerator> StrongRetentionChecker<Supports> {
     pub fn new(consistency_level: StrongConsistency, supports: Supports) -> Self {
-        StrongConsistencyChecker {
+        StrongRetentionChecker {
             consistency_level,
             supports,
             supported_values: HashSet::default(),
@@ -42,8 +42,8 @@ impl<Supports: SupportGenerator> StrongConsistencyChecker<Supports> {
     }
 }
 
-impl<Supports: SupportGenerator> ConsistencyChecker for StrongConsistencyChecker<Supports> {
-    fn check_consistency(&mut self, scope: &Scope, domains: Domains<'_>) -> bool {
+impl<Supports: SupportGenerator> RetentionChecker for StrongRetentionChecker<Supports> {
+    fn check_retention(&mut self, scope: &Scope, domains: Domains<'_>) -> bool {
         // Make sure to clear the cache of supported values. At the beginning, no values are
         // supported.
         self.supported_values.clear();
@@ -86,7 +86,7 @@ impl<Supports: SupportGenerator> ConsistencyChecker for StrongConsistencyChecker
     }
 }
 
-impl<Supports: SupportGenerator> StrongConsistencyChecker<Supports> {
+impl<Supports: SupportGenerator> StrongRetentionChecker<Supports> {
     /// Tests whether the [`StrongConsistencyChecker::support`] is a valid support.
     ///
     /// Drains the support in the process, so it can be used again by subsequent calls to

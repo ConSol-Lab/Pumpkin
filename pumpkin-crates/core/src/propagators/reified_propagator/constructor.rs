@@ -1,5 +1,5 @@
 #[cfg(feature = "check-consistency")]
-use crate::checkers::BoxedConsistencyChecker;
+use crate::checkers::BoxedRetentionChecker;
 use crate::propagation::DomainEvents;
 #[cfg(feature = "check-consistency")]
 use crate::propagation::LocalId;
@@ -93,7 +93,7 @@ fn wrap_consistency_checkers(
         reification_literal.add_to_scope(scope, reification_literal_id);
 
         replace_with::replace_with_or_abort(checker, |inner_checker| {
-            BoxedConsistencyChecker::from(ReifiedConsistencyChecker {
+            BoxedRetentionChecker::from(ReifiedConsistencyChecker {
                 inner: inner_checker,
                 reification_literal,
                 reification_literal_id,

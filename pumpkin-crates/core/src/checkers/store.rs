@@ -1,4 +1,4 @@
-use crate::checkers::BoxedConsistencyChecker;
+use crate::checkers::BoxedRetentionChecker;
 use crate::checkers::Scope;
 use crate::containers::KeyedBitSet;
 use crate::containers::KeyedVec;
@@ -13,7 +13,7 @@ use crate::variables::DomainId;
 #[derive(Clone, Debug, Default)]
 pub struct ConsistencyCheckerStore {
     /// The checkers in the store.
-    store: KeyedVec<CheckerId, (Scope, BoxedConsistencyChecker)>,
+    store: KeyedVec<CheckerId, (Scope, BoxedRetentionChecker)>,
     /// Map from [`DomainId`] to the relevant checkers via their ID.
     watch_list: KeyedVec<DomainId, Vec<CheckerId>>,
     /// The checkers to run the next time.
@@ -25,7 +25,7 @@ pub struct ConsistencyCheckerStore {
 
 impl ConsistencyCheckerStore {
     /// Add a new `checker` to the store with the given `scope`.
-    pub fn register(&mut self, scope: Scope, checker: BoxedConsistencyChecker) {
+    pub fn register(&mut self, scope: Scope, checker: BoxedRetentionChecker) {
         let checker_slot = self.store.new_slot();
 
         for (_, domain) in scope.domains() {
@@ -60,7 +60,7 @@ impl ConsistencyCheckerStore {
 
             let (scope, checker) = &mut self.store[checker_id];
 
-            if !checker.check_consistency(scope, domains.reborrow()) {
+            if !checker.check_retention(scope, domains.reborrow()) {
                 return false;
             }
         }

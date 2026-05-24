@@ -1,5 +1,5 @@
 use pumpkin_core::checkers::StrongConsistency;
-use pumpkin_core::checkers::StrongConsistencyChecker;
+use pumpkin_core::checkers::StrongRetentionChecker;
 use pumpkin_core::checkers::support::SupportsValue;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
@@ -48,7 +48,7 @@ where
 
         context.add_consistency_checker(
             ((super::ID_A, &a), (super::ID_B, &b), (super::ID_C, &c)),
-            StrongConsistencyChecker::new(
+            StrongRetentionChecker::new(
                 StrongConsistency::Bounds,
                 IntegerMultiplicationChecker {
                     a: a.clone(),

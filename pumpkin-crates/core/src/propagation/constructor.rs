@@ -12,7 +12,7 @@ use super::PropagatorVarId;
 use crate::Solver;
 use crate::basic_types::PredicateId;
 use crate::basic_types::RefOrOwned;
-use crate::checkers::BoxedConsistencyChecker;
+use crate::checkers::BoxedRetentionChecker;
 use crate::checkers::Scope;
 use crate::engine::Assignments;
 use crate::engine::State;
@@ -68,7 +68,7 @@ pub struct PropagatorConstructorContext<'a> {
 
     /// Pending consistency checkers to be registered into [`State`] when this context is dropped.
     #[cfg(feature = "check-consistency")]
-    pub(crate) pending_consistency_checkers: RefOrOwned<'a, Vec<(Scope, BoxedConsistencyChecker)>>,
+    pub(crate) pending_consistency_checkers: RefOrOwned<'a, Vec<(Scope, BoxedRetentionChecker)>>,
 
     /// Pending inference checkers to be registered into [`State`] when this context is dropped.
     #[cfg(feature = "check-propagations")]
@@ -210,7 +210,7 @@ impl PropagatorConstructorContext<'_> {
     pub fn add_consistency_checker(
         &mut self,
         scope: impl Into<Scope>,
-        checker: impl Into<BoxedConsistencyChecker>,
+        checker: impl Into<BoxedRetentionChecker>,
     ) {
         #[cfg(feature = "check-consistency")]
         self.pending_consistency_checkers

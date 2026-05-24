@@ -4,8 +4,8 @@ use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::VariableState;
 
-use crate::checkers::BoxedConsistencyChecker;
-use crate::checkers::ConsistencyChecker;
+use crate::checkers::BoxedRetentionChecker;
+use crate::checkers::RetentionChecker;
 use crate::checkers::Scope;
 use crate::propagation::Domains;
 use crate::propagation::LocalId;
@@ -16,21 +16,21 @@ use crate::variables::Literal;
 /// not assigned to true.
 #[derive(Debug, Clone)]
 pub struct ReifiedConsistencyChecker {
-    pub inner: BoxedConsistencyChecker,
+    pub inner: BoxedRetentionChecker,
     pub reification_literal: Literal,
     /// The [`LocalId`] of the reification literal in the scope, used to strip it before passing
     /// the scope to the inner checker.
     pub reification_literal_id: LocalId,
 }
 
-impl ConsistencyChecker for ReifiedConsistencyChecker {
-    fn check_consistency(&mut self, scope: &Scope, domains: Domains<'_>) -> bool {
+impl RetentionChecker for ReifiedConsistencyChecker {
+    fn check_retention(&mut self, scope: &Scope, domains: Domains<'_>) -> bool {
         if domains.evaluate_literal(self.reification_literal) != Some(true) {
             return true;
         }
 
         let inner_scope = scope.without(self.reification_literal_id);
-        self.inner.check_consistency(&inner_scope, domains)
+        self.inner.check_retention(&inner_scope, domains)
     }
 }
 

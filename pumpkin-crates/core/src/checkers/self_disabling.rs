@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
-use super::ConsistencyChecker;
+use super::RetentionChecker;
 use super::Scope;
 use crate::propagation::Domains;
 
@@ -34,11 +34,11 @@ impl<T> SelfDisablingChecker<T> {
     }
 }
 
-impl<T: ConsistencyChecker + Clone> ConsistencyChecker for SelfDisablingChecker<T> {
-    fn check_consistency(&mut self, scope: &Scope, domains: Domains<'_>) -> bool {
+impl<T: RetentionChecker + Clone> RetentionChecker for SelfDisablingChecker<T> {
+    fn check_retention(&mut self, scope: &Scope, domains: Domains<'_>) -> bool {
         if self.is_deleted.load(Ordering::Relaxed) {
             return true;
         }
-        self.inner.check_consistency(scope, domains)
+        self.inner.check_retention(scope, domains)
     }
 }

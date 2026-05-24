@@ -1,5 +1,5 @@
 use pumpkin_core::checkers::StrongConsistency;
-use pumpkin_core::checkers::StrongConsistencyChecker;
+use pumpkin_core::checkers::StrongRetentionChecker;
 use pumpkin_core::containers::HashSet;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
@@ -44,7 +44,7 @@ where
 
         context.add_consistency_checker(
             ((super::ID_LHS, &a), (super::ID_RHS, &b)),
-            StrongConsistencyChecker::new(
+            StrongRetentionChecker::new(
                 StrongConsistency::Domain,
                 BinaryEqualsChecker {
                     lhs: a.clone(),

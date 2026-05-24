@@ -1,12 +1,12 @@
-mod consistency_checker;
+mod retention_checker;
 mod scope;
 mod self_disabling;
 mod store;
-mod strong_consistency;
+mod strong_retention_checker;
 pub mod support;
 
-pub use consistency_checker::*;
+pub use retention_checker::*;
 pub use scope::*;
 pub use self_disabling::*;
 pub use store::*;
-pub use strong_consistency::*;
+pub use strong_retention_checker::*;

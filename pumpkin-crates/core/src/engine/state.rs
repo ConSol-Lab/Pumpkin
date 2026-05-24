@@ -5,7 +5,7 @@ use pumpkin_checking::InferenceChecker;
 #[cfg(feature = "check-propagations")]
 use pumpkin_checking::VariableState;
 
-use crate::checkers::BoxedConsistencyChecker;
+use crate::checkers::BoxedRetentionChecker;
 use crate::checkers::ConsistencyCheckerStore;
 use crate::checkers::Scope;
 use crate::containers::HashMap;
@@ -381,7 +381,7 @@ impl State {
     pub fn add_consistency_checker(
         &mut self,
         scope: impl Into<Scope>,
-        checker: impl Into<BoxedConsistencyChecker>,
+        checker: impl Into<BoxedRetentionChecker>,
     ) {
         self.consistency_checkers
             .register(scope.into(), checker.into());

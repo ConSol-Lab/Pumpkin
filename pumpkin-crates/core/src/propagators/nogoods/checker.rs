@@ -4,7 +4,7 @@ use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::VariableState;
 
-use crate::checkers::ConsistencyChecker;
+use crate::checkers::RetentionChecker;
 use crate::checkers::Scope;
 use crate::predicates::Predicate;
 use crate::propagation::Domains;
@@ -24,8 +24,8 @@ where
     }
 }
 
-impl ConsistencyChecker for NogoodChecker<Predicate> {
-    fn check_consistency(&mut self, _: &Scope, domains: Domains<'_>) -> bool {
+impl RetentionChecker for NogoodChecker<Predicate> {
+    fn check_retention(&mut self, _: &Scope, domains: Domains<'_>) -> bool {
         // For unit propagation, the state is consistent if:
         // - at least two predicates are unassigned
         // - or otherwise, at least one predicate is assigned
@@ -68,7 +68,7 @@ mod tests {
         };
 
         let scope = Scope::from_iter([(LocalId::from(0), x), (LocalId::from(1), y)]);
-        assert!(checker.check_consistency(&scope, state.get_domains()));
+        assert!(checker.check_retention(&scope, state.get_domains()));
     }
 
     #[test]
@@ -83,7 +83,7 @@ mod tests {
         };
 
         let scope = Scope::from_iter([(LocalId::from(0), x), (LocalId::from(1), y)]);
-        assert!(!checker.check_consistency(&scope, state.get_domains()));
+        assert!(!checker.check_retention(&scope, state.get_domains()));
     }
 
     #[test]
@@ -98,6 +98,6 @@ mod tests {
         };
 
         let scope = Scope::from_iter([(LocalId::from(0), x), (LocalId::from(1), y)]);
-        assert!(checker.check_consistency(&scope, state.get_domains()));
+        assert!(checker.check_retention(&scope, state.get_domains()));
     }
 }
