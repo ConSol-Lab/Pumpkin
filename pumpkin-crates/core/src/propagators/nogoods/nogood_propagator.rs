@@ -1,4 +1,3 @@
-use std::cmp::max;
 use std::ops::Not;
 
 use log::warn;
@@ -8,6 +7,7 @@ use super::NogoodId;
 use super::NogoodInfo;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PropositionalConjunction;
+use crate::containers::HashSet;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::Assignments;
@@ -59,7 +59,7 @@ pub struct NogoodPropagator {
     /// Nogoods which are permanently present
     permanent_nogood_ids: Vec<NogoodId>,
     /// Stores all learned nogoods.
-    learned_nogood_ids: LearnedNogoodIds,
+    learned_nogood_ids: Vec<NogoodId>,
     /// Watch lists for the nogood propagator.
     watch_lists: KeyedVec<PredicateId, Vec<Watcher>>,
     /// Keep track of the events which the propagator has been notified of.
@@ -139,22 +139,6 @@ impl PropagatorConstructor for NogoodPropagator {
     fn create(self, _: PropagatorConstructorContext) -> Self::PropagatorImpl {
         self
     }
-}
-
-/// Keeps track of three tiers of nogoods:
-/// - "low" LBD nogoods
-/// - "mid" LBD nogoods
-/// - "high" LBD nogoods
-///
-/// In general, the lower the LBD the better the nogood.
-///
-/// See the [`LearningOptions`] for the paramters which determine what tier to assign each nogood
-/// to.
-#[derive(Default, Debug, Clone)]
-struct LearnedNogoodIds {
-    low_lbd: Vec<NogoodId>,
-    mid_lbd: Vec<NogoodId>,
-    high_lbd: Vec<NogoodId>,
 }
 
 impl NogoodPropagator {
@@ -368,12 +352,7 @@ impl Propagator for NogoodPropagator {
         let info_id = self.nogood_predicates.get_nogood_index(&id);
 
         // Update the LBD and activity of the nogood, if appropriate.
-        //
-        // Note that low lbd nogoods are kept permanently, so these are not updated.
-        if !self.nogood_info[info_id].block_bumps
-            && self.nogood_info[info_id].is_learned
-            && self.nogood_info[info_id].lbd > self.parameters.lbd_threshold_low
-        {
+        if !self.nogood_info[info_id].block_bumps && self.nogood_info[info_id].is_learned {
             self.nogood_info[info_id].block_bumps = true;
             self.bumped_nogoods.push(id);
             // Note that we do not need to take into account the propagated predicate (in position
@@ -394,21 +373,11 @@ impl Propagator for NogoodPropagator {
             if self.nogood_info[info_id].activity + self.parameters.activity_bump_increment
                 > self.parameters.max_activity
             {
-                // Rescale the activity of the "mid" and "high" LBD learned nogoods (recall that
-                // "low" LBD nogoods do not have their LBD scaled).
-                //
-                // TODO: we could consider having separate activity bump values for each tier, so
-                // that we can do rescaling only within the same tier.
-                // This would lead to less rescaling, and anyway we are (probably) only interested
-                // in the relative order of nogoods within a tier.
-                self.learned_nogood_ids
-                    .high_lbd
-                    .iter()
-                    .chain(self.learned_nogood_ids.mid_lbd.iter())
-                    .for_each(|i| {
-                        let i = self.nogood_predicates.get_nogood_index(i);
-                        self.nogood_info[i].activity /= self.parameters.max_activity;
-                    });
+                // Rescale the activity of learned nogoods
+                self.learned_nogood_ids.iter().for_each(|i| {
+                    let i = self.nogood_predicates.get_nogood_index(i);
+                    self.nogood_info[i].activity /= self.parameters.max_activity;
+                });
                 self.parameters.activity_bump_increment /= self.parameters.max_activity;
             }
 
@@ -496,14 +465,8 @@ impl NogoodPropagator {
             .post(predicate, reason)
             .expect("Cannot fail to add the asserting predicate.");
 
-        // We then assign the nogood to the correct tier based on its LBD
-        if lbd >= self.parameters.lbd_threshold_high {
-            self.learned_nogood_ids.high_lbd.push(nogood_id);
-        } else if lbd <= self.parameters.lbd_threshold_low {
-            self.learned_nogood_ids.low_lbd.push(nogood_id);
-        } else {
-            self.learned_nogood_ids.mid_lbd.push(nogood_id);
-        }
+        // We then record the nogood
+        self.learned_nogood_ids.push(nogood_id);
     }
 
     /// Adds a nogood to the propagator as a permanent nogood and sets the internal state to be
@@ -691,126 +654,153 @@ impl NogoodPropagator {
 
 /// Nogood management
 impl NogoodPropagator {
-    /// Removes learned nogoods if there are too many learned nogoods based on the three-tiered
-    /// clause system from \[1\] and \[2\] (with a sligh change).
+    /// Removes learned nogoods if the current database size exceeds the current maximal size
+    /// (as specified by `self.parameters.current_max_num_nogoods`)
     ///
-    /// The removal process is as follows:
-    /// - Learned nogoods are partitioned into three categories: high-, mid-, and low-LBD nogoods
-    ///   where each tier has a predefined limit on the number of nogoods it may store (see
-    ///   [`LearningOptions`]).
-    /// - If a tier has more nogoods than the limit prescribes, roughly half of the nogoods from the
-    ///   tier are removed. High- and mid-tier nogoods remove the least active nogoods, whereas
-    ///   low-tier nogoods are removed based on lbd and size.
-    ///
-    /// Nogoods can move from higher tiers to lower tiers if the LBD drops sufficiently low, but
-    /// not the other way around. This is the main difference compared to \[2\].
-    ///
-    /// # Bibliography
-    /// - \[1\] Oh, C. (2016). Improving SAT solvers by exploiting empirical characteristics of
-    ///   CDCL. New York University.
-    /// - \[2\] Kochemazov, S. (2020). Improving implementation of SAT competitions 2017--2019
-    ///   winners. International Conference on Theory and Applications of Satisfiability Testing,
-    ///   139–148. Springer.
+    /// In general, whenever the database size exceeds the limit, we attempt to remove roughly
+    /// half of the nogoods, prioritizing to keep the ones that have either low LBD or high
+    /// activity, giving these metrics equal weight (half of the kept nogoods are retained
+    /// because they had low LBD, and the other half because they had high activity).
     fn clean_up_learned_nogoods_if_needed(
         &mut self,
         assignments: &Assignments,
         reason_store: &mut ReasonStore,
         notification_engine: &mut NotificationEngine,
     ) {
-        // The clean-up procedure is divided into four stages (for simplicity of implementation).
+        // In more detail, the clean-up procedure is as follows:
+        // 1. Check if the number of nogoods exceed the limit and calculate how many should be kept
+        // 2. Mark all currently propagating nogoods as 'to keep'
+        // 3. Get two lists of nogoods - one sorted on LBD and the other sorted on activity
+        // 4. Keep marking nogoods as 'to keep' until the required number is fulfilled, in each
+        //    iteration choosing one nogood based on LBD and one based on activity
+        // 5. Remove all non-marked nogoods
         //
-        // For each tier, if the number of nogoods exceeds the predefined threshold for that tier:
-        //  1. Promote nogoods in the "mid"- and "high" LBD tiers that have achieved a sufficiently
-        //     low LBD to the next tier.
-        //  2. Sort the nogoods according to a criteria.
-        //    - Criteria for high- and mid-lbd nogoods: activity (higher activity better)
-        //    - Criteria for low-lbd nogoods: LBD, and tie-break on size (lower LBD and size better)
-        //  3. Remove the "worst" half of the nogoods, skipping nogoods which are currently
-        //     propagating. This only removes the nogood IDs from their respective tier.
-        //  4. Finally, after all of the previous stages, remove deleted nogoods from the watchers.
-        //
-        // Note: in other works, instead of deleting nogoods, they get demoted to the previous tier.
-        // The rational for our choice is that demoting many nogoods will likely trigger clean up
-        // of the previous tier, and demoted nogoods have low activities, so they would be targets
-        // for deletion anyway.
-        //
-        // TODO: check whether this is the case.
+        // Note that in each iteration we first choose a nogood based on LBD and then another one
+        // based on activity. So it could happen that a low-LBD high-activity nogood is kept due
+        // to LBD, allowing activity to choose some less-active nogood, thus potentially giving
+        // activity slightly more priority.
+        // However, it could also happen that the same nogood is retained because of its activity
+        // before it is considered for LBD (depending on values of other nogoods). So it is likely
+        // that the order in which LBD and activity are considered does not have much influence.
 
-        // We keep track of whether at least one of the nogoods has been removed in the third
-        // stage
+        // Check if we exceed the allowed limit of stored nogoods
+        if self.learned_nogood_ids.len() <= self.parameters.current_max_num_nogoods {
+            return;
+        }
+
+        // First we calculate how many nogoods to keep
+        let num_all_nogoods = self.learned_nogood_ids.len();
+        let num_nogoods_to_keep = num_all_nogoods - self.learned_nogood_ids.len() / 2;
+
+        let mut nogoods_to_keep: HashSet<NogoodId> = HashSet::default();
+
+        // Keep all nogoods that are propagating at a non-root level.
+        for &nogood_id in &self.learned_nogood_ids {
+            if NogoodPropagator::is_nogood_propagating(
+                self.handle,
+                &self.nogood_predicates[nogood_id],
+                assignments,
+                reason_store,
+                nogood_id,
+                notification_engine,
+            ) && assignments
+                .get_checkpoint_for_predicate(
+                    &!notification_engine.get_predicate(self.nogood_predicates[nogood_id][0]),
+                )
+                .expect("A propagating predicate must have a decision level.")
+                > 0
+            {
+                let _ = nogoods_to_keep.insert(nogood_id);
+            }
+        }
+
+        let mut lbd_index = 0;
+        let mut activity_index = 0;
+
+        // It could be that more than half of all nogoods are currently propagating
+        // Then we don't want to spend time on sorting
+        // TODO: check if this actually happens in practice
+        if nogoods_to_keep.len() < num_nogoods_to_keep {
+            // Sort learned nogoods increasingly based on LBD
+            self.learned_nogood_ids.sort_unstable_by(|id1, id2| {
+                let nogood1 = &self.nogood_info[self.nogood_predicates.get_nogood_index(id1)];
+                let nogood2 = &self.nogood_info[self.nogood_predicates.get_nogood_index(id2)];
+                nogood1.lbd.cmp(&nogood2.lbd)
+            });
+
+            // Clone the nogoods to sort them descendingly on activity
+            let mut sorted_on_activity = self.learned_nogood_ids.clone();
+            sorted_on_activity.sort_unstable_by(|id1, id2| {
+                let nogood1 = &self.nogood_info[self.nogood_predicates.get_nogood_index(id1)];
+                let nogood2 = &self.nogood_info[self.nogood_predicates.get_nogood_index(id2)];
+                nogood2.activity.partial_cmp(&nogood1.activity).unwrap()
+            });
+
+            while nogoods_to_keep.len() < num_nogoods_to_keep {
+                // We will always eventually leave this loop, so no specific break needed
+
+                // First we find a nogood to keep according to LBD
+                // Skip all nogoods that are already retained
+                while lbd_index < num_all_nogoods
+                    && nogoods_to_keep.contains(&self.learned_nogood_ids[lbd_index])
+                {
+                    lbd_index += 1;
+                }
+
+                if lbd_index < num_all_nogoods {
+                    // Found a nogood to keep based on LBD
+                    let _ = nogoods_to_keep.insert(self.learned_nogood_ids[lbd_index]);
+                    lbd_index += 1;
+                }
+
+                // Now the same for activity
+                // Skip all nogoods that are already retained
+                while activity_index < num_all_nogoods
+                    && nogoods_to_keep.contains(&sorted_on_activity[activity_index])
+                {
+                    activity_index += 1;
+                }
+
+                if activity_index < num_all_nogoods {
+                    // Found a nogood to keep based on activity
+                    let _ = nogoods_to_keep.insert(sorted_on_activity[activity_index]);
+                    activity_index += 1;
+                }
+            }
+        }
+
+        // We found the nogoods to keep -> mark the other ones as to delete
+        // We know the first `lbd_index` nogoods in `learned_nogood_ids` are definitely retained,
+        // so we can skip them
+        for nogood_id in self.learned_nogood_ids.iter().skip(lbd_index) {
+            if !nogoods_to_keep.contains(nogood_id) {
+                self.nogood_info[self.nogood_predicates.get_nogood_index(nogood_id)].is_deleted =
+                    true;
+            }
+        }
+
+        // We remove the nogood from the `learned_nogood_ids`.
         //
+        // Note that this does not remove them from the watchers (yet)
+        let num_nogoods_before_removal = self.learned_nogood_ids.len();
+        self.learned_nogood_ids.retain(|&id| {
+            !self.nogood_info[self.nogood_predicates.get_nogood_index(&id)].is_deleted
+        });
+        let num_nogoods_after_removal = self.learned_nogood_ids.len();
+
         // If at least one nogood has been removed then we need to update the watchers as well
-        let mut removed_at_least_one_nogood = false;
-
-        // Process high-lbd nogoods.
-        if self.learned_nogood_ids.high_lbd.len() > self.parameters.max_num_high_lbd_nogoods {
-            self.promote_high_lbd_nogoods();
-
-            // Sort the "high" LBD nogood by activity
-            NogoodPropagator::sort_nogoods_by_decreasing_activity(
-                &mut self.learned_nogood_ids.high_lbd,
-                &self.nogood_info,
-                &self.nogood_predicates,
-            );
-
-            // Then we remove roughly the worst half of the "high" LBD tier nogood IDs
-            removed_at_least_one_nogood |= NogoodPropagator::remove_roughly_worst_half_nogood_ids(
-                self.handle,
-                &mut self.learned_nogood_ids.high_lbd,
-                &mut self.nogood_info,
-                &self.nogood_predicates,
-                assignments,
-                reason_store,
-                notification_engine,
-            );
-        }
-
-        // Process mid-lbd nogoods.
-        if self.learned_nogood_ids.mid_lbd.len() > self.parameters.max_num_mid_lbd_nogoods {
-            self.promote_mid_lbd_nogoods();
-
-            // Sort the "mid" LBD nogood by activity
-            NogoodPropagator::sort_nogoods_by_decreasing_activity(
-                &mut self.learned_nogood_ids.mid_lbd,
-                &self.nogood_info,
-                &self.nogood_predicates,
-            );
-
-            // Then we remove roughly the worst half of the "mid" LBD tier nogood IDs
-            removed_at_least_one_nogood |= NogoodPropagator::remove_roughly_worst_half_nogood_ids(
-                self.handle,
-                &mut self.learned_nogood_ids.mid_lbd,
-                &mut self.nogood_info,
-                &self.nogood_predicates,
-                assignments,
-                reason_store,
-                notification_engine,
-            );
-        }
-
-        // Process low-lbd nogoods.
-        if self.learned_nogood_ids.low_lbd.len() > self.parameters.max_num_low_lbd_nogoods {
-            // Sort the "low" LBD nogood by LBD while tie-breaking based on size
-            NogoodPropagator::sort_nogoods_by_increasing_lbd_and_size(
-                &mut self.learned_nogood_ids.low_lbd,
-                &self.nogood_predicates,
-                &self.nogood_info,
-            );
-
-            // Then we remove roughly the worst half of the "low" LBD tier nogood IDs
-            removed_at_least_one_nogood |= NogoodPropagator::remove_roughly_worst_half_nogood_ids(
-                self.handle,
-                &mut self.learned_nogood_ids.low_lbd,
-                &mut self.nogood_info,
-                &self.nogood_predicates,
-                assignments,
-                reason_store,
-                notification_engine,
-            );
-        }
-
-        if removed_at_least_one_nogood {
+        if num_nogoods_before_removal != num_nogoods_after_removal {
             self.remove_deleted_nogoods_from_watchers(assignments, notification_engine);
+        }
+
+        // After a database reduction occurs, we increase the allowed database size
+        self.parameters.current_max_num_nogoods = (self.parameters.current_max_num_nogoods as f32
+            * self.parameters.max_num_nogoods_increment)
+            .round() as usize;
+
+        // If the size after increase exceed the upper limit, reset it to the limit
+        if self.parameters.current_max_num_nogoods > self.parameters.num_nogoods_upper_limit {
+            self.parameters.current_max_num_nogoods = self.parameters.num_nogoods_upper_limit;
         }
     }
 
@@ -926,174 +916,12 @@ impl NogoodPropagator {
         }
 
         // We have deleted a trivial nogood; we need to ensure that it is also removed from the
-        // structures to ensure that it does not clutter up the tier.
+        // database to ensure that it does not clutter it up.
         if trivial_nogood_deleted {
-            self.learned_nogood_ids.high_lbd.retain(|nogood_id| {
-                !self.nogood_info[self.nogood_predicates.get_nogood_index(nogood_id)].is_deleted
-            });
-
-            self.learned_nogood_ids.mid_lbd.retain(|nogood_id| {
-                !self.nogood_info[self.nogood_predicates.get_nogood_index(nogood_id)].is_deleted
-            });
-
-            self.learned_nogood_ids.low_lbd.retain(|nogood_id| {
+            self.learned_nogood_ids.retain(|nogood_id| {
                 !self.nogood_info[self.nogood_predicates.get_nogood_index(nogood_id)].is_deleted
             });
         }
-    }
-
-    // Attempts to remove the worst half of the provided `nogood_ids` and returns true if at least
-    // one nogood has been removed.
-    //
-    // It is assumed that the provided `nogood_ids` is sorted based on the criterion where
-    // `nogood_ids[0]` contains the nogood with the "best" value for the criterion.
-    //
-    // A nogood is not removed if it is currently propagating at a non-root level.
-    // This means that the function may remove some nogoods from the first half if
-    // some of the bottom nogoods are currently propagating.
-    fn remove_roughly_worst_half_nogood_ids(
-        handle: PropagatorHandle<NogoodPropagator>,
-        nogood_ids: &mut Vec<NogoodId>,
-        nogood_info: &mut KeyedVec<NogoodIndex, NogoodInfo>,
-        nogoods: &ArenaAllocator,
-        assignments: &Assignments,
-        reason_store: &mut ReasonStore,
-        notification_engine: &mut NotificationEngine,
-    ) -> bool {
-        // The removal is done in two phases.
-        // 1. Nogoods are deleted in the database, but the IDs are not removed from `nogood_ids`.
-        // 2. The corresponding IDs are removed from the `nogood_ids`.
-        //
-        // Recall that these deleted nogoods are not yet removed from the watch lists.
-
-        // First we calculate how many nogoods to remove (at least one)
-        let mut num_nogoods_to_remove = max(nogood_ids.len() / 2, 1);
-
-        // Then we go over all of the nogoods; recall that the "worst" nogood IDs are stored at the
-        // end of `nogood_ids` (hence the rev).
-        //
-        // The aim is to remove half of the nogoods but fewer could be removed if many nogoods are
-        // currently propagating.
-        for &id in nogood_ids.iter().rev() {
-            if num_nogoods_to_remove == 0 {
-                // We are done removing nogoods.
-                break;
-            }
-
-            // Skip nogoods which are propagating at a non-root level.
-            if NogoodPropagator::is_nogood_propagating(
-                handle,
-                &nogoods[id],
-                assignments,
-                reason_store,
-                id,
-                notification_engine,
-            ) && assignments
-                .get_checkpoint_for_predicate(&!notification_engine.get_predicate(nogoods[id][0]))
-                .expect("A propagating predicate must have a decision level.")
-                > 0
-            {
-                continue;
-            }
-
-            // We can now delete the nogood.
-            //
-            // It will be kept in the database for now but it will not be used for propagation
-            // since its watchers will be removed in the next step.
-            nogood_info[nogoods.get_nogood_index(&id)].is_deleted = true;
-
-            num_nogoods_to_remove -= 1;
-        }
-
-        // We remove the nogood from the provided `nogood_ids`.
-        //
-        // Note that this does not remove it from either the nogood database or the watchers!
-        let num_nogoods_before_removal = nogood_ids.len();
-        nogood_ids.retain(|&id| !nogood_info[nogoods.get_nogood_index(&id)].is_deleted);
-        let num_nogoods_after_removal = nogood_ids.len();
-
-        num_nogoods_before_removal != num_nogoods_after_removal
-    }
-
-    /// Goes through all of the "high" LBD nogoods and promotes nogoods which have been updated to
-    /// either the "low" LBD or "mid" LBD tier.
-    fn promote_high_lbd_nogoods(&mut self) {
-        self.learned_nogood_ids.high_lbd.retain(|id| {
-            let info_index = self.nogood_predicates.get_nogood_index(id);
-            if self.nogood_info[info_index].lbd >= self.parameters.lbd_threshold_high {
-                // If the LBD is still high, the nogood stays in the high LBD category.
-                true
-            } else if self.nogood_info[info_index].lbd <= self.parameters.lbd_threshold_low {
-                // If the LBD is low then the nogood is moved to the low LBD category
-                self.learned_nogood_ids.low_lbd.push(*id);
-                false
-            } else {
-                // Otherwise, if has neither high nor low LBD, the nogood is placed in the mid LBD
-                // category
-                self.learned_nogood_ids.mid_lbd.push(*id);
-                false
-            }
-        })
-    }
-
-    /// Goes through all of the "high" LBD nogoods and promotes nogoods which have been updated to
-    /// the "low" LBD tier.
-    ///
-    /// A "mid" LBD nogood cannot be moved to the high LBD tier.
-    fn promote_mid_lbd_nogoods(&mut self) {
-        self.learned_nogood_ids.mid_lbd.retain(|id| {
-            let info_index = self.nogood_predicates.get_nogood_index(id);
-            if self.nogood_info[info_index].lbd > self.parameters.lbd_threshold_low {
-                // If the LBD is still mid, the nogood stays in the mid LBD category.
-                //
-                // Note that we do not move it to the high LBD tier.
-                true
-            } else {
-                // If the LBD is low then the nogood is moved to the low LBD category
-                self.learned_nogood_ids.low_lbd.push(*id);
-                false
-            }
-        })
-    }
-
-    fn sort_nogoods_by_decreasing_activity(
-        nogood_ids: &mut [NogoodId],
-        nogood_info: &KeyedVec<NogoodIndex, NogoodInfo>,
-        nogood_predicates: &ArenaAllocator,
-    ) {
-        nogood_ids.sort_unstable_by(|id1, id2| {
-            let nogood1 = &nogood_info[nogood_predicates.get_nogood_index(id1)];
-            let nogood2 = &nogood_info[nogood_predicates.get_nogood_index(id2)];
-            // Notice that nogood2 goes first in the next line (and not nogood1) to ensure that it
-            // is sorted decreasingly.
-            nogood2.activity.partial_cmp(&nogood1.activity).unwrap()
-        });
-    }
-
-    /// Sorts the provided nogoods non-decreasingly based on LBD and tie-breaks based on the size
-    /// of the nogoods (giving preference to smaller nogoods).
-    fn sort_nogoods_by_increasing_lbd_and_size(
-        nogood_ids: &mut [NogoodId],
-        nogoods: &ArenaAllocator,
-        nogood_info: &KeyedVec<NogoodIndex, NogoodInfo>,
-    ) {
-        nogood_ids.sort_unstable_by(|&id1, &id2| {
-            let lbd1 = nogood_info[nogoods.get_nogood_index(&id1)].lbd;
-            let lbd2 = nogood_info[nogoods.get_nogood_index(&id2)].lbd;
-
-            if lbd1 != lbd2 {
-                // Recall that lower LBD is better.
-                lbd1.cmp(&lbd2)
-            } else {
-                // As a tie-breaker, a smaller nogoods is better.
-                //
-                // TODO: currently we do not remove true predicates from
-                // nogoods, so calling len() might not be accurate.
-                let size1 = nogoods[id1].len();
-                let size2 = nogoods[id2].len();
-                size1.cmp(&size2)
-            }
-        });
     }
 
     /// Decays the activity bump increment by

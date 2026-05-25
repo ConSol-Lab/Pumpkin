@@ -89,77 +89,36 @@ struct Args {
     #[arg(long, value_enum, default_value_t)]
     proof_type: ProofType,
 
-    /// The number of high-lbd learned nogoods that are kept in the database.
-    ///
-    /// Learned nogoods are kept based on the tiered system introduced in "Improving
-    /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)".
+    /// The initial max number of learned nogoods that are initially kept in the database
     ///
     /// Possible values: usize
     #[arg(
-        long = "learning-max-num-high-lbd-nogoods",
-        default_value_t = 20_000,
+        long = "learning-initial-max-num-nogoods",
+        default_value_t = 40_000,
         verbatim_doc_comment
     )]
-    learning_max_num_high_lbd_nogoods: usize,
+    learning_initial_max_num_nogoods: usize,
 
-    /// The number of mid-lbd learned nogoods that are kept in the database.
+    /// The factor with which the max number of stored nogoods is multiplied
+    /// after each database reduction
     ///
-    /// This is based on the variation of the three-tiered system proposed in
-    /// "Improving Implementation of SAT Competitions 2017–2019 Winners".
+    /// Possible values: f32
+    #[arg(
+        long = "learning-max-num-nogoods-increment",
+        default_value_t = 1.1,
+        verbatim_doc_comment
+    )]
+    learning_max_num_nogoods_increment: f32,
+
+    /// The upper limit for the nogoods database size (growth stops at this value)
     ///
     /// Possible values: usize
     #[arg(
-        long = "learning-max-num-mid-lbd-nogoods",
-        default_value_t = 7000,
+        long = "learning-num-nogoods-upper-limit",
+        default_value_t = 1_000_000_000,
         verbatim_doc_comment
     )]
-    learning_max_num_mid_lbd_nogoods: usize,
-
-    /// The number of low-lbd learned nogoods that are kept in the database.
-    ///
-    /// This is based on the variation of the three-tiered system proposed in
-    /// "Improving Implementation of SAT Competitions 2017–2019 Winners".
-    ///
-    /// Possible values: usize
-    #[arg(
-        long = "learning-max-num-low-lbd-nogoods",
-        default_value_t = 100_000,
-        verbatim_doc_comment
-    )]
-    learning_max_num_low_lbd_nogoods: usize,
-
-    /// The treshold determining whether a learned nogood is "low" LBD.
-    ///
-    /// "Low" LBD nogood are kept around for longer since they are of better "quality".
-    ///
-    /// Learned nogoods are kept based on the tiered system introduced "Improving
-    /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)"
-    /// with the variation from "Improving Implementation of SAT Competitions 2017–2019 Winners".
-    ///
-    /// Possible values: u32
-    #[arg(
-        long = "learning-low-lbd-threshold",
-        default_value_t = 3,
-        verbatim_doc_comment
-    )]
-    learning_low_lbd_threshold: u32,
-
-    /// The treshold determining whether a learned nogood is "low" LBD.
-    ///
-    /// "High" LBD nogood are kept around for a shorter amount of time since they are of bad
-    /// "quality".
-    ///
-    /// Learned nogoods are kept based on the tiered system introduced "Improving
-    /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)"
-    /// with the variation from "Improving Implementation of SAT Competitions 2017–2019 Winners".
-    ///
-    /// Possible values: u32
-    #[arg(
-        long = "learning-high-lbd-threshold",
-        default_value_t = 7,
-        verbatim_doc_comment
-    )]
-    learning_high_lbd_threshold: u32,
+    learning_num_nogoods_upper_limit: usize,
 
     /// Decides whether learned clauses are minimised as a post-processing step after computing the
     /// 1-UIP Minimisation is done; according to the idea proposed in "Generalized Conflict-Clause
@@ -559,11 +518,9 @@ fn run() -> PumpkinResult<()> {
     let learning_options = LearningOptions {
         max_activity: 1e20,
         activity_decay_factor: 0.99,
-        max_num_high_lbd_nogoods: args.learning_max_num_high_lbd_nogoods,
-        max_num_mid_lbd_nogoods: args.learning_max_num_mid_lbd_nogoods,
-        max_num_low_lbd_nogoods: args.learning_max_num_low_lbd_nogoods,
-        lbd_threshold_low: args.learning_low_lbd_threshold,
-        lbd_threshold_high: args.learning_high_lbd_threshold,
+        current_max_num_nogoods: args.learning_initial_max_num_nogoods,
+        max_num_nogoods_increment: args.learning_max_num_nogoods_increment,
+        num_nogoods_upper_limit: args.learning_num_nogoods_upper_limit,
         activity_bump_increment: 1.0,
     };
 
