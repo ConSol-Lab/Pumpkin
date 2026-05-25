@@ -8,22 +8,42 @@ use crate::variables::DomainId;
 /// This trait is implemented by [`crate::state::State`] for production use, and by
 /// `FakeTrail` in tests.
 pub(crate) trait TrailView {
-    fn trail_position(&self, predicate: Predicate) -> Option<usize>;
+    /// Get the trail position at which the given predicate became assigned.
+    ///
+    /// Panics if the predicate is unassigned.
+    fn trail_position_of_predicate(&self, predicate: Predicate) -> Option<usize>;
+
+    /// Get the checkpoint at which the given predicate became assigned.
+    ///
+    /// Panics if the predicate is unassigned.
     fn checkpoint_for_predicate(&self, predicate: Predicate) -> Option<usize>;
+
+    /// Get the current checkpoint.
     fn current_checkpoint(&self) -> usize;
+
+    /// Get the last trail position for the given checkpoint.
     fn trail_position_at_checkpoint(&self, checkpoint: usize) -> usize;
+
     /// Returns the predicate that is directly recorded at `trail_position` on the trail.
     ///
     /// Used by [`crate::hypercube_linear::predicate_heap::PredicateHeap`] to determine whether a
     /// predicate is a direct trail entry or an implied predicate.
     fn predicate_at_trail_position(&self, trail_position: usize) -> Predicate;
+
+    /// Evaluate the predicate at the given trail position.
     fn truth_value_at(&self, predicate: Predicate, trail_position: usize) -> Option<bool>;
+
+    /// Get the lower bound of the domain at the trail position.
     fn lower_bound_at_trail_position(&self, domain: DomainId, trail_position: usize) -> i32;
+
+    /// Get the upper bound of the domain at the trail position.
     fn upper_bound_at_trail_position(&self, domain: DomainId, trail_position: usize) -> i32;
+
     /// Returns the explanation for why `predicate` was propagated.
     ///
     /// Panics if the predicate is not propagated (i.e. is a decision or not on the trail).
     fn reason_for(&mut self, predicate: Predicate) -> HypercubeLinearExplanation;
+
     /// Returns the trail position of the last entry on the trail.
     ///
     /// Only valid during conflict analysis, where the trail is guaranteed to be non-empty.
@@ -70,7 +90,7 @@ use crate::state::CurrentNogood;
 use crate::state::State;
 
 impl TrailView for State {
-    fn trail_position(&self, predicate: Predicate) -> Option<usize> {
+    fn trail_position_of_predicate(&self, predicate: Predicate) -> Option<usize> {
         self.assignments.get_trail_position(&predicate)
     }
 

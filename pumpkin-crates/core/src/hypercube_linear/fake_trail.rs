@@ -82,7 +82,7 @@ impl FakeTrail {
 }
 
 impl TrailView for FakeTrail {
-    fn trail_position(&self, predicate: Predicate) -> Option<usize> {
+    fn trail_position_of_predicate(&self, predicate: Predicate) -> Option<usize> {
         self.assignments
             .iter()
             .find(|a| a.predicate == predicate)

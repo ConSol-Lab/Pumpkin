@@ -53,7 +53,7 @@ impl PredicateHeap {
         }
 
         let trail_position = trail
-            .trail_position(predicate)
+            .trail_position_of_predicate(predicate)
             .expect("predicate must be true in given trail");
 
         let is_implied = trail.predicate_at_trail_position(trail_position) != predicate;

@@ -68,9 +68,9 @@ impl<'a> ExplanationContext<'a> {
             assignments: self.assignments,
             notification_engine: self.notification_engine,
             current_nogood: CurrentNogood {
-                heap: &self.current_nogood.heap,
-                visited: &self.current_nogood.visited,
-                ids: &self.current_nogood.ids,
+                heap: self.current_nogood.heap,
+                visited: self.current_nogood.visited,
+                ids: self.current_nogood.ids,
             },
             trail_position: self.trail_position,
         }

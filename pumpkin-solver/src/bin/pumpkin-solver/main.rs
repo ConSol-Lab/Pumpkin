@@ -405,12 +405,6 @@ struct Args {
     /// Ignored if not using hypercube linear resolver or not logging a proof.
     #[arg(long = "hl-proof-with-intermediates", default_value_t)]
     hl_proof_with_intermediates: bool,
-
-    /// Use the middling propositional resolution operator.
-    ///
-    /// Ignored if not using a hypercube linear resolver.
-    #[arg(long = "hl-middling-propres", default_value_t)]
-    hl_middling_propres: bool,
 }
 
 fn configure_logging(
@@ -658,12 +652,6 @@ fn run() -> PumpkinResult<()> {
                     })
                     .unwrap_or(Trace::discard());
 
-                let resolver = if args.hl_middling_propres {
-                    HypercubeLinearResolver::with_middling_resh(trace)
-                } else {
-                    HypercubeLinearResolver::new(trace)
-                };
-
                 flatzinc::solve(
                     Solver::with_options(solver_options),
                     instance_path,
@@ -683,7 +671,7 @@ fn run() -> PumpkinResult<()> {
                         verbose: args.verbose.log_level_filter() >= LevelFilter::Info,
                         use_hypercube_linear: true,
                     },
-                    resolver,
+                    HypercubeLinearResolver::new(trace),
                 )?
             }
         },

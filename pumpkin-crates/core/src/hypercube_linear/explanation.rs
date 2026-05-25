@@ -10,8 +10,6 @@ use crate::hypercube_linear::trail_view::TrailView;
 use crate::hypercube_linear::trail_view::affine_lower_bound_at;
 use crate::predicate;
 use crate::predicates::Predicate;
-use crate::variables::AffineView;
-use crate::variables::DomainId;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HypercubeLinear {
@@ -78,22 +76,6 @@ impl Default for HypercubeLinearExplanation {
 }
 
 impl HypercubeLinearExplanation {
-    pub(crate) fn terms(&self) -> impl Iterator<Item = AffineView<DomainId>> {
-        match self {
-            HypercubeLinearExplanation::Proper(hypercube_linear) => {
-                itertools::Either::Left(hypercube_linear.linear.terms())
-            }
-            HypercubeLinearExplanation::Conjunction(_) => {
-                itertools::Either::Right(std::iter::empty())
-            }
-        }
-    }
-
-    pub(crate) fn is_clause(&self) -> bool {
-        self.linear()
-            .is_none_or(|linear| linear.is_trivially_false())
-    }
-
     pub(crate) fn into_clause<T: TrailView + ?Sized>(
         self,
         trail: &T,

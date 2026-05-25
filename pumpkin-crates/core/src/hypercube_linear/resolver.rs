@@ -23,7 +23,6 @@ use crate::hypercube_linear::conflict_state::ConflictState;
 use crate::hypercube_linear::conflict_state::predicate_applies_to_term;
 use crate::hypercube_linear::explanation::HypercubeLinear;
 use crate::hypercube_linear::explanation::HypercubeLinearExplanation;
-use crate::hypercube_linear::resh_strategy::MiddlingResH;
 use crate::hypercube_linear::resh_strategy::ResHStrategy;
 use crate::hypercube_linear::resh_strategy::StandardResH;
 use crate::hypercube_linear::trail_view::TrailView;
@@ -78,18 +77,6 @@ impl HypercubeLinearResolver {
         Self {
             state: ConflictState::new(Rc::clone(&proof_file)),
             prop_resolver: Box::new(StandardResH::default()),
-            statistics: Default::default(),
-            logged_variable_names: false,
-            #[cfg(feature = "hl-checks")]
-            learned_constraints: Default::default(),
-        }
-    }
-
-    pub fn with_middling_resh(trace: Trace) -> Self {
-        let proof_file = Rc::new(RefCell::new(trace));
-        Self {
-            state: ConflictState::new(Rc::clone(&proof_file)),
-            prop_resolver: Box::new(MiddlingResH::default()),
             statistics: Default::default(),
             logged_variable_names: false,
             #[cfg(feature = "hl-checks")]
@@ -243,7 +230,7 @@ impl HypercubeLinearResolver {
                 self.state
                     .predicates_to_explain
                     .iter()
-                    .map(|p| format!("{p} @ {}", trail.trail_position(p).unwrap()))
+                    .map(|p| format!("{p} @ {}", trail.trail_position_of_predicate(p).unwrap()))
                     .format(", "),
             );
 
@@ -262,7 +249,7 @@ impl HypercubeLinearResolver {
 
             trail_position = {
                 let tp = trail
-                    .trail_position(pivot)
+                    .trail_position_of_predicate(pivot)
                     .expect("all predicates are true");
 
                 assert!(
@@ -389,7 +376,9 @@ impl HypercubeLinearResolver {
             .hypercube_predicates_on_conflict_dl
             .iter()
             .any(|p| {
-                let p_tp = trail.trail_position(p).expect("all hypercube is satisfied");
+                let p_tp = trail
+                    .trail_position_of_predicate(p)
+                    .expect("all hypercube is satisfied");
 
                 pivot.implies(p) && p_tp == trail_position
             });
@@ -491,9 +480,11 @@ impl HypercubeLinearResolver {
 
                     #[cfg(feature = "hl-checks")]
                     {
-                        let pivot_tp = trail.trail_position(pivot).expect("pivot is on trail");
+                        let pivot_tp = trail
+                            .trail_position_of_predicate(pivot)
+                            .expect("pivot is on trail");
                         let tp = trail
-                            .trail_position(predicate)
+                            .trail_position_of_predicate(predicate)
                             .expect("all predicates are true");
                         assert!(pivot_tp >= tp, "pivot_tp = {pivot_tp}, tp = {tp}");
                     }
@@ -550,7 +541,6 @@ impl HypercubeLinearResolver {
         let EmptyDomainConflict {
             trigger_reason,
             trigger_predicate,
-            ..
         } = empty_domain_conflict;
 
         assert_eq!(state.truth_value(trigger_predicate), Some(false));
@@ -870,7 +860,7 @@ impl HypercubeLinearResolver {
         // sure cannot backtrack.
         let mut d1 = None;
         for p in self.state.hypercube_predicates_on_conflict_dl.iter() {
-            if d1 == None {
+            if d1.is_none() {
                 d1 = Some(p.get_domain());
             } else if d1 != Some(p.get_domain()) {
                 // If there are two different domains in the predicates that the
@@ -973,7 +963,7 @@ impl HypercubeLinearResolver {
                     term.scale,
                     term.inner,
                     lb,
-                    trail.trail_position(predicate![term >= lb])
+                    trail.trail_position_of_predicate(predicate![term >= lb])
                 );
             }
             panic!(
@@ -1369,116 +1359,5 @@ mod tests {
             Hypercube::from_single_predicate(predicate![x >= 2]),
         );
         assert_eq!(result.linear, linear_inequality!(2 y + 3 z <= 18));
-    }
-
-    #[test_log::test]
-    fn propositional_resolution_may_also_weaken_linear_from_explanation() {
-        let mut trail_builder = FakeTrail::builder();
-
-        let x = trail_builder.domain(0, 5);
-        let y = trail_builder.domain(-5, 5);
-        let z = trail_builder.domain(-5, 5);
-
-        let mut trail = trail_builder
-            .decide(predicate![z >= 0])
-            .decide(predicate![y >= 2])
-            .propagate(
-                predicate![x >= 3],
-                HypercubeLinear {
-                    hypercube: Hypercube::from_single_predicate(predicate![x <= 2]),
-                    linear: linear_inequality!(2 y + 1 z <= 3),
-                },
-            )
-            .build();
-
-        let mut resolver = HypercubeLinearResolver::with_middling_resh(Trace::discard());
-        let result = resolver.run_resolution(
-            &mut trail,
-            conjunction!([x >= 3]),
-            linear_inequality!(1 y + 1 z <= 1),
-        );
-
-        assert_eq!(
-            result.hypercube,
-            Hypercube::from_single_predicate(predicate![y >= 2]),
-        );
-        assert_eq!(result.linear, linear_inequality!(1 y + 1 z <= 1));
-    }
-
-    #[test_log::test]
-    fn middling_resh_works_with_negative_signs() {
-        let mut trail_builder = FakeTrail::builder();
-
-        let x = trail_builder.domain(0, 5);
-        let y = trail_builder.domain(-5, 5);
-        let z = trail_builder.domain(-5, 5);
-
-        let mut trail = trail_builder
-            .decide(predicate![z >= 0])
-            .decide(predicate![y <= -2])
-            .propagate(
-                predicate![x >= 3],
-                HypercubeLinear {
-                    hypercube: Hypercube::from_single_predicate(predicate![x <= 2]),
-                    linear: linear_inequality!(-2 y + 1 z <= 3),
-                },
-            )
-            .build();
-
-        let mut resolver = HypercubeLinearResolver::with_middling_resh(Trace::discard());
-        let result = resolver.run_resolution(
-            &mut trail,
-            conjunction!([x >= 3]),
-            linear_inequality!(-1 y + 1 z <= 1),
-        );
-
-        assert_eq!(
-            result.hypercube,
-            Hypercube::from_single_predicate(predicate![y <= -2]),
-        );
-        assert_eq!(result.linear, linear_inequality!(-1 y + 1 z <= 1));
-    }
-
-    #[test_log::test]
-    fn middling_resh_works_with_opposite_signs_on_weight() {
-        let mut trail_builder = FakeTrail::builder();
-
-        let x = trail_builder.domain(-5, 5);
-        let y = trail_builder.domain(-5, 5);
-        let z = trail_builder.domain(-5, 5);
-
-        let mut trail = trail_builder
-            .decide(predicate![z >= 1])
-            .decide(predicate![z >= 1])
-            .decide(predicate![y <= -3])
-            .propagate(
-                predicate![z >= 12],
-                HypercubeLinear {
-                    hypercube: Hypercube::new(conjunction!([y <= -3] & [z <= 11]))
-                        .expect("not inconsistent"),
-                    linear: LinearInequality::trivially_false(),
-                },
-            )
-            .propagate(
-                predicate![x >= 1],
-                HypercubeLinear {
-                    hypercube: Hypercube::from_single_predicate(predicate![x <= 0]),
-                    linear: linear_inequality!(-4 y + 5 z <= 15),
-                },
-            )
-            .build();
-
-        let mut resolver = HypercubeLinearResolver::with_middling_resh(Trace::discard());
-        let result = resolver.run_resolution(
-            &mut trail,
-            conjunction!([x >= 1]),
-            linear_inequality!(1 y + 2 z <= 17),
-        );
-
-        assert_eq!(
-            result.hypercube,
-            Hypercube::from_single_predicate(predicate![y <= -3]),
-        );
-        assert_eq!(result.linear, linear_inequality!(2 z <= 22));
     }
 }
