@@ -269,7 +269,7 @@ where
         let bound = DomainEvent::LowerBound | DomainEvent::UpperBound;
         let intersection = events.intersection(bound);
         if intersection.len() == 1 && self.scale.is_negative() {
-            events = events.symmetrical_difference(bound);
+            events = events.symmetric_difference(bound);
         }
         self.inner.watch_all(watchers, events);
     }
@@ -282,7 +282,7 @@ where
         let bound = DomainEvent::LowerBound | DomainEvent::UpperBound;
         let intersection = events.intersection(bound);
         if intersection.len() == 1 && self.scale.is_negative() {
-            events = events.symmetrical_difference(bound);
+            events = events.symmetric_difference(bound);
         }
         self.inner.watch_all_backtrack(watchers, events);
     }

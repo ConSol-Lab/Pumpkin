@@ -45,13 +45,13 @@ fn determine_git_hash() {
     let git_sha = String::from_utf8(output.stdout)
         .expect("Git output was not valid UTF-8")
         .trim()
-        .to_string();
+        .to_owned();
 
     println!("cargo:rustc-env=GIT_SHA={}", git_sha);
 
     // Rerun if HEAD changes (new commits, branch switches, etc.)
-    println!("cargo:rerun-if-changed=.git/HEAD");
-    println!("cargo:rerun-if-changed=.git/refs");
+    println!("cargo:rerun-if-changed=../.git/HEAD");
+    println!("cargo:rerun-if-changed=../.git/refs");
 }
 
 fn compile_c_binary<Source: AsRef<Path>>(

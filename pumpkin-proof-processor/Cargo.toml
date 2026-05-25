@@ -20,7 +20,7 @@ log = "0.4.29"
 thiserror = "2.0.18"
 
 [dev-dependencies]
-assert_cmd = "2.1.2"
+assert_cmd = "2.2.2"
 escargot = "0.5.15"
 pumpkin-checker = { path = "../pumpkin-checker" }
 regex = "1.12.3"
