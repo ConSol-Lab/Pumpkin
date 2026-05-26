@@ -16,7 +16,7 @@ pub enum StrongConsistency {
     Bounds,
 }
 
-/// A [`ConsistencyChecker`] that enforces a strong consistency property.
+/// A [`RetentionChecker`] that enforces a strong consistency property.
 ///
 /// The level of consistency is configured via [`StrongConsistency`].
 #[derive(Clone, Debug)]

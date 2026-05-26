@@ -6,9 +6,9 @@ use crate::propagation::LocalId;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
-#[cfg(feature = "check-consistency")]
-use crate::propagators::ReifiedConsistencyChecker;
 use crate::propagators::ReifiedPropagator;
+#[cfg(feature = "check-consistency")]
+use crate::propagators::ReifiedRetentionChecker;
 use crate::variables::Literal;
 
 /// A [`PropagatorConstructor`] for the reified propagator.
@@ -93,7 +93,7 @@ fn wrap_consistency_checkers(
         reification_literal.add_to_scope(scope, reification_literal_id);
 
         replace_with::replace_with_or_abort(checker, |inner_checker| {
-            BoxedRetentionChecker::from(ReifiedConsistencyChecker {
+            BoxedRetentionChecker::from(ReifiedRetentionChecker {
                 inner: inner_checker,
                 reification_literal,
                 reification_literal_id,

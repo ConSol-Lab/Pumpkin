@@ -9,8 +9,11 @@ use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
+#[cfg(doc)]
+use super::MaximumConstructor;
+
 /// Bounds-consistent propagator which enforces `max(array) = rhs`. Can be constructed through
-/// [`MaximumArgs`].
+/// [`MaximumConstructor`].
 #[derive(Clone, Debug)]
 pub struct MaximumPropagator<ElementVar, Rhs> {
     pub(crate) array: Box<[ElementVar]>,

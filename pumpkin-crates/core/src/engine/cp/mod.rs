@@ -14,7 +14,13 @@ pub use trailed::*;
 mod tests {
     use assignments::Assignments;
 
+    #[cfg(feature = "check-consistency")]
+    use crate::checkers::ConsistencyCheckerStore;
+    #[cfg(feature = "check-propagations")]
+    use crate::checkers::PropagationChecker;
     use crate::conjunction;
+    #[cfg(feature = "check-propagations")]
+    use crate::containers::HashMap;
     use crate::containers::StorageKey;
     use crate::engine::TrailedValues;
     use crate::engine::cp::assignments;
@@ -36,12 +42,23 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut notification_engine = NotificationEngine::default();
+            #[cfg(feature = "check-consistency")]
+            let mut consistency_checker_store = ConsistencyCheckerStore::default();
+            #[cfg(feature = "check-propagations")]
+            let mut inference_checkers: HashMap<
+                InferenceCode,
+                Vec<PropagationChecker>,
+            > = HashMap::default();
             let mut context = PropagationContext::new(
                 &mut trailed_values,
                 &mut assignments,
                 &mut reason_store,
                 &mut notification_engine,
                 PropagatorId(0),
+                #[cfg(feature = "check-consistency")]
+                &mut consistency_checker_store,
+                #[cfg(feature = "check-propagations")]
+                &mut inference_checkers,
             );
 
             let result = context.post(
@@ -67,12 +84,23 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut notification_engine = NotificationEngine::default();
+            #[cfg(feature = "check-consistency")]
+            let mut consistency_checker_store = ConsistencyCheckerStore::default();
+            #[cfg(feature = "check-propagations")]
+            let mut inference_checkers: HashMap<
+                InferenceCode,
+                Vec<PropagationChecker>,
+            > = HashMap::default();
             let mut context = PropagationContext::new(
                 &mut trailed_values,
                 &mut assignments,
                 &mut reason_store,
                 &mut notification_engine,
                 PropagatorId(0),
+                #[cfg(feature = "check-consistency")]
+                &mut consistency_checker_store,
+                #[cfg(feature = "check-propagations")]
+                &mut inference_checkers,
             );
 
             let result = context.post(
@@ -98,12 +126,23 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut notification_engine = NotificationEngine::default();
+            #[cfg(feature = "check-consistency")]
+            let mut consistency_checker_store = ConsistencyCheckerStore::default();
+            #[cfg(feature = "check-propagations")]
+            let mut inference_checkers: HashMap<
+                InferenceCode,
+                Vec<PropagationChecker>,
+            > = HashMap::default();
             let mut context = PropagationContext::new(
                 &mut trailed_values,
                 &mut assignments,
                 &mut reason_store,
                 &mut notification_engine,
                 PropagatorId(0),
+                #[cfg(feature = "check-consistency")]
+                &mut consistency_checker_store,
+                #[cfg(feature = "check-propagations")]
+                &mut inference_checkers,
             );
 
             let result = context.post(

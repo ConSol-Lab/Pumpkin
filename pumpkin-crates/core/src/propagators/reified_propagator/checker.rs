@@ -12,10 +12,10 @@ use crate::propagation::LocalId;
 use crate::propagation::ReadDomains;
 use crate::variables::Literal;
 
-/// A [`ConsistencyChecker`] wrapper that skips the inner check when the reification literal is
+/// A [`RetentionChecker`] wrapper that skips the inner check when the reification literal is
 /// not assigned to true.
 #[derive(Debug, Clone)]
-pub struct ReifiedConsistencyChecker {
+pub struct ReifiedRetentionChecker {
     pub inner: BoxedRetentionChecker,
     pub reification_literal: Literal,
     /// The [`LocalId`] of the reification literal in the scope, used to strip it before passing
@@ -23,7 +23,7 @@ pub struct ReifiedConsistencyChecker {
     pub reification_literal_id: LocalId,
 }
 
-impl RetentionChecker for ReifiedConsistencyChecker {
+impl RetentionChecker for ReifiedRetentionChecker {
     fn check_retention(&mut self, scope: &Scope, domains: Domains<'_>) -> bool {
         if domains.evaluate_literal(self.reification_literal) != Some(true) {
             return true;

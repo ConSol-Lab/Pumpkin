@@ -6,7 +6,7 @@ use super::RetentionChecker;
 use super::Scope;
 use crate::propagation::Domains;
 
-/// A [`ConsistencyChecker`] wrapper that skips the inner check when the associated constraint has
+/// A [`RetentionChecker`] wrapper that skips the inner check when the associated constraint has
 /// been deleted.
 ///
 /// The deletion flag is shared with the constraint owner (e.g. the nogood propagator). Setting the
