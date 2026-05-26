@@ -99,7 +99,10 @@ impl<Supports: SupportGenerator> StrongRetentionChecker<Supports> {
 
         for (domain, value) in self.support.drain() {
             if !value.is_in(domain, domains) {
-                log::error!("Support value is not in the domain");
+                log::error!(
+                    "Support value {value:?} is not in the domain of {domain:?} - {domain}: {:?}",
+                    domains.iterate_domain(&domain).collect::<Vec<_>>()
+                );
                 return false;
             }
 
