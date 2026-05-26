@@ -21,9 +21,9 @@ impl Deref for PropositionalConjunction {
     }
 }
 
-impl Into<Box<[Predicate]>> for PropositionalConjunction {
-    fn into(self) -> Box<[Predicate]> {
-        self.predicates_in_conjunction.into()
+impl From<PropositionalConjunction> for Box<[Predicate]> {
+    fn from(val: PropositionalConjunction) -> Self {
+        val.predicates_in_conjunction.into()
     }
 }
 
