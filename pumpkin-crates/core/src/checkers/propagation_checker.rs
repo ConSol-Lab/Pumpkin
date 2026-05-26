@@ -44,7 +44,7 @@ impl PropagationChecker {
 
         if self
             .inference_checker
-            .check(variable_state, &premises, consequent.as_ref())
+            .check(variable_state, premises, consequent.as_ref())
         {
             Ok(())
         } else {

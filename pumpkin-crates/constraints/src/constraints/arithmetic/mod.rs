@@ -10,7 +10,7 @@ use pumpkin_core::variables::IntegerVariable;
 use pumpkin_propagators::arithmetic::AbsoluteValueArgs;
 use pumpkin_propagators::arithmetic::DivisionArgs;
 use pumpkin_propagators::arithmetic::IntegerMultiplicationArgs;
-use pumpkin_propagators::arithmetic::MaximumArgs;
+use pumpkin_propagators::arithmetic::MaximumConstructor;
 
 /// Creates the [`Constraint`] `a + b = c`.
 pub fn plus<Var: IntegerVariable + 'static>(
@@ -76,7 +76,7 @@ pub fn maximum<Var: IntegerVariable + 'static>(
     rhs: impl IntegerVariable + 'static,
     constraint_tag: ConstraintTag,
 ) -> impl Constraint {
-    MaximumArgs {
+    MaximumConstructor {
         array: array.into_iter().collect(),
         rhs,
         constraint_tag,
