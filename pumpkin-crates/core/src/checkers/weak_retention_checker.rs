@@ -75,20 +75,50 @@ impl<Inferences: InferenceChecker<Predicate> + Clone> RetentionChecker
                     )
                     .expect("Domain should not be inconsistent");
 
-                    !self
-                        .inference_checker
-                        .check(state, &premises.clone(), consequent.as_ref())
+                    let value_could_not_be_removed = !self.inference_checker.check(
+                        state,
+                        &premises.clone(),
+                        consequent.as_ref(),
+                    );
+
+                    if !value_could_not_be_removed {
+                        log::error!(
+                            "The value {value} could be removed from {domain_id}; the propagator is not weakly domain consistent.\n{premises:?} -> {:?}",
+                            predicate!(domain_id != value)
+                        );
+                    }
+
+                    value_could_not_be_removed
                 }),
                 WeakConsistency::Bounds => {
                     let lb = domains.lower_bound(&domain_id);
                     let lb_not_updatable =
                         self.bound_not_updatable(predicate![domain_id >= lb + 1], &premises);
 
+                    if !lb_not_updatable {
+                        log::error!(
+                            "The lower-bound of {domain_id} could be updated to {}; the propagator is not weakly bound consistent.\n{premises:?} -> {:?}",
+                            lb + 1,
+                            predicate!(domain_id >= lb + 1)
+                        );
+
+                        return false;
+                    }
+
                     let ub = domains.upper_bound(&domain_id);
                     let ub_not_updatable =
                         self.bound_not_updatable(predicate![domain_id <= ub - 1], &premises);
 
-                    lb_not_updatable && ub_not_updatable
+                    if !ub_not_updatable {
+                        log::error!(
+                            "The upper-bound of {domain_id} could be updated to {}; the propagator is not weakly bound consistent.\n{premises:?} -> {:?}",
+                            ub - 1,
+                            predicate!(domain_id <= ub - 1)
+                        );
+                        return false;
+                    }
+
+                    true
                 }
             })
     }
