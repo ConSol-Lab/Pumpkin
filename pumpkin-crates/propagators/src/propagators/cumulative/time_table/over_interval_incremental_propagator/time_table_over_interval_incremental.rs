@@ -28,8 +28,7 @@ use super::removal;
 use crate::cumulative::options::CumulativePropagatorOptions;
 use crate::cumulative::time_table::create_time_table_over_interval_from_scratch;
 use crate::cumulative::time_table::propagate_from_scratch_time_table_interval;
-use crate::cumulative::time_table::CheckerTask;
-use crate::cumulative::time_table::TimeTableChecker;
+use crate::cumulative::time_table::time_table_util::register_checkers;
 use crate::cumulative::util::check_bounds_equal_at_propagation;
 use crate::cumulative::util::create_tasks;
 use crate::cumulative::util::register_tasks;
@@ -110,22 +109,6 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstruc
     type PropagatorImpl = Self;
 
     fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        context.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, TimeTable),
-            Box::new(TimeTableChecker {
-                tasks: self
-                    .parameters
-                    .tasks
-                    .iter()
-                    .map(|task| CheckerTask {
-                        start_time: task.start_variable.clone(),
-                        processing_time: task.processing_time,
-                        resource_usage: task.resource_usage,
-                    })
-                    .collect(),
-                capacity: self.parameters.capacity,
-            }),
-        );
         // We only register for notifications of backtrack events if incremental backtracking is
         // enabled
         register_tasks(
@@ -133,6 +116,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstruc
             context.reborrow(),
             self.parameters.options.incremental_backtracking,
         );
+        register_checkers(&mut context, self.constraint_tag, &self.parameters);
 
         // First we store the bounds in the parameters
         self.updatable_structures

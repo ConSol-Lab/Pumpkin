@@ -6,10 +6,15 @@ use std::cmp::min;
 use std::rc::Rc;
 
 use pumpkin_core::asserts::pumpkin_assert_extreme;
+use pumpkin_core::checkers::Scope;
+use pumpkin_core::checkers::WeakConsistency;
+use pumpkin_core::checkers::WeakRetentionChecker;
+use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::PropagationContext;
+use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
@@ -19,6 +24,9 @@ use crate::cumulative::ResourceProfile;
 use crate::cumulative::Task;
 use crate::cumulative::UpdatableStructures;
 use crate::cumulative::UpdatedTaskInfo;
+use crate::cumulative::time_table::CheckerTask;
+use crate::cumulative::time_table::TimeTable;
+use crate::cumulative::time_table::TimeTableChecker;
 use crate::propagators::cumulative::time_table::propagation_handler::CumulativePropagationHandler;
 
 /// The result of [`should_enqueue`], contains the [`EnqueueDecision`] whether the propagator should
@@ -33,6 +41,56 @@ pub(crate) struct ShouldEnqueueResult<Var> {
     /// In general, non-incremental propagators will not make use of this field since they will
     /// propagate from scratch anyways.
     pub(crate) update: Option<UpdatedTaskInfo<Var>>,
+}
+
+pub(crate) fn register_checkers<Var: IntegerVariable + 'static>(
+    context: &mut PropagatorConstructorContext,
+    constraint_tag: ConstraintTag,
+    parameters: &CumulativeParameters<Var>,
+) {
+    context.add_inference_checker(
+        InferenceCode::new(constraint_tag, TimeTable),
+        Box::new(TimeTableChecker {
+            tasks: parameters
+                .tasks
+                .iter()
+                .map(|task| CheckerTask {
+                    start_time: task.start_variable.clone(),
+                    processing_time: task.processing_time,
+                    resource_usage: task.resource_usage,
+                })
+                .collect(),
+            capacity: parameters.capacity,
+        }),
+    );
+
+    let mut scope = Scope::default();
+    parameters.tasks.iter().for_each(|task| {
+        task.start_variable.add_to_scope(&mut scope, task.id);
+    });
+
+    context.add_consistency_checker(
+        scope,
+        WeakRetentionChecker::new(
+            if parameters.options.allow_holes_in_domain {
+                WeakConsistency::Domain
+            } else {
+                WeakConsistency::Bounds
+            },
+            TimeTableChecker {
+                tasks: parameters
+                    .tasks
+                    .iter()
+                    .map(|task| CheckerTask {
+                        start_time: task.start_variable.clone(),
+                        processing_time: task.processing_time,
+                        resource_usage: task.resource_usage,
+                    })
+                    .collect(),
+                capacity: parameters.capacity,
+            },
+        ),
+    );
 }
 
 /// Determines whether a time-table propagator should enqueue and returns a structure containing the

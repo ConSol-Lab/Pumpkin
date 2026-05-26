@@ -30,13 +30,12 @@ use crate::cumulative::ResourceProfile;
 use crate::cumulative::Task;
 use crate::cumulative::UpdatableStructures;
 use crate::cumulative::options::CumulativePropagatorOptions;
-use crate::cumulative::time_table::CheckerTask;
 use crate::cumulative::time_table::PerPointTimeTableType;
-use crate::cumulative::time_table::TimeTableChecker;
 #[cfg(doc)]
 use crate::cumulative::time_table::TimeTablePerPointPropagator;
 use crate::cumulative::time_table::create_time_table_per_point_from_scratch;
 use crate::cumulative::time_table::propagate_from_scratch_time_table_point;
+use crate::cumulative::time_table::time_table_util::register_checkers;
 use crate::cumulative::util::check_bounds_equal_at_propagation;
 use crate::cumulative::util::create_tasks;
 use crate::cumulative::util::register_tasks;
@@ -107,25 +106,10 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
     type PropagatorImpl = Self;
 
     fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        context.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, TimeTable),
-            Box::new(TimeTableChecker {
-                tasks: self
-                    .parameters
-                    .tasks
-                    .iter()
-                    .map(|task| CheckerTask {
-                        start_time: task.start_variable.clone(),
-                        processing_time: task.processing_time,
-                        resource_usage: task.resource_usage,
-                    })
-                    .collect(),
-                capacity: self.parameters.capacity,
-            }),
-        );
         register_tasks(&self.parameters.tasks, context.reborrow(), true);
         self.updatable_structures
             .reset_all_bounds_and_remove_fixed(context.domains(), &self.parameters);
+        register_checkers(&mut context, self.constraint_tag, &self.parameters);
 
         // Then we do normal propagation
         self.is_time_table_outdated = true;

@@ -33,8 +33,7 @@ use crate::cumulative::CumulativeParameters;
 use crate::cumulative::ResourceProfile;
 use crate::cumulative::UpdatableStructures;
 use crate::cumulative::options::CumulativePropagatorOptions;
-use crate::cumulative::time_table::CheckerTask;
-use crate::cumulative::time_table::TimeTableChecker;
+use crate::cumulative::time_table::time_table_util::register_checkers;
 use crate::cumulative::util::create_tasks;
 use crate::cumulative::util::register_tasks;
 use crate::cumulative::util::update_bounds_task;
@@ -100,25 +99,10 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPoint
     type PropagatorImpl = Self;
 
     fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        context.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, TimeTable),
-            Box::new(TimeTableChecker {
-                tasks: self
-                    .parameters
-                    .tasks
-                    .iter()
-                    .map(|task| CheckerTask {
-                        start_time: task.start_variable.clone(),
-                        processing_time: task.processing_time,
-                        resource_usage: task.resource_usage,
-                    })
-                    .collect(),
-                capacity: self.parameters.capacity,
-            }),
-        );
         self.updatable_structures
             .initialise_bounds_and_remove_fixed(context.domains(), &self.parameters);
         register_tasks(&self.parameters.tasks, context.reborrow(), false);
+        register_checkers(&mut context, self.constraint_tag, &self.parameters);
 
         self.inference_code = Some(InferenceCode::new(self.constraint_tag, TimeTable));
 
