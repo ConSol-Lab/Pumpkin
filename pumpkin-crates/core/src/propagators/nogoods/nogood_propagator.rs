@@ -1,6 +1,7 @@
 use std::cmp::max;
 use std::ops::Not;
 
+use bitfield_struct::bitfield;
 use log::warn;
 
 use super::LearningOptions;
@@ -107,6 +108,21 @@ create_statistics_struct!(NogoodPropagatorStatistics {
     num_extended_hole_propagations: usize,
     average_num_predicates_describing_domain_when_propagating_extended: CumulativeMovingAverage<usize>
 });
+
+/// The information necessary to calculate the explanation for a propagation.
+#[bitfield(u64)]
+struct LazyNogoodExplanation {
+    /// The [`NogoodId`] of the nogood which caused the propagation.
+    #[bits(32)]
+    nogood_id: NogoodId,
+    /// Whether extended nogood propagation takes place; if this is the case, then a different
+    /// explanation than when using unit propagation is generated.
+    explains_extended_propagation: bool,
+
+    /// Padding
+    #[bits(31)]
+    __: u32,
+}
 
 /// [`PropagatorConstructor`] for constructing a new instance of the [`NogoodPropagator`] with the
 /// provided [`LearningOptions`] and `capacity`.
@@ -555,8 +571,9 @@ impl Propagator for NogoodPropagator {
         code: u64,
         mut context: ExplanationContext,
     ) -> LazyExplanation<'_> {
-        if (code >> 32) > 0 {
-            let id = NogoodId { id: code as u32 };
+        let reason = LazyNogoodExplanation::from_bits(code);
+        let id = reason.nogood_id();
+        if reason.explains_extended_propagation() {
             let nogood = &self.nogood_predicates[id];
             let info_id = self.nogood_predicates.get_nogood_index(&id);
 
@@ -614,72 +631,73 @@ impl Propagator for NogoodPropagator {
                 PredicateType::Equal => unreachable!(),
             }
 
-            return LazyExplanation {
+            LazyExplanation {
                 predicates: &self.temp_nogood_reason,
                 inference_code: self.inference_codes[info_id].clone(),
-            };
-        }
-
-        let id = NogoodId { id: code as u32 };
-
-        self.temp_nogood_reason = self.nogood_predicates[id][1..]
-            .iter()
-            .map(|predicate_id| context.get_predicate(*predicate_id))
-            .collect::<Vec<_>>();
-
-        let info_id = self.nogood_predicates.get_nogood_index(&id);
-
-        // Update the LBD and activity of the nogood, if appropriate.
-        //
-        // Note that low lbd nogoods are kept permanently, so these are not updated.
-        if !self.nogood_info[info_id].block_bumps
-            && self.nogood_info[info_id].is_learned
-            && self.nogood_info[info_id].lbd > self.parameters.lbd_threshold_low
-        {
-            self.nogood_info[info_id].block_bumps = true;
-            self.bumped_nogoods.push(id);
-            // Note that we do not need to take into account the propagated predicate (in position
-            // zero), since it will share a decision level with one of the other predicates (if it
-            // did not then it should have propagated earlier).
-            let current_lbd = self
-                .lbd_helper
-                .compute_lbd(&self.temp_nogood_reason, &context);
-
-            // The nogood keeps track of the best lbd encountered.
-            if current_lbd < self.nogood_info[info_id].lbd {
-                self.nogood_info[info_id].lbd = current_lbd;
             }
+        } else {
+            self.temp_nogood_reason = self.nogood_predicates[id][1..]
+                .iter()
+                .map(|predicate_id| context.get_predicate(*predicate_id))
+                .collect::<Vec<_>>();
 
-            // Nogood activity update.
+            let info_id = self.nogood_predicates.get_nogood_index(&id);
+
+            // Update the LBD and activity of the nogood, if appropriate.
             //
-            // Rescale the nogood activity if bumping would lead to a (too) large activity value.
-            if self.nogood_info[info_id].activity + self.parameters.activity_bump_increment
-                > self.parameters.max_activity
+            // Note that low lbd nogoods are kept permanently, so these are not updated.
+            if !self.nogood_info[info_id].block_bumps
+                && self.nogood_info[info_id].is_learned
+                && self.nogood_info[info_id].lbd > self.parameters.lbd_threshold_low
             {
-                // Rescale the activity of the "mid" and "high" LBD learned nogoods (recall that
-                // "low" LBD nogoods do not have their LBD scaled).
-                //
-                // TODO: we could consider having separate activity bump values for each tier, so
-                // that we can do rescaling only within the same tier.
-                // This would lead to less rescaling, and anyway we are (probably) only interested
-                // in the relative order of nogoods within a tier.
-                self.learned_nogood_ids
-                    .high_lbd
-                    .iter()
-                    .chain(self.learned_nogood_ids.mid_lbd.iter())
-                    .for_each(|i| {
-                        let i = self.nogood_predicates.get_nogood_index(i);
-                        self.nogood_info[i].activity /= self.parameters.max_activity;
-                    });
-                self.parameters.activity_bump_increment /= self.parameters.max_activity;
-            }
+                self.nogood_info[info_id].block_bumps = true;
+                self.bumped_nogoods.push(id);
+                // Note that we do not need to take into account the propagated predicate (in
+                // position zero), since it will share a decision level with one of
+                // the other predicates (if it did not then it should have
+                // propagated earlier).
+                let current_lbd = self
+                    .lbd_helper
+                    .compute_lbd(&self.temp_nogood_reason, &context);
 
-            // At this point, it is safe to increase the activity value
-            self.nogood_info[info_id].activity += self.parameters.activity_bump_increment;
-        }
-        LazyExplanation {
-            predicates: self.temp_nogood_reason.as_slice(),
-            inference_code: self.inference_codes[info_id].clone(),
+                // The nogood keeps track of the best lbd encountered.
+                if current_lbd < self.nogood_info[info_id].lbd {
+                    self.nogood_info[info_id].lbd = current_lbd;
+                }
+
+                // Nogood activity update.
+                //
+                // Rescale the nogood activity if bumping would lead to a (too) large activity
+                // value.
+                if self.nogood_info[info_id].activity + self.parameters.activity_bump_increment
+                    > self.parameters.max_activity
+                {
+                    // Rescale the activity of the "mid" and "high" LBD learned nogoods (recall that
+                    // "low" LBD nogoods do not have their LBD scaled).
+                    //
+                    // TODO: we could consider having separate activity bump values for each tier,
+                    // so that we can do rescaling only within the same tier.
+                    // This would lead to less rescaling, and anyway we are (probably) only
+                    // interested in the relative order of nogoods within a
+                    // tier.
+                    self.learned_nogood_ids
+                        .high_lbd
+                        .iter()
+                        .chain(self.learned_nogood_ids.mid_lbd.iter())
+                        .for_each(|i| {
+                            let i = self.nogood_predicates.get_nogood_index(i);
+                            self.nogood_info[i].activity /= self.parameters.max_activity;
+                        });
+                    self.parameters.activity_bump_increment /= self.parameters.max_activity;
+                }
+
+                // At this point, it is safe to increase the activity value
+                self.nogood_info[info_id].activity += self.parameters.activity_bump_increment;
+            }
+            LazyExplanation {
+                predicates: self.temp_nogood_reason.as_slice(),
+                inference_code: self.inference_codes[info_id].clone(),
+            }
         }
     }
 }
@@ -712,67 +730,14 @@ impl NogoodPropagator {
     ) -> Result<(), Conflict> {
         statistics.num_extended_propagation_calls += 1;
 
-        // We keep track of the holes in the domains which are posted; these can be seen as
-        // "exceptions" to the removals of the domain
-        let mut exceptions: HashSet<i32> = Default::default();
-
-        // We need to keep track of whether there is a lower-bound and/or upper-bound predicate in
-        // the nogood.
-        let mut lower_bound = None;
-        let mut upper_bound = None;
-
-        let mut num_describing_domain = 0;
-        let mut last_describing_predicate = Predicate::trivially_false();
-        let mut propagated = false;
-        let mut is_falsified = false;
-
-        for predicate in nogood.iter().filter_map(|&predicate_id| {
-            // First, we filter out all of the predicates which are currently satisfied and
-            // which are not concerning the propagated domain id
-            let predicate = context.get_predicate(predicate_id);
-
-            is_falsified |= context.is_predicate_id_falsified(predicate_id);
-
-            pumpkin_assert_moderate!(
-                predicate.get_domain() == propagated_domain
-                    || context.is_predicate_id_satisfied(predicate_id),
-                "Expected {predicate} to be unassigned with {propagated_domain:?}; nogood: {:?}",
-                nogood
-                    .iter()
-                    .map(|predicate_id| {
-                        let predicate = context.get_predicate(*predicate_id);
-
-                        (
-                            predicate,
-                            context.lower_bound(&predicate.get_domain()),
-                            context.upper_bound(&predicate.get_domain()),
-                        )
-                    })
-                    .collect::<Vec<_>>()
-            );
-
-            (!context.is_predicate_id_satisfied(predicate_id)
-                && predicate.get_domain() == propagated_domain)
-                .then_some(predicate)
-        }) {
-            // Then we add the information of the predicates to our structures
-            num_describing_domain += 1;
-            last_describing_predicate = predicate;
-            match predicate.get_predicate_type() {
-                PredicateType::UpperBound => {
-                    pumpkin_assert_simple!(upper_bound.is_none());
-                    upper_bound = Some(predicate)
-                }
-                PredicateType::LowerBound => {
-                    pumpkin_assert_simple!(lower_bound.is_none());
-                    lower_bound = Some(predicate)
-                }
-                PredicateType::NotEqual => {
-                    let _ = exceptions.insert(predicate.get_right_hand_side());
-                }
-                PredicateType::Equal => {}
-            }
-        }
+        let (
+            exceptions,
+            lower_bound,
+            upper_bound,
+            num_describing_domain,
+            last_describing_predicate,
+            is_falsified,
+        ) = get_domain_info(context, nogood, propagated_domain);
 
         if is_falsified {
             // The nogood is already falsified
@@ -818,7 +783,11 @@ impl NogoodPropagator {
                         .expect("Negated predicate should be present in the nogood")
                         == 0
                 );
-                Reason::DynamicLazy(nogood_id.id as u64)
+                Reason::DynamicLazy(
+                    LazyNogoodExplanation::new()
+                        .with_nogood_id(nogood_id)
+                        .into(),
+                )
             } else {
                 (
                     nogood
@@ -878,6 +847,9 @@ impl NogoodPropagator {
         );
         pumpkin_assert_simple!(lb <= ub);
 
+        // We keep track of whether propagation took place.
+        let mut propagated = false;
+
         // Now we check whether we can do any bound propagation
         if upper_bound.is_none() {
             pumpkin_assert_simple!(
@@ -917,10 +889,12 @@ impl NogoodPropagator {
                 // [x != 15] is required in the    explanation
                 statistics.num_extended_upper_bound_propagations += 1;
                 let reason = if let Some(nogood_id) = nogood_id {
-                    // Add +1 so we can differentiate between these types of reason codes and
-                    // others.
-                    let predicate_type = PredicateType::UpperBound as u8 + 1;
-                    Reason::DynamicLazy((nogood_id.id as u64) | ((predicate_type as u64) << 32))
+                    Reason::DynamicLazy(
+                        LazyNogoodExplanation::new()
+                            .with_nogood_id(nogood_id)
+                            .with_explains_extended_propagation(true)
+                            .into(),
+                    )
                 } else {
                     (
                         nogood
@@ -980,10 +954,12 @@ impl NogoodPropagator {
                 //    [x != 5] is required in the explanation
                 statistics.num_extended_lower_bound_propagations += 1;
                 let reason = if let Some(nogood_id) = nogood_id {
-                    // Add +1 so we can differentiate between these types of reason codes and
-                    // others.
-                    let predicate_type = PredicateType::LowerBound as u8 + 1;
-                    Reason::DynamicLazy((nogood_id.id as u64) | ((predicate_type as u64) << 32))
+                    Reason::DynamicLazy(
+                        LazyNogoodExplanation::new()
+                            .with_nogood_id(nogood_id)
+                            .with_explains_extended_propagation(true)
+                            .into(),
+                    )
                 } else {
                     (
                         nogood
@@ -1062,10 +1038,12 @@ impl NogoodPropagator {
                 propagated = true;
                 statistics.num_extended_hole_propagations += 1;
                 let reason = if let Some(nogood_id) = nogood_id {
-                    // Add +1 so we can differentiate between these types of reason codes and
-                    // others.
-                    let predicate_type = PredicateType::NotEqual as u8 + 1;
-                    Reason::DynamicLazy((nogood_id.id as u64) | ((predicate_type as u64) << 32))
+                    Reason::DynamicLazy(
+                        LazyNogoodExplanation::new()
+                            .with_nogood_id(nogood_id)
+                            .with_explains_extended_propagation(true)
+                            .into(),
+                    )
                 } else {
                     (
                         nogood
@@ -1410,6 +1388,86 @@ impl NogoodPropagator {
             }
         }
     }
+}
+
+/// Returns the following information about the unsatisfied predicates concerning the provided
+/// domain:
+/// 1. The values disequality values which are present in the nogood.
+/// 2. The lower-bound predicate, if present.
+/// 3. The upper-bound predicate, if present
+/// 4. The number of elements describing the domain.
+/// 5. The last processed predicate of the domain.
+/// 6. Whether any predicates in the nogood are satisfied.
+fn get_domain_info(
+    context: &mut PropagationContext<'_>,
+    nogood: &[PredicateId],
+    propagated_domain: DomainId,
+) -> (
+    HashSet<i32>,
+    Option<Predicate>,
+    Option<Predicate>,
+    usize,
+    Predicate,
+    bool,
+) {
+    // We keep track of the holes in the domains which are posted; these can be seen as
+    // "exceptions" to the removals of the domain
+    let mut exceptions: HashSet<i32> = Default::default();
+
+    // We need to keep track of whether there is a lower-bound and/or upper-bound predicate in
+    // the nogood.
+    let mut lower_bound = None;
+    let mut upper_bound = None;
+
+    let mut num_describing_domain = 0;
+    let mut last_describing_predicate = Predicate::trivially_false();
+    let mut is_falsified = false;
+
+    for predicate_id in nogood.iter().copied() {
+        let predicate = context.get_predicate(predicate_id);
+
+        is_falsified |= context.is_predicate_id_falsified(predicate_id);
+
+        pumpkin_assert_moderate!(
+            predicate.get_domain() == propagated_domain
+                || context.is_predicate_id_satisfied(predicate_id),
+            "Expected {predicate} to be unassigned with {propagated_domain:?}",
+        );
+
+        // First, we filter out all of the predicates which are currently satisfied and
+        // which are not concerning the propagated domain id
+        if context.is_predicate_id_satisfied(predicate_id)
+            || predicate.get_domain() != propagated_domain
+        {
+            continue;
+        }
+
+        // Then we add the information of the predicates to our structures
+        num_describing_domain += 1;
+        last_describing_predicate = predicate;
+        match predicate.get_predicate_type() {
+            PredicateType::UpperBound => {
+                pumpkin_assert_simple!(upper_bound.is_none());
+                upper_bound = Some(predicate)
+            }
+            PredicateType::LowerBound => {
+                pumpkin_assert_simple!(lower_bound.is_none());
+                lower_bound = Some(predicate)
+            }
+            PredicateType::NotEqual => {
+                let _ = exceptions.insert(predicate.get_right_hand_side());
+            }
+            PredicateType::Equal => {}
+        }
+    }
+    (
+        exceptions,
+        lower_bound,
+        upper_bound,
+        num_describing_domain,
+        last_describing_predicate,
+        is_falsified,
+    )
 }
 
 /// Methods concerning the watchers and watch lists
