@@ -177,14 +177,6 @@ impl PropagatorConstructor for NogoodPropagator {
     }
 }
 
-impl Eq for Watcher {}
-
-impl PartialEq for Watcher {
-    fn eq(&self, other: &Self) -> bool {
-        self.nogood_id.eq(&other.nogood_id)
-    }
-}
-
 /// Keeps track of three tiers of nogoods:
 /// - "low" LBD nogoods
 /// - "mid" LBD nogoods
@@ -510,7 +502,11 @@ impl Propagator for NogoodPropagator {
                     // predicate; no propagation can take place in either case, so we
                     // continue
                     pumpkin_assert_moderate!(nogood_predicates.iter().skip(2).all(
-                        |predicate_id| { !self.watch_lists[predicate_id].contains(&watcher) }
+                        |predicate_id| {
+                            !self.watch_lists[predicate_id]
+                                .iter()
+                                .any(|other_watcher| watcher.nogood_id == other_watcher.nogood_id)
+                        }
                     ),);
                     continue;
                 }
