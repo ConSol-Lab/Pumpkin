@@ -27,7 +27,6 @@ use crate::basic_types::StoredConflictInfo;
 use crate::basic_types::time::Instant;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
-use crate::conflict_resolving::AnalysisMode;
 use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::conflict_resolving::ConflictResolver;
 use crate::containers::HashMap;
@@ -51,6 +50,7 @@ use crate::propagation::store::PropagatorHandle;
 use crate::propagators::nogoods::NogoodChecker;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
+use crate::propagators::nogoods::PropagationMode;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_ne_moderate;
@@ -156,9 +156,6 @@ pub enum ConflictResolverType {
     /// level which reason over a single variable when learning) in combination with extended nogood
     /// propagation.
     ExtendedCPIP,
-    /// Learns 1UIP nogoods in combination with extended nogood and applies extended nogood
-    /// propagation whenever possible.
-    ExtendedOneUIP,
     /// Learns CPIP nogoods in combination with extended nogood propagation but rather than stopping
     /// at the first point where extended nogood propagation can take place, it stops when
     /// extended nogood propagation can adjust a bound upon learning.
@@ -275,12 +272,13 @@ impl ConstraintSatisfactionSolver {
             (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
             solver_options.learning_options,
             match solver_options.analysis_mode {
-                ConflictResolverType::OneUIP => AnalysisMode::OneUIP,
-                ConflictResolverType::AllDecision => AnalysisMode::AllDecision,
-                ConflictResolverType::ExtendedCPIP => AnalysisMode::ExtendedCPIP,
-                ConflictResolverType::ExtendedOneUIP => AnalysisMode::ExtendedOneUIP,
-                ConflictResolverType::BoundsExtendedCPIP => AnalysisMode::BoundsExtendedCPIP,
-                _ => AnalysisMode::OneUIP,
+                ConflictResolverType::OneUIP | ConflictResolverType::AllDecision => {
+                    PropagationMode::UnitPropagation
+                }
+                ConflictResolverType::ExtendedCPIP | ConflictResolverType::BoundsExtendedCPIP => {
+                    PropagationMode::ExtendedNogoodPropagation
+                }
+                ConflictResolverType::NoLearning => PropagationMode::default(),
             },
         ));
 
