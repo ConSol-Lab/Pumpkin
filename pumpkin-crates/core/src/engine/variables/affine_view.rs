@@ -14,7 +14,7 @@ use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::math::num_ext::NumExt;
-use crate::propagation::EventRegistration;
+use crate::propagation::EventDispatcher;
 use crate::propagation::EventTarget;
 use crate::propagation::LocalId;
 
@@ -60,7 +60,7 @@ impl<Inner> AffineView<Inner> {
 impl<Inner: EventTarget> EventTarget for AffineView<Inner> {
     fn register(
         &self,
-        registration: &mut EventRegistration,
+        registration: &mut impl EventDispatcher,
         mut events: EnumSet<DomainEvent>,
         local_id: LocalId,
     ) {
@@ -282,15 +282,6 @@ where
         self.inner
             .iterate_domain(assignment)
             .map(|value| self.map(value))
-    }
-
-    fn watch_all(&self, watchers: &mut Watchers<'_>, mut events: EnumSet<DomainEvent>) {
-        let bound = DomainEvent::LowerBound | DomainEvent::UpperBound;
-        let intersection = events.intersection(bound);
-        if intersection.len() == 1 && self.scale.is_negative() {
-            events = events.symmetric_difference(bound);
-        }
-        self.inner.watch_all(watchers, events);
     }
 
     fn unwatch_all(&self, watchers: &mut Watchers<'_>) {

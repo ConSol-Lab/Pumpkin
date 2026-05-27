@@ -12,7 +12,7 @@ use crate::engine::variables::IntegerVariable;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateConstructor;
 use crate::predicates::PredicateType;
-use crate::propagation::EventRegistration;
+use crate::propagation::EventDispatcher;
 use crate::propagation::EventTarget;
 use crate::propagation::LocalId;
 use crate::pumpkin_assert_simple;
@@ -38,11 +38,11 @@ impl DomainId {
 impl EventTarget for DomainId {
     fn register(
         &self,
-        registration: &mut EventRegistration,
+        registration: &mut impl EventDispatcher,
         events: EnumSet<DomainEvent>,
         local_id: LocalId,
     ) {
-        registration.with_domain(*self, events, local_id);
+        registration.register(*self, events, local_id);
     }
 }
 
@@ -167,10 +167,6 @@ impl IntegerVariable for DomainId {
 
     fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32> {
         assignment.get_domain_iterator(*self)
-    }
-
-    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
-        watchers.watch_all(*self, events);
     }
 
     fn unwatch_all(&self, watchers: &mut Watchers<'_>) {

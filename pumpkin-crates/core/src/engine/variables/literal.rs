@@ -15,7 +15,7 @@ use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::variables::AffineView;
-use crate::propagation::EventRegistration;
+use crate::propagation::EventDispatcher;
 use crate::propagation::EventTarget;
 use crate::propagation::LocalId;
 
@@ -79,7 +79,7 @@ macro_rules! forward {
 impl EventTarget for Literal {
     fn register(
         &self,
-        registration: &mut EventRegistration,
+        registration: &mut impl EventDispatcher,
         events: EnumSet<DomainEvent>,
         local_id: LocalId,
     ) {
@@ -177,10 +177,6 @@ impl IntegerVariable for Literal {
 
     fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32> {
         self.integer_variable.iterate_domain(assignment)
-    }
-
-    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
-        self.integer_variable.watch_all(watchers, events)
     }
 
     fn unwatch_all(&self, watchers: &mut Watchers<'_>) {

@@ -10,10 +10,15 @@ pub trait EventTarget {
     /// Add a registration of self for the given domain events with a local id.
     fn register(
         &self,
-        registration: &mut EventRegistration,
+        registration: &mut impl EventDispatcher,
         events: EnumSet<DomainEvent>,
         local_id: LocalId,
     );
+}
+
+pub trait EventDispatcher {
+    /// Register the [`DomainId`] with the given [`LocalId`] on the given [`DomainEvents`].
+    fn register(&mut self, domain_id: DomainId, events: EnumSet<DomainEvent>, local_id: LocalId);
 }
 
 /// Contains all the events and domains that a propagator needs to be enqueued for.
@@ -58,22 +63,15 @@ impl EventRegistration {
         target.register(self, domain_events.events(), local_id);
     }
 
-    /// Register the [`DomainId`] with the given [`LocalId`] on the given [`DomainEvents`].
-    ///
-    /// When creating the [`EventRegistration`] in a propagator, prefer to use
-    /// [`EventRegistration::add`] to deal with domain views.
-    pub fn with_domain(
-        &mut self,
-        domain_id: DomainId,
-        events: EnumSet<DomainEvent>,
-        local_id: LocalId,
-    ) {
-        self.0.push((domain_id, events, local_id));
-    }
-
     /// Iterate the registrations already made.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = (DomainId, EnumSet<DomainEvent>, LocalId)> {
         self.0.iter().copied()
+    }
+}
+
+impl EventDispatcher for EventRegistration {
+    fn register(&mut self, domain_id: DomainId, events: EnumSet<DomainEvent>, local_id: LocalId) {
+        self.0.push((domain_id, events, local_id));
     }
 }
 
