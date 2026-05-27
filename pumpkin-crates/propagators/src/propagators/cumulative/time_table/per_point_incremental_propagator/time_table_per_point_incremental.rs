@@ -11,6 +11,8 @@ use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
+use pumpkin_core::propagation::EventRegistration;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
@@ -105,8 +107,11 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 {
     type PropagatorImpl = Self;
 
-    fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        register_tasks(&self.parameters.tasks, context.reborrow(), true);
+    fn create(
+        mut self,
+        mut context: PropagatorConstructorContext,
+    ) -> (EventRegistration, Self::PropagatorImpl) {
+        let registration = register_tasks(&self.parameters.tasks, context.reborrow(), true);
         self.updatable_structures
             .reset_all_bounds_and_remove_fixed(context.domains(), &self.parameters);
         register_checkers(&mut context, self.constraint_tag, &self.parameters);
@@ -116,7 +121,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 
         self.inference_code = Some(InferenceCode::new(self.constraint_tag, TimeTable));
 
-        self
+        (registration, self)
     }
 }
 

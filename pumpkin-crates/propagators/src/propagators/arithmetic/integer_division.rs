@@ -9,6 +9,8 @@ use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::EventRegistration;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -42,7 +44,10 @@ where
 {
     type PropagatorImpl = DivisionPropagator<VA, VB, VC>;
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(
+        self,
+        mut context: PropagatorConstructorContext,
+    ) -> (EventRegistration, Self::PropagatorImpl) {
         let DivisionArgs {
             numerator,
             denominator,
@@ -64,18 +69,22 @@ where
             "Denominator cannot contain 0"
         );
 
-        context.register(numerator.clone(), DomainEvents::BOUNDS, ID_NUMERATOR);
-        context.register(denominator.clone(), DomainEvents::BOUNDS, ID_DENOMINATOR);
-        context.register(rhs.clone(), DomainEvents::BOUNDS, ID_RHS);
+        let registration = EventRegistration::builder()
+            .add(&numerator, DomainEvents::BOUNDS, ID_NUMERATOR)
+            .add(&denominator, DomainEvents::BOUNDS, ID_DENOMINATOR)
+            .add(&rhs, DomainEvents::BOUNDS, ID_RHS)
+            .build();
 
         let inference_code = InferenceCode::new(constraint_tag, Division);
 
-        DivisionPropagator {
+        let propagator = DivisionPropagator {
             numerator,
             denominator,
             rhs,
             inference_code,
-        }
+        };
+
+        (registration, propagator)
     }
 }
 

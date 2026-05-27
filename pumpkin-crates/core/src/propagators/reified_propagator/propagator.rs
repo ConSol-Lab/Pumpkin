@@ -3,6 +3,7 @@ use crate::engine::notifications::OpaqueDomainEvent;
 use crate::predicates::Predicate;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
+use crate::propagation::EventRegistration;
 use crate::propagation::ExplanationContext;
 use crate::propagation::LazyExplanation;
 use crate::propagation::LocalId;
@@ -14,6 +15,58 @@ use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_simple;
 use crate::state::Conflict;
 use crate::variables::Literal;
+
+/// A [`PropagatorConstructor`] for the reified propagator.
+#[derive(Clone, Debug)]
+pub struct ReifiedPropagatorArgs<WrappedArgs> {
+    pub propagator: WrappedArgs,
+    pub reification_literal: Literal,
+}
+
+impl<WrappedArgs, WrappedPropagator> PropagatorConstructor for ReifiedPropagatorArgs<WrappedArgs>
+where
+    WrappedArgs: PropagatorConstructor<PropagatorImpl = WrappedPropagator>,
+    WrappedPropagator: Propagator + Clone,
+{
+    type PropagatorImpl = ReifiedPropagator<WrappedPropagator>;
+
+    fn create(
+        self,
+        mut context: PropagatorConstructorContext,
+    ) -> (EventRegistration, Self::PropagatorImpl) {
+        let ReifiedPropagatorArgs {
+            propagator,
+            reification_literal,
+        } = self;
+
+        let (mut registration, propagator) = propagator.create(context.reborrow());
+
+        let reification_literal_id = registration
+            .iter()
+            .map(|(_, _, lid)| lid)
+            .max()
+            .expect("cannot reify propagators that do not register all variables immediately")
+            .successor();
+
+        registration.add(
+            &self.reification_literal,
+            DomainEvents::BOUNDS,
+            reification_literal_id,
+        );
+
+        let name = format!("Reified({})", propagator.name());
+
+        let propagator = ReifiedPropagator {
+            propagator,
+            reification_literal,
+            reification_literal_id,
+            name,
+            reason_buffer: vec![],
+        };
+
+        (registration, propagator)
+    }
+}
 
 /// Propagator for the constraint `r -> p`, where `r` is a Boolean literal and `p` is an arbitrary
 /// propagator.
@@ -213,6 +266,7 @@ mod tests {
         let _ = solver
             .new_propagator(ReifiedPropagatorArgs {
                 propagator: GenericPropagator::new(
+                    vec![a, b],
                     move |_: PropagationContext| {
                         Err(PropagatorConflict {
                             conjunction: t1.clone(),
@@ -247,6 +301,7 @@ mod tests {
         let propagator = solver
             .new_propagator(ReifiedPropagatorArgs {
                 propagator: GenericPropagator::new(
+                    vec![var],
                     move |mut ctx: PropagationContext| {
                         ctx.post(
                             predicate![var >= 3],
@@ -290,6 +345,7 @@ mod tests {
         let inconsistency = solver
             .new_propagator(ReifiedPropagatorArgs {
                 propagator: GenericPropagator::new(
+                    vec![var],
                     move |_: PropagationContext| {
                         Err(PropagatorConflict {
                             conjunction: conjunction!([var >= 1]),
@@ -331,6 +387,7 @@ mod tests {
         let propagator = solver
             .new_propagator(ReifiedPropagatorArgs {
                 propagator: GenericPropagator::new(
+                    vec![var],
                     |_: PropagationContext| Ok(()),
                     move |context: Domains| {
                         if context.is_fixed(&var) {
@@ -367,16 +424,17 @@ mod tests {
     {
         type PropagatorImpl = Self;
 
-        fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        fn create(
+            self,
+            _: PropagatorConstructorContext,
+        ) -> (EventRegistration, Self::PropagatorImpl) {
+            let mut registration = EventRegistration::empty();
+
             for (index, variable) in self.variables_to_register.iter().enumerate() {
-                context.register(
-                    *variable,
-                    DomainEvents::ANY_INT,
-                    LocalId::from(index as u32),
-                );
+                registration.add(variable, DomainEvents::ANY_INT, LocalId::from(index as u32));
             }
 
-            self
+            (registration, self)
         }
     }
 
@@ -403,11 +461,15 @@ mod tests {
         Propagation: Fn(PropagationContext) -> PropagationStatusCP,
         ConsistencyCheck: Fn(Domains) -> Option<PropagatorConflict>,
     {
-        pub(crate) fn new(propagation: Propagation, consistency_check: ConsistencyCheck) -> Self {
+        pub(crate) fn new(
+            variables_to_register: Vec<DomainId>,
+            propagation: Propagation,
+            consistency_check: ConsistencyCheck,
+        ) -> Self {
             GenericPropagator {
                 propagation,
                 consistency_check,
-                variables_to_register: vec![],
+                variables_to_register,
             }
         }
 

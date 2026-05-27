@@ -20,19 +20,35 @@ pub struct MaximumConstructor<ElementVar, Rhs> {
     pub constraint_tag: ConstraintTag,
 }
 
-impl<ElementVar, Rhs> PropagatorConstructor for MaximumConstructor<ElementVar, Rhs>
+impl<ElementVar, Rhs> PropagatorConstructor for MaximumArgs<ElementVar, Rhs>
 where
     ElementVar: IntegerVariable + 'static,
     Rhs: IntegerVariable + 'static,
 {
     type PropagatorImpl = MaximumPropagator<ElementVar, Rhs>;
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        let MaximumConstructor {
+    fn create(
+        self,
+        context: PropagatorConstructorContext,
+    ) -> (EventRegistration, Self::PropagatorImpl) {
+        let MaximumArgs {
             array,
             rhs,
             constraint_tag,
         } = self;
+
+        let mut registration = EventRegistration::builder();
+        for (idx, var) in array.iter().enumerate() {
+            registration = registration.add(var, DomainEvents::BOUNDS, LocalId::from(idx as u32));
+        }
+
+        registration = registration.add(
+            &rhs,
+            DomainEvents::BOUNDS,
+            LocalId::from(array.len() as u32),
+        );
+
+        let inference_code = InferenceCode::new(constraint_tag, Maximum);
 
         let mut scope = Scope::default();
 
@@ -65,12 +81,12 @@ where
             ),
         );
 
-        let inference_code = InferenceCode::new(constraint_tag, Maximum);
-
-        MaximumPropagator {
+        let propagator = MaximumPropagator {
             array,
             rhs,
             inference_code,
-        }
+        };
+
+        (registration.build(), propagator)
     }
 }

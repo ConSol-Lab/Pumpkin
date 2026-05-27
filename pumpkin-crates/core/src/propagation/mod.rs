@@ -69,12 +69,15 @@
 mod constructor;
 mod contexts;
 mod domains;
+mod event_registration;
 mod local_id;
 mod propagator;
 
 pub(crate) mod propagator_id;
 pub(crate) mod propagator_var_id;
 pub(crate) mod store;
+
+pub use event_registration::*;
 
 mod reexports {
     // Re-exports of types not in this module according to the file tree.

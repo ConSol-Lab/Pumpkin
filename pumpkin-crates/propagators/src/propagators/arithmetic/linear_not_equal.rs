@@ -18,6 +18,8 @@ use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
+use pumpkin_core::propagation::EventRegistration;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
@@ -49,7 +51,10 @@ where
 {
     type PropagatorImpl = LinearNotEqualPropagator<Var>;
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(
+        self,
+        mut context: PropagatorConstructorContext,
+    ) -> (EventRegistration, Self::PropagatorImpl) {
         let LinearNotEqualPropagatorArgs {
             terms,
             rhs,
@@ -64,8 +69,9 @@ where
             }),
         );
 
+        let mut registration = EventRegistration::builder();
         for (i, x_i) in terms.iter().enumerate() {
-            context.register(x_i.clone(), DomainEvents::ASSIGN, LocalId::from(i as u32));
+            registration = registration.add(x_i, DomainEvents::ASSIGN, LocalId::from(i as u32));
             context.register_backtrack(
                 x_i.clone(),
                 DomainEvents::new(enum_set!(DomainEvent::Assign | DomainEvent::Removal)),
@@ -85,7 +91,7 @@ where
 
         propagator.recalculate_fixed_variables(context.domains());
 
-        propagator
+        (registration.build(), propagator)
     }
 }
 
