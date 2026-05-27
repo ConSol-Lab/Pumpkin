@@ -36,6 +36,7 @@ use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorId;
+use crate::propagation::PropagatorVarId;
 use crate::propagation::store::PropagatorStore;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_eq_simple;
@@ -342,6 +343,16 @@ impl State {
         let constructor_context =
             PropagatorConstructorContext::new(original_handle.propagator_id(), self);
         let (registration, propagator) = constructor.create(constructor_context);
+
+        for (domain_id, events, local_id) in registration.iter() {
+            let propagator_var = PropagatorVarId {
+                propagator: original_handle.propagator_id(),
+                variable: local_id,
+            };
+
+            self.notification_engine
+                .watch_all(domain_id, events, propagator_var);
+        }
 
         pumpkin_assert_simple!(
             propagator.priority() as u8 <= 3,
