@@ -24,7 +24,7 @@ pub(crate) struct DeductionPropagatorConstructor {
 impl PropagatorConstructor for DeductionPropagatorConstructor {
     type PropagatorImpl = DeductionPropagator;
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, mut context: PropagatorConstructorContext) -> (EventRegistration, Self::PropagatorImpl) {
         declare_inference_label!(Nogood);
 
         let DeductionPropagatorConstructor {

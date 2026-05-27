@@ -9,6 +9,7 @@ use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::EventRegistration;
 use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
@@ -46,30 +47,33 @@ where
         );
     }
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, _: PropagatorConstructorContext) -> (EventRegistration, Self::PropagatorImpl) {
         let MaximumArgs {
             array,
             rhs,
             constraint_tag,
         } = self;
 
+        let mut registration = EventRegistration::builder();
         for (idx, var) in array.iter().enumerate() {
-            context.register(var.clone(), DomainEvents::BOUNDS, LocalId::from(idx as u32));
+            registration = registration.add(var, DomainEvents::BOUNDS, LocalId::from(idx as u32));
         }
 
-        context.register(
-            rhs.clone(),
+        registration = registration.add(
+            &rhs,
             DomainEvents::BOUNDS,
             LocalId::from(array.len() as u32),
         );
 
         let inference_code = InferenceCode::new(constraint_tag, Maximum);
 
-        MaximumPropagator {
+        let propagator = MaximumPropagator {
             array,
             rhs,
             inference_code,
-        }
+        };
+
+        (registration.build(), propagator)
     }
 }
 

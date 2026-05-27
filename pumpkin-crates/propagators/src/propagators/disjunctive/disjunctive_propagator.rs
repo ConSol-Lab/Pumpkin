@@ -8,6 +8,7 @@ use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::EventRegistration;
 use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagationContext;
@@ -79,7 +80,7 @@ impl<Var> DisjunctiveConstructor<Var> {
 impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstructor<Var> {
     type PropagatorImpl = DisjunctivePropagator<Var>;
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, _: PropagatorConstructorContext) -> (EventRegistration, Self::PropagatorImpl) {
         let tasks = self
             .tasks
             .into_iter()
@@ -94,17 +95,20 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
 
         let inference_code = InferenceCode::new(self.constraint_tag, DisjunctiveEdgeFinding);
 
-        tasks.iter().for_each(|task| {
-            context.register(task.start_time.clone(), DomainEvents::BOUNDS, task.id);
-        });
+        let mut registration = EventRegistration::builder();
+        for task in tasks.iter() {
+            registration = registration.add(&task.start_time, DomainEvents::BOUNDS, task.id);
+        }
 
-        DisjunctivePropagator {
+        let propagator = DisjunctivePropagator {
             tasks: tasks.clone().into_boxed_slice(),
             sorted_tasks: tasks,
             theta_lambda_tree,
 
             inference_code,
-        }
+        };
+
+        (registration.build(), propagator)
     }
 
     fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {

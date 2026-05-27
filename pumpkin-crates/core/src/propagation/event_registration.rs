@@ -42,9 +42,16 @@ impl EventRegistration {
     /// # Example
     ///
     /// ```
+    /// use pumpkin_core::propagation::DomainEvents;
+    /// use pumpkin_core::propagation::EventRegistration;
+    /// use pumpkin_core::propagation::LocalId;
+    /// use pumpkin_core::variables::DomainId;
+    ///
+    /// let v1 = DomainId::new(0);
+    /// let v2 = DomainId::new(0);
     /// let registration = EventRegistration::builder()
-    ///     .add(LocalId::from(0), &v1)
-    ///     .add(LocalId::from(1), &v2)
+    ///     .add(&v1, DomainEvents::ANY_INT, LocalId::from(0))
+    ///     .add(&v2, DomainEvents::ANY_INT, LocalId::from(1))
     ///     .build();
     /// ```
     pub fn builder() -> EventRegistrationBuilder {

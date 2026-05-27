@@ -17,6 +17,7 @@ use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::EventRegistration;
 use pumpkin_core::propagation::ExplanationContext;
 use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LazyExplanation;
@@ -60,7 +61,7 @@ where
         );
     }
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, _: PropagatorConstructorContext) -> (EventRegistration, Self::PropagatorImpl) {
         let ElementArgs {
             array,
             index,
@@ -68,26 +69,29 @@ where
             constraint_tag,
         } = self;
 
+        let mut registration = EventRegistration::builder();
         for (i, x_i) in array.iter().enumerate() {
-            context.register(
-                x_i.clone(),
+            registration = registration.add(
+                x_i,
                 DomainEvents::ANY_INT,
                 LocalId::from(i as u32 + ID_X_OFFSET),
             );
         }
 
-        context.register(index.clone(), DomainEvents::ANY_INT, ID_INDEX);
-        context.register(rhs.clone(), DomainEvents::ANY_INT, ID_RHS);
+        registration = registration.add(&index, DomainEvents::ANY_INT, ID_INDEX);
+        registration = registration.add(&rhs, DomainEvents::ANY_INT, ID_RHS);
 
         let inference_code = InferenceCode::new(constraint_tag, Element);
 
-        ElementPropagator {
+        let propagator = ElementPropagator {
             array,
             index,
             rhs,
             inference_code,
             rhs_reason_buffer: vec![],
-        }
+        };
+
+        (registration.build(), propagator)
     }
 }
 

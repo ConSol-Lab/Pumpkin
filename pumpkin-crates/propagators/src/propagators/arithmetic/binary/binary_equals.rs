@@ -20,6 +20,7 @@ use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
+use pumpkin_core::propagation::EventRegistration;
 use pumpkin_core::propagation::ExplanationContext;
 use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LazyExplanation;
@@ -64,17 +65,19 @@ where
         );
     }
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, _: PropagatorConstructorContext) -> (EventRegistration, Self::PropagatorImpl) {
         let BinaryEqualsPropagatorArgs {
             a,
             b,
             constraint_tag,
         } = self;
 
-        context.register(a.clone(), DomainEvents::ANY_INT, LocalId::from(0));
-        context.register(b.clone(), DomainEvents::ANY_INT, LocalId::from(1));
+        let registration = EventRegistration::builder()
+            .add(&a, DomainEvents::ANY_INT, LocalId::from(0))
+            .add(&b, DomainEvents::ANY_INT, LocalId::from(1))
+            .build();
 
-        BinaryEqualsPropagator {
+        let propagator = BinaryEqualsPropagator {
             a,
             b,
 
@@ -86,7 +89,9 @@ where
             has_backtracked: false,
             first_propagation_loop: true,
             reason: Predicate::trivially_false(),
-        }
+        };
+
+        (registration, propagator)
     }
 }
 

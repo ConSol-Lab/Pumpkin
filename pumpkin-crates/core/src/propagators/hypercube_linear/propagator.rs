@@ -77,7 +77,8 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
             inference_code: InferenceCode::new(constraint_tag, HypercubeLinear),
         };
 
-        let registration = EventRegistration::builder().build();
+        // TODO: This will be expanded with registration of predicates.
+        let registration = EventRegistration::empty();
 
         (registration, propagator)
     }
