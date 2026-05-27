@@ -48,11 +48,17 @@ where
             reification_literal,
         } = self;
 
-        let (registration, propagator) = propagator.create(context.reborrow());
-        let reification_literal_id = context.get_next_local_id();
+        let (mut registration, propagator) = propagator.create(context.reborrow());
 
-        context.register(
-            self.reification_literal,
+        let reification_literal_id = registration
+            .iter()
+            .map(|(_, _, lid)| lid)
+            .max()
+            .expect("cannot reify propagators that do not register all variables immediately")
+            .successor();
+
+        registration.add(
+            &self.reification_literal,
             DomainEvents::BOUNDS,
             reification_literal_id,
         );

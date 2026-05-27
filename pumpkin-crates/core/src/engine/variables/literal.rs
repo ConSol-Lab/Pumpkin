@@ -15,6 +15,9 @@ use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::variables::AffineView;
+use crate::propagation::EventRegistration;
+use crate::propagation::EventTarget;
+use crate::propagation::LocalId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Literal {
@@ -70,6 +73,18 @@ macro_rules! forward {
         ) -> $return_type $(where $($where_clause)*)? {
             self.$field.$name($($param_name),*)
         }
+    }
+}
+
+impl EventTarget for Literal {
+    fn register(
+        &self,
+        registration: &mut EventRegistration,
+        events: EnumSet<DomainEvent>,
+        local_id: LocalId,
+    ) {
+        self.integer_variable
+            .register(registration, events, local_id);
     }
 }
 

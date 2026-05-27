@@ -1,3 +1,6 @@
+use enumset::EnumSet;
+
+use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
 use crate::propagation::LocalId;
 use crate::variables::DomainId;
@@ -8,14 +11,14 @@ pub trait EventTarget {
     fn register(
         &self,
         registration: &mut EventRegistration,
-        events: DomainEvents,
+        events: EnumSet<DomainEvent>,
         local_id: LocalId,
     );
 }
 
 /// Contains all the events and domains that a propagator needs to be enqueued for.
 #[derive(Clone, Debug)]
-pub struct EventRegistration(Vec<(DomainId, DomainEvents, LocalId)>);
+pub struct EventRegistration(Vec<(DomainId, EnumSet<DomainEvent>, LocalId)>);
 
 impl EventRegistration {
     /// Create an [`EventRegistration`] without any variables.
@@ -52,15 +55,25 @@ impl EventRegistration {
         domain_events: DomainEvents,
         local_id: LocalId,
     ) {
-        target.register(self, domain_events, local_id);
+        target.register(self, domain_events.events(), local_id);
     }
 
     /// Register the [`DomainId`] with the given [`LocalId`] on the given [`DomainEvents`].
     ///
     /// When creating the [`EventRegistration`] in a propagator, prefer to use
     /// [`EventRegistration::add`] to deal with domain views.
-    pub fn with_domain(&mut self, domain_id: DomainId, events: DomainEvents, local_id: LocalId) {
+    pub fn with_domain(
+        &mut self,
+        domain_id: DomainId,
+        events: EnumSet<DomainEvent>,
+        local_id: LocalId,
+    ) {
         self.0.push((domain_id, events, local_id));
+    }
+
+    /// Iterate the registrations already made.
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (DomainId, EnumSet<DomainEvent>, LocalId)> {
+        self.0.iter().copied()
     }
 }
 

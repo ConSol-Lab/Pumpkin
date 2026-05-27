@@ -104,10 +104,8 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
 
     fn create(
         self,
-        mut context: PropagatorConstructorContext,
+        context: PropagatorConstructorContext,
     ) -> (EventRegistration, Self::PropagatorImpl) {
-        context.will_not_register_any_events();
-
         let propagator = NogoodPropagator {
             handle: PropagatorHandle::new(context.propagator_id),
             parameters: self.parameters,

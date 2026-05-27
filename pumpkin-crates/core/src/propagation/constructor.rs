@@ -1,6 +1,3 @@
-use std::ops::Deref;
-use std::ops::DerefMut;
-
 use pumpkin_checking::InferenceChecker;
 
 use super::Domains;
@@ -11,7 +8,6 @@ use super::PropagatorVarId;
 #[cfg(doc)]
 use crate::Solver;
 use crate::basic_types::PredicateId;
-use crate::basic_types::RefOrOwned;
 use crate::engine::Assignments;
 use crate::engine::State;
 use crate::engine::TrailedValues;
@@ -105,15 +101,6 @@ impl InferenceCheckers<'_> {
 pub struct PropagatorConstructorContext<'a> {
     state: &'a mut State,
     pub(crate) propagator_id: PropagatorId,
-
-    /// A [`LocalId`] that is guaranteed not to be used to register any variables yet. This is
-    /// either a reference or an owned value, to support
-    /// [`PropagatorConstructorContext::reborrow`].
-    next_local_id: RefOrOwned<'a, LocalId>,
-
-    /// Marker to indicate whether the constructor registered for at least one domain event or
-    /// predicate becoming assigned. If not, the [`Drop`] implementation will cause a panic.
-    did_register: RefOrOwned<'a, bool>,
 }
 
 impl PropagatorConstructorContext<'_> {
@@ -122,20 +109,9 @@ impl PropagatorConstructorContext<'_> {
         state: &'a mut State,
     ) -> PropagatorConstructorContext<'a> {
         PropagatorConstructorContext {
-            next_local_id: RefOrOwned::Owned(LocalId::from(0)),
             propagator_id,
             state,
-            did_register: RefOrOwned::Owned(false),
         }
-    }
-
-    /// Indicate that the constructor is deliberately not registering the propagator to be enqueued
-    /// at any time.
-    ///
-    /// If this is called and later a registration happens, then the registration will still go
-    /// through. Calling this function only prevents the crash if no registration happens.
-    pub fn will_not_register_any_events(&mut self) {
-        *self.did_register = true;
     }
 
     /// Get domain information.
@@ -143,40 +119,9 @@ impl PropagatorConstructorContext<'_> {
         Domains::new(&self.state.assignments, &mut self.state.trailed_values)
     }
 
-    /// Subscribes the propagator to the given [`DomainEvents`].
-    ///
-    /// The domain events determine when [`Propagator::notify()`] will be called on the propagator.
-    /// The [`LocalId`] is internal information related to the propagator,
-    /// which is used when calling [`Propagator::notify()`] to identify the variable.
-    ///
-    /// Each variable *must* have a unique [`LocalId`]. Most often this would be its index of the
-    /// variable in the internal array of variables.
-    ///
-    /// Duplicate registrations are ignored.
-    pub fn register(
-        &mut self,
-        var: impl IntegerVariable,
-        domain_events: DomainEvents,
-        local_id: LocalId,
-    ) {
-        self.will_not_register_any_events();
-
-        let propagator_var = PropagatorVarId {
-            propagator: self.propagator_id,
-            variable: local_id,
-        };
-
-        self.update_next_local_id(local_id);
-
-        let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
-        var.watch_all(&mut watchers, domain_events.events());
-    }
-
     /// Register the propagator to be enqueued when the given [`Predicate`] becomes true.
     /// Returns the [`PredicateId`] used by the solver to track the predicate.
     pub fn register_predicate(&mut self, predicate: Predicate) -> PredicateId {
-        self.will_not_register_any_events();
-
         self.state.notification_engine.watch_predicate(
             predicate,
             self.propagator_id,
@@ -209,15 +154,8 @@ impl PropagatorConstructorContext<'_> {
             variable: local_id,
         };
 
-        self.update_next_local_id(local_id);
-
         let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
         var.watch_all_backtrack(&mut watchers, domain_events.events());
-    }
-
-    /// Get a new [`LocalId`] which is guaranteed to be unused.
-    pub(crate) fn get_next_local_id(&self) -> LocalId {
-        *self.next_local_id.deref()
     }
 
     /// Reborrow the current context to a new value with a shorter lifetime. Should be used when
@@ -226,8 +164,6 @@ impl PropagatorConstructorContext<'_> {
     pub fn reborrow(&mut self) -> PropagatorConstructorContext<'_> {
         PropagatorConstructorContext {
             propagator_id: self.propagator_id,
-            next_local_id: self.next_local_id.reborrow(),
-            did_register: self.did_register.reborrow(),
             state: self.state,
         }
     }
@@ -242,35 +178,6 @@ impl PropagatorConstructorContext<'_> {
         checker: Box<dyn InferenceChecker<Predicate>>,
     ) {
         self.state.add_inference_checker(inference_code, checker);
-    }
-
-    /// Set the next local id to be at least one more than the largest encountered local id.
-    fn update_next_local_id(&mut self, local_id: LocalId) {
-        let next_local_id = (*self.next_local_id.deref()).max(LocalId::from(local_id.unpack() + 1));
-
-        *self.next_local_id.deref_mut() = next_local_id;
-    }
-}
-
-impl Drop for PropagatorConstructorContext<'_> {
-    fn drop(&mut self) {
-        if std::thread::panicking() {
-            // If we are already unwinding due to a panic, we do not want to trigger another one.
-            return;
-        }
-
-        let did_register = match self.did_register {
-            // If we are in a reborrowed context, we do not want to enforce registration.
-            RefOrOwned::Ref(_) => return,
-
-            RefOrOwned::Owned(did_register) => did_register,
-        };
-
-        if !did_register {
-            panic!(
-                "Propagator did not register to be enqueued. If this is intentional, call PropagatorConstructorContext::will_not_register_any_events()."
-            );
-        }
     }
 }
 

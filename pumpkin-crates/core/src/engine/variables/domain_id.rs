@@ -12,6 +12,9 @@ use crate::engine::variables::IntegerVariable;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateConstructor;
 use crate::predicates::PredicateType;
+use crate::propagation::EventRegistration;
+use crate::propagation::EventTarget;
+use crate::propagation::LocalId;
 use crate::pumpkin_assert_simple;
 
 /// A structure which represents the most basic [`IntegerVariable`]; it is simply the id which links
@@ -29,6 +32,17 @@ impl DomainId {
 
     pub fn id(&self) -> u32 {
         self.id
+    }
+}
+
+impl EventTarget for DomainId {
+    fn register(
+        &self,
+        registration: &mut EventRegistration,
+        events: EnumSet<DomainEvent>,
+        local_id: LocalId,
+    ) {
+        registration.with_domain(*self, events, local_id);
     }
 }
 

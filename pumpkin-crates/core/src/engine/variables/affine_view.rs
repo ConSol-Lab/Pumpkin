@@ -14,6 +14,9 @@ use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::math::num_ext::NumExt;
+use crate::propagation::EventRegistration;
+use crate::propagation::EventTarget;
+use crate::propagation::LocalId;
 
 /// Models the constraint `y = ax + b`, by expressing the domain of `y` as a transformation of the
 /// domain of `x`.
@@ -51,6 +54,22 @@ impl<Inner> AffineView<Inner> {
 
     fn map(&self, value: i32) -> i32 {
         self.scale * value + self.offset
+    }
+}
+
+impl<Inner: EventTarget> EventTarget for AffineView<Inner> {
+    fn register(
+        &self,
+        registration: &mut EventRegistration,
+        mut events: EnumSet<DomainEvent>,
+        local_id: LocalId,
+    ) {
+        let bound = DomainEvent::LowerBound | DomainEvent::UpperBound;
+        let intersection = events.intersection(bound);
+        if intersection.len() == 1 && self.scale.is_negative() {
+            events = events.symmetric_difference(bound);
+        }
+        self.inner.register(registration, events, local_id);
     }
 }
 
