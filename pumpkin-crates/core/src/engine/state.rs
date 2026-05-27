@@ -341,7 +341,7 @@ impl State {
 
         let constructor_context =
             PropagatorConstructorContext::new(original_handle.propagator_id(), self);
-        let propagator = constructor.create(constructor_context);
+        let (registration, propagator) = constructor.create(constructor_context);
 
         pumpkin_assert_simple!(
             propagator.priority() as u8 <= 3,

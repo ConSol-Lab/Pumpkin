@@ -9,6 +9,7 @@ use crate::predicates::Predicate;
 use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
+use crate::propagation::EventRegistration;
 use crate::propagation::ExplanationContext;
 use crate::propagation::InferenceCheckers;
 use crate::propagation::LazyExplanation;
@@ -38,13 +39,16 @@ where
 {
     type PropagatorImpl = ReifiedPropagator<WrappedPropagator>;
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(
+        self,
+        mut context: PropagatorConstructorContext,
+    ) -> (EventRegistration, Self::PropagatorImpl) {
         let ReifiedPropagatorArgs {
             propagator,
             reification_literal,
         } = self;
 
-        let propagator = propagator.create(context.reborrow());
+        let (registration, propagator) = propagator.create(context.reborrow());
         let reification_literal_id = context.get_next_local_id();
 
         context.register(
@@ -55,13 +59,15 @@ where
 
         let name = format!("Reified({})", propagator.name());
 
-        ReifiedPropagator {
+        let propagator = ReifiedPropagator {
             propagator,
             reification_literal,
             reification_literal_id,
             name,
             reason_buffer: vec![],
-        }
+        };
+
+        (EventRegistration::builder().build(), propagator)
     }
 
     fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
