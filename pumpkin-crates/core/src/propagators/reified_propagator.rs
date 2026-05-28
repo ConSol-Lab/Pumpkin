@@ -9,7 +9,7 @@ use crate::predicates::Predicate;
 use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
-use crate::propagation::EventRegistration;
+use crate::propagation::EventsToRegister;
 use crate::propagation::ExplanationContext;
 use crate::propagation::InferenceCheckers;
 use crate::propagation::LazyExplanation;
@@ -42,7 +42,7 @@ where
     fn create(
         self,
         mut context: PropagatorConstructorContext,
-    ) -> (EventRegistration, Self::PropagatorImpl) {
+    ) -> (EventsToRegister, Self::PropagatorImpl) {
         let ReifiedPropagatorArgs {
             propagator,
             reification_literal,
@@ -469,8 +469,8 @@ mod tests {
         fn create(
             self,
             _: PropagatorConstructorContext,
-        ) -> (EventRegistration, Self::PropagatorImpl) {
-            let mut registration = EventRegistration::empty();
+        ) -> (EventsToRegister, Self::PropagatorImpl) {
+            let mut registration = EventsToRegister::empty();
 
             for (index, variable) in self.variables_to_register.iter().enumerate() {
                 registration.add(variable, DomainEvents::ANY_INT, LocalId::from(index as u32));

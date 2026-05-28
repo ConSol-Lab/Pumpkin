@@ -8,7 +8,7 @@ use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::EventRegistration;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagationContext;
@@ -80,7 +80,7 @@ impl<Var> DisjunctiveConstructor<Var> {
 impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstructor<Var> {
     type PropagatorImpl = DisjunctivePropagator<Var>;
 
-    fn create(self, _: PropagatorConstructorContext) -> (EventRegistration, Self::PropagatorImpl) {
+    fn create(self, _: PropagatorConstructorContext) -> (EventsToRegister, Self::PropagatorImpl) {
         let tasks = self
             .tasks
             .into_iter()
@@ -95,7 +95,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
 
         let inference_code = InferenceCode::new(self.constraint_tag, DisjunctiveEdgeFinding);
 
-        let mut registration = EventRegistration::builder();
+        let mut registration = EventsToRegister::builder();
         for task in tasks.iter() {
             registration = registration.add(&task.start_time, DomainEvents::BOUNDS, task.id);
         }

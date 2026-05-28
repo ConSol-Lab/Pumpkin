@@ -9,7 +9,7 @@ use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::EventRegistration;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
@@ -47,7 +47,7 @@ where
     fn create(
         self,
         context: PropagatorConstructorContext,
-    ) -> (EventRegistration, Self::PropagatorImpl) {
+    ) -> (EventsToRegister, Self::PropagatorImpl) {
         let DivisionArgs {
             numerator,
             denominator,
@@ -60,7 +60,7 @@ where
             "Denominator cannot contain 0"
         );
 
-        let registration = EventRegistration::builder()
+        let registration = EventsToRegister::builder()
             .add(&numerator, DomainEvents::BOUNDS, ID_NUMERATOR)
             .add(&denominator, DomainEvents::BOUNDS, ID_DENOMINATOR)
             .add(&rhs, DomainEvents::BOUNDS, ID_RHS)

@@ -21,7 +21,7 @@ use crate::engine::reason::ReasonStore;
 use crate::predicate;
 use crate::proof::InferenceCode;
 use crate::propagation::EnqueueDecision;
-use crate::propagation::EventRegistration;
+use crate::propagation::EventsToRegister;
 use crate::propagation::ExplanationContext;
 use crate::propagation::LazyExplanation;
 use crate::propagation::NotificationContext;
@@ -105,7 +105,7 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
     fn create(
         self,
         context: PropagatorConstructorContext,
-    ) -> (EventRegistration, Self::PropagatorImpl) {
+    ) -> (EventsToRegister, Self::PropagatorImpl) {
         let propagator = NogoodPropagator {
             handle: PropagatorHandle::new(context.propagator_id),
             parameters: self.parameters,
@@ -121,7 +121,7 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             temp_nogood_reason: Default::default(),
         };
 
-        (EventRegistration::empty(), propagator)
+        (EventsToRegister::empty(), propagator)
     }
 }
 

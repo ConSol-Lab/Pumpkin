@@ -13,7 +13,7 @@ use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
-use pumpkin_core::propagation::EventRegistration;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::ExplanationContext;
 use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LazyExplanation;
@@ -60,7 +60,7 @@ where
     fn create(
         self,
         mut context: PropagatorConstructorContext,
-    ) -> (EventRegistration, Self::PropagatorImpl) {
+    ) -> (EventsToRegister, Self::PropagatorImpl) {
         let LinearLessOrEqualPropagatorArgs {
             x,
             c,
@@ -70,7 +70,7 @@ where
         let mut lower_bound_left_hand_side = 0_i64;
         let mut current_bounds = vec![];
 
-        let mut registration = EventRegistration::builder();
+        let mut registration = EventsToRegister::builder();
         for (i, x_i) in x.iter().enumerate() {
             registration =
                 registration.add(x_i, DomainEvents::LOWER_BOUND, LocalId::from(i as u32));

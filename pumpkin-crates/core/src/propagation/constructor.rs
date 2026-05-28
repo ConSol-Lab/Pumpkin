@@ -21,7 +21,7 @@ use crate::proof::InferenceCode;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
-use crate::propagation::EventRegistration;
+use crate::propagation::EventsToRegister;
 use crate::propagators::reified_propagator::ReifiedChecker;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
@@ -48,7 +48,7 @@ pub trait PropagatorConstructor {
     fn create(
         self,
         context: PropagatorConstructorContext,
-    ) -> (EventRegistration, Self::PropagatorImpl);
+    ) -> (EventsToRegister, Self::PropagatorImpl);
 }
 
 /// Interface used to add [`InferenceChecker`]s to the [`State`].

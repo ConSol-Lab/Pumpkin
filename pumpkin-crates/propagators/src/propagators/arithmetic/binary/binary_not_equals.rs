@@ -8,7 +8,7 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
-use pumpkin_core::propagation::EventRegistration;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
@@ -48,7 +48,7 @@ where
         );
     }
 
-    fn create(self, _: PropagatorConstructorContext) -> (EventRegistration, Self::PropagatorImpl) {
+    fn create(self, _: PropagatorConstructorContext) -> (EventsToRegister, Self::PropagatorImpl) {
         let BinaryNotEqualsPropagatorArgs {
             a,
             b,
@@ -56,7 +56,7 @@ where
         } = self;
 
         // We only care about the case where one of the two is assigned
-        let registration = EventRegistration::builder()
+        let registration = EventsToRegister::builder()
             .add(&a, DomainEvents::ASSIGN, LocalId::from(0))
             .add(&b, DomainEvents::ASSIGN, LocalId::from(1))
             .build();

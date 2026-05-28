@@ -23,15 +23,15 @@ pub trait EventDispatcher {
 
 /// Contains all the events and domains that a propagator needs to be enqueued for.
 #[derive(Clone, Debug)]
-pub struct EventRegistration(Vec<(DomainId, EnumSet<DomainEvent>, LocalId)>);
+pub struct EventsToRegister(Vec<(DomainId, EnumSet<DomainEvent>, LocalId)>);
 
-impl EventRegistration {
+impl EventsToRegister {
     /// Create an [`EventRegistration`] without any variables.
     ///
     /// This is the uncommon case. Without registering for variable events, a propagator will never
     /// be enqueued.
-    pub fn empty() -> EventRegistration {
-        EventRegistration(vec![])
+    pub fn empty() -> EventsToRegister {
+        EventsToRegister(vec![])
     }
 
     /// Create a new [`EventRegistrationBuilder`].
@@ -56,7 +56,7 @@ impl EventRegistration {
     /// ```
     pub fn builder() -> EventRegistrationBuilder {
         EventRegistrationBuilder {
-            registrations: EventRegistration(vec![]),
+            registrations: EventsToRegister(vec![]),
         }
     }
 
@@ -76,7 +76,7 @@ impl EventRegistration {
     }
 }
 
-impl EventDispatcher for EventRegistration {
+impl EventDispatcher for EventsToRegister {
     fn register(&mut self, domain_id: DomainId, events: EnumSet<DomainEvent>, local_id: LocalId) {
         self.0.push((domain_id, events, local_id));
     }
@@ -87,7 +87,7 @@ impl EventDispatcher for EventRegistration {
 /// See [`EventRegistration::builder`] for a usage example.
 #[derive(Clone, Debug)]
 pub struct EventRegistrationBuilder {
-    registrations: EventRegistration,
+    registrations: EventsToRegister,
 }
 
 impl EventRegistrationBuilder {
@@ -106,7 +106,7 @@ impl EventRegistrationBuilder {
     ///
     /// If no variables are registered, then this panics. If no variables can be registered during
     /// construction, use [`EventRegistration::empty`].
-    pub fn build(self) -> EventRegistration {
+    pub fn build(self) -> EventsToRegister {
         assert!(
             !self.registrations.0.is_empty(),
             "did not register for any events"
