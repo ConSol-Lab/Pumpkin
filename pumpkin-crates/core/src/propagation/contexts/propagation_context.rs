@@ -297,6 +297,9 @@ pub(crate) fn build_reason(
     }
 }
 
+/// Wrapper around the [`NotificationEngine`] that is tied to a specific propagator.
+///
+/// Implements [`EventDispatcher`] to handle registration of domain events.
 struct NotificationEngineWatchers<'a> {
     propagator_id: PropagatorId,
     notificaton_engine: &'a mut NotificationEngine,
