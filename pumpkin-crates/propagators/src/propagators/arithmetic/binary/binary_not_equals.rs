@@ -9,7 +9,8 @@ use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
-use pumpkin_core::propagation::EventRegistration;
+use pumpkin_core::propagation::EventsToRegister;
+
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -50,7 +51,7 @@ where
         } = self;
 
         // We only care about the case where one of the two is assigned
-        let registration = EventRegistration::builder()
+        let registration = EventsToRegister::builder()
             .add(&a, DomainEvents::ASSIGN, LocalId::from(0))
             .add(&b, DomainEvents::ASSIGN, LocalId::from(1))
             .build();

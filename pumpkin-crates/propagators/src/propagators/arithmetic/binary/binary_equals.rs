@@ -21,7 +21,7 @@ use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
-use pumpkin_core::propagation::EventRegistration;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::ExplanationContext;
 use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
@@ -66,7 +66,7 @@ where
             constraint_tag,
         } = self;
 
-        let registration = EventRegistration::builder()
+        let registration = EventsToRegister::builder()
             .add(&a, DomainEvents::ANY_INT, LocalId::from(0))
             .add(&b, DomainEvents::ANY_INT, LocalId::from(1))
             .build();

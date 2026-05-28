@@ -22,7 +22,7 @@ use crate::predicate;
 use crate::proof::InferenceCode;
 use crate::propagation::ConstructedPropagator;
 use crate::propagation::EnqueueDecision;
-use crate::propagation::EventRegistration;
+use crate::propagation::EventsToRegister;
 use crate::propagation::ExplanationContext;
 use crate::propagation::LazyExplanation;
 use crate::propagation::NotificationContext;
@@ -124,7 +124,7 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
         };
 
         ConstructedPropagator {
-            registration: EventRegistration::empty(),
+            registration: EventsToRegister::empty(),
             checkers: RuntimeCheckers::empty(),
             propagator,
         }

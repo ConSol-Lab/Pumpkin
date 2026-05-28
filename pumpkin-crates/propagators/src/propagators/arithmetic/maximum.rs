@@ -10,7 +10,8 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::EventRegistration;
+use pumpkin_core::propagation::EventsToRegister;
+
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -48,7 +49,7 @@ where
             constraint_tag,
         } = self;
 
-        let mut registration = EventRegistration::builder();
+        let mut registration = EventsToRegister::builder();
         for (idx, var) in array.iter().enumerate() {
             registration = registration.add(var, DomainEvents::BOUNDS, LocalId::from(idx as u32));
         }

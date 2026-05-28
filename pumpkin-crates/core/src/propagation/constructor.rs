@@ -18,8 +18,8 @@ use crate::predicates::Predicate;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
-use crate::propagation::EventRegistration;
-use crate::propagation::runtime_checkers::RuntimeCheckers;
+use crate::propagation::EventsToRegister;
+use crate::propagation::RuntimeCheckers;
 use crate::variables::IntegerVariable;
 
 /// A propagator constructor creates a fully initialized instance of a [`Propagator`].
@@ -43,7 +43,7 @@ pub trait PropagatorConstructor {
 #[derive(Clone, Debug)]
 pub struct ConstructedPropagator<P> {
     /// The domain events the propagator needs to be be registered for.
-    pub registration: EventRegistration,
+    pub registration: EventsToRegister,
     /// Any runtime checkers that verify the propagator's implementation.
     pub checkers: RuntimeCheckers,
     /// The propagator

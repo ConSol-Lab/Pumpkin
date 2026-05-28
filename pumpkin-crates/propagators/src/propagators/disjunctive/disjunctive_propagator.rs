@@ -9,7 +9,8 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::EventRegistration;
+use pumpkin_core::propagation::EventsToRegister;
+
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
@@ -97,7 +98,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
             .collect::<Vec<_>>();
         let theta_lambda_tree = ThetaLambdaTree::new(&tasks);
 
-        let mut registration = EventRegistration::builder();
+        let mut registration = EventsToRegister::builder();
         for task in tasks.iter() {
             registration = registration.add(&task.start_time, DomainEvents::BOUNDS, task.id);
         }

@@ -8,7 +8,7 @@ use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::ConstructedPropagator;
 use crate::propagation::DomainEvents;
-use crate::propagation::EventRegistration;
+use crate::propagation::EventsToRegister;
 use crate::propagation::LocalId;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
@@ -79,7 +79,7 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
         };
 
         // TODO: This will be expanded with registration of predicates.
-        let registration = EventRegistration::empty();
+        let registration = EventsToRegister::empty();
 
         ConstructedPropagator {
             registration,

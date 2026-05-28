@@ -303,7 +303,7 @@ mod tests {
     use crate::proof::ConstraintTag;
     use crate::proof::InferenceCode;
     use crate::proof::Unknown;
-    use crate::propagation::EventRegistration;
+    use crate::propagation::EventsToRegister;
     use crate::variables::DomainId;
 
     #[test]
@@ -488,7 +488,7 @@ mod tests {
             self,
             _: PropagatorConstructorContext,
         ) -> ConstructedPropagator<Self::PropagatorImpl> {
-            let mut registration = EventRegistration::empty();
+            let mut registration = EventsToRegister::empty();
 
             for (index, variable) in self.variables_to_register.iter().enumerate() {
                 registration.add(variable, DomainEvents::ANY_INT, LocalId::from(index as u32));

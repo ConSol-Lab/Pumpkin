@@ -10,7 +10,8 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::EventRegistration;
+use pumpkin_core::propagation::EventsToRegister;
+
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -61,7 +62,7 @@ where
             "Denominator cannot contain 0"
         );
 
-        let registration = EventRegistration::builder()
+        let registration = EventsToRegister::builder()
             .add(&numerator, DomainEvents::BOUNDS, ID_NUMERATOR)
             .add(&denominator, DomainEvents::BOUNDS, ID_DENOMINATOR)
             .add(&rhs, DomainEvents::BOUNDS, ID_RHS)

@@ -14,7 +14,7 @@ use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
-use pumpkin_core::propagation::EventRegistration;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::ExplanationContext;
 use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
@@ -61,7 +61,7 @@ where
         let mut lower_bound_left_hand_side = 0_i64;
         let mut current_bounds = vec![];
 
-        let mut registration = EventRegistration::builder();
+        let mut registration = EventsToRegister::builder();
         for (i, x_i) in x.iter().enumerate() {
             registration =
                 registration.add(x_i, DomainEvents::LOWER_BOUND, LocalId::from(i as u32));

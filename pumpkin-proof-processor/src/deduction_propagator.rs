@@ -3,7 +3,7 @@ use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::ConstructedPropagator;
-use pumpkin_core::propagation::EventRegistration;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::PredicateId;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
@@ -51,7 +51,7 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
         };
 
         ConstructedPropagator {
-            registration: EventRegistration::empty(),
+            registration: EventsToRegister::empty(),
             checkers: RuntimeCheckers::empty(),
             propagator,
         }

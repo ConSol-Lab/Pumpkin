@@ -18,7 +18,7 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::EventRegistration;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::ExplanationContext;
 use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
@@ -62,7 +62,7 @@ where
             constraint_tag,
         } = self;
 
-        let mut registration = EventRegistration::builder();
+        let mut registration = EventsToRegister::builder();
         for (i, x_i) in array.iter().enumerate() {
             registration = registration.add(
                 x_i,

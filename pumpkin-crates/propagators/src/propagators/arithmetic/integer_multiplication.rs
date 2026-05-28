@@ -9,7 +9,8 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::EventRegistration;
+use pumpkin_core::propagation::EventsToRegister;
+
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -52,7 +53,7 @@ where
             constraint_tag,
         } = self;
 
-        let registration = EventRegistration::builder()
+        let registration = EventsToRegister::builder()
             .add(&a, DomainEvents::ANY_INT, ID_A)
             .add(&b, DomainEvents::ANY_INT, ID_B)
             .add(&c, DomainEvents::ANY_INT, ID_C)
