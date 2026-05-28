@@ -20,6 +20,7 @@ use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::predicate;
 use crate::proof::InferenceCode;
+use crate::propagation::ConstructedPropagator;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::EventRegistration;
 use crate::propagation::ExplanationContext;
@@ -31,6 +32,7 @@ use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::ReadDomains;
+use crate::propagation::RuntimeCheckers;
 use crate::propagators::nogoods::arena_allocator::ArenaAllocator;
 use crate::propagators::nogoods::arena_allocator::NogoodIndex;
 use crate::pumpkin_assert_advanced;
@@ -105,7 +107,7 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
     fn create(
         self,
         context: PropagatorConstructorContext,
-    ) -> (EventRegistration, Self::PropagatorImpl) {
+    ) -> ConstructedPropagator<Self::PropagatorImpl> {
         let propagator = NogoodPropagator {
             handle: PropagatorHandle::new(context.propagator_id),
             parameters: self.parameters,
@@ -121,7 +123,11 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             temp_nogood_reason: Default::default(),
         };
 
-        (EventRegistration::empty(), propagator)
+        ConstructedPropagator {
+            registration: EventRegistration::empty(),
+            checkers: RuntimeCheckers::empty(),
+            propagator,
+        }
     }
 }
 
