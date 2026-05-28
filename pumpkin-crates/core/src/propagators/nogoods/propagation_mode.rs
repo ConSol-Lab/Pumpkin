@@ -380,7 +380,7 @@ impl PropagationMode {
             }
             PropagationMode::UnitPropagation => {
                 #[cfg(feature = "check-propagations")]
-                let nogood = input_nogood
+                let nogood = nogood
                     .iter()
                     .map(|predicate| context.get_id(*predicate))
                     .collect::<Vec<_>>();
