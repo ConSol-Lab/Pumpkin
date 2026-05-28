@@ -101,6 +101,8 @@ pub struct NogoodPropagator {
     statistics: NogoodPropagatorStatistics,
     /// A [`SemanticMinimiser`] used for preprocessing nogoods when added to the database.
     semantic_minimiser: SemanticMinimiser,
+    /// The priority of the nogood propagator.
+    priority: Priority,
 }
 
 create_statistics_struct!(NogoodPropagatorStatistics {
@@ -143,6 +145,7 @@ pub(crate) struct NogoodPropagatorConstructor {
     capacity: usize,
     parameters: LearningOptions,
     propagation_mode: PropagationMode,
+    priority: Priority,
 }
 
 impl NogoodPropagatorConstructor {
@@ -150,11 +153,13 @@ impl NogoodPropagatorConstructor {
         capacity: usize,
         parameters: LearningOptions,
         propagation_mode: PropagationMode,
+        priority: Priority,
     ) -> Self {
         Self {
             capacity,
             parameters,
             propagation_mode,
+            priority,
         }
     }
 }
@@ -181,6 +186,7 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             temp_nogood_reason: Default::default(),
             propagation_mode: self.propagation_mode,
             semantic_minimiser: Default::default(),
+            priority: self.priority,
         }
     }
 }
@@ -276,7 +282,7 @@ impl Propagator for NogoodPropagator {
     }
 
     fn priority(&self) -> Priority {
-        Priority::High
+        self.priority
     }
 
     fn notify_predicate_id_satisfied(

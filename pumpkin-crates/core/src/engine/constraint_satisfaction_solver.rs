@@ -280,6 +280,7 @@ impl ConstraintSatisfactionSolver {
                 }
                 ConflictResolverType::NoLearning => PropagationMode::default(),
             },
+            solver_options.learning_options.nogood_propagator_priority,
         ));
 
         ConstraintSatisfactionSolver {

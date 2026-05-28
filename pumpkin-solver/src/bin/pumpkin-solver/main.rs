@@ -27,6 +27,7 @@ use parsers::dimacs::parse_cnf;
 use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_core::conflict_resolving::AnalysisMode;
+use pumpkin_core::propagation::Priority;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_propagators::cumulative::options::CumulativePropagationMethod;
 use pumpkin_propagators::cumulative::time_table::CumulativeExplanationType;
@@ -401,6 +402,10 @@ struct Args {
     /// The amount of memory (in MB) that is preallocated for storing nogoods.
     #[arg(long = "memory-preallocated", default_value_t = 50)]
     memory_preallocated: usize,
+
+    /// The priority of the nogood propagator.
+    #[arg(long = "nogood-priority", value_enum, default_value_t)]
+    nogood_propagator_priority: Priority,
 }
 
 fn configure_logging(
@@ -565,6 +570,7 @@ fn run() -> PumpkinResult<()> {
         lbd_threshold_low: args.learning_low_lbd_threshold,
         lbd_threshold_high: args.learning_high_lbd_threshold,
         activity_bump_increment: 1.0,
+        nogood_propagator_priority: args.nogood_propagator_priority,
     };
 
     let should_minimise_nogoods = !args.no_learning_clause_minimisation;

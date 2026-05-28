@@ -45,6 +45,7 @@ impl Default for TestSolver {
             0,
             LearningOptions::default(),
             PropagationMode::UnitPropagation,
+            crate::propagation::Priority::High,
         ));
         let mut solver = Self {
             state,
