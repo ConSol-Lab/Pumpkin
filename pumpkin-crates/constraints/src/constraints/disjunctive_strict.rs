@@ -42,17 +42,17 @@ struct DisjunctiveConstraint<Var> {
 impl<Var: IntegerVariable + 'static> Constraint for DisjunctiveConstraint<Var> {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         // We post both the propagator on the lower-bound and the propagator on the upper-bound.
-        DisjunctiveConstructor::new(self.tasks.clone(), self.constraint_tag).post(solver)
-        // DisjunctiveConstructor::new(
-        //     self.tasks.iter().map(|task| ArgDisjunctiveTask {
-        //         // The propagations on the upper-bound take place by "reversing" the tasks such
-        //         // that instead of going from [EST, LST], the domain goes from [-LCT, -ECT]
-        //         start_time: task.start_time.offset(task.processing_time).scaled(-1),
-        //         processing_time: task.processing_time,
-        //     }),
-        //     self.constraint_tag,
-        // )
-        // .post(solver)
+        DisjunctiveConstructor::new(self.tasks.clone(), self.constraint_tag).post(solver)?;
+        DisjunctiveConstructor::new(
+            self.tasks.iter().map(|task| ArgDisjunctiveTask {
+                // The propagations on the upper-bound take place by "reversing" the tasks such
+                // that instead of going from [EST, LST], the domain goes from [-LCT, -ECT]
+                start_time: task.start_time.offset(task.processing_time).scaled(-1),
+                processing_time: task.processing_time,
+            }),
+            self.constraint_tag,
+        )
+        .post(solver)
     }
 
     fn implied_by(
