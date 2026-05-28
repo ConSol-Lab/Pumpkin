@@ -23,10 +23,29 @@ use crate::state::PropagationStatusCP;
 use crate::state::PropagatorHandle;
 use crate::variables::DomainId;
 
+/// The type of propagation performed by the nogood propagator.
 #[derive(Clone, Copy, Debug, Default)]
 pub enum PropagationMode {
+    /// Uses the standard unit propagation.
+    ///
+    /// Unit propagation occurs under the following two conditions:
+    ///  - There are no falsified predicates in the nogood.
+    ///  - There is only a single unassigned predicate.
+    ///
+    /// If both of these conditions hold, then the unassigned predicate is propagated to be false.
     #[default]
     UnitPropagation,
+    /// Uses the extended nogood propagation algorithm.
+    ///
+    /// Extended nogood propagation occurs under the following two conditions:
+    ///  - There are no falsified predicates in the nogood.
+    ///  - The only unassigned predicates reason over the same variable `x`.
+    ///
+    /// If both of these conditions hold, then the nogood represents a domain description of `x`.
+    /// All of the values which would lead to all predicates in the nogood being false can be
+    /// removed.
+    ///
+    /// Note that this approach subsumes unit propagation.
     ExtendedNogoodPropagation,
 }
 
@@ -297,6 +316,8 @@ impl PropagationMode {
         }
     }
 
+    /// Adds the provided nogood to the nogood database as a permanent nogood (i.e., it cannot be
+    /// removed by nogood database management).
     #[allow(
         clippy::too_many_arguments,
         reason = "Cannot take the nogood propagator; could be refactored in the future"
@@ -426,8 +447,8 @@ impl PropagationMode {
     }
 }
 
-/// The result of [`AnalysisMode::process_potential_watcher`] indicating what should happen to the
-/// watchers of the nogood.
+/// The result of [`PropagationMode::process_potential_watcher`] indicating what should happen to
+/// the watchers of the nogood.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum WatcherProcessingStatus {
     /// No new watcher has been found, we should simply move to the next potential watcher.

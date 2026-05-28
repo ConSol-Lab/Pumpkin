@@ -214,6 +214,7 @@ impl AnalysisMode {
         predicate_id_generator.get_predicate(next_predicate_id)
     }
 
+    /// Whether the analysis mode learns CPIP nogoods.
     pub fn uses_cpip(&self) -> bool {
         matches!(self, AnalysisMode::CPIP | AnalysisMode::BoundsCPIP)
     }

@@ -92,20 +92,32 @@ pub struct NogoodPropagator {
     /// proapgated literal to see if this propagator propagated a predicate.
     #[allow(unused, reason = "Will be reintroduced with database management")]
     handle: PropagatorHandle<NogoodPropagator>,
-
+    /// What form of propagation is performed (e.g., unit propagation, or extended nogood
+    /// propagation).
+    ///
+    /// This, among other components, influences how watchers are placed.
     propagation_mode: PropagationMode,
+    /// The statistics kept by the [`NogoodPropagator`].
     statistics: NogoodPropagatorStatistics,
-
+    /// A [`SemanticMinimiser`] used for preprocessing nogoods when added to the database.
     semantic_minimiser: SemanticMinimiser,
 }
 
 create_statistics_struct!(NogoodPropagatorStatistics {
+    /// Records the number of unit propagations.
     num_unit_propagations: usize,
+    /// Records the number of calls to the extended nogood propagation algorithm.
     num_extended_propagation_calls: usize,
+    /// Records the number of variables propagated by extended nogood propagation.
     num_variables_propagated: usize,
+    /// Records the number of lower-bounds propagated by extended nogood propagation.
     num_extended_lower_bound_propagations: usize,
+    /// Records the number of upper-bounds propagated by extended nogood propagation.
     num_extended_upper_bound_propagations: usize,
-    num_extended_hole_propagations: usize,
+    /// Records the number of disequalities propagated by extended nogood propagation.
+    num_extended_disequality_propagations: usize,
+    /// The average number of [`Predicate`]s describing the propagated domain when performing
+    /// extended nogood propagation.
     average_num_predicates_describing_domain_when_propagating_extended: CumulativeMovingAverage<usize>
 });
 
@@ -210,6 +222,10 @@ struct LearnedNogoodIds {
 }
 
 impl NogoodPropagator {
+    /// Replace the watcher at `watcher_to_replace` with `i`.
+    ///
+    /// Note that this method does not remove any watchers but only adds a watcher to
+    /// `watcher_to_replace`.
     fn replace_watcher(
         context: &mut PropagationContext<'_>,
         watcher: Watcher,
@@ -229,6 +245,11 @@ impl NogoodPropagator {
         );
     }
 
+    /// Removes the provided `watcher` in the watchlist of `predicate_id`.
+    ///
+    /// Note that this method removes the watcher by iterating through the watchers of
+    /// `predicate_id` and finding the one that matches it nogood id. If the index of the watcher
+    /// in the watchlist of `predicate_id` is known, then this method should not be used.
     fn remove_watcher(
         context: &mut PropagationContext<'_>,
         watcher: Watcher,
@@ -499,9 +520,11 @@ impl Propagator for NogoodPropagator {
         let reason = LazyNogoodExplanation::from_bits(code);
         let id = reason.nogood_id();
         if reason.explains_extended_propagation() {
+            // The lazy explanations explains a propagation using extended nogood propagation.
             let nogood = &self.nogood_predicates[id];
             let info_id = self.nogood_predicates.get_nogood_index(&id);
 
+            // We retrieve the predicate which is being explained.
             let predicate_to_be_explained = context.get_predicate_to_be_explained();
             let rhs = predicate_to_be_explained.get_right_hand_side();
             let propagated_domain = predicate_to_be_explained.get_domain();
@@ -629,10 +652,6 @@ impl Propagator for NogoodPropagator {
 
 /// Functions for adding nogoods
 impl NogoodPropagator {
-    #[allow(
-        clippy::filter_map_bool_then,
-        reason = "Would otherwise run into issues with borrowing"
-    )]
     /// Propagates a nogood using "extended" reasoning.
     ///
     /// If the nogood only contains unassigned predicates over a single variable, then the nogood
@@ -645,6 +664,10 @@ impl NogoodPropagator {
     /// For this nogood to be satisfied, we can see that [x <= 5] \/ [x >= 16] \/ [x == 12].
     /// Based on this reasoning, we can remove the values {6, 7, 8, 9, 10, 11, 13, 14, 15} from the
     /// domain of `x`.
+    #[allow(
+        clippy::filter_map_bool_then,
+        reason = "Otherwise leads to borrow issues."
+    )]
     pub(crate) fn propagate_extended_nogood(
         context: &mut PropagationContext,
         nogood: &[PredicateId],
@@ -961,7 +984,7 @@ impl NogoodPropagator {
                 && context.contains(&propagated_domain, value_in_domain)
             {
                 propagated = true;
-                statistics.num_extended_hole_propagations += 1;
+                statistics.num_extended_disequality_propagations += 1;
                 let reason = if let Some(nogood_id) = nogood_id {
                     Reason::DynamicLazy(
                         LazyNogoodExplanation::new()
@@ -998,14 +1021,10 @@ impl NogoodPropagator {
         Ok(())
     }
 
-    #[allow(
-        clippy::filter_map_bool_then,
-        reason = "Would otherwise run into issues with borrowing"
-    )]
     /// Adds a nogood which has been learned during search.
     ///
     /// The first predicate should be asserting and the second predicate should contain the
-    /// predicte with the next highest decision level.
+    /// predicate with the next highest decision level.
     pub(crate) fn add_asserting_nogood(
         &mut self,
         nogood: Vec<Predicate>,
@@ -1093,10 +1112,6 @@ impl NogoodPropagator {
         self.add_permanent_nogood(nogood, inference_code, context)
     }
 
-    #[allow(
-        clippy::filter_map_bool_then,
-        reason = "Will run into borrow issues otherwise"
-    )]
     /// Adds a nogood which cannot be deleted by clause management.
     fn add_permanent_nogood(
         &mut self,
@@ -1304,7 +1319,7 @@ impl NogoodPropagator {
         watcher: Watcher,
         watch_lists: &mut KeyedVec<PredicateId, Vec<Watcher>>,
     ) {
-        // First we resize the watch list to accomodate the new nogood
+        // First we resize the watch list to accommodate the new nogood
         if predicate.id as usize >= watch_lists.len() {
             watch_lists.resize((predicate.id + 1) as usize, Vec::default());
         }
@@ -1341,7 +1356,6 @@ impl NogoodPropagator {
     /// - \[2\] Kochemazov, S. (2020). Improving implementation of SAT competitions 2017--2019
     ///   winners. International Conference on Theory and Applications of Satisfiability Testing,
     ///   139–148. Springer.
-    #[allow(unused, reason = "Will be reintroduced with database management")]
     fn clean_up_learned_nogoods_if_needed(
         &mut self,
         assignments: &Assignments,
