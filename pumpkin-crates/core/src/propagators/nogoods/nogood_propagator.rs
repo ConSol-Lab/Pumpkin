@@ -1201,6 +1201,7 @@ impl NogoodPropagator {
         else {
             self.propagation_mode.add_permanent_nogood_non_unit(
                 nogood,
+                &input_nogood,
                 inference_code,
                 context,
                 &mut self.nogood_predicates,

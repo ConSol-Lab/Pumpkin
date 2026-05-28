@@ -301,9 +301,11 @@ impl PropagationMode {
         clippy::too_many_arguments,
         reason = "Cannot take the nogood propagator; could be refactored in the future"
     )]
+    #[allow(unused, reason = "Used when using feature flag")]
     pub(crate) fn add_permanent_nogood_non_unit(
         &mut self,
         nogood: Vec<Predicate>,
+        input_nogood: &[Predicate],
         inference_code: InferenceCode,
         context: &mut PropagationContext<'_>,
         nogood_predicates: &mut ArenaAllocator,
@@ -380,7 +382,7 @@ impl PropagationMode {
             }
             PropagationMode::UnitPropagation => {
                 #[cfg(feature = "check-propagations")]
-                let nogood = nogood
+                let nogood = input_nogood
                     .iter()
                     .map(|predicate| context.get_id(*predicate))
                     .collect::<Vec<_>>();
