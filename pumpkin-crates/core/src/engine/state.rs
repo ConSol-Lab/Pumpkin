@@ -6,7 +6,6 @@ use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::VariableState;
 
 use crate::checkers::CheckerStore;
-use crate::checkers::StoresCheckers;
 use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
