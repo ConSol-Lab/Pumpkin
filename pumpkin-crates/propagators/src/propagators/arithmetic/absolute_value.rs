@@ -7,9 +7,9 @@ use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventRegistration;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -17,6 +17,7 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -36,17 +37,10 @@ where
 {
     type PropagatorImpl = AbsoluteValuePropagator<VA, VB>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, AbsoluteValue),
-            Box::new(AbsoluteValueChecker {
-                signed: self.signed.clone(),
-                absolute: self.absolute.clone(),
-            }),
-        );
-    }
-
-    fn create(self, _: PropagatorConstructorContext) -> (EventRegistration, Self::PropagatorImpl) {
+    fn create(
+        self,
+        _: PropagatorConstructorContext,
+    ) -> ConstructedPropagator<Self::PropagatorImpl> {
         let AbsoluteValueArgs {
             signed,
             absolute,
@@ -58,7 +52,15 @@ where
             .add(&absolute, DomainEvents::BOUNDS, LocalId::from(1))
             .build();
 
-        let inference_code = InferenceCode::new(constraint_tag, AbsoluteValue);
+        let mut checkers = RuntimeCheckers::builder();
+        let inference_code = checkers.add_inference_checker(
+            constraint_tag,
+            AbsoluteValue,
+            AbsoluteValueChecker {
+                signed: signed.clone(),
+                absolute: absolute.clone(),
+            },
+        );
 
         let propagator = AbsoluteValuePropagator {
             signed,
@@ -66,7 +68,11 @@ where
             inference_code,
         };
 
-        (registration, propagator)
+        ConstructedPropagator {
+            registration,
+            checkers: checkers.build(),
+            propagator,
+        }
     }
 }
 

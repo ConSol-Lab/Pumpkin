@@ -8,9 +8,9 @@ use pumpkin_core::predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventRegistration;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -18,6 +18,7 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -37,17 +38,10 @@ where
 {
     type PropagatorImpl = MaximumPropagator<ElementVar, Rhs>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, Maximum),
-            Box::new(MaximumChecker {
-                array: self.array.clone(),
-                rhs: self.rhs.clone(),
-            }),
-        );
-    }
-
-    fn create(self, _: PropagatorConstructorContext) -> (EventRegistration, Self::PropagatorImpl) {
+    fn create(
+        self,
+        _: PropagatorConstructorContext,
+    ) -> ConstructedPropagator<Self::PropagatorImpl> {
         let MaximumArgs {
             array,
             rhs,
@@ -65,7 +59,15 @@ where
             LocalId::from(array.len() as u32),
         );
 
-        let inference_code = InferenceCode::new(constraint_tag, Maximum);
+        let mut checkers = RuntimeCheckers::builder();
+        let inference_code = checkers.add_inference_checker(
+            constraint_tag,
+            Maximum,
+            MaximumChecker {
+                array: array.clone(),
+                rhs: rhs.clone(),
+            },
+        );
 
         let propagator = MaximumPropagator {
             array,
@@ -73,7 +75,11 @@ where
             inference_code,
         };
 
-        (registration.build(), propagator)
+        ConstructedPropagator {
+            registration: registration.build(),
+            checkers: checkers.build(),
+            propagator,
+        }
     }
 }
 
