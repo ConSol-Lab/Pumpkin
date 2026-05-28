@@ -20,7 +20,6 @@ use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::EventsToRegister;
-
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
