@@ -2,6 +2,9 @@ use std::cmp::Reverse;
 use std::cmp::min;
 
 use pumpkin_core::asserts::pumpkin_assert_simple;
+use pumpkin_core::checkers::Scope;
+use pumpkin_core::checkers::WeakConsistency;
+use pumpkin_core::checkers::WeakRetentionChecker;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
@@ -80,7 +83,10 @@ impl<Var> DisjunctiveConstructor<Var> {
 impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstructor<Var> {
     type PropagatorImpl = DisjunctivePropagator<Var>;
 
-    fn create(self, _: PropagatorConstructorContext) -> (EventRegistration, Self::PropagatorImpl) {
+    fn create(
+        self,
+        mut context: PropagatorConstructorContext,
+    ) -> (EventRegistration, Self::PropagatorImpl) {
         let tasks = self
             .tasks
             .into_iter()
@@ -95,10 +101,29 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
 
         let inference_code = InferenceCode::new(self.constraint_tag, DisjunctiveEdgeFinding);
 
+        let mut scope = Scope::default();
         let mut registration = EventRegistration::builder();
         for task in tasks.iter() {
             registration = registration.add(&task.start_time, DomainEvents::BOUNDS, task.id);
+            task.start_time.add_to_scope(&mut scope, task.id);
         }
+
+        context.add_inference_checker(
+            inference_code,
+            Box::new(DisjunctiveEdgeFindingChecker {
+                tasks: self.tasks.clone().into(),
+            }),
+        );
+
+        context.add_consistency_checker(
+            scope,
+            Box::new(WeakRetentionChecker::new(
+                WeakConsistency::Bounds,
+                DisjunctiveEdgeFindingChecker {
+                    tasks: self.tasks.clone().into(),
+                },
+            )),
+        );
 
         let propagator = DisjunctivePropagator {
             tasks: tasks.clone().into_boxed_slice(),
