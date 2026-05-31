@@ -59,6 +59,9 @@ pub struct NogoodPropagator {
     permanent_nogood_ids: Vec<NogoodId>,
     /// Stores all learned nogoods.
     learned_nogood_ids: Vec<NogoodId>,
+    /// Used during nogood database reduction to store nogoods sorted on activity, while
+    /// `learned_nogood_ids` are sorted on LBD. This way we prevent memory reallocation.
+    temp_nogood_ids: Vec<NogoodId>,
     /// Watch lists for the nogood propagator.
     watch_lists: KeyedVec<PredicateId, Vec<Watcher>>,
     /// Keep track of the events which the propagator has been notified of.
@@ -111,6 +114,7 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             inference_codes: Default::default(),
             permanent_nogood_ids: Default::default(),
             learned_nogood_ids: Default::default(),
+            temp_nogood_ids: Default::default(),
             watch_lists: Default::default(),
             updated_predicate_ids: Default::default(),
             lbd_helper: Default::default(),
@@ -735,8 +739,10 @@ impl NogoodPropagator {
             });
 
             // Clone the nogoods to sort them descendingly on activity
-            let mut sorted_on_activity = self.learned_nogood_ids.clone();
-            sorted_on_activity.sort_unstable_by(|id1, id2| {
+            self.temp_nogood_ids.clear();
+            self.temp_nogood_ids
+                .extend_from_slice(&self.learned_nogood_ids);
+            self.temp_nogood_ids.sort_unstable_by(|id1, id2| {
                 let nogood1 = &self.nogood_info[self.nogood_predicates.get_nogood_index(id1)];
                 let nogood2 = &self.nogood_info[self.nogood_predicates.get_nogood_index(id2)];
                 nogood2.activity.partial_cmp(&nogood1.activity).unwrap()
@@ -771,7 +777,7 @@ impl NogoodPropagator {
                 while activity_index < num_all_nogoods
                     && !self.nogood_info[self
                         .nogood_predicates
-                        .get_nogood_index(&sorted_on_activity[activity_index])]
+                        .get_nogood_index(&self.temp_nogood_ids[activity_index])]
                     .is_deleted
                 {
                     activity_index += 1;
@@ -781,7 +787,7 @@ impl NogoodPropagator {
                     // Found a nogood to keep based on activity
                     self.nogood_info[self
                         .nogood_predicates
-                        .get_nogood_index(&sorted_on_activity[activity_index])]
+                        .get_nogood_index(&self.temp_nogood_ids[activity_index])]
                     .is_deleted = false;
                     activity_index += 1;
                     num_nogoods_to_keep -= 1;
