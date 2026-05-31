@@ -6,12 +6,13 @@ pub struct LearningOptions {
     pub max_activity: f32,
     /// Determines the factor by which the activities are divided when a conflict is found.
     pub activity_decay_factor: f32,
-    /// The maximum number of nogoods that the solver stores
+    /// The maximum number of nogoods that the solver stores.
     pub current_max_num_nogoods: usize,
     /// The factor by which the maximum number of nogoods is increased after each database
-    /// reduction
+    /// reduction. For the database to grow, it should be greater than 1. For example, the
+    /// default value of 1.1 means the database grows by 10% (e.g. 40_000 -> 44_000).
     pub max_num_nogoods_increment: f32,
-    /// The upper limit for the number of stored nogoods
+    /// The upper limit for the number of stored nogoods.
     pub num_nogoods_upper_limit: usize,
     /// Specifies by how much the activity is increased when a nogood is bumped.
     pub activity_bump_increment: f32,
@@ -22,8 +23,8 @@ impl Default for LearningOptions {
             max_activity: 1e20,
             activity_decay_factor: 0.99,
             current_max_num_nogoods: 40000,
-            num_nogoods_upper_limit: 1_000_000_000,
             max_num_nogoods_increment: 1.1,
+            num_nogoods_upper_limit: 1_000_000_000,
             activity_bump_increment: 1.0,
         }
     }

@@ -89,7 +89,8 @@ struct Args {
     #[arg(long, value_enum, default_value_t)]
     proof_type: ProofType,
 
-    /// The initial max number of learned nogoods that are initially kept in the database
+    /// The maximum number of learned nogoods that are initially kept in the database
+    /// (before the first database reduction).
     ///
     /// Possible values: usize
     #[arg(
@@ -100,7 +101,7 @@ struct Args {
     learning_initial_max_num_nogoods: usize,
 
     /// The factor with which the max number of stored nogoods is multiplied
-    /// after each database reduction
+    /// after each database reduction.
     ///
     /// Possible values: f32
     #[arg(
@@ -110,7 +111,7 @@ struct Args {
     )]
     learning_max_num_nogoods_increment: f32,
 
-    /// The upper limit for the nogoods database size (growth stops at this value)
+    /// The upper limit for the nogoods database size (growth stops at this value).
     ///
     /// Possible values: usize
     #[arg(
