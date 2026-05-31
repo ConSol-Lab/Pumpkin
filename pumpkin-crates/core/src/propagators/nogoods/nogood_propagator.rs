@@ -7,7 +7,6 @@ use super::NogoodId;
 use super::NogoodInfo;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PropositionalConjunction;
-use crate::containers::HashSet;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::Assignments;
@@ -690,11 +689,13 @@ impl NogoodPropagator {
 
         // First we calculate how many nogoods to keep
         let num_all_nogoods = self.learned_nogood_ids.len();
-        let num_nogoods_to_keep = num_all_nogoods - self.learned_nogood_ids.len() / 2;
+        let mut num_nogoods_to_keep = (num_all_nogoods - self.learned_nogood_ids.len() / 2) as i32;
 
-        let mut nogoods_to_keep: HashSet<NogoodId> = HashSet::default();
-
-        // Keep all nogoods that are propagating at a non-root level.
+        // Keep all nogoods that are propagating at a non-root level
+        // Marking nogoods as 'to keep' is done by setting their `is_deleted` flag in `nogood_info`
+        // to false
+        // For all other nogoods, we set their `is_deleted` to true (which gets flipped later if
+        // one of the metrics marks the given nogood as 'to keep')
         for &nogood_id in &self.learned_nogood_ids {
             if NogoodPropagator::is_nogood_propagating(
                 self.handle,
@@ -710,7 +711,12 @@ impl NogoodPropagator {
                 .expect("A propagating predicate must have a decision level.")
                 > 0
             {
-                let _ = nogoods_to_keep.insert(nogood_id);
+                self.nogood_info[self.nogood_predicates.get_nogood_index(&nogood_id)].is_deleted =
+                    false;
+                num_nogoods_to_keep -= 1;
+            } else {
+                self.nogood_info[self.nogood_predicates.get_nogood_index(&nogood_id)].is_deleted =
+                    true;
             }
         }
 
@@ -720,7 +726,7 @@ impl NogoodPropagator {
         // It could be that more than half of all nogoods are currently propagating
         // Then we don't want to spend time on sorting
         // TODO: check if this actually happens in practice
-        if nogoods_to_keep.len() < num_nogoods_to_keep {
+        if num_nogoods_to_keep > 0 {
             // Sort learned nogoods increasingly based on LBD
             self.learned_nogood_ids.sort_unstable_by(|id1, id2| {
                 let nogood1 = &self.nogood_info[self.nogood_predicates.get_nogood_index(id1)];
@@ -736,50 +742,54 @@ impl NogoodPropagator {
                 nogood2.activity.partial_cmp(&nogood1.activity).unwrap()
             });
 
-            while nogoods_to_keep.len() < num_nogoods_to_keep {
+            while num_nogoods_to_keep > 0 {
                 // We will always eventually leave this loop, so no specific break needed
 
                 // First we find a nogood to keep according to LBD
                 // Skip all nogoods that are already retained
                 while lbd_index < num_all_nogoods
-                    && nogoods_to_keep.contains(&self.learned_nogood_ids[lbd_index])
+                    && !self.nogood_info[self
+                        .nogood_predicates
+                        .get_nogood_index(&self.learned_nogood_ids[lbd_index])]
+                    .is_deleted
                 {
                     lbd_index += 1;
                 }
 
                 if lbd_index < num_all_nogoods {
                     // Found a nogood to keep based on LBD
-                    let _ = nogoods_to_keep.insert(self.learned_nogood_ids[lbd_index]);
+                    self.nogood_info[self
+                        .nogood_predicates
+                        .get_nogood_index(&self.learned_nogood_ids[lbd_index])]
+                    .is_deleted = false;
                     lbd_index += 1;
+                    num_nogoods_to_keep -= 1;
                 }
 
                 // Now the same for activity
                 // Skip all nogoods that are already retained
                 while activity_index < num_all_nogoods
-                    && nogoods_to_keep.contains(&sorted_on_activity[activity_index])
+                    && !self.nogood_info[self
+                        .nogood_predicates
+                        .get_nogood_index(&sorted_on_activity[activity_index])]
+                    .is_deleted
                 {
                     activity_index += 1;
                 }
 
                 if activity_index < num_all_nogoods {
                     // Found a nogood to keep based on activity
-                    let _ = nogoods_to_keep.insert(sorted_on_activity[activity_index]);
+                    self.nogood_info[self
+                        .nogood_predicates
+                        .get_nogood_index(&sorted_on_activity[activity_index])]
+                    .is_deleted = false;
                     activity_index += 1;
+                    num_nogoods_to_keep -= 1;
                 }
             }
         }
 
-        // We found the nogoods to keep -> mark the other ones as to delete
-        // We know the first `lbd_index` nogoods in `learned_nogood_ids` are definitely retained,
-        // so we can skip them
-        for nogood_id in self.learned_nogood_ids.iter().skip(lbd_index) {
-            if !nogoods_to_keep.contains(nogood_id) {
-                self.nogood_info[self.nogood_predicates.get_nogood_index(nogood_id)].is_deleted =
-                    true;
-            }
-        }
-
-        // We remove the nogood from the `learned_nogood_ids`.
+        // We remove the nogoods from the `learned_nogood_ids`.
         //
         // Note that this does not remove them from the watchers (yet)
         let num_nogoods_before_removal = self.learned_nogood_ids.len();
@@ -799,9 +809,10 @@ impl NogoodPropagator {
             .round() as usize;
 
         // If the size after increase exceed the upper limit, reset it to the limit
-        if self.parameters.current_max_num_nogoods > self.parameters.num_nogoods_upper_limit {
-            self.parameters.current_max_num_nogoods = self.parameters.num_nogoods_upper_limit;
-        }
+        self.parameters.current_max_num_nogoods = self
+            .parameters
+            .current_max_num_nogoods
+            .min(self.parameters.num_nogoods_upper_limit);
     }
 
     fn has_a_watched_predicate_falsified_at_root_level(
