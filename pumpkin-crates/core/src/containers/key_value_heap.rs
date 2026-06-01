@@ -123,6 +123,18 @@ where
         }
     }
 
+    pub fn set_value(&mut self, key: Key, value: Value) {
+        if key.index() < self.len() {
+            let position = self.map_key_to_position[key];
+            self.values[position] = value;
+            // Recall that increment may be applied to keys not present
+            // So we only apply sift up in case the key is present
+            if self.is_key_present(key) {
+                self.sift_up(position);
+            }
+        }
+    }
+
     /// Restores the entry with key 'key' to the heap if the key is not present, otherwise does
     /// nothing. Its value is the previous value used before 'delete_key' was called.
     ///

@@ -97,7 +97,10 @@ pub(crate) fn run_solver_with_options(
     match child.wait_timeout(TEST_TIMEOUT) {
         Ok(None) => panic!("solver took more than {} seconds", TEST_TIMEOUT.as_secs()),
         Ok(Some(status)) if status.success() => {}
-        Ok(Some(e)) => panic!("error solving instance {e}"),
+        Ok(Some(e)) => panic!(
+            "error solving instance {e}\n{:?}",
+            std::fs::read_to_string(err_file_path)
+        ),
         Err(e) => panic!("error starting solver: {e}"),
     }
 

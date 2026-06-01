@@ -14,3 +14,4 @@ workspace = true
 pumpkin-core = { version = "0.3.0", path = "../core" }
 itertools = "0.14.0"
 log = "0.4.27"
+pumpkin-checking = { version = "0.3.0", path = "../checking" }

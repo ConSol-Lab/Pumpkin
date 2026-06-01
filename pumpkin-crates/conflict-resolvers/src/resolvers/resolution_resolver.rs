@@ -1,5 +1,7 @@
+use std::ops::ControlFlow;
+
 use pumpkin_core::asserts::pumpkin_assert_advanced;
-use pumpkin_core::asserts::pumpkin_assert_moderate;
+use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conflict_resolving::AnalysisMode;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::conflict_resolving::ConflictResolver;
@@ -19,7 +21,9 @@ use pumpkin_core::statistics::moving_averages::CumulativeMovingAverage;
 use pumpkin_core::statistics::moving_averages::MovingAverage;
 use pumpkin_core::variables::DomainId;
 
+use crate::minimisers::IterativeMinimiser;
 use crate::minimisers::NogoodMinimiser;
+use crate::minimisers::ProcessingResult;
 use crate::minimisers::RecursiveMinimiser;
 use crate::minimisers::SemanticMinimisationMode;
 use crate::minimisers::SemanticMinimiser;
@@ -79,11 +83,14 @@ pub struct ResolutionResolver {
     ///
     /// Note that semantic minimisation is always applied to remove duplicates.
     should_minimise: bool,
+    iterative_minimisation: bool,
+
+    iterative_minimiser: IterativeMinimiser,
 }
 
 impl Default for ResolutionResolver {
     fn default() -> Self {
-        ResolutionResolver::new(AnalysisMode::OneUIP, true)
+        ResolutionResolver::new(AnalysisMode::OneUIP, true, false)
     }
 }
 
@@ -108,7 +115,10 @@ create_statistics_struct!(
         /// The number of nogoods which one predicate concerning the propagating variable.
         num_regular_nogood_learned: usize,
 
+        iterative_minimisation_statistics: IterativeMinimisationStatistics
 });
+
+create_statistics_struct!(IterativeMinimisationStatistics { num_removed: usize });
 
 impl ConflictResolver for ResolutionResolver {
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) {
@@ -146,7 +156,7 @@ impl ConflictResolver for ResolutionResolver {
 }
 
 impl ResolutionResolver {
-    pub fn new(mode: AnalysisMode, should_minimise: bool) -> Self {
+    pub fn new(mode: AnalysisMode, should_minimise: bool, iterative_minimisation: bool) -> Self {
         Self {
             mode,
             to_process_heap: Default::default(),
@@ -159,6 +169,8 @@ impl ResolutionResolver {
             statistics: Default::default(),
             should_minimise,
             unique_variable_helper: Default::default(),
+            iterative_minimisation,
+            iterative_minimiser: Default::default(),
         }
     }
 
@@ -166,6 +178,9 @@ impl ResolutionResolver {
         self.clean_up();
 
         let conflict_nogood = context.get_conflict_nogood();
+
+        // println!("======================================================================");
+        // println!("C: {conflict_nogood:?}");
 
         // Initialise the data structures with the conflict nogood.
         for predicate in conflict_nogood.iter() {
@@ -214,6 +229,8 @@ impl ResolutionResolver {
                 &mut self.reason_buffer,
             );
 
+            // println!("R: {:?} -> {next_predicate}", self.reason_buffer);
+
             for i in 0..self.reason_buffer.len() {
                 self.add_predicate_to_conflict_nogood(self.reason_buffer[i], self.mode, context);
             }
@@ -228,6 +245,11 @@ impl ResolutionResolver {
         self.predicate_id_generator.clear();
         self.to_process_heap.clear();
         self.unique_variable_helper.clear();
+
+        // TODO: make more efficient
+        if self.iterative_minimisation {
+            self.iterative_minimiser = IterativeMinimiser::default()
+        }
     }
 
     /// Add the predicate to the current conflict nogood if we know it needs to be added.
@@ -251,6 +273,9 @@ impl ResolutionResolver {
             });
         // Ignore root level predicates.
         if dec_level == 0 {
+            // println!("{predicate:?} ROOT LEVEL");
+            self.iterative_minimiser.apply_predicate(predicate, context);
+
             context.explain_root_assignment(predicate);
         }
         // 1UIP
@@ -260,87 +285,506 @@ impl ResolutionResolver {
         // All-decision Learning
         // If the variables are not decisions then we want to potentially add them to the heap,
         // otherwise we add it to the decision predicates which have been discovered previously
-        else if mode.predicate_should_be_processed(predicate, dec_level, context) {
+        else {
             let predicate_id = self.predicate_id_generator.get_id(predicate);
-            // The first time we encounter the predicate, we initialise its value in the
-            // heap.
-            //
-            // Note that if the predicate is already in the heap, no action needs to be
-            // taken. It can happen that a predicate is returned
-            // multiple times as a reason for other predicates.
-
-            // TODO: could improve the heap structure to be more user-friendly.
-
-            // Here we manually adjust the size of the heap to accommodate new elements.
-            while self.to_process_heap.len() <= predicate_id.index() {
-                let next_id = PredicateId::create_from_index(self.to_process_heap.len());
-                self.to_process_heap.grow(next_id, 0);
-                self.to_process_heap.delete_key(next_id);
-            }
-
-            // Then we check whether the predicate was not already present in the heap, if
-            // this is not the case then we insert it
-            if !self.to_process_heap.is_key_present(predicate_id)
-                && *self.to_process_heap.get_value(predicate_id) == 0
+            if self.iterative_minimisation
+                && let ControlFlow::Break(_) =
+                    self.check_for_iterative_redundancy(predicate, context, predicate_id)
             {
-                context.predicate_appeared_in_conflict(predicate);
-
-                // The goal is to traverse predicate in reverse order of the trail.
-                //
-                // However some predicates may share the trail position. For example, if a
-                // predicate that was posted to trail resulted in
-                // some other predicates being true, then all
-                // these predicates would have the same trail position.
-                //
-                // When considering the predicates in reverse order of the trail, the
-                // implicitly set predicates are posted after the
-                // explicitly set one, but they all have the same
-                // trail position.
-                //
-                // To remedy this, we make a tie-breaking scheme to prioritise implied
-                // predicates over explicit predicates. This is done
-                // by assigning explicitly set predicates the
-                // value `2 * trail_position`, whereas implied predicates get `2 *
-                // trail_position + 1`.
-                let heap_value = if context.get_state().is_on_trail(predicate) {
-                    context
-                        .get_state()
-                        .trail_position(predicate)
-                        .expect("Predicate should be true during conflict analysis")
-                        * 2
-                } else {
-                    context
-                        .get_state()
-                        .trail_position(predicate)
-                        .expect("Predicate should be true during conflict analysis")
-                        * 2
-                        + 1
-                };
-
-                // We restore the key and since we know that the value is 0, we can safely
-                // increment with `heap_value`
-                self.to_process_heap.restore_key(predicate_id);
-                self.to_process_heap
-                    .increment(predicate_id, heap_value as u32);
-                mode.add_predicate_to_nogood(predicate, &mut self.unique_variable_helper);
-
-                pumpkin_assert_moderate!(
-                    *self.to_process_heap.get_value(predicate_id) == heap_value.try_into().unwrap(),
-                    "The value in the heap should be the same as was added"
-                )
+                return;
             }
-        } else {
-            // We do not check for duplicate, we simply add the predicate.
-            // Semantic minimisation will later remove duplicates and do other processing.
-            self.processed_nogood_predicates.push(predicate);
+            if mode.predicate_should_be_processed(predicate, dec_level, context) {
+                // The first time we encounter the predicate, we initialise its value in the
+                // heap.
+                //
+                // Note that if the predicate is already in the heap, no action needs to be
+                // taken. It can happen that a predicate is returned
+                // multiple times as a reason for other predicates.
+
+                // TODO: could improve the heap structure to be more user-friendly.
+
+                // Here we manually adjust the size of the heap to accommodate new elements.
+                while self.to_process_heap.len() <= predicate_id.index() {
+                    let next_id = PredicateId::create_from_index(self.to_process_heap.len());
+                    self.to_process_heap.grow(next_id, 0);
+                    self.to_process_heap.delete_key(next_id);
+                }
+
+                if self.iterative_minimisation
+                    || (!self.to_process_heap.is_key_present(predicate_id)
+                        && *self.to_process_heap.get_value(predicate_id) == 0)
+                {
+                    context.predicate_appeared_in_conflict(predicate);
+
+                    // The goal is to traverse predicate in reverse order of the trail.
+                    //
+                    // However some predicates may share the trail position. For example, if a
+                    // predicate that was posted to trail resulted in
+                    // some other predicates being true, then all
+                    // these predicates would have the same trail position.
+                    //
+                    // When considering the predicates in reverse order of the trail, the
+                    // implicitly set predicates are posted after the
+                    // explicitly set one, but they all have the same
+                    // trail position.
+                    //
+                    // To remedy this, we make a tie-breaking scheme to prioritise implied
+                    // predicates over explicit predicates. This is done
+                    // by assigning explicitly set predicates the
+                    // value `2 * trail_position`, whereas implied predicates get `2 *
+                    // trail_position + 1`.
+                    let heap_value = get_heap_value(predicate, context);
+
+                    // We restore the key and since we know that the value is 0, we can safely
+                    // increment with `heap_value`
+                    self.to_process_heap.restore_key(predicate_id);
+                    self.to_process_heap.set_value(predicate_id, heap_value);
+                    mode.add_predicate_to_nogood(predicate, &mut self.unique_variable_helper);
+
+                    pumpkin_assert_simple!(
+                        *self.to_process_heap.get_value(predicate_id) == heap_value,
+                        "The value in the heap should be the same as was added"
+                    );
+                }
+            } else {
+                // We do not check for duplicate, we simply add the predicate.
+                // Semantic minimisation will later remove duplicates and do other processing.
+                self.processed_nogood_predicates.push(predicate);
+            }
         }
     }
 
+    fn check_for_iterative_redundancy(
+        &mut self,
+        predicate: Predicate,
+        context: &mut ConflictAnalysisContext<'_>,
+        predicate_id: PredicateId,
+    ) -> ControlFlow<()> {
+        let process_predicate = self
+            .iterative_minimiser
+            .process_predicate(predicate, context);
+        // println!("\tRESULT ({predicate:?}): {process_predicate:?}");
+        match process_predicate {
+            ProcessingResult::Redundant => {
+                if !self.to_process_heap.is_key_present(predicate_id) {
+                    // println!("\t\tNot present - {predicate:?}");
+                    if predicate_id.index() < self.to_process_heap.len() {
+                        self.to_process_heap.set_value(predicate_id, 0);
+                    }
+                    self.to_process_heap.delete_key(predicate_id);
+                }
+
+                self.statistics
+                    .iterative_minimisation_statistics
+                    .num_removed += 1;
+                return ControlFlow::Break(());
+            }
+            ProcessingResult::ReplacedPresent { removed } => {
+                for removed_predicate in removed {
+                    self.statistics
+                        .iterative_minimisation_statistics
+                        .num_removed += 1;
+                    self.iterative_minimiser.remove_predicate(removed_predicate);
+                    let removed_id = self.predicate_id_generator.get_id(removed_predicate);
+                    if self.to_process_heap.is_key_present(removed_id) {
+                        self.to_process_heap.delete_key(removed_id);
+                    } else {
+                        if let Some(position) = self
+                            .processed_nogood_predicates
+                            .iter()
+                            .position(|predicate| *predicate == removed_predicate)
+                        {
+                            let _ = self.processed_nogood_predicates.remove(position);
+                        }
+                    }
+                }
+
+                self.iterative_minimiser.apply_predicate(predicate, context);
+            }
+            ProcessingResult::PossiblyReplacedWithNew {
+                removed: previous,
+                new_predicate,
+            } => {
+                self.statistics
+                    .iterative_minimisation_statistics
+                    .num_removed += 1;
+
+                if context.get_checkpoint_for_predicate(new_predicate).unwrap()
+                    == context.get_checkpoint()
+                {
+                    if let ControlFlow::Break(_) =
+                        self.replace_if_possible_current_level(context, previous, new_predicate)
+                    {
+                        self.to_process_heap.set_value(predicate_id, 0);
+                        self.to_process_heap.delete_key(predicate_id);
+                        return ControlFlow::Break(());
+                    } else {
+                        self.iterative_minimiser.apply_predicate(predicate, context);
+                    }
+                } else {
+                    if let ControlFlow::Break(_) =
+                        self.replace_if_possible_previous_level(context, previous, new_predicate)
+                    {
+                        self.to_process_heap.set_value(predicate_id, 0);
+                        self.to_process_heap.delete_key(predicate_id);
+                        return ControlFlow::Break(());
+                    } else {
+                        self.iterative_minimiser.apply_predicate(predicate, context);
+                    }
+                }
+            }
+            ProcessingResult::NotRedundant => {
+                self.iterative_minimiser.apply_predicate(predicate, context);
+            }
+        }
+        ControlFlow::Continue(())
+    }
+
+    // fn check_redundancy_current_level(
+    //     &mut self,
+    //     predicate: Predicate,
+    //     context: &mut ConflictAnalysisContext<'_>,
+    // ) -> ControlFlow<()> {
+    //     for element in self
+    //         .to_process_heap
+    //         .keys()
+    //         .map(|predicate_id| self.predicate_id_generator.get_predicate(predicate_id))
+    //         .filter(|element| {
+    //             element.get_domain() == predicate.get_domain()
+    //                 && context.get_state().trail_position(*element)
+    //                     != context.get_state().trail_position(predicate)
+    //         })
+    //         .collect::<Vec<_>>()
+    //     {
+    //         match (element.get_predicate_type(), predicate.get_predicate_type()) {
+    //             (PredicateType::Equal, PredicateType::NotEqual)
+    //             | (PredicateType::Equal, PredicateType::UpperBound)
+    //             | (PredicateType::Equal, PredicateType::LowerBound) => {
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed_current_dl += 1;
+    //                 return ControlFlow::Break(());
+    //             }
+    //             (PredicateType::UpperBound, PredicateType::UpperBound) => {
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed_current_dl += 1;
+    //                 if element.get_right_hand_side() <= predicate.get_right_hand_side() {
+    //                     return ControlFlow::Break(());
+    //                 } else {
+    //                     let element_id = self.predicate_id_generator.get_id(element);
+    //                     self.to_process_heap.delete_key(element_id);
+    //                 }
+    //             }
+    //             (PredicateType::UpperBound, PredicateType::NotEqual) => {
+    //                 if element.get_right_hand_side() == predicate.get_right_hand_side() {
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed_current_dl += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_replaced_with_new_current_dl += 1;
+    //                     let domain = element.get_domain();
+    //
+    //                     let new_predicate = predicate!(domain <= element.get_right_hand_side() -
+    // 1);                     self.replace_if_possible_current_level(context, element,
+    // new_predicate)?;                 } else if element.get_right_hand_side() <
+    // predicate.get_right_hand_side() {                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed_current_dl += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed += 1;
+    //                     return ControlFlow::Break(());
+    //                 }
+    //             }
+    //             (PredicateType::LowerBound, PredicateType::LowerBound) => {
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed_current_dl += 1;
+    //                 if element.get_right_hand_side() >= predicate.get_right_hand_side() {
+    //                     return ControlFlow::Break(());
+    //                 } else {
+    //                     let element_id = self.predicate_id_generator.get_id(element);
+    //                     self.to_process_heap.delete_key(element_id);
+    //                 }
+    //             }
+    //             (PredicateType::LowerBound, PredicateType::NotEqual) => {
+    //                 if element.get_right_hand_side() == predicate.get_right_hand_side() {
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed_current_dl += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_replaced_with_new_current_dl += 1;
+    //                     let domain = element.get_domain();
+    //
+    //                     let new_predicate = predicate!(domain >= element.get_right_hand_side() +
+    // 1);                     self.replace_if_possible_current_level(context, element,
+    // new_predicate)?;                 } else if element.get_right_hand_side() >
+    // predicate.get_right_hand_side() {                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed_current_dl += 1;
+    //                     return ControlFlow::Break(());
+    //                 }
+    //             }
+    //             (PredicateType::UpperBound, PredicateType::LowerBound)
+    //                 if element.get_right_hand_side() == predicate.get_right_hand_side() =>
+    //             {
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed_current_dl += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_replaced_with_new_current_dl += 1;
+    //                 let domain = element.get_domain();
+    //
+    //                 let new_predicate = predicate!(domain == element.get_right_hand_side());
+    //                 self.replace_if_possible_current_level(context, element, new_predicate)?;
+    //             }
+    //
+    //             _ => {}
+    //         }
+    //     }
+    //     ControlFlow::Continue(())
+    // }
+
+    fn replace_if_possible_current_level(
+        &mut self,
+        context: &mut ConflictAnalysisContext<'_>,
+        element: Predicate,
+        new_predicate: Predicate,
+    ) -> ControlFlow<()> {
+        let heap_value = get_heap_value(new_predicate, context);
+
+        if heap_value
+            < self
+                .to_process_heap
+                .peek_max()
+                .map(|(_, value)| *value)
+                .unwrap_or_default()
+        {
+            let element_id = self.predicate_id_generator.get_id(element);
+            self.to_process_heap.delete_key(element_id);
+
+            // println!("Removing previous: {element:?}");
+            self.iterative_minimiser.remove_predicate(element);
+            self.add_predicate_to_conflict_nogood(new_predicate, self.mode, context);
+
+            return ControlFlow::Break(());
+        }
+        ControlFlow::Continue(())
+    }
+
+    // fn check_redundancy_previous_level(
+    //     &mut self,
+    //     predicate: Predicate,
+    //     context: &mut ConflictAnalysisContext<'_>,
+    // ) -> ControlFlow<()> {
+    //     for element in self
+    //         .processed_nogood_predicates
+    //         .iter()
+    //         .filter(|element| {
+    //             element.get_domain() == predicate.get_domain()
+    //                 && context.get_state().trail_position(**element)
+    //                     != context.get_state().trail_position(predicate)
+    //         })
+    //         .copied()
+    //         .collect::<Vec<_>>()
+    //     {
+    //         match (element.get_predicate_type(), predicate.get_predicate_type()) {
+    //             (PredicateType::Equal, PredicateType::NotEqual)
+    //             | (PredicateType::Equal, PredicateType::UpperBound)
+    //             | (PredicateType::Equal, PredicateType::LowerBound) => {
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed_previous_dl += 1;
+    //                 return ControlFlow::Break(());
+    //             }
+    //             (PredicateType::UpperBound, PredicateType::UpperBound) => {
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed_previous_dl += 1;
+    //                 if element.get_right_hand_side() <= predicate.get_right_hand_side() {
+    //                     return ControlFlow::Break(());
+    //                 } else {
+    //                     if let Some(index) = self
+    //                         .processed_nogood_predicates
+    //                         .iter()
+    //                         .position(|predicate| *predicate == element)
+    //                     {
+    //                         let _ = self.processed_nogood_predicates.remove(index);
+    //                     }
+    //                 }
+    //             }
+    //             (PredicateType::UpperBound, PredicateType::NotEqual) => {
+    //                 if element.get_right_hand_side() == predicate.get_right_hand_side() {
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed_previous_dl += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_replaced_with_new_previous_dl += 1;
+    //
+    //                     let domain = element.get_domain();
+    //                     let new_predicate = predicate!(domain <= element.get_right_hand_side() -
+    // 1);                     self.replace_if_possible_previous_level(context, element,
+    // new_predicate)?;                 } else if element.get_right_hand_side() <
+    // predicate.get_right_hand_side() {                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed_previous_dl += 1;
+    //                     return ControlFlow::Break(());
+    //                 }
+    //             }
+    //             (PredicateType::LowerBound, PredicateType::LowerBound) => {
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed_previous_dl += 1;
+    //                 if element.get_right_hand_side() >= predicate.get_right_hand_side() {
+    //                     return ControlFlow::Break(());
+    //                 } else {
+    //                     if let Some(index) = self
+    //                         .processed_nogood_predicates
+    //                         .iter()
+    //                         .position(|predicate| *predicate == element)
+    //                     {
+    //                         let _ = self.processed_nogood_predicates.remove(index);
+    //                     }
+    //                 }
+    //             }
+    //             (PredicateType::LowerBound, PredicateType::NotEqual) => {
+    //                 if element.get_right_hand_side() == predicate.get_right_hand_side() {
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed_previous_dl += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_replaced_with_new_previous_dl += 1;
+    //
+    //                     let domain = element.get_domain();
+    //                     let new_predicate = predicate!(domain >= element.get_right_hand_side() +
+    // 1);                     self.replace_if_possible_previous_level(context, element,
+    // new_predicate)?;                 } else if element.get_right_hand_side() >
+    // predicate.get_right_hand_side() {                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed_previous_dl += 1;
+    //                     return ControlFlow::Break(());
+    //                 }
+    //             }
+    //             (PredicateType::UpperBound, PredicateType::LowerBound)
+    //                 if element.get_right_hand_side() == predicate.get_right_hand_side() =>
+    //             {
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed_previous_dl += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_replaced_with_new_previous_dl += 1;
+    //
+    //                 let domain = element.get_domain();
+    //                 let new_predicate = predicate!(domain == element.get_right_hand_side());
+    //                 self.replace_if_possible_previous_level(context, element, new_predicate)?;
+    //             }
+    //
+    //             _ => {}
+    //         }
+    //     }
+    //     ControlFlow::Continue(())
+    // }
+
+    fn replace_if_possible_previous_level(
+        &mut self,
+        context: &mut ConflictAnalysisContext<'_>,
+        element: Predicate,
+        new_predicate: Predicate,
+    ) -> ControlFlow<()> {
+        let heap_value = get_heap_value(new_predicate, context);
+
+        if heap_value
+            < self
+                .to_process_heap
+                .peek_max()
+                .map(|(_, value)| *value)
+                .unwrap_or_default()
+        {
+            if let Some(index) = self
+                .processed_nogood_predicates
+                .iter()
+                .position(|predicate| *predicate == element)
+            {
+                let _ = self.processed_nogood_predicates.remove(index);
+            }
+
+            // println!("Removing previous: {element:?}");
+            self.iterative_minimiser.remove_predicate(element);
+
+            self.add_predicate_to_conflict_nogood(new_predicate, self.mode, context);
+
+            return ControlFlow::Break(());
+        }
+        ControlFlow::Continue(())
+    }
+
     fn pop_predicate_from_conflict_nogood(&mut self) -> Predicate {
-        let next_predicate_id = self.to_process_heap.pop_max().unwrap();
+        let next_predicate_id = self
+            .to_process_heap
+            .pop_max()
+            .expect("Expected predicate to be poppable from nogood");
         let predicate = self.predicate_id_generator.get_predicate(next_predicate_id);
         self.mode
             .remove_predicate_from_nogood(predicate, &mut self.unique_variable_helper);
+        if self.iterative_minimisation {
+            // println!("Removing {next_predicate:?}");
+            self.iterative_minimiser.remove_predicate(predicate);
+        }
         predicate
     }
 
@@ -409,5 +853,22 @@ impl ResolutionResolver {
         for predicate in self.processed_nogood_predicates.iter() {
             context.predicate_appeared_in_conflict(*predicate);
         }
+    }
+}
+
+fn get_heap_value(predicate: Predicate, context: &mut ConflictAnalysisContext<'_>) -> u32 {
+    if context.get_state().is_on_trail(predicate) {
+        context
+            .get_state()
+            .trail_position(predicate)
+            .expect("Predicate should be true during conflict analysis") as u32
+            * 2
+    } else {
+        context
+            .get_state()
+            .trail_position(predicate)
+            .expect("Predicate should be true during conflict analysis") as u32
+            * 2
+            + 1
     }
 }

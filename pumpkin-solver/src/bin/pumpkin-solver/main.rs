@@ -172,6 +172,15 @@ struct Args {
     #[arg(long = "no-learning-minimise", verbatim_doc_comment)]
     no_learning_clause_minimisation: bool,
 
+    /// Decides whether to apply semantic minimisation during conflict analysis; according to the
+    /// idea proposed in "Semantic Learning for Lazy Clause Generation - Feydy et al. (2013)".
+    ///
+    /// If this flag is present then the minimisation is turned on.
+    ///
+    /// Possible values: bool
+    #[arg(long = "iterative-minimisation", verbatim_doc_comment)]
+    iterative_minimisation: bool,
+
     /// Decides the sequence based on which the restarts are performed.
     ///
     /// - The "constant" approach uses a constant number of conflicts before another restart is
@@ -641,6 +650,7 @@ fn run() -> PumpkinResult<()> {
                 ResolutionResolver::new(
                     AnalysisMode::OneUIP,
                     !args.no_learning_clause_minimisation,
+                    args.iterative_minimisation,
                 ),
             )?,
             ConflictResolverType::ExtendedCPIP => flatzinc::solve(
@@ -661,7 +671,11 @@ fn run() -> PumpkinResult<()> {
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
                 },
-                ResolutionResolver::new(AnalysisMode::CPIP, should_minimise_nogoods),
+                ResolutionResolver::new(
+                    AnalysisMode::CPIP,
+                    should_minimise_nogoods,
+                    args.iterative_minimisation,
+                ),
             )?,
             ConflictResolverType::BoundsExtendedCPIP => flatzinc::solve(
                 Solver::with_options(solver_options),
@@ -681,7 +695,11 @@ fn run() -> PumpkinResult<()> {
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
                 },
-                ResolutionResolver::new(AnalysisMode::BoundsCPIP, should_minimise_nogoods),
+                ResolutionResolver::new(
+                    AnalysisMode::BoundsCPIP,
+                    should_minimise_nogoods,
+                    args.iterative_minimisation,
+                ),
             )?,
             ConflictResolverType::AllDecision => flatzinc::solve(
                 Solver::with_options(solver_options),
@@ -701,7 +719,11 @@ fn run() -> PumpkinResult<()> {
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
                 },
-                ResolutionResolver::new(AnalysisMode::AllDecision, should_minimise_nogoods),
+                ResolutionResolver::new(
+                    AnalysisMode::AllDecision,
+                    should_minimise_nogoods,
+                    args.iterative_minimisation,
+                ),
             )?,
         },
     }

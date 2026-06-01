@@ -12,7 +12,7 @@ repository.workspace = true
 clap = { version = "4.5.17", features = ["derive"] }
 env_logger = "0.11.10"
 flatzinc = "0.3.21"
-log = "0.4.27"
+log = "0.4.30"
 pumpkin-core = { version = "0.3.0", path = "../pumpkin-crates/core/", features = ["clap"] }
 pumpkin-constraints = { version = "0.3.0", path = "../pumpkin-crates/constraints/"}
 pumpkin-propagators = { version = "0.3.0", path = "../pumpkin-crates/propagators/", features=["clap"]}
