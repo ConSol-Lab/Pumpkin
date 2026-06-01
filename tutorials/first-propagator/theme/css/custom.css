@@ -1,0 +1,13 @@
+details {
+    box-sizing: border-box;
+    margin: 20px 0;
+    padding: 20px;
+    color: var(--fg);
+    background-color: var(--quote-bg);
+    border-block-start: .1em solid var(--quote-border);
+    border-block-end: .1em solid var(--quote-border);
+}
+
+details > summary {
+    cursor: pointer;
+}
