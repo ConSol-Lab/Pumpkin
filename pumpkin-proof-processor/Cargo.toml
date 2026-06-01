@@ -16,11 +16,11 @@ flate2 = { version = "1.1.2" }
 env_logger = "0.11.10"
 pumpkin-core = { version = "0.3.0", path = "../pumpkin-crates/core" }
 pumpkin-propagators = { version = "0.3.0", path = "../pumpkin-crates/propagators" }
-log = "0.4.29"
+log = "0.4.30"
 thiserror = "2.0.18"
 
 [dev-dependencies]
-assert_cmd = "2.1.2"
+assert_cmd = "2.2.2"
 escargot = "0.5.15"
 pumpkin-checker = { path = "../pumpkin-checker" }
 regex = "1.12.3"
