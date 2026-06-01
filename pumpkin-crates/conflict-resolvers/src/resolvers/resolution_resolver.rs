@@ -3,6 +3,7 @@ use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::conflict_resolving::AnalysisMode;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::conflict_resolving::ConflictResolver;
+use pumpkin_core::containers::HashMap;
 use pumpkin_core::containers::KeyValueHeap;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::create_statistics_struct;
@@ -16,6 +17,7 @@ use pumpkin_core::statistics::Statistic;
 use pumpkin_core::statistics::StatisticLogger;
 use pumpkin_core::statistics::moving_averages::CumulativeMovingAverage;
 use pumpkin_core::statistics::moving_averages::MovingAverage;
+use pumpkin_core::variables::DomainId;
 
 use crate::minimisers::NogoodMinimiser;
 use crate::minimisers::RecursiveMinimiser;
@@ -57,6 +59,7 @@ pub struct ResolutionResolver {
     reason_buffer: Vec<Predicate>,
     /// Computes the LBD for nogoods.
     lbd_helper: Lbd,
+    unique_variable_helper: HashMap<DomainId, u32>,
 
     /// A minimiser which recursively determines whether a predicate is redundant in the nogood
     recursive_minimiser: RecursiveMinimiser,
@@ -140,6 +143,7 @@ impl ResolutionResolver {
             semantic_minimiser: Default::default(),
             statistics: Default::default(),
             should_minimise,
+            unique_variable_helper: Default::default(),
         }
     }
 
@@ -171,10 +175,11 @@ impl ResolutionResolver {
         // When posting the decision [x = v], it gets decomposed into two decisions ([x >= v] & [x
         // <= v]). In this case there will be two predicates left from the current decision
         // level, and both will be decisions. This is accounted for below.
-        while self
-            .mode
-            .should_continue_resolving(&self.to_process_heap, &mut self.predicate_id_generator)
-        {
+        while self.mode.should_continue_resolving(
+            &self.to_process_heap,
+            &mut self.predicate_id_generator,
+            &mut self.unique_variable_helper,
+        ) {
             // Replace the predicate from the nogood that has been assigned last on the trail.
             //
             // This is done in two steps:
@@ -207,6 +212,7 @@ impl ResolutionResolver {
         self.processed_nogood_predicates.clear();
         self.predicate_id_generator.clear();
         self.to_process_heap.clear();
+        self.unique_variable_helper.clear();
     }
 
     /// Add the predicate to the current conflict nogood if we know it needs to be added.
@@ -301,6 +307,7 @@ impl ResolutionResolver {
                 self.to_process_heap.restore_key(predicate_id);
                 self.to_process_heap
                     .increment(predicate_id, heap_value as u32);
+                mode.add_predicate_to_nogood(predicate, &mut self.unique_variable_helper);
 
                 pumpkin_assert_moderate!(
                     *self.to_process_heap.get_value(predicate_id) == heap_value.try_into().unwrap(),
@@ -316,7 +323,10 @@ impl ResolutionResolver {
 
     fn pop_predicate_from_conflict_nogood(&mut self) -> Predicate {
         let next_predicate_id = self.to_process_heap.pop_max().unwrap();
-        self.predicate_id_generator.get_predicate(next_predicate_id)
+        let predicate = self.predicate_id_generator.get_predicate(next_predicate_id);
+        self.mode
+            .remove_predicate_from_nogood(predicate, &mut self.unique_variable_helper);
+        predicate
     }
 
     fn extract_final_nogood(&mut self, context: &mut ConflictAnalysisContext) {

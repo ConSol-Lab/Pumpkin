@@ -1,7 +1,10 @@
+use std::collections::hash_map::Entry;
+
 use itertools::Itertools;
 
 use crate::basic_types::PredicateId;
 use crate::conflict_resolving::ConflictAnalysisContext;
+use crate::containers::HashMap;
 use crate::containers::KeyValueHeap;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateIdGenerator;
@@ -9,6 +12,7 @@ use crate::predicates::PredicateType;
 use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::variables::DomainId;
 
 /// Determines the different type of resolution-based analysis modes that are supported.
 #[derive(Debug, Clone, Copy)]
@@ -58,6 +62,7 @@ impl AnalysisMode {
         &self,
         to_process_heap: &KeyValueHeap<PredicateId, u32>,
         predicate_id_generator: &mut PredicateIdGenerator,
+        unique_variable_helper: &mut HashMap<DomainId, u32>,
     ) -> bool {
         match self {
             AnalysisMode::OneUIP => {
@@ -71,18 +76,7 @@ impl AnalysisMode {
             }
             AnalysisMode::CPIP => {
                 // We wait until there are only elements over a single variable left.
-                //
-                // TODO: compute this incrementally
-                to_process_heap
-                    .keys()
-                    .map(|predicate_id| {
-                        predicate_id_generator
-                            .get_predicate(predicate_id)
-                            .get_domain()
-                    })
-                    .unique()
-                    .count()
-                    > 1
+                unique_variable_helper.len() > 1
             }
             AnalysisMode::BoundsCPIP => {
                 // We wait until extended nogood propagation can propagate a bound.
@@ -217,5 +211,50 @@ impl AnalysisMode {
     /// Whether the analysis mode learns CPIP nogoods.
     pub fn uses_cpip(&self) -> bool {
         matches!(self, AnalysisMode::CPIP | AnalysisMode::BoundsCPIP)
+    }
+
+    pub fn add_predicate_to_nogood(
+        &self,
+        predicate: Predicate,
+        unique_variable_helper: &mut HashMap<DomainId, u32>,
+    ) {
+        match self {
+            AnalysisMode::CPIP | AnalysisMode::BoundsCPIP => {
+                let entry = unique_variable_helper
+                    .entry(predicate.get_domain())
+                    .or_default();
+
+                *entry += 1
+            }
+            AnalysisMode::OneUIP | AnalysisMode::AllDecision => {}
+        }
+    }
+
+    pub fn remove_predicate_from_nogood(
+        &self,
+        predicate: Predicate,
+        unique_variable_helper: &mut HashMap<DomainId, u32>,
+    ) {
+        match self {
+            AnalysisMode::CPIP | AnalysisMode::BoundsCPIP => {
+                let entry = unique_variable_helper.entry(predicate.get_domain());
+
+                match entry {
+                    Entry::Occupied(mut occupied_entry) => {
+                        let value = occupied_entry.get_mut();
+                        pumpkin_assert_simple!(*value > 0);
+                        if *value == 1 {
+                            let _ = occupied_entry.remove();
+                        } else {
+                            *value -= 1;
+                        }
+                    }
+                    Entry::Vacant(_) => {
+                        panic!("Whne removing a predicate from a nogood, it should exist.")
+                    }
+                }
+            }
+            AnalysisMode::OneUIP | AnalysisMode::AllDecision => {}
+        }
     }
 }
