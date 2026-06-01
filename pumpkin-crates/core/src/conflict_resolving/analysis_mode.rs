@@ -213,6 +213,10 @@ impl AnalysisMode {
         matches!(self, AnalysisMode::CPIP | AnalysisMode::BoundsCPIP)
     }
 
+    /// Called whenever a [`Predicate`] is added to the nogood by the resolution resolver.
+    ///
+    /// A helper is passed which contains how many times a [`DomainId`] appears in the current
+    /// nogood.
     pub fn add_predicate_to_nogood(
         &self,
         predicate: Predicate,
@@ -220,6 +224,7 @@ impl AnalysisMode {
     ) {
         match self {
             AnalysisMode::CPIP | AnalysisMode::BoundsCPIP => {
+                // We get the current count for the domain, or insert it if it does not exist
                 let entry = unique_variable_helper
                     .entry(predicate.get_domain())
                     .or_default();
@@ -230,6 +235,10 @@ impl AnalysisMode {
         }
     }
 
+    /// Called whenever a [`Predicate`] is removed from the nogood by the resolution resolver.
+    ///
+    /// A helper is passed which contains how many times a [`DomainId`] appears in the current
+    /// nogood.
     pub fn remove_predicate_from_nogood(
         &self,
         predicate: Predicate,
@@ -237,15 +246,20 @@ impl AnalysisMode {
     ) {
         match self {
             AnalysisMode::CPIP | AnalysisMode::BoundsCPIP => {
+                // First, we find the entry
                 let entry = unique_variable_helper.entry(predicate.get_domain());
 
                 match entry {
                     Entry::Occupied(mut occupied_entry) => {
                         let value = occupied_entry.get_mut();
+
                         pumpkin_assert_simple!(*value > 0);
+
                         if *value == 1 {
+                            // We remove the entry in its entirety if the count ever reaches 0.
                             let _ = occupied_entry.remove();
                         } else {
+                            // Otherwise, we simply reduce the count by 1.
                             *value -= 1;
                         }
                     }

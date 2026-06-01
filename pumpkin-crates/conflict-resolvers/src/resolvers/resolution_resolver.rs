@@ -59,14 +59,25 @@ pub struct ResolutionResolver {
     reason_buffer: Vec<Predicate>,
     /// Computes the LBD for nogoods.
     lbd_helper: Lbd,
+    /// A helper for keeping track of how many [`Predicate`]s concerning a specific [`DomainId`]
+    /// are present in the working nogood.
+    ///
+    /// This is used when determining when to stop resolving when using CPIP learning (see
+    /// [`AnalysisMode::CPIP`]).
     unique_variable_helper: HashMap<DomainId, u32>,
 
-    /// A minimiser which recursively determines whether a predicate is redundant in the nogood
+    /// A minimiser which recursively determines whether a predicate is redundant in the nogood.
     recursive_minimiser: RecursiveMinimiser,
+    /// A minimiser which determines whether a predicate is redundant in the nogood based on its
+    /// semantic meaning.
     semantic_minimiser: SemanticMinimiser,
 
+    /// The statistics of the learned nogoods.
     statistics: LearnedNogoodStatistics,
 
+    /// Whether nogood minimisation should be applied.
+    ///
+    /// Note that semantic minimisation is always applied to remove duplicates.
     should_minimise: bool,
 }
 
@@ -89,8 +100,12 @@ create_statistics_struct!(
         average_backtrack_amount: CumulativeMovingAverage<u64>,
         /// The average literal-block distance (LBD) metric for newly added learned nogoods
         average_lbd: CumulativeMovingAverage<u64>,
-        average_number_of_predicates_describing_domain_when_extended: CumulativeMovingAverage<usize>,
-        num_extended_nogood_learned: usize,
+        /// The average number of predicates which describe the domain of the propagating variable when
+        /// using CPIP learning.
+        average_number_of_predicates_describing_domain_cpip: CumulativeMovingAverage<usize>,
+        /// The number of nogoods which have more than one predicate concerning the propagating variable (i.e., CPIP nogoods).
+        num_cpip_nogood_learned: usize,
+        /// The number of nogoods which one predicate concerning the propagating variable.
         num_regular_nogood_learned: usize,
 
 });
@@ -342,12 +357,12 @@ impl ResolutionResolver {
         );
 
         self.statistics
-            .average_number_of_predicates_describing_domain_when_extended
+            .average_number_of_predicates_describing_domain_cpip
             .add_term(num_removed);
         if num_removed == 1 {
             self.statistics.num_regular_nogood_learned += 1;
         } else {
-            self.statistics.num_extended_nogood_learned += 1;
+            self.statistics.num_cpip_nogood_learned += 1;
         }
 
         // First we minimise the nogood using semantic minimisation to remove duplicates but we
