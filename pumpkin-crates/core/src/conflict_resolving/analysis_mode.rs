@@ -224,6 +224,7 @@ impl AnalysisMode {
     ) {
         match self {
             AnalysisMode::CPIP | AnalysisMode::BoundsCPIP => {
+                // println!("- Adding {predicate:?}");
                 // We get the current count for the domain, or insert it if it does not exist
                 let entry = unique_variable_helper
                     .entry(predicate.get_domain())
@@ -246,6 +247,7 @@ impl AnalysisMode {
     ) {
         match self {
             AnalysisMode::CPIP | AnalysisMode::BoundsCPIP => {
+                // println!("- Removing {predicate:?}");
                 // First, we find the entry
                 let entry = unique_variable_helper.entry(predicate.get_domain());
 

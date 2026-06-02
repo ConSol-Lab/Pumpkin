@@ -1,6 +1,7 @@
 use std::ops::ControlFlow;
 
 use pumpkin_core::asserts::pumpkin_assert_advanced;
+use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conflict_resolving::AnalysisMode;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
@@ -187,6 +188,8 @@ impl ResolutionResolver {
             self.add_predicate_to_conflict_nogood(*predicate, self.mode, context);
         }
 
+        pumpkin_assert_moderate!(self.check_counts());
+
         // Record conflict nogood size statistics.
         let num_initial_conflict_predicates =
             self.to_process_heap.num_nonremoved_elements() + self.processed_nogood_predicates.len();
@@ -364,6 +367,8 @@ impl ResolutionResolver {
             .iterative_minimiser
             .process_predicate(predicate, context);
         // println!("\tRESULT ({predicate:?}): {process_predicate:?}");
+        pumpkin_assert_moderate!(self.check_counts());
+
         match process_predicate {
             ProcessingResult::Redundant => {
                 if !self.to_process_heap.is_key_present(predicate_id) {
@@ -373,6 +378,8 @@ impl ResolutionResolver {
                     }
                     self.to_process_heap.delete_key(predicate_id);
                 }
+
+                pumpkin_assert_moderate!(self.check_counts());
 
                 self.statistics
                     .iterative_minimisation_statistics
@@ -387,6 +394,10 @@ impl ResolutionResolver {
                     self.iterative_minimiser.remove_predicate(removed_predicate);
                     let removed_id = self.predicate_id_generator.get_id(removed_predicate);
                     if self.to_process_heap.is_key_present(removed_id) {
+                        self.mode.remove_predicate_from_nogood(
+                            predicate,
+                            &mut self.unique_variable_helper,
+                        );
                         self.to_process_heap.delete_key(removed_id);
                     } else {
                         if let Some(position) = self
@@ -400,9 +411,10 @@ impl ResolutionResolver {
                 }
 
                 self.iterative_minimiser.apply_predicate(predicate, context);
+                pumpkin_assert_moderate!(self.check_counts());
             }
             ProcessingResult::PossiblyReplacedWithNew {
-                removed: previous,
+                removed,
                 new_predicate,
             } => {
                 self.statistics
@@ -413,165 +425,66 @@ impl ResolutionResolver {
                     == context.get_checkpoint()
                 {
                     if let ControlFlow::Break(_) =
-                        self.replace_if_possible_current_level(context, previous, new_predicate)
+                        self.replace_if_possible_current_level(context, removed, new_predicate)
                     {
+                        if self.to_process_heap.is_key_present(predicate_id) {
+                            self.mode.remove_predicate_from_nogood(
+                                predicate,
+                                &mut self.unique_variable_helper,
+                            );
+                        }
                         self.to_process_heap.set_value(predicate_id, 0);
                         self.to_process_heap.delete_key(predicate_id);
+                        pumpkin_assert_moderate!(self.check_counts());
                         return ControlFlow::Break(());
                     } else {
                         self.iterative_minimiser.apply_predicate(predicate, context);
+                        pumpkin_assert_moderate!(self.check_counts());
                     }
                 } else {
                     if let ControlFlow::Break(_) =
-                        self.replace_if_possible_previous_level(context, previous, new_predicate)
+                        self.replace_if_possible_previous_level(context, removed, new_predicate)
                     {
                         self.to_process_heap.set_value(predicate_id, 0);
                         self.to_process_heap.delete_key(predicate_id);
+                        pumpkin_assert_moderate!(self.check_counts());
                         return ControlFlow::Break(());
                     } else {
                         self.iterative_minimiser.apply_predicate(predicate, context);
+                        pumpkin_assert_moderate!(self.check_counts());
                     }
                 }
             }
             ProcessingResult::NotRedundant => {
                 self.iterative_minimiser.apply_predicate(predicate, context);
+                pumpkin_assert_moderate!(self.check_counts());
             }
         }
+        pumpkin_assert_moderate!(self.check_counts());
         ControlFlow::Continue(())
     }
 
-    // fn check_redundancy_current_level(
-    //     &mut self,
-    //     predicate: Predicate,
-    //     context: &mut ConflictAnalysisContext<'_>,
-    // ) -> ControlFlow<()> {
-    //     for element in self
-    //         .to_process_heap
-    //         .keys()
-    //         .map(|predicate_id| self.predicate_id_generator.get_predicate(predicate_id))
-    //         .filter(|element| {
-    //             element.get_domain() == predicate.get_domain()
-    //                 && context.get_state().trail_position(*element)
-    //                     != context.get_state().trail_position(predicate)
-    //         })
-    //         .collect::<Vec<_>>()
-    //     {
-    //         match (element.get_predicate_type(), predicate.get_predicate_type()) {
-    //             (PredicateType::Equal, PredicateType::NotEqual)
-    //             | (PredicateType::Equal, PredicateType::UpperBound)
-    //             | (PredicateType::Equal, PredicateType::LowerBound) => {
-    //                 self.statistics
-    //                     .iterative_minimisation_statistics
-    //                     .num_removed += 1;
-    //                 self.statistics
-    //                     .iterative_minimisation_statistics
-    //                     .num_removed_current_dl += 1;
-    //                 return ControlFlow::Break(());
-    //             }
-    //             (PredicateType::UpperBound, PredicateType::UpperBound) => {
-    //                 self.statistics
-    //                     .iterative_minimisation_statistics
-    //                     .num_removed += 1;
-    //                 self.statistics
-    //                     .iterative_minimisation_statistics
-    //                     .num_removed_current_dl += 1;
-    //                 if element.get_right_hand_side() <= predicate.get_right_hand_side() {
-    //                     return ControlFlow::Break(());
-    //                 } else {
-    //                     let element_id = self.predicate_id_generator.get_id(element);
-    //                     self.to_process_heap.delete_key(element_id);
-    //                 }
-    //             }
-    //             (PredicateType::UpperBound, PredicateType::NotEqual) => {
-    //                 if element.get_right_hand_side() == predicate.get_right_hand_side() {
-    //                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_removed += 1;
-    //                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_removed_current_dl += 1;
-    //                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_replaced_with_new_current_dl += 1;
-    //                     let domain = element.get_domain();
-    //
-    //                     let new_predicate = predicate!(domain <= element.get_right_hand_side() -
-    // 1);                     self.replace_if_possible_current_level(context, element,
-    // new_predicate)?;                 } else if element.get_right_hand_side() <
-    // predicate.get_right_hand_side() {                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_removed += 1;
-    //                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_removed_current_dl += 1;
-    //                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_removed += 1;
-    //                     return ControlFlow::Break(());
-    //                 }
-    //             }
-    //             (PredicateType::LowerBound, PredicateType::LowerBound) => {
-    //                 self.statistics
-    //                     .iterative_minimisation_statistics
-    //                     .num_removed += 1;
-    //                 self.statistics
-    //                     .iterative_minimisation_statistics
-    //                     .num_removed_current_dl += 1;
-    //                 if element.get_right_hand_side() >= predicate.get_right_hand_side() {
-    //                     return ControlFlow::Break(());
-    //                 } else {
-    //                     let element_id = self.predicate_id_generator.get_id(element);
-    //                     self.to_process_heap.delete_key(element_id);
-    //                 }
-    //             }
-    //             (PredicateType::LowerBound, PredicateType::NotEqual) => {
-    //                 if element.get_right_hand_side() == predicate.get_right_hand_side() {
-    //                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_removed += 1;
-    //                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_removed_current_dl += 1;
-    //                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_replaced_with_new_current_dl += 1;
-    //                     let domain = element.get_domain();
-    //
-    //                     let new_predicate = predicate!(domain >= element.get_right_hand_side() +
-    // 1);                     self.replace_if_possible_current_level(context, element,
-    // new_predicate)?;                 } else if element.get_right_hand_side() >
-    // predicate.get_right_hand_side() {                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_removed += 1;
-    //                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_removed_current_dl += 1;
-    //                     return ControlFlow::Break(());
-    //                 }
-    //             }
-    //             (PredicateType::UpperBound, PredicateType::LowerBound)
-    //                 if element.get_right_hand_side() == predicate.get_right_hand_side() =>
-    //             {
-    //                 self.statistics
-    //                     .iterative_minimisation_statistics
-    //                     .num_removed += 1;
-    //                 self.statistics
-    //                     .iterative_minimisation_statistics
-    //                     .num_removed_current_dl += 1;
-    //                 self.statistics
-    //                     .iterative_minimisation_statistics
-    //                     .num_replaced_with_new_current_dl += 1;
-    //                 let domain = element.get_domain();
-    //
-    //                 let new_predicate = predicate!(domain == element.get_right_hand_side());
-    //                 self.replace_if_possible_current_level(context, element, new_predicate)?;
-    //             }
-    //
-    //             _ => {}
-    //         }
-    //     }
-    //     ControlFlow::Continue(())
-    // }
+    fn check_counts(&mut self) -> bool {
+        if !self.mode.uses_cpip() {
+            return true;
+        }
+        let mut check = HashMap::default();
+        self.to_process_heap.keys().for_each(|predicate_id| {
+            let predicate = self.predicate_id_generator.get_predicate(predicate_id);
+            let entry = check.entry(predicate.get_domain()).or_default();
+            *entry += 1;
+        });
+        if check != self.unique_variable_helper {
+            eprintln!(
+                "{:?}",
+                self.to_process_heap
+                    .keys()
+                    .map(|predicate_id| self.predicate_id_generator.get_predicate(predicate_id))
+                    .collect::<Vec<_>>()
+            );
+        }
+        check == self.unique_variable_helper
+    }
 
     fn replace_if_possible_current_level(
         &mut self,
@@ -589,6 +502,12 @@ impl ResolutionResolver {
                 .unwrap_or_default()
         {
             let element_id = self.predicate_id_generator.get_id(element);
+
+            if self.to_process_heap.is_key_present(element_id) {
+                self.mode
+                    .remove_predicate_from_nogood(element, &mut self.unique_variable_helper);
+            }
+
             self.to_process_heap.delete_key(element_id);
 
             // println!("Removing previous: {element:?}");
@@ -599,146 +518,6 @@ impl ResolutionResolver {
         }
         ControlFlow::Continue(())
     }
-
-    // fn check_redundancy_previous_level(
-    //     &mut self,
-    //     predicate: Predicate,
-    //     context: &mut ConflictAnalysisContext<'_>,
-    // ) -> ControlFlow<()> {
-    //     for element in self
-    //         .processed_nogood_predicates
-    //         .iter()
-    //         .filter(|element| {
-    //             element.get_domain() == predicate.get_domain()
-    //                 && context.get_state().trail_position(**element)
-    //                     != context.get_state().trail_position(predicate)
-    //         })
-    //         .copied()
-    //         .collect::<Vec<_>>()
-    //     {
-    //         match (element.get_predicate_type(), predicate.get_predicate_type()) {
-    //             (PredicateType::Equal, PredicateType::NotEqual)
-    //             | (PredicateType::Equal, PredicateType::UpperBound)
-    //             | (PredicateType::Equal, PredicateType::LowerBound) => {
-    //                 self.statistics
-    //                     .iterative_minimisation_statistics
-    //                     .num_removed += 1;
-    //                 self.statistics
-    //                     .iterative_minimisation_statistics
-    //                     .num_removed_previous_dl += 1;
-    //                 return ControlFlow::Break(());
-    //             }
-    //             (PredicateType::UpperBound, PredicateType::UpperBound) => {
-    //                 self.statistics
-    //                     .iterative_minimisation_statistics
-    //                     .num_removed += 1;
-    //                 self.statistics
-    //                     .iterative_minimisation_statistics
-    //                     .num_removed_previous_dl += 1;
-    //                 if element.get_right_hand_side() <= predicate.get_right_hand_side() {
-    //                     return ControlFlow::Break(());
-    //                 } else {
-    //                     if let Some(index) = self
-    //                         .processed_nogood_predicates
-    //                         .iter()
-    //                         .position(|predicate| *predicate == element)
-    //                     {
-    //                         let _ = self.processed_nogood_predicates.remove(index);
-    //                     }
-    //                 }
-    //             }
-    //             (PredicateType::UpperBound, PredicateType::NotEqual) => {
-    //                 if element.get_right_hand_side() == predicate.get_right_hand_side() {
-    //                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_removed += 1;
-    //                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_removed_previous_dl += 1;
-    //                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_replaced_with_new_previous_dl += 1;
-    //
-    //                     let domain = element.get_domain();
-    //                     let new_predicate = predicate!(domain <= element.get_right_hand_side() -
-    // 1);                     self.replace_if_possible_previous_level(context, element,
-    // new_predicate)?;                 } else if element.get_right_hand_side() <
-    // predicate.get_right_hand_side() {                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_removed += 1;
-    //                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_removed_previous_dl += 1;
-    //                     return ControlFlow::Break(());
-    //                 }
-    //             }
-    //             (PredicateType::LowerBound, PredicateType::LowerBound) => {
-    //                 self.statistics
-    //                     .iterative_minimisation_statistics
-    //                     .num_removed += 1;
-    //                 self.statistics
-    //                     .iterative_minimisation_statistics
-    //                     .num_removed_previous_dl += 1;
-    //                 if element.get_right_hand_side() >= predicate.get_right_hand_side() {
-    //                     return ControlFlow::Break(());
-    //                 } else {
-    //                     if let Some(index) = self
-    //                         .processed_nogood_predicates
-    //                         .iter()
-    //                         .position(|predicate| *predicate == element)
-    //                     {
-    //                         let _ = self.processed_nogood_predicates.remove(index);
-    //                     }
-    //                 }
-    //             }
-    //             (PredicateType::LowerBound, PredicateType::NotEqual) => {
-    //                 if element.get_right_hand_side() == predicate.get_right_hand_side() {
-    //                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_removed += 1;
-    //                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_removed_previous_dl += 1;
-    //                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_replaced_with_new_previous_dl += 1;
-    //
-    //                     let domain = element.get_domain();
-    //                     let new_predicate = predicate!(domain >= element.get_right_hand_side() +
-    // 1);                     self.replace_if_possible_previous_level(context, element,
-    // new_predicate)?;                 } else if element.get_right_hand_side() >
-    // predicate.get_right_hand_side() {                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_removed += 1;
-    //                     self.statistics
-    //                         .iterative_minimisation_statistics
-    //                         .num_removed_previous_dl += 1;
-    //                     return ControlFlow::Break(());
-    //                 }
-    //             }
-    //             (PredicateType::UpperBound, PredicateType::LowerBound)
-    //                 if element.get_right_hand_side() == predicate.get_right_hand_side() =>
-    //             {
-    //                 self.statistics
-    //                     .iterative_minimisation_statistics
-    //                     .num_removed += 1;
-    //                 self.statistics
-    //                     .iterative_minimisation_statistics
-    //                     .num_removed_previous_dl += 1;
-    //                 self.statistics
-    //                     .iterative_minimisation_statistics
-    //                     .num_replaced_with_new_previous_dl += 1;
-    //
-    //                 let domain = element.get_domain();
-    //                 let new_predicate = predicate!(domain == element.get_right_hand_side());
-    //                 self.replace_if_possible_previous_level(context, element, new_predicate)?;
-    //             }
-    //
-    //             _ => {}
-    //         }
-    //     }
-    //     ControlFlow::Continue(())
-    // }
 
     fn replace_if_possible_previous_level(
         &mut self,
@@ -785,6 +564,7 @@ impl ResolutionResolver {
             // println!("Removing {next_predicate:?}");
             self.iterative_minimiser.remove_predicate(predicate);
         }
+        pumpkin_assert_moderate!(self.check_counts());
         predicate
     }
 

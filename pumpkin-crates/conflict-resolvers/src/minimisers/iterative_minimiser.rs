@@ -285,6 +285,11 @@ impl IterativeMinimiser {
                     // [x >= v], [x != v'] => [x >= v] where v' < v
                     self.explain_lower_bound_in_proof(predicate, context);
                     ProcessingResult::Redundant
+                } else if !self
+                    .state
+                    .contains(&predicate.get_domain(), predicate.get_right_hand_side())
+                {
+                    ProcessingResult::Redundant
                 } else {
                     ProcessingResult::NotRedundant
                 }
