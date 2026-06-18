@@ -63,6 +63,7 @@ Please cite Pumpkin using the following citation:
 - K. Sidorov, I. Marijnissen, and E. Demirović, [‘Unite and Lead: Finding Disjunctive Cliques for Scheduling Problems’](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2025.35), in 31st International Conference on Principles and Practice of Constraint Programming (CP 2025), 2025, vol. 340, p. 35:1-35:24.
 - I. Bleukx, M. Flippo, B. Bogaerts, E. Demirović, and T. Guns, [‘Using Certifying Constraint Solvers for Generating Step-wise Explanations’](https://ojs.aaai.org/index.php/AAAI/article/view/38432), Proceedings of the AAAI Conference on Artificial Intelligence, vol. 40, no. 17, pp. 14192–14200, Mar. 2026.
 - M. Flippo, P. J. Stuckey, and E. Demirović, [‘Resolution Meets Cutting Planes: Introducing Hypercube Linear Resolution’](https://link.springer.com/chapter/10.1007/978-3-032-27242-3_10), in Integration of Constraint Programming, Artificial Intelligence, and Operations Research, 2026, pp. 155–172. 
+- I. Marijnissen, J. C. Beck, E. Demirović, and R. Kuroiwa, [‘Domain-Independent Dynamic Programming with Constraint Propagation’](https://ojs.aaai.org/index.php/ICAPS/article/view/42826), Proceedings of the International Conference on Automated Planning and Scheduling, vol. 36, no. 1, pp. 171–180, June 2026.
 
 # Usage
 
