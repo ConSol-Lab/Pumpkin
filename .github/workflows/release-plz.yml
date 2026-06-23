@@ -33,7 +33,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Run release-plz
         uses: release-plz/action@v0.5
-        id: release-plz
+        id: release_plz
         with:
           command: release
         env:
