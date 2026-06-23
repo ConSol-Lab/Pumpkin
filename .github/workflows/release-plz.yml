@@ -7,7 +7,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/pumpkin-solver
+  IMAGE_NAME: consol-lab/pumpkin-solver
 
 jobs:
   # Release unpublished packages.
