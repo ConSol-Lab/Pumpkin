@@ -16,7 +16,7 @@ WORKDIR /pumpkin-src
 RUN cargo build -p pumpkin-solver --release
 
 # Create the MiniZinc image
-FROM minizinc/mznc2025:latest
+FROM minizinc/mznc2026:latest
 
 # Copy the solver executable 
 COPY --from=builder /pumpkin-src/target/release/pumpkin-solver /pumpkin/pumpkin-solver
