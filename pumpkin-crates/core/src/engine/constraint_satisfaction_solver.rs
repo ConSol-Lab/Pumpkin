@@ -50,6 +50,7 @@ use crate::propagation::store::PropagatorHandle;
 use crate::propagators::nogoods::NogoodChecker;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
+use crate::propagators::nogoods::PropagationMode;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_ne_moderate;
@@ -144,7 +145,21 @@ pub enum CoreExtractionResult {
 pub enum ConflictResolverType {
     NoLearning,
     #[default]
-    UIP,
+    /// Standard conflict analysis which returns as soon as the first unit implication point is
+    /// found (i.e. when a nogood is created which only contains a single predicate from the
+    /// current decision level).
+    OneUIP,
+    /// An alternative to 1-UIP which stops as soon as the learned nogood only creates decision
+    /// predicates.
+    AllDecision,
+    /// Learns CPIP nogoods (i.e., nogoods which only have predicates from the current decision
+    /// level which reason over a single variable when learning) in combination with extended nogood
+    /// propagation.
+    ExtendedCPIP,
+    /// Learns CPIP nogoods in combination with extended nogood propagation but rather than stopping
+    /// at the first point where extended nogood propagation can take place, it stops when
+    /// extended nogood propagation can adjust a bound upon learning.
+    BoundsExtendedCPIP,
 }
 
 /// Options for the [`Solver`] which determine how it behaves.
@@ -162,6 +177,7 @@ pub struct SatisfactionSolverOptions {
     pub learning_options: LearningOptions,
     /// The number of MBs which are preallocated by the nogood propagator.
     pub memory_preallocated: usize,
+    pub analysis_mode: ConflictResolverType,
 }
 
 impl Default for SatisfactionSolverOptions {
@@ -173,6 +189,7 @@ impl Default for SatisfactionSolverOptions {
             proof_log: ProofLog::default(),
             learning_options: LearningOptions::default(),
             memory_preallocated: 50,
+            analysis_mode: ConflictResolverType::default(),
         }
     }
 }
@@ -254,6 +271,16 @@ impl ConstraintSatisfactionSolver {
         let handle = state.add_propagator(NogoodPropagatorConstructor::new(
             (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
             solver_options.learning_options,
+            match solver_options.analysis_mode {
+                ConflictResolverType::OneUIP | ConflictResolverType::AllDecision => {
+                    PropagationMode::UnitPropagation
+                }
+                ConflictResolverType::ExtendedCPIP | ConflictResolverType::BoundsExtendedCPIP => {
+                    PropagationMode::ExtendedNogoodPropagation
+                }
+                ConflictResolverType::NoLearning => PropagationMode::default(),
+            },
+            solver_options.learning_options.nogood_propagator_priority,
         ));
 
         ConstraintSatisfactionSolver {
