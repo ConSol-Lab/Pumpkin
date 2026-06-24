@@ -17,6 +17,7 @@ use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::proof::InferenceLabel;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
 use crate::propagation::NotificationContext;
@@ -57,7 +58,11 @@ impl Default for TestSolver {
 
 #[deprecated = "Will be replaced by the state API"]
 impl TestSolver {
-    pub fn accept_inferences_by(&mut self, inference_code: InferenceCode) {
+    pub fn accept_inferences_by(
+        &mut self,
+        constraint_tag: ConstraintTag,
+        inference_label: impl InferenceLabel,
+    ) -> InferenceCode {
         #[derive(Debug, Clone, Copy)]
         struct Checker;
 
@@ -73,7 +78,7 @@ impl TestSolver {
         }
 
         self.state
-            .add_inference_checker(inference_code, Box::new(Checker));
+            .add_inference_checker(constraint_tag, inference_label, Checker)
     }
 
     pub fn new_variable(&mut self, lb: i32, ub: i32) -> DomainId {

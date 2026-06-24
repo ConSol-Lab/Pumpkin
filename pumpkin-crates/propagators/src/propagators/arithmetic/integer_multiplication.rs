@@ -7,8 +7,9 @@ use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::InferenceCheckers;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -16,6 +17,7 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::propagator_conflict;
 use pumpkin_core::variables::IntegerVariable;
@@ -39,18 +41,10 @@ where
 {
     type PropagatorImpl = IntegerMultiplicationPropagator<VA, VB, VC>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, IntegerMultiplication),
-            Box::new(IntegerMultiplicationChecker {
-                a: self.a.clone(),
-                b: self.b.clone(),
-                c: self.c.clone(),
-            }),
-        );
-    }
-
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(
+        self,
+        _: PropagatorConstructorContext,
+    ) -> ConstructedPropagator<Self::PropagatorImpl> {
         let IntegerMultiplicationArgs {
             a,
             b,
@@ -58,15 +52,34 @@ where
             constraint_tag,
         } = self;
 
-        context.register(a.clone(), DomainEvents::ANY_INT, ID_A);
-        context.register(b.clone(), DomainEvents::ANY_INT, ID_B);
-        context.register(c.clone(), DomainEvents::ANY_INT, ID_C);
+        let registration = EventsToRegister::builder()
+            .add(&a, DomainEvents::ANY_INT, ID_A)
+            .add(&b, DomainEvents::ANY_INT, ID_B)
+            .add(&c, DomainEvents::ANY_INT, ID_C)
+            .build();
 
-        IntegerMultiplicationPropagator {
+        let mut checkers = RuntimeCheckers::builder();
+        let inference_code = checkers.add_inference_checker(
+            constraint_tag,
+            IntegerMultiplication,
+            IntegerMultiplicationChecker {
+                a: a.clone(),
+                b: b.clone(),
+                c: c.clone(),
+            },
+        );
+
+        let propagator = IntegerMultiplicationPropagator {
             a,
             b,
             c,
-            inference_code: InferenceCode::new(constraint_tag, IntegerMultiplication),
+            inference_code,
+        };
+
+        ConstructedPropagator {
+            registration,
+            checkers: checkers.build(),
+            propagator,
         }
     }
 }
