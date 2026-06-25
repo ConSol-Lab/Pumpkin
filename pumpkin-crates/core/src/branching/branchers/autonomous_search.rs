@@ -279,7 +279,9 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
     }
 
     fn update_polarity(&mut self, predicate: Predicate, polarity: bool) {
-        if !self.predicate_id_info.has_id_for_predicate(predicate) {
+        if self.best_known_solution.is_some()
+            || !self.predicate_id_info.has_id_for_predicate(predicate)
+        {
             return;
         }
 
