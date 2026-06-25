@@ -59,6 +59,11 @@ impl PredicateNotifier {
         self.predicate_to_id.get_predicate(predicate_id)
     }
 
+    /// Returns the [`PredicateId`] corresponding to a [`Predicate`].
+    pub(crate) fn get_id(&mut self, predicate: Predicate) -> PredicateId {
+        self.predicate_to_id.get_id(predicate)
+    }
+
     /// Method which is called when an update to a [`DomainId`] has taken place
     ///
     /// This method will pass it along to the correct [`PredicateNotifier::on_update`]

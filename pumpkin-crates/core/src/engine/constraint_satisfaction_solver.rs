@@ -15,7 +15,6 @@ use rand::rngs::SmallRng;
 use super::solver_statistics::SolverStatistics;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
-use super::variables::Literal;
 #[cfg(doc)]
 use crate::Solver;
 use crate::basic_types::CSPSolverExecutionFlag;
@@ -326,37 +325,6 @@ impl ConstraintSatisfactionSolver {
         self.state.new_constraint_tag()
     }
 
-    pub fn create_new_literal(&mut self, name: Option<Arc<str>>) -> Literal {
-        self.state.new_literal(name)
-    }
-
-    pub fn create_new_literal_for_predicate(
-        &mut self,
-        predicate: Predicate,
-        name: Option<Arc<str>>,
-        constraint_tag: ConstraintTag,
-    ) -> Literal {
-        let literal = self.state.new_literal(name);
-
-        self.internal_parameters
-            .proof_log
-            .reify_predicate(literal, predicate);
-
-        // If literal --> predicate
-        let _ = self.add_clause(
-            vec![!literal.get_true_predicate(), predicate],
-            constraint_tag,
-        );
-
-        // If !literal --> !predicate
-        let _ = self.add_clause(
-            vec![!literal.get_false_predicate(), !predicate],
-            constraint_tag,
-        );
-
-        literal
-    }
-
     /// Create a new integer variable. Its domain will have the given lower and upper bounds.
     pub fn create_new_integer_variable(
         &mut self,
@@ -452,8 +420,8 @@ impl ConstraintSatisfactionSolver {
             })
     }
 
-    pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
-        self.state.get_literal_value(literal)
+    pub fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
+        self.state.truth_value(predicate)
     }
 
     /// Get the lower bound for the given variable.
@@ -1247,8 +1215,12 @@ mod tests {
         let c1 = solver.new_constraint_tag();
         let c2 = solver.new_constraint_tag();
         let c3 = solver.new_constraint_tag();
-        let lit1 = solver.create_new_literal(None).get_true_predicate();
-        let lit2 = solver.create_new_literal(None).get_true_predicate();
+
+        let i_1 = solver.create_new_integer_variable(0, 1, None);
+        let lit1 = predicate!(i_1 == 1);
+
+        let i_2 = solver.create_new_integer_variable(0, 1, None);
+        let lit2 = predicate!(i_2 == 1);
 
         let _ = solver.add_clause([lit1, lit2], c1);
         let _ = solver.add_clause([lit1, !lit2], c2);
@@ -1260,7 +1232,10 @@ mod tests {
     fn core_extraction_unit_core() {
         let mut solver = ConstraintSatisfactionSolver::default();
         let constraint_tag = solver.new_constraint_tag();
-        let lit1 = solver.create_new_literal(None).get_true_predicate();
+
+        let i_1 = solver.create_new_integer_variable(0, 1, None);
+        let lit1 = predicate!(i_1 == 1);
+
         let _ = solver.add_clause(vec![lit1], constraint_tag);
 
         run_test(
@@ -1320,9 +1295,15 @@ mod tests {
         let mut solver = ConstraintSatisfactionSolver::default();
         let c1 = solver.new_constraint_tag();
         let c2 = solver.new_constraint_tag();
-        let lit1 = solver.create_new_literal(None).get_true_predicate();
-        let lit2 = solver.create_new_literal(None).get_true_predicate();
-        let lit3 = solver.create_new_literal(None).get_true_predicate();
+
+        let i_1 = solver.create_new_integer_variable(0, 1, None);
+        let lit1 = predicate!(i_1 == 1);
+
+        let i_2 = solver.create_new_integer_variable(0, 1, None);
+        let lit2 = predicate!(i_2 == 1);
+
+        let i_3 = solver.create_new_integer_variable(0, 1, None);
+        let lit3 = predicate!(i_3 == 1);
 
         let _ = solver.add_clause([lit1, lit2, lit3], c1);
         let _ = solver.add_clause([lit1, !lit2, lit3], c2);
@@ -1365,9 +1346,14 @@ mod tests {
         let mut solver = ConstraintSatisfactionSolver::default();
         let constraint_tag = solver.new_constraint_tag();
 
-        let lit1 = solver.create_new_literal(None).get_true_predicate();
-        let lit2 = solver.create_new_literal(None).get_true_predicate();
-        let lit3 = solver.create_new_literal(None).get_true_predicate();
+        let i_1 = solver.create_new_integer_variable(0, 1, None);
+        let lit1 = predicate!(i_1 == 1);
+
+        let i_2 = solver.create_new_integer_variable(0, 1, None);
+        let lit2 = predicate!(i_2 == 1);
+
+        let i_3 = solver.create_new_integer_variable(0, 1, None);
+        let lit3 = predicate!(i_3 == 1);
 
         let _ = solver.add_clause([lit1, lit2, lit3], constraint_tag);
         (solver, vec![lit1, lit2, lit3])

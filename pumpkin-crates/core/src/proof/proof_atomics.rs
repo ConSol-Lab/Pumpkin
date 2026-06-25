@@ -6,7 +6,6 @@ use crate::engine::VariableNames;
 use crate::engine::predicates::predicate::PredicateType;
 use crate::predicates::Predicate;
 use crate::variables::DomainId;
-use crate::variables::Literal;
 
 #[derive(Default, Debug)]
 pub(crate) struct ProofAtomics {
@@ -40,18 +39,6 @@ impl ProofAtomics {
         };
 
         IntAtomic::new(name, comparison, value)
-    }
-
-    /// Given a literal, whenever it shows up in a proof step, substitute it with the provided
-    /// predicate.
-    pub(crate) fn reify_predicate(&mut self, literal: Literal, predicate: Predicate) {
-        // Note: This only works because we assume `literal` is a fresh literal and we are given
-        // the positive polarity. That assumption holds as the only place this can be called is
-        // transitively through `new_literal_for_predicate`. As soon as this assumption is
-        // violated, all hell will break loose.
-        let domain = literal.get_true_predicate().get_domain();
-
-        let _ = self.reification_domains.insert(domain, predicate);
     }
 
     /// The given predicate is a predicate over a literal. This function gets the associated

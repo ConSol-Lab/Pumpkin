@@ -2,10 +2,10 @@ use std::fmt::Display;
 use std::fmt::Write;
 use std::rc::Rc;
 
+use pumpkin_core::predicates::Predicate;
 use pumpkin_solver::core::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_solver::core::optimisation::OptimisationDirection;
 use pumpkin_solver::core::variables::DomainId;
-use pumpkin_solver::core::variables::Literal;
 
 /// The objective function of a FlatZinc model,
 /// consisting of the direction (e.g. maximization or minimization) and the integer variable which
@@ -41,14 +41,14 @@ impl FlatZincInstance {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Output {
-    Bool(VariableOutput<Literal>),
+    Bool(VariableOutput<Predicate>),
     Int(VariableOutput<DomainId>),
-    ArrayOfBool(ArrayOutput<Literal>),
+    ArrayOfBool(ArrayOutput<Predicate>),
     ArrayOfInt(ArrayOutput<DomainId>),
 }
 
 impl Output {
-    pub(crate) fn bool(id: Rc<str>, boolean: Literal) -> Output {
+    pub(crate) fn bool(id: Rc<str>, boolean: Predicate) -> Output {
         Output::Bool(VariableOutput {
             id,
             variable: boolean,
@@ -58,7 +58,7 @@ impl Output {
     pub(crate) fn array_of_bool(
         id: Rc<str>,
         shape: Box<[(i32, i32)]>,
-        contents: Rc<[Literal]>,
+        contents: Rc<[Predicate]>,
     ) -> Output {
         Output::ArrayOfBool(ArrayOutput {
             id,

@@ -37,23 +37,26 @@ pub mod variables {
     //! information unaltered, or apply transformations which can be performed without the need of
     //! constraints.
     //!
-    //! We define 2 types of variables:
-    //! - Integer Variables ([`IntegerVariable`]) - These are represented by [`DomainId`]s when
-    //!   interacting with the [`Solver`]. These variables can be created using
-    //!   [`Solver::new_bounded_integer`] when creating a variable with the domain between a
-    //!   lower-bound and an upper-bound or using [`Solver::new_sparse_integer`] when creating a
-    //!   variable with holes in the domain. These variables can be transformed (according to the
-    //!   trait [`TransformableVariable`]) to create an [`AffineView`].
-    //! - Literals ([`Literal`]) - These specify booleans that can be used when interacting with the
-    //!   [`Solver`]. A [`Literal`] can be created using [`Solver::new_literal`].
+    //! We define the following types of variables:
+    //! - Integer Variables ([`IntegerVariable`]) - These can be represented using two types:
+    //!  - Represented by [`DomainId`]s when interacting with the [`Solver`]. These variables can be
+    //!    created using [`Solver::new_bounded_integer`] when creating a variable with the domain
+    //!    between a lower-bound and an upper-bound or using [`Solver::new_sparse_integer`] when
+    //!    creating a variable with holes in the domain. These variables can be transformed
+    //!    (according to the trait [`TransformableVariable`]) to create an [`AffineView`].
+    //!  - Represented by [`Predicate`]s when interacting with the [`Solver`]. These can be created
+    //!    over [`DomainId`]s using the [`crate::predicate`] macro. [`Predicate`]s are also treated
+    //!    as integer variables by the [`Solver`].
     #[cfg(doc)]
     use crate::Solver;
     pub use crate::engine::Reason;
     pub use crate::engine::variables::AffineView;
+    pub use crate::engine::variables::AnyInteger;
     pub use crate::engine::variables::DomainId;
     pub use crate::engine::variables::IntegerVariable;
-    pub use crate::engine::variables::Literal;
     pub use crate::engine::variables::TransformableVariable;
+    #[cfg(doc)]
+    use crate::predicates::Predicate;
 }
 
 pub mod options {
@@ -109,8 +112,6 @@ pub mod predicates {
     pub use crate::engine::predicates::predicate::Predicate;
     pub use crate::engine::predicates::predicate::PredicateType;
     pub use crate::engine::predicates::predicate_constructor::PredicateConstructor;
-    #[cfg(doc)]
-    use crate::variables::Literal;
 }
 
 pub mod state {

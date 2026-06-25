@@ -1,15 +1,14 @@
-"""
-Generate constraints and expressions based on the grammar supported by the API
+"""Generate constraints and expressions based on the grammar supported by the API.
 
-Generates linear constraints, special operators and global constraints.
-Whenever possible, the script also generates 'boolean as integer' versions of the arguments
+Generates linear constraints, special operators and global constraints. Whenever possible, the script also generates
+'boolean as integer' versions of the arguments
 """
 
 from random import randint
 
+import pumpkin_solver
 import pytest
 from pumpkin_solver import constraints
-import pumpkin_solver
 
 
 def chain(*iterables):
@@ -68,15 +67,11 @@ def create_linear_model(request):
     model = pumpkin_solver.Model()
 
     if bool:
-        args = [
-            model.new_boolean_variable(name=f"x[{i}]").as_integer() for i in range(3)
-        ]
+        args = [model.new_boolean_variable(name=f"x[{i}]").as_integer() for i in range(3)]
     else:
         args = [model.new_integer_variable(-3, 5, name=f"x[{i}]") for i in range(3)]
     if scaled:  # do scaling (0, -2, 4,...)
-        args = [
-            a.scaled(-2 * i + 1) for i, a in enumerate(args)
-        ]  # TODO: div by zero when scale = 0, fixed with +1
+        args = [a.scaled(-2 * i + 1) for i, a in enumerate(args)]  # TODO: div by zero when scale = 0, fixed with +1
 
     rhs = 1
     cons = None
@@ -104,15 +99,11 @@ def create_operator_model(request):
     model = pumpkin_solver.Model()
 
     if bool:
-        args = [
-            model.new_boolean_variable(name=f"x[{i}]").as_integer() for i in range(3)
-        ]
+        args = [model.new_boolean_variable(name=f"x[{i}]").as_integer() for i in range(3)]
     else:
         args = [model.new_integer_variable(-3, 5, name=f"x[{i}]") for i in range(3)]
     if scaled:  # do scaling (0, -2, 4,...)
-        args = [
-            a.scaled(-2 * i + 1) for i, a in enumerate(args)
-        ]  # TODO: div by zero when scale = 0, fixed with +1
+        args = [a.scaled(-2 * i + 1) for i, a in enumerate(args)]  # TODO: div by zero when scale = 0, fixed with +1
 
     rhs = model.new_integer_variable(-3, 5, name="rhs")
     cons = None
@@ -128,9 +119,7 @@ def create_operator_model(request):
     if name == "max":
         cons = constraints.Maximum(args, rhs, model.new_constraint_tag())
     if name == "element":
-        idx = model.new_integer_variable(
-            -1, 5, name="idx"
-        )  # sneaky, idx can be out of bounds
+        idx = model.new_integer_variable(-1, 5, name="idx")  # sneaky, idx can be out of bounds
         cons = constraints.Element(idx, args, rhs, model.new_constraint_tag())
 
     if not cons:
@@ -151,16 +140,11 @@ def create_global_model(request):
 
     if name == "alldiff":
         if bool:
-            args = [
-                model.new_boolean_variable(name=f"x[{i}]").as_integer()
-                for i in range(3)
-            ]
+            args = [model.new_boolean_variable(name=f"x[{i}]").as_integer() for i in range(3)]
         else:
             args = [model.new_integer_variable(-3, 5, name=f"x[{i}]") for i in range(3)]
         if scaled or bool:  # do scaling (0, -2, 4,...)
-            args = [
-                a.scaled(-2 * i + 1) for i, a in enumerate(args)
-            ]  # TODO: div by zero when scale = 0, fixed with +1
+            args = [a.scaled(-2 * i + 1) for i, a in enumerate(args)]  # TODO: div by zero when scale = 0, fixed with +1
 
         cons = constraints.AllDifferent(args, model.new_constraint_tag())
 
@@ -182,9 +166,7 @@ def create_global_model(request):
         start = [model.new_integer_variable(-3, 5, name=f"x[{i}]") for i in range(3)]
         if scaled:
             start = [a.scaled(-2 * i) for i, a in enumerate(start)]
-        cons = constraints.Cumulative(
-            start, duration, demand, capacity, model.new_constraint_tag()
-        )
+        cons = constraints.Cumulative(start, duration, demand, capacity, model.new_constraint_tag())
 
     else:
         assert False, f"unknown global {name}"
@@ -200,9 +182,7 @@ def global_model(request):
 def make_id(args):
     name, scaled, bool = args
 
-    return " ".join(
-        ["Scaled" if scaled else "Unscaled", "Boolean" if bool else "Integer", name]
-    )
+    return " ".join(["Scaled" if scaled else "Unscaled", "Boolean" if bool else "Integer", name])
 
 
 @pytest.mark.parametrize("linear_model", generate_linear(), indirect=True, ids=make_id)
