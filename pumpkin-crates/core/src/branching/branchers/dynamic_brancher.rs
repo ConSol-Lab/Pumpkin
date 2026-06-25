@@ -90,6 +90,14 @@ impl Brancher for DynamicBrancher {
         }
     }
 
+    fn on_unassign_predicate(&mut self, predicate: Predicate, value: bool) {
+        self.relevant_event_to_index[BrancherEvent::UnassignPredicate]
+            .iter()
+            .for_each(|&brancher_index| {
+                self.branchers[brancher_index].on_unassign_predicate(predicate, value)
+            });
+    }
+
     fn log_statistics(&self, statistic_logger: StatisticLogger) {
         self.branchers
             .iter()

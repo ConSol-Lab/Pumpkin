@@ -5,6 +5,7 @@ use pumpkin_checking::InferenceChecker;
 #[cfg(feature = "check-propagations")]
 use pumpkin_checking::VariableState;
 
+use crate::basic_types::PredicateId;
 use crate::containers::HashMap;
 use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
@@ -537,7 +538,10 @@ impl State {
     /// panic.
     ///
     /// See [`State::new_checkpoint`] for an example.
-    pub fn restore_to(&mut self, checkpoint: usize) -> Vec<(DomainId, i32)> {
+    pub fn restore_to(
+        &mut self,
+        checkpoint: usize,
+    ) -> (Vec<(DomainId, i32)>, Vec<(PredicateId, bool)>) {
         pumpkin_assert_simple!(checkpoint <= self.get_checkpoint());
 
         self.statistics.sum_of_backjumps +=
@@ -547,7 +551,7 @@ impl State {
         }
 
         if checkpoint == self.get_checkpoint() {
-            return vec![];
+            return (vec![], vec![]);
         }
 
         let unfixed_after_backtracking = self
@@ -577,13 +581,16 @@ impl State {
         self.notification_engine
             .update_last_notified_index(&mut self.assignments);
         // Should be done after the assignments and trailed values have been synchronised
-        self.notification_engine.synchronise(
+        let unfixed_predicates_after_backtracking = self.notification_engine.synchronise(
             checkpoint,
             &self.assignments,
             &mut self.trailed_values,
         );
 
-        unfixed_after_backtracking
+        (
+            unfixed_after_backtracking,
+            unfixed_predicates_after_backtracking.collect(),
+        )
     }
 
     /// Performs a single call to [`Propagator::propagate`] for the propagator with the provided

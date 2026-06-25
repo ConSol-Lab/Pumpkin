@@ -258,6 +258,11 @@ impl ConflictAnalysisContext<'_> {
     ///
     /// This is used by [`Brancher`]s such as [`AutonomousSearch`] to guide the search.
     pub fn predicate_appeared_in_conflict(&mut self, predicate: Predicate) {
+        let id = self.state.notification_engine.get_id(predicate);
+        self.state
+            .notification_engine
+            .predicate_notifier
+            .track_predicate(id, &mut self.state.trailed_values, &self.state.assignments);
         self.brancher.on_appearance_in_conflict_predicate(predicate);
     }
 }

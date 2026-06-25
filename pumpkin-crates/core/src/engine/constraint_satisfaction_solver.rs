@@ -720,11 +720,21 @@ impl ConstraintSatisfactionSolver {
 
         brancher.on_backtrack();
 
-        state
-            .restore_to(backtrack_level)
+        let (unfixed_domain_ids, unfixed_predicate_ids) = state.restore_to(backtrack_level);
+
+        unfixed_domain_ids
             .into_iter()
             .for_each(|(domain_id, previous_value)| {
                 brancher.on_unassign_integer(domain_id, previous_value)
+            });
+
+        unfixed_predicate_ids
+            .into_iter()
+            .for_each(|(predicate_id, previous_value)| {
+                brancher.on_unassign_predicate(
+                    state.notification_engine.get_predicate(predicate_id),
+                    previous_value,
+                );
             });
 
         brancher.synchronise(&mut SelectionContext::new(&state.assignments, rng));

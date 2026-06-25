@@ -22,6 +22,17 @@ impl PredicateIdGenerator {
         }
     }
 
+    pub fn get_id_exists(&self, predicate: Predicate) -> PredicateId {
+        *self
+            .predicate_to_id
+            .get(&predicate)
+            .expect("Expected to be able to retrieve id for predicate")
+    }
+
+    pub fn has_id_for_predicate(&self, predicate: Predicate) -> bool {
+        self.predicate_to_id.contains_key(&predicate)
+    }
+
     pub fn get_predicate(&self, id: PredicateId) -> Predicate {
         self.id_to_predicate[id]
     }

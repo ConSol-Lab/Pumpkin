@@ -341,7 +341,7 @@ impl TestSolver {
             .state
             .assignments
             .synchronise(level, &mut self.state.notification_engine);
-        self.state.notification_engine.synchronise(
+        let _ = self.state.notification_engine.synchronise(
             level,
             &self.state.assignments,
             &mut self.state.trailed_values,

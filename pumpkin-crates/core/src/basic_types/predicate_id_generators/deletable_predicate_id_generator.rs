@@ -51,6 +51,13 @@ impl DeletablePredicateIdGenerator {
         }
     }
 
+    pub(crate) fn get_id_exists(&self, predicate: Predicate) -> PredicateId {
+        *self
+            .predicate_to_id
+            .get(&predicate)
+            .expect("Expected PredicateId to exist")
+    }
+
     pub(crate) fn get_predicate(&self, id: PredicateId) -> Option<Predicate> {
         self.id_to_predicate.get(&id).copied()
     }

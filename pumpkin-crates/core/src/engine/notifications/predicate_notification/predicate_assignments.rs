@@ -162,19 +162,27 @@ impl PredicateIdAssignments {
         self.predicate_values[predicate_id].is_falsified()
     }
 
-    pub(crate) fn synchronise(&mut self, new_checkpoint: usize) {
+    pub(crate) fn synchronise(
+        &mut self,
+        new_checkpoint: usize,
+    ) -> impl Iterator<Item = (PredicateId, bool)> {
         // We also need to clear the stored updated predicates; if this is not done, then it can be
         // the case that a predicate is erroneously said to be satisfied/falsified while it is not
         self.satisfied_predicates.clear();
 
-        self.trail
-            .synchronise(new_checkpoint)
-            .for_each(|predicate_id| {
-                // If the predicate id is unassigned then backtracking will not change anything;
-                // this is more of a sanity check since it should not be on the trail if it is
-                // unassigned
-                self.predicate_values[predicate_id] = PredicateValue::Unknown
-            })
+        self.trail.synchronise(new_checkpoint).map(|predicate_id| {
+            let previous_value = match self.predicate_values[predicate_id] {
+                PredicateValue::AssignedTrue => true,
+                PredicateValue::AssignedFalse => false,
+                PredicateValue::Unknown => unreachable!(),
+            };
+            // If the predicate id is unassigned then backtracking will not change anything;
+            // this is more of a sanity check since it should not be on the trail if it is
+            // unassigned
+            self.predicate_values[predicate_id] = PredicateValue::Unknown;
+
+            (predicate_id, previous_value)
+        })
     }
 
     /// Returns whether the status of the [`Predicate`] is unknown.

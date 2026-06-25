@@ -89,6 +89,8 @@ pub trait Brancher: Debug {
     /// [`BrancherEvent::AppearanceInConflictPredicate`] in [`Self::subscribe_to_events`]
     fn on_appearance_in_conflict_predicate(&mut self, _predicate: Predicate) {}
 
+    fn on_unassign_predicate(&mut self, _predicate: Predicate, _value: bool) {}
+
     /// This method is called whenever a restart is performed.
     /// To receive information about this event, use [`BrancherEvent::Restart`] in
     /// [`Self::subscribe_to_events`]
@@ -135,6 +137,7 @@ pub enum BrancherEvent {
     Solution,
     /// Event for when an integer variable has become unassigned
     UnassignInteger,
+    UnassignPredicate,
     /// Event for when a predicate appears during conflict analysis
     AppearanceInConflictPredicate,
     /// Event for when a restart occurs

@@ -570,7 +570,7 @@ impl NotificationEngine {
         backtrack_level: usize,
         assignments: &Assignments,
         _trailed_values: &mut TrailedValues,
-    ) {
+    ) -> impl Iterator<Item = (PredicateId, bool)> {
         pumpkin_assert_simple!(
             assignments.get_checkpoint() == backtrack_level,
             "Expected the assignments to have been backtracked previously"
