@@ -21,6 +21,7 @@ use crate::engine::reason::ReasonStore;
 use crate::predicate;
 use crate::proof::InferenceCode;
 use crate::propagation::EnqueueDecision;
+use crate::propagation::EventsToRegister;
 use crate::propagation::ExplanationContext;
 use crate::propagation::LazyExplanation;
 use crate::propagation::NotificationContext;
@@ -101,10 +102,11 @@ impl NogoodPropagatorConstructor {
 impl PropagatorConstructor for NogoodPropagatorConstructor {
     type PropagatorImpl = NogoodPropagator;
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        context.will_not_register_any_events();
-
-        NogoodPropagator {
+    fn create(
+        self,
+        context: PropagatorConstructorContext,
+    ) -> (EventsToRegister, Self::PropagatorImpl) {
+        let propagator = NogoodPropagator {
             handle: PropagatorHandle::new(context.propagator_id),
             parameters: self.parameters,
             nogood_predicates: ArenaAllocator::new(self.capacity),
@@ -117,7 +119,9 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             lbd_helper: Default::default(),
             bumped_nogoods: Default::default(),
             temp_nogood_reason: Default::default(),
-        }
+        };
+
+        (EventsToRegister::empty(), propagator)
     }
 }
 
@@ -131,14 +135,6 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
 struct Watcher {
     nogood_id: NogoodId,
     cached_predicate: PredicateId,
-}
-
-impl PropagatorConstructor for NogoodPropagator {
-    type PropagatorImpl = Self;
-
-    fn create(self, _: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        self
-    }
 }
 
 /// Keeps track of three tiers of nogoods:

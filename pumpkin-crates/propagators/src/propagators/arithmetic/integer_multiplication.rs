@@ -8,6 +8,7 @@ use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
@@ -50,7 +51,7 @@ where
         );
     }
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, _: PropagatorConstructorContext) -> (EventsToRegister, Self::PropagatorImpl) {
         let IntegerMultiplicationArgs {
             a,
             b,
@@ -58,16 +59,20 @@ where
             constraint_tag,
         } = self;
 
-        context.register(a.clone(), DomainEvents::ANY_INT, ID_A);
-        context.register(b.clone(), DomainEvents::ANY_INT, ID_B);
-        context.register(c.clone(), DomainEvents::ANY_INT, ID_C);
+        let registration = EventsToRegister::builder()
+            .add(&a, DomainEvents::ANY_INT, ID_A)
+            .add(&b, DomainEvents::ANY_INT, ID_B)
+            .add(&c, DomainEvents::ANY_INT, ID_C)
+            .build();
 
-        IntegerMultiplicationPropagator {
+        let propagator = IntegerMultiplicationPropagator {
             a,
             b,
             c,
             inference_code: InferenceCode::new(constraint_tag, IntegerMultiplication),
-        }
+        };
+
+        (registration, propagator)
     }
 }
 
