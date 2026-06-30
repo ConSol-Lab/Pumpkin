@@ -11,8 +11,8 @@ description = "The constraints of the Pumpkin constraint programming solver."
 workspace = true
 
 [dependencies]
-pumpkin-core = { version = "0.4.0", path = "../core" }
-pumpkin-propagators = { version = "0.4.0", path="../propagators"}
+pumpkin-core = { version = "0.4.1", path = "../core" }
+pumpkin-propagators = { version = "0.4.1", path="../propagators"}
 
 [features]
 clap = ["pumpkin-core/clap", "pumpkin-propagators/clap"]
