@@ -279,13 +279,13 @@ impl ConflictAnalysisContext<'_> {
         let learned_nogood = LearnedNogood::create_from_vec(learned_nogood_predicates, self);
 
         let constraint_tag = self.log_deduction(learned_nogood.predicates.iter().copied());
-        let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
 
-        self.state.add_inference_checker(
-            inference_code.clone(),
-            Box::new(NogoodChecker {
+        let inference_code = self.state.add_inference_checker(
+            constraint_tag,
+            NogoodLabel,
+            NogoodChecker {
                 nogood: learned_nogood.predicates.clone().into(),
-            }),
+            },
         );
 
         self.restore_to(learned_nogood.backtrack_level);

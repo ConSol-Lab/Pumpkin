@@ -16,12 +16,13 @@ use pumpkin_core::predicates::PredicateConstructor;
 use pumpkin_core::predicates::PredicateType;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::ExplanationContext;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
@@ -32,6 +33,7 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::EmptyDomainConflict;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
@@ -54,38 +56,49 @@ where
 {
     type PropagatorImpl = BinaryEqualsPropagator<AVar, BVar>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, BinaryEquals),
-            Box::new(BinaryEqualsChecker {
-                lhs: self.a.clone(),
-                rhs: self.b.clone(),
-            }),
-        );
-    }
-
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(
+        self,
+        _: PropagatorConstructorContext,
+    ) -> ConstructedPropagator<Self::PropagatorImpl> {
         let BinaryEqualsPropagatorArgs {
             a,
             b,
             constraint_tag,
         } = self;
 
-        context.register(a.clone(), DomainEvents::ANY_INT, LocalId::from(0));
-        context.register(b.clone(), DomainEvents::ANY_INT, LocalId::from(1));
+        let registration = EventsToRegister::builder()
+            .add(&a, DomainEvents::ANY_INT, LocalId::from(0))
+            .add(&b, DomainEvents::ANY_INT, LocalId::from(1))
+            .build();
 
-        BinaryEqualsPropagator {
+        let mut checkers = RuntimeCheckers::builder();
+        let inference_code = checkers.add_inference_checker(
+            constraint_tag,
+            BinaryEquals,
+            BinaryEqualsChecker {
+                lhs: a.clone(),
+                rhs: b.clone(),
+            },
+        );
+
+        let propagator = BinaryEqualsPropagator {
             a,
             b,
 
             a_removed_values: HashSet::default(),
             b_removed_values: HashSet::default(),
 
-            inference_code: InferenceCode::new(constraint_tag, BinaryEquals),
+            inference_code,
 
             has_backtracked: false,
             first_propagation_loop: true,
             reason: Predicate::trivially_false(),
+        };
+
+        ConstructedPropagator {
+            registration,
+            checkers: checkers.build(),
+            propagator,
         }
     }
 }

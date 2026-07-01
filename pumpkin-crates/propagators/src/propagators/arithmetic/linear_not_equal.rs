@@ -14,11 +14,12 @@ use pumpkin_core::predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
-use pumpkin_core::propagation::InferenceCheckers;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
@@ -28,6 +29,7 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
@@ -50,31 +52,35 @@ where
 {
     type PropagatorImpl = LinearNotEqualPropagator<Var>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, LinearNotEquals),
-            Box::new(LinearNotEqualChecker {
-                terms: self.terms.as_ref().into(),
-                bound: self.rhs,
-            }),
-        );
-    }
-
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(
+        self,
+        mut context: PropagatorConstructorContext,
+    ) -> ConstructedPropagator<Self::PropagatorImpl> {
         let LinearNotEqualPropagatorArgs {
             terms,
             rhs,
             constraint_tag,
         } = self;
 
+        let mut registration = EventsToRegister::builder();
         for (i, x_i) in terms.iter().enumerate() {
-            context.register(x_i.clone(), DomainEvents::ASSIGN, LocalId::from(i as u32));
+            registration = registration.add(x_i, DomainEvents::ASSIGN, LocalId::from(i as u32));
             context.register_backtrack(
                 x_i.clone(),
                 DomainEvents::new(enum_set!(DomainEvent::Assign | DomainEvent::Removal)),
                 LocalId::from(i as u32),
             );
         }
+
+        let mut checkers = RuntimeCheckers::builder();
+        let inference_code = checkers.add_inference_checker(
+            constraint_tag,
+            LinearNotEquals,
+            LinearNotEqualChecker {
+                terms: terms.as_ref().into(),
+                bound: rhs,
+            },
+        );
 
         let mut propagator = LinearNotEqualPropagator {
             terms,
@@ -83,12 +89,16 @@ where
             fixed_lhs: 0,
             unfixed_variable_has_been_updated: false,
             should_recalculate_lhs: false,
-            inference_code: InferenceCode::new(constraint_tag, LinearNotEquals),
+            inference_code,
         };
 
         propagator.recalculate_fixed_variables(context.domains());
 
-        propagator
+        ConstructedPropagator {
+            registration: registration.build(),
+            checkers: checkers.build(),
+            propagator,
+        }
     }
 }
 

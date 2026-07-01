@@ -1,11 +1,20 @@
+use enumset::EnumSet;
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::IntExt;
 
 use crate::engine::Assignments;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateConstructor;
+use crate::propagation::DomainEvent;
+use crate::propagation::EventDispatcher;
+use crate::propagation::EventTarget;
+use crate::propagation::LocalId;
 use crate::variables::IntegerVariable;
 use crate::variables::TransformableVariable;
+
+impl EventTarget for i32 {
+    fn register(&self, _: &mut impl EventDispatcher, _: EnumSet<DomainEvent>, _: LocalId) {}
+}
 
 impl IntegerVariable for i32 {
     type AffineView = i32;
@@ -51,26 +60,16 @@ impl IntegerVariable for i32 {
         std::iter::once(*self)
     }
 
-    fn watch_all(
-        &self,
-        _watchers: &mut crate::engine::notifications::Watchers<'_>,
-        _events: enumset::EnumSet<crate::propagation::DomainEvent>,
-    ) {
-    }
-
     fn unwatch_all(&self, _watchers: &mut crate::engine::notifications::Watchers<'_>) {}
 
     fn watch_all_backtrack(
         &self,
         _watchers: &mut crate::engine::notifications::Watchers<'_>,
-        _events: enumset::EnumSet<crate::propagation::DomainEvent>,
+        _events: EnumSet<DomainEvent>,
     ) {
     }
 
-    fn unpack_event(
-        &self,
-        _event: crate::propagation::OpaqueDomainEvent,
-    ) -> crate::propagation::DomainEvent {
+    fn unpack_event(&self, _event: crate::propagation::OpaqueDomainEvent) -> DomainEvent {
         unreachable!()
     }
 
