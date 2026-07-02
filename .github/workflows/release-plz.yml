@@ -48,7 +48,7 @@ jobs:
       - name: Extract metadata (tags, labels) for Docker
         if: contains(steps.release_plz.outputs.packages_released, 'pumpkin-solver')
         id: meta
-        uses: docker/metadata-action@020b7354dd55a28effcab0f3b19639fe24d3f58b
+        uses: docker/metadata-action@860a41aba453ca8da198cc147883f6a6503507ee
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
