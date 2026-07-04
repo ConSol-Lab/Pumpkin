@@ -24,7 +24,7 @@ macro_rules! declare_constraints {
             pub fn implied_by(
                 self,
                 solver: &mut pumpkin_solver::Solver,
-                reification_literal: pumpkin_solver::core::variables::Literal,
+                reification_literal: pumpkin_solver::core::predicates::Predicate,
             ) -> Result<(), pumpkin_solver::core::ConstraintOperationError> {
                 match self {
                     $($name::$constraint(cns) => cns.implied_by(solver, reification_literal)),+

@@ -6,3 +6,5 @@ pub use domain_event_watch_list::DomainEvent;
 pub(crate) use domain_event_watch_list::WatchListDomainEvents;
 pub(crate) use domain_event_watch_list::Watchers;
 pub(crate) use event_sink::*;
+pub(crate) use watch_list_predicate_id::PredicateWatchList;
+mod watch_list_predicate_id;

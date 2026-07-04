@@ -285,6 +285,15 @@ impl Assignments {
         self.is_domain_assigned(var).then(|| var.lower_bound(self))
     }
 
+    pub(crate) fn get_assigned_value_at_trail_position<Var: IntegerVariable>(
+        &self,
+        var: &Var,
+        trail_position: usize,
+    ) -> Option<i32> {
+        self.is_domain_assigned_at_trail_position(var, trail_position)
+            .then(|| var.lower_bound(self))
+    }
+
     pub(crate) fn is_decision_predicate(&self, predicate: &Predicate) -> bool {
         let domain = predicate.get_domain();
         if let Some(trail_position) = self.get_trail_position(predicate)
@@ -363,6 +372,15 @@ impl Assignments {
 
     pub(crate) fn is_domain_assigned<Var: IntegerVariable>(&self, var: &Var) -> bool {
         var.lower_bound(self) == var.upper_bound(self)
+    }
+
+    pub(crate) fn is_domain_assigned_at_trail_position<Var: IntegerVariable>(
+        &self,
+        var: &Var,
+        trail_position: usize,
+    ) -> bool {
+        var.lower_bound_at_trail_position(self, trail_position)
+            == var.upper_bound_at_trail_position(self, trail_position)
     }
 
     /// Returns the index of the trail entry at which point the given predicate became true.
@@ -612,6 +630,66 @@ impl Assignments {
         Ok(update_took_place)
     }
 
+    /// Determines whether the provided [`Predicate`] holds at the provided trail position. In case
+    /// the predicate is not assigned yet (neither true nor false), returns None.
+    pub(crate) fn evaluate_predicate_at_trail_position(
+        &self,
+        predicate: Predicate,
+        trail_position: usize,
+    ) -> Option<bool> {
+        let domain_id = predicate.get_domain();
+        let value = predicate.get_right_hand_side();
+
+        match predicate.get_predicate_type() {
+            PredicateType::LowerBound => {
+                if self.get_lower_bound_at_trail_position(domain_id, trail_position) >= value {
+                    Some(true)
+                } else if self.get_upper_bound_at_trail_position(domain_id, trail_position) < value
+                {
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            PredicateType::UpperBound => {
+                if self.get_upper_bound_at_trail_position(domain_id, trail_position) <= value {
+                    Some(true)
+                } else if self.get_lower_bound_at_trail_position(domain_id, trail_position) > value
+                {
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            PredicateType::NotEqual => {
+                if !self.is_value_in_domain_at_trail_position(domain_id, value, trail_position) {
+                    Some(true)
+                } else if let Some(assigned_value) =
+                    self.get_assigned_value_at_trail_position(&domain_id, trail_position)
+                {
+                    // Previous branch concluded the value is not in the domain, so if the variable
+                    // is assigned, then it is assigned to the not equals value.
+                    pumpkin_assert_simple!(assigned_value == value);
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            PredicateType::Equal => {
+                if !self.is_value_in_domain_at_trail_position(domain_id, value, trail_position) {
+                    Some(false)
+                } else if let Some(assigned_value) =
+                    self.get_assigned_value_at_trail_position(&domain_id, trail_position)
+                {
+                    pumpkin_assert_moderate!(assigned_value == value);
+                    Some(true)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
     /// Determines whether the provided [`Predicate`] holds in the current state of the
     /// [`Assignments`]. In case the predicate is not assigned yet (neither true nor false),
     /// returns None.
@@ -665,6 +743,15 @@ impl Assignments {
 
     pub(crate) fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
         self.evaluate_predicate(predicate)
+            .is_some_and(|truth_value| truth_value)
+    }
+
+    pub(crate) fn is_predicate_satisfied_at_trail_position(
+        &self,
+        predicate: Predicate,
+        trail_position: usize,
+    ) -> bool {
+        self.evaluate_predicate_at_trail_position(predicate, trail_position)
             .is_some_and(|truth_value| truth_value)
     }
 

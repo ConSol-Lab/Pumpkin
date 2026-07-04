@@ -4,9 +4,9 @@ use pumpkin_core::ConstraintOperationError;
 use pumpkin_core::Solver;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::constraints::Constraint;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
-use pumpkin_core::variables::Literal;
 use pumpkin_propagators::cumulative::ArgTask;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_propagators::cumulative::options::CumulativePropagationMethod;
@@ -235,7 +235,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
     fn implied_by(
         self,
         solver: &mut Solver,
-        reification_literal: Literal,
+        reification_literal: Predicate,
     ) -> Result<(), ConstraintOperationError> {
         match self.options.propagation_method {
             CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointPropagator::new(

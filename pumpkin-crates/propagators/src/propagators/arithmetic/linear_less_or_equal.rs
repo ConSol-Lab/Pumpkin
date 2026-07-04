@@ -3,6 +3,7 @@ use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
+use pumpkin_core::asserts::pumpkin_assert_extreme;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
@@ -76,6 +77,13 @@ where
             current_bounds.push(context.new_trailed_integer(context.lower_bound(x_i) as i64));
         }
 
+        pumpkin_assert_extreme!(
+            lower_bound_left_hand_side
+                == x.iter().map(|x| context.lower_bound(x) as i64).sum::<i64>(),
+            "Expected {lower_bound_left_hand_side} to be equal to {}",
+            x.iter().map(|x| context.lower_bound(x)).sum::<i32>()
+        );
+
         let lower_bound_left_hand_side = context.new_trailed_integer(lower_bound_left_hand_side);
 
         LinearLessOrEqualPropagator {
@@ -145,10 +153,7 @@ where
         let old_bound = context.read_trailed_integer(self.current_bounds[index]);
         let new_bound = context.lower_bound(x_i) as i64;
 
-        pumpkin_assert_simple!(
-            old_bound < new_bound,
-            "propagator should only be triggered when lower bounds are tightened, old_bound={old_bound}, new_bound={new_bound}"
-        );
+        pumpkin_assert_simple!(new_bound > old_bound);
 
         context.write_trailed_integer(
             self.lower_bound_left_hand_side,
@@ -221,10 +226,19 @@ where
                 return Ok(());
             }
         };
+        pumpkin_assert_extreme!(
+            lower_bound_left_hand_side
+                == self.x.iter().map(|x| context.lower_bound(x)).sum::<i32>(),
+            "Expected {lower_bound_left_hand_side} to be equal to {}\n{:?}",
+            self.x.iter().map(|x| context.lower_bound(x)).sum::<i32>(),
+            self.x
+                .iter()
+                .map(|x| (x, context.lower_bound(x)))
+                .collect::<Vec<_>>()
+        );
 
         for (i, x_i) in self.x.iter().enumerate() {
             let bound = self.c - (lower_bound_left_hand_side - context.lower_bound(x_i));
-
             if context.upper_bound(x_i) > bound {
                 context.post(predicate![x_i <= bound], i)?;
             }

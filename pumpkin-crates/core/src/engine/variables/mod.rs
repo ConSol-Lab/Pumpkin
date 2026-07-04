@@ -3,16 +3,16 @@
 //! constraints.
 
 mod affine_view;
+mod any_integer;
 mod constant;
 mod domain_generator_iterator;
 mod domain_id;
 mod integer_variable;
-mod literal;
 mod transformable_variable;
 
 pub use affine_view::AffineView;
+pub use any_integer::AnyInteger;
 pub(crate) use domain_generator_iterator::DomainGeneratorIterator;
 pub use domain_id::DomainId;
 pub use integer_variable::IntegerVariable;
-pub use literal::Literal;
 pub use transformable_variable::TransformableVariable;

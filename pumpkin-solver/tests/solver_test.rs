@@ -20,7 +20,7 @@ fn proof_with_reified_literals() {
 
     let constraint_tag = solver.new_constraint_tag();
     let variable = solver.new_named_bounded_integer(1, 10, "var");
-    let literal = solver.new_literal_for_predicate(predicate![variable == 5], constraint_tag);
+    let literal = predicate![variable == 5];
 
     solver
         .add_constraint(pumpkin_constraints::clause(vec![literal], constraint_tag))

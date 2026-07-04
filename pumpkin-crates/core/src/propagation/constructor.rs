@@ -27,7 +27,6 @@ use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
 use crate::propagators::reified_propagator::ReifiedChecker;
 use crate::variables::IntegerVariable;
-use crate::variables::Literal;
 
 /// A propagator constructor creates a fully initialized instance of a [`Propagator`].
 ///
@@ -55,7 +54,7 @@ pub trait PropagatorConstructor {
 #[derive(Debug)]
 pub struct InferenceCheckers<'state> {
     state: &'state mut State,
-    reification_literal: Option<Literal>,
+    reification_literal: Option<Predicate>,
 }
 
 impl<'state> InferenceCheckers<'state> {
@@ -87,7 +86,7 @@ impl InferenceCheckers<'_> {
         }
     }
 
-    pub fn with_reification_literal(&mut self, literal: Literal) {
+    pub fn with_reification_literal(&mut self, literal: Predicate) {
         self.reification_literal = Some(literal)
     }
 }
@@ -164,7 +163,12 @@ impl PropagatorConstructorContext<'_> {
 
         self.update_next_local_id(local_id);
 
-        let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
+        let mut watchers = Watchers::new(
+            propagator_var,
+            &mut self.state.notification_engine,
+            &mut self.state.trailed_values,
+            &self.state.assignments,
+        );
         var.watch_all(&mut watchers, domain_events.events());
     }
 
@@ -207,7 +211,12 @@ impl PropagatorConstructorContext<'_> {
 
         self.update_next_local_id(local_id);
 
-        let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
+        let mut watchers = Watchers::new(
+            propagator_var,
+            &mut self.state.notification_engine,
+            &mut self.state.trailed_values,
+            &self.state.assignments,
+        );
         var.watch_all_backtrack(&mut watchers, domain_events.events());
     }
 

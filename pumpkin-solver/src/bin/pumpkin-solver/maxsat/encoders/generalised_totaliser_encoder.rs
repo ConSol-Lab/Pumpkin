@@ -1,9 +1,10 @@
 use log::debug;
+use pumpkin_core::predicates::Predicate;
+use pumpkin_core::predicates::PredicateConstructor;
 use pumpkin_solver::core::containers::HashMap;
 use pumpkin_solver::core::proof::ConstraintTag;
 use pumpkin_solver::core::pumpkin_assert_moderate;
 use pumpkin_solver::core::pumpkin_assert_simple;
-use pumpkin_solver::core::variables::Literal;
 
 use super::WeightedLiteral;
 use super::pseudo_boolean_constraint_encoder::EncodingError;
@@ -70,10 +71,7 @@ impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
                 self.index_last_added_weighted_literal = i;
 
                 if solver
-                    .add_clause(
-                        [(!weighted_literals[i].literal).get_true_predicate()],
-                        self.constraint_tag,
-                    )
+                    .add_clause([(!weighted_literals[i].literal)], self.constraint_tag)
                     .is_err()
                 {
                     return Err(EncodingError::CannotStrengthen);
@@ -127,7 +125,7 @@ impl GeneralisedTotaliserEncoder {
 
         // these are to be used in the loop below
         //  will be reused to avoid allocating each iteration
-        let mut value_to_literal_map: HashMap<u64, Literal> = HashMap::default();
+        let mut value_to_literal_map: HashMap<u64, Predicate> = HashMap::default();
         let mut partial_sums: Vec<u64> = Vec::new();
 
         //  in each iteration, the literals of the next_layer are created and appropriate clauses
@@ -189,7 +187,7 @@ impl GeneralisedTotaliserEncoder {
                 //  then create the variables, one for each partial sum, and register the mapping
                 // between the partial sum value and the corresponding literal
                 for partial_sum in &partial_sums {
-                    let literal = solver.new_literal();
+                    let literal = solver.new_bounded_integer(0, 1).lower_bound_predicate(1);
                     let _ = value_to_literal_map.insert(*partial_sum, literal);
                     next_layer_node.push(WeightedLiteral {
                         literal,
@@ -205,9 +203,8 @@ impl GeneralisedTotaliserEncoder {
                     solver
                         .add_clause(
                             vec![
-                                (!weighted_literal.literal).get_true_predicate(),
-                                (*value_to_literal_map.get(&weighted_literal.weight).unwrap())
-                                    .get_true_predicate(),
+                                (!weighted_literal.literal),
+                                (*value_to_literal_map.get(&weighted_literal.weight).unwrap()),
                             ],
                             self.constraint_tag,
                         )
@@ -220,9 +217,8 @@ impl GeneralisedTotaliserEncoder {
                     solver
                         .add_clause(
                             vec![
-                                (!weighted_literal.literal).get_true_predicate(),
-                                (*value_to_literal_map.get(&weighted_literal.weight).unwrap())
-                                    .get_true_predicate(),
+                                (!weighted_literal.literal),
+                                (*value_to_literal_map.get(&weighted_literal.weight).unwrap()),
                             ],
                             self.constraint_tag,
                         )
@@ -239,10 +235,9 @@ impl GeneralisedTotaliserEncoder {
                             solver
                                 .add_clause(
                                     vec![
-                                        (!wl1.literal).get_true_predicate(),
-                                        (!wl2.literal).get_true_predicate(),
-                                        (*value_to_literal_map.get(&combined_weight).unwrap())
-                                            .get_true_predicate(),
+                                        (!wl1.literal),
+                                        (!wl2.literal),
+                                        (*value_to_literal_map.get(&combined_weight).unwrap()),
                                     ],
                                     self.constraint_tag,
                                 )
@@ -256,10 +251,7 @@ impl GeneralisedTotaliserEncoder {
                         } else {
                             solver
                                 .add_clause(
-                                    vec![
-                                        (!wl1.literal).get_true_predicate(),
-                                        (!wl2.literal).get_true_predicate(),
-                                    ],
+                                    vec![(!wl1.literal), (!wl2.literal)],
                                     self.constraint_tag,
                                 )
                                 .expect("Adding encoding clause should not lead to conflict");

@@ -9,7 +9,6 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::reason::StoredReason;
-use crate::engine::variables::Literal;
 use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
 use crate::propagation::HasAssignments;
@@ -83,7 +82,7 @@ pub struct PropagationContext<'a> {
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) propagator_id: PropagatorId,
     pub(crate) notification_engine: &'a mut NotificationEngine,
-    reification_literal: Option<Literal>,
+    reification_literal: Option<Predicate>,
 }
 
 impl<'a> HasAssignments for PropagationContext<'a> {
@@ -151,7 +150,12 @@ impl<'a> PropagationContext<'a> {
             variable: local_id,
         };
 
-        let mut watchers = Watchers::new(propagator_var, self.notification_engine);
+        let mut watchers = Watchers::new(
+            propagator_var,
+            self.notification_engine,
+            self.trailed_values,
+            self.assignments,
+        );
         var.watch_all(&mut watchers, domain_events.events());
     }
 
@@ -162,7 +166,12 @@ impl<'a> PropagationContext<'a> {
             variable: local_id,
         };
 
-        let mut watchers = Watchers::new(propagator_var, self.notification_engine);
+        let mut watchers = Watchers::new(
+            propagator_var,
+            self.notification_engine,
+            self.trailed_values,
+            self.assignments,
+        );
         var.unwatch_all(&mut watchers);
     }
 
@@ -179,7 +188,7 @@ impl<'a> PropagationContext<'a> {
     }
 
     /// Apply a reification literal to all the explanations that are passed to the context.
-    pub(crate) fn with_reification(&mut self, reification_literal: Literal) {
+    pub(crate) fn with_reification(&mut self, reification_literal: Predicate) {
         pumpkin_assert_simple!(
             self.reification_literal.is_none(),
             "cannot reify an already reified propagation context"
@@ -276,15 +285,11 @@ impl PropagationContext<'_> {
 
 pub(crate) fn build_reason(
     reason: impl Into<Reason>,
-    reification_literal: Option<Literal>,
+    reification_literal: Option<Predicate>,
 ) -> StoredReason {
     match reason.into() {
         Reason::Eager(mut conjunction, inference_code) => {
-            conjunction.extend(
-                reification_literal
-                    .iter()
-                    .map(|lit| lit.get_true_predicate()),
-            );
+            conjunction.extend(reification_literal);
             StoredReason::Eager(conjunction, inference_code)
         }
         Reason::DynamicLazy(code) => StoredReason::DynamicLazy(code),
