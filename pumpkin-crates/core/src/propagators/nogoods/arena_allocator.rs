@@ -19,11 +19,11 @@ pub(crate) struct ArenaAllocator {
     /// If there is a [`NogoodId`] with value `i`, then the [`PredicateId`] at position `i` will
     /// contain the length `x` of the nogood. The next `i + 1 + x` elements are then the nogood
     /// pointed to by the [`NogoodId`] with value `i`.
-    nogoods: Vec<PredicateId>,
+    pub(crate) nogoods: Vec<PredicateId>,
     /// Maps each [`NogoodId`] to an index; this is to prevent unnecessary allocations for other
     /// structures such as the [`NogoodInfo`] which use direct hashing for storing information
     /// about nogoods.
-    nogood_id_to_index: HashMap<NogoodId, NogoodIndex>,
+    pub(crate) nogood_id_to_index: HashMap<NogoodId, NogoodIndex>,
     /// The current index for the next [`NogoodId`] which is entered; see
     /// [`ArenaAllocator::nogood_id_to_index`].
     current_index: u32,
@@ -106,7 +106,7 @@ impl ArenaAllocator {
     }
 
     /// Calculates the range of the nogood spanned by the nogood with ID [`NogoodId`].
-    fn calculate_range_of_nogood(&self, nogood_id: NogoodId) -> Range<usize> {
+    pub(crate) fn calculate_range_of_nogood(&self, nogood_id: NogoodId) -> Range<usize> {
         let len = self.len_of_nogood(nogood_id);
         nogood_id.index() + 1..nogood_id.index() + 1 + len
     }

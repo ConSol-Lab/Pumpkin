@@ -335,9 +335,11 @@ impl Propagator for NogoodPropagator {
                     index += 1;
                     continue;
                 }
-                let inference_code = &self.inference_codes
-                    [self.nogood_predicates.get_nogood_index(&watcher.nogood_id)];
-                let nogood_predicates = &mut self.nogood_predicates[watcher.nogood_id];
+                let calculate_range_of_nogood = self
+                    .nogood_predicates
+                    .calculate_range_of_nogood(watcher.nogood_id);
+                let nogood_predicates =
+                    &mut self.nogood_predicates.nogoods[calculate_range_of_nogood];
 
                 // Place the watched predicate at position 1 for simplicity.
                 if nogood_predicates[0] == predicate_id {
@@ -480,10 +482,15 @@ impl Propagator for NogoodPropagator {
                 }
 
                 // Now we perform the propagation
+                let nogood_index = self
+                    .nogood_predicates
+                    .nogood_id_to_index
+                    .get(&watcher.nogood_id)
+                    .expect("Expected nogood predicate to exist");
                 self.propagation_mode.perform_propagation(
                     &mut context,
                     nogood_predicates,
-                    inference_code,
+                    &self.inference_codes[nogood_index],
                     watcher.nogood_id,
                     &mut self.statistics,
                 )?;
