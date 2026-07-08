@@ -275,8 +275,8 @@ impl Propagator for NogoodPropagator {
                 // to replace the watched predicate.
                 let mut found_new_watch = false;
                 // Start from index 2 since we are skipping watched predicates.
-                for i in (last_traversed_watcher.index()..nogood_predicates.len())
-                    .chain(2..last_traversed_watcher.index())
+                for i in (last_traversed_watcher.index() + 1..nogood_predicates.len())
+                    .chain(2..=last_traversed_watcher.index())
                 {
                     last_traversed_watcher.id = i as u32;
 
