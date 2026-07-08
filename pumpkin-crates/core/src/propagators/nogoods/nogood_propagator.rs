@@ -251,7 +251,9 @@ impl Propagator for NogoodPropagator {
                     continue;
                 }
 
-                let nogood_predicates = &mut self.nogood_predicates[watcher.nogood_id];
+                let (last_traversed_watcher, nogood_predicates) = self
+                    .nogood_predicates
+                    .get_nogood_mut_with_last_traversed(watcher.nogood_id);
 
                 // Place the watched predicate at position 1 for simplicity.
                 if nogood_predicates[0] == predicate_id {
@@ -273,7 +275,11 @@ impl Propagator for NogoodPropagator {
                 // to replace the watched predicate.
                 let mut found_new_watch = false;
                 // Start from index 2 since we are skipping watched predicates.
-                for i in 2..nogood_predicates.len() {
+                for i in (last_traversed_watcher.index()..nogood_predicates.len())
+                    .chain(2..last_traversed_watcher.index())
+                {
+                    last_traversed_watcher.id = i as u32;
+
                     // Find a predicate that is either false or unassigned,
                     // i.e., not assigned true.
                     if !context.is_predicate_id_satisfied(nogood_predicates[i]) {
@@ -360,7 +366,7 @@ impl Propagator for NogoodPropagator {
     ) -> LazyExplanation<'_> {
         let id = NogoodId { id: code as u32 };
 
-        self.temp_nogood_reason = self.nogood_predicates[id][1..]
+        self.temp_nogood_reason = self.nogood_predicates.get_nogood(id)[1..]
             .iter()
             .map(|predicate_id| context.get_predicate(*predicate_id))
             .collect::<Vec<_>>();
@@ -468,19 +474,19 @@ impl NogoodPropagator {
 
         let watcher = Watcher {
             nogood_id,
-            cached_predicate: self.nogood_predicates[nogood_id][0],
+            cached_predicate: self.nogood_predicates.get_nogood(nogood_id)[0],
         };
 
         // Now we add two watchers to the first two predicates in the nogood
         NogoodPropagator::add_watcher(
             context,
-            self.nogood_predicates[nogood_id][0],
+            self.nogood_predicates.get_nogood(nogood_id)[0],
             watcher,
             &mut self.watch_lists,
         );
         NogoodPropagator::add_watcher(
             context,
-            self.nogood_predicates[nogood_id][1],
+            self.nogood_predicates.get_nogood(nogood_id)[1],
             watcher,
             &mut self.watch_lists,
         );
@@ -491,7 +497,7 @@ impl NogoodPropagator {
 
         let predicate = !context
             .notification_engine
-            .get_predicate(self.nogood_predicates[nogood_id][0]);
+            .get_predicate(self.nogood_predicates.get_nogood(nogood_id)[0]);
         context
             .post(predicate, reason)
             .expect("Cannot fail to add the asserting predicate.");
@@ -644,18 +650,18 @@ impl NogoodPropagator {
 
             let watcher = Watcher {
                 nogood_id,
-                cached_predicate: self.nogood_predicates[nogood_id][0],
+                cached_predicate: self.nogood_predicates.get_nogood(nogood_id)[0],
             };
 
             NogoodPropagator::add_watcher(
                 context,
-                self.nogood_predicates[nogood_id][0],
+                self.nogood_predicates.get_nogood(nogood_id)[0],
                 watcher,
                 &mut self.watch_lists,
             );
             NogoodPropagator::add_watcher(
                 context,
-                self.nogood_predicates[nogood_id][1],
+                self.nogood_predicates.get_nogood(nogood_id)[1],
                 watcher,
                 &mut self.watch_lists,
             );
@@ -881,7 +887,7 @@ impl NogoodPropagator {
                 if self.nogood_info[info_index].is_deleted {
                     false
                 } else if NogoodPropagator::has_a_watched_predicate_falsified_at_root_level(
-                    &self.nogood_predicates[watcher.nogood_id],
+                    self.nogood_predicates.get_nogood(watcher.nogood_id),
                     assignments,
                     notification_engine,
                 ) {
@@ -983,13 +989,15 @@ impl NogoodPropagator {
             // Skip nogoods which are propagating at a non-root level.
             if NogoodPropagator::is_nogood_propagating(
                 handle,
-                &nogoods[id],
+                nogoods.get_nogood(id),
                 assignments,
                 reason_store,
                 id,
                 notification_engine,
             ) && assignments
-                .get_checkpoint_for_predicate(&!notification_engine.get_predicate(nogoods[id][0]))
+                .get_checkpoint_for_predicate(
+                    &!notification_engine.get_predicate(nogoods.get_nogood(id)[0]),
+                )
                 .expect("A propagating predicate must have a decision level.")
                 > 0
             {
@@ -1089,8 +1097,8 @@ impl NogoodPropagator {
                 //
                 // TODO: currently we do not remove true predicates from
                 // nogoods, so calling len() might not be accurate.
-                let size1 = nogoods[id1].len();
-                let size2 = nogoods[id2].len();
+                let size1 = nogoods.get_nogood(id1).len();
+                let size2 = nogoods.get_nogood(id2).len();
                 size1.cmp(&size2)
             }
         });
@@ -1157,7 +1165,7 @@ impl NogoodPropagator {
         context: &mut PropagationContext,
     ) -> Result<(), Conflict> {
         // This is an inefficient implementation for testing purposes
-        let nogood = &self.nogood_predicates[nogood_id];
+        let nogood = &self.nogood_predicates.get_nogood(nogood_id);
         let info_id = self.nogood_predicates.get_nogood_index(&nogood_id);
         let inference_code = &self.inference_codes[info_id];
 
@@ -1251,7 +1259,7 @@ impl NogoodPropagator {
         };
 
         for nogood_id in self.nogood_predicates.nogoods_ids() {
-            let nogood_predicates = &self.nogood_predicates[nogood_id];
+            let nogood_predicates = &self.nogood_predicates.get_nogood(nogood_id);
 
             if self.nogood_info[self.nogood_predicates.get_nogood_index(&nogood_id)].is_deleted {
                 // If the clause is deleted then it will have no watchers
