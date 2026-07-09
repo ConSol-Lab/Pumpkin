@@ -251,6 +251,7 @@ impl Propagator for NogoodPropagator {
                     continue;
                 }
 
+                // We retrieve the index of the last-traversed watcher and the nogood itself.
                 let (last_traversed_watcher, nogood_predicates) = self
                     .nogood_predicates
                     .get_nogood_mut_with_last_traversed(watcher.nogood_id);
@@ -274,11 +275,15 @@ impl Propagator for NogoodPropagator {
                 // Look for another nonsatisfied predicate
                 // to replace the watched predicate.
                 let mut found_new_watch = false;
-                // Start from index 2 since we are skipping watched predicates.
-                for i in (last_traversed_watcher.index()..nogood_predicates.len())
-                    .chain(2..last_traversed_watcher.index())
+
+                // We start from the index of the last-traversed watcher and circle around after
+                // reaching the end of the nogood to ensure that all possible watcher are
+                // considered.
+                for i in (*last_traversed_watcher as usize..nogood_predicates.len())
+                    .chain(2..*last_traversed_watcher as usize)
                 {
-                    last_traversed_watcher.id = i as u32;
+                    // We update the last-traversed watcher
+                    *last_traversed_watcher = i as u32;
 
                     // Find a predicate that is either false or unassigned,
                     // i.e., not assigned true.
