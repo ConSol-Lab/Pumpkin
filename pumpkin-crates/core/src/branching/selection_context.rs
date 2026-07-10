@@ -95,4 +95,8 @@ impl<'a> SelectionContext<'a> {
 
         (assignments, notification_engine)
     }
+
+    pub(crate) fn num_domains(&self) -> u32 {
+        self.assignments.num_domains()
+    }
 }
