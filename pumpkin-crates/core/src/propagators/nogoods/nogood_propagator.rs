@@ -279,11 +279,11 @@ impl Propagator for NogoodPropagator {
                 // We start from the index of the last-traversed watcher and circle around after
                 // reaching the end of the nogood to ensure that all possible watcher are
                 // considered.
-                for i in (*last_traversed_watcher as usize..nogood_predicates.len())
-                    .chain(2..*last_traversed_watcher as usize)
+                for i in (last_traversed_watcher.unpack_second() as usize..nogood_predicates.len())
+                    .chain(2..last_traversed_watcher.unpack_second() as usize)
                 {
                     // We update the last-traversed watcher
-                    *last_traversed_watcher = i as u32;
+                    last_traversed_watcher.set_second(i);
 
                     // Find a predicate that is either false or unassigned,
                     // i.e., not assigned true.

@@ -110,6 +110,39 @@ pub struct PredicateId {
     pub(crate) id: u32,
 }
 
+impl PredicateId {
+    /// Packs the two provided values into a single [`PredicateId`].
+    ///
+    /// Panics if either of the two values exceed the maximum value of [`u16`].
+    pub(crate) fn pack(first: usize, second: usize) -> Self {
+        assert!(first <= u16::MAX as usize);
+        assert!(second <= u16::MAX as usize);
+
+        Self {
+            id: ((first as u32) << 16) | second as u32,
+        }
+    }
+
+    /// Returns the first value provided to [`PredicateId::pack`].
+    pub(crate) fn unpack_first(&self) -> u32 {
+        self.id >> 16
+    }
+
+    /// Returns the second value provided to [`PredicateId::pack`].
+    pub(crate) fn unpack_second(&self) -> u32 {
+        self.id & 0x0000_FFFF
+    }
+
+    /// Overwrites the second value stored in the [`PredicateId`] when using [`PredicateId::pack`].
+    ///
+    /// Panics if the provided value exceeds the maximum value of [`u16`].
+    pub(crate) fn set_second(&mut self, value: usize) {
+        assert!(value <= u16::MAX as usize);
+
+        self.id = (self.id & 0xFFFF_0000) | value as u32;
+    }
+}
+
 impl StorageKey for PredicateId {
     fn index(&self) -> usize {
         self.id as usize
@@ -196,5 +229,60 @@ mod tests {
         assert_eq!(iterator.next().unwrap().id, 8);
         assert_eq!(iterator.next().unwrap().id, 10);
         assert_eq!(iterator.next(), None);
+    }
+
+    #[test]
+    fn test_packing() {
+        let first = u16::MAX as usize - 1;
+        let second = u16::MAX as usize;
+
+        let mut id = PredicateId::pack(first, second);
+
+        assert_eq!(id.unpack_first(), first as u32);
+        assert_eq!(id.unpack_second(), second as u32);
+
+        let third = 15;
+
+        id.set_second(third);
+
+        assert_eq!(id.unpack_first(), first as u32);
+        assert_eq!(id.unpack_second(), third as u32);
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_first_too_big() {
+        let first = u16::MAX as usize + 1;
+        let second = 42;
+
+        let _ = PredicateId::pack(first, second);
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_second_too_big() {
+        let first = 42;
+        let second = u16::MAX as usize + 1;
+
+        let _ = PredicateId::pack(first, second);
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_set_value_too_large() {
+        let first = 15000;
+        let second = 42;
+
+        let mut id = PredicateId::pack(first, second);
+
+        assert_eq!(id.unpack_first(), first as u32);
+        assert_eq!(id.unpack_second(), second as u32);
+
+        let third = u16::MAX as usize + 1;
+
+        id.set_second(third);
+
+        assert_eq!(id.unpack_first(), first as u32);
+        assert_eq!(id.unpack_second(), third as u32);
     }
 }
