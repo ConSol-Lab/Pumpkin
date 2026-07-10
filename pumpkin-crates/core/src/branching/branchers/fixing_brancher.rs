@@ -9,7 +9,7 @@ use crate::branching::value_selection::ValueSelector;
 use crate::branching::variable_selection::InputOrder;
 use crate::engine::variables::DomainGeneratorIterator;
 use crate::predicates::Predicate;
-use crate::pumpkin_assert_simple;
+use crate::pumpkin_assert_advanced;
 #[cfg(doc)]
 use crate::variables::DomainId;
 
@@ -37,23 +37,22 @@ impl Brancher for FixingBrancher {
         //
         // Note that we start looking from the index of the last fixed variable that was
         // encountered. We then loop around to ensure that we consider all of the variables.
-        if let Some(domain) =
-            DomainGeneratorIterator::new(self.last_fixed + 1, context.num_domains())
-                .chain(DomainGeneratorIterator::new(1, self.last_fixed))
-                .find(|domain_id| {
-                    let is_fixed = context.is_integer_fixed(*domain_id);
+        if let Some(domain) = DomainGeneratorIterator::new(self.last_fixed, context.num_domains())
+            .chain(DomainGeneratorIterator::new(1, self.last_fixed))
+            .find(|domain_id| {
+                let is_fixed = context.is_integer_fixed(*domain_id);
 
-                    if is_fixed {
-                        self.last_fixed = domain_id.id();
-                    }
+                if is_fixed {
+                    self.last_fixed = domain_id.id();
+                }
 
-                    !is_fixed
-                })
+                !is_fixed
+            })
         {
             return Some(InDomainMin.select_value(context, domain));
         }
 
-        pumpkin_assert_simple!(context.are_all_variables_assigned());
+        pumpkin_assert_advanced!(context.are_all_variables_assigned());
 
         None
     }
