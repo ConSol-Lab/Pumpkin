@@ -38,7 +38,7 @@ pub(crate) struct ArenaAllocator {
 /// begin.
 ///
 /// See [`ArenaAllocator::nogoods`] for more information.
-const OFFSET: usize = 1;
+const OFFSET: usize = 2;
 
 #[derive(Clone, Copy, Debug, Hash)]
 pub(crate) struct NogoodIndex(u32);
@@ -78,10 +78,12 @@ impl ArenaAllocator {
             .insert(nogood_id, NogoodIndex(self.current_index));
         self.current_index += 1;
 
-        // We push a PredicateId which stores the length of the nogood and the last-traversed
-        // watcher.
-        self.nogoods.push(PredicateId::pack(nogood.len(), 2));
-
+        // We push a PredicateId which stores the length of the nogood
+        self.nogoods
+            .push(PredicateId::create_from_index(nogood.len()));
+        // We also push a PredicateId which stores the last-traversed watcher (defaults to the
+        // first non-watcher element)
+        self.nogoods.push(PredicateId::create_from_index(2));
         self.nogoods.extend(nogood);
 
         nogood_id
@@ -108,7 +110,7 @@ impl ArenaAllocator {
 
     /// Returns the length of the nogood corresponding to the provided [`NogoodId`].
     fn len_of_nogood(&self, nogood_id: NogoodId) -> usize {
-        self.nogoods[nogood_id.index()].unpack_first() as usize
+        self.nogoods[nogood_id.index()].index()
     }
 
     /// Calculates the range of the nogood spanned by the nogood with ID [`NogoodId`].
@@ -150,11 +152,12 @@ impl ArenaAllocator {
     pub(crate) fn get_nogood_mut_with_last_traversed(
         &mut self,
         nogood_id: NogoodId,
-    ) -> (&mut PredicateId, &mut [PredicateId]) {
+    ) -> (&mut u32, &mut [PredicateId]) {
         let nogood_range = self.calculate_range_of_nogood_including_last_traversed(nogood_id);
 
         self.nogoods[nogood_range]
             .split_first_mut()
+            .map(|(last_traversed, nogood)| (&mut last_traversed.id, nogood))
             .expect("Expected nogood to be at least of length two")
     }
 }
