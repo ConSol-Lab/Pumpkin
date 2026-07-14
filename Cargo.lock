@@ -671,15 +671,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "itertools"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
-dependencies = [
- "either",
-]
-
-[[package]]
 name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -995,7 +986,7 @@ dependencies = [
 name = "pumpkin-conflict-resolvers"
 version = "0.4.0"
 dependencies = [
- "itertools 0.15.0",
+ "itertools",
  "log",
  "pumpkin-core",
 ]
@@ -1025,7 +1016,7 @@ dependencies = [
  "fnv",
  "getrandom",
  "indexmap",
- "itertools 0.15.0",
+ "itertools",
  "log",
  "num",
  "once_cell",
@@ -1040,7 +1031,7 @@ dependencies = [
 name = "pumpkin-macros"
 version = "0.1.0"
 dependencies = [
- "itertools 0.14.0",
+ "itertools",
  "proc-macro2",
  "quote",
  "stringcase",
