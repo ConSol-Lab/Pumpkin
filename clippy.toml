@@ -4,4 +4,5 @@ allowed-duplicate-crates = [
     "anstream",
     "anstyle-parse",
     "regex-syntax",
+    "hashbrown",
 ]

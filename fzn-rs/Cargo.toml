@@ -1,6 +1,6 @@
 [package]
 name = "fzn-rs"
-version = "0.1.0"
+version = "0.1.1"
 description = "A FlatZinc parser written in Rust."
 repository.workspace = true
 edition.workspace = true
@@ -8,9 +8,9 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-chumsky = { version = "0.12.0" }
+chumsky = { version = "0.13.0" }
 thiserror = "2.0.12"
-fzn-rs-derive = { version = "0.1.0", path = "../fzn-rs-derive/" }
+fzn-rs-derive = { version = "0.1.1", path = "../fzn-rs-derive/" }
 
 [lints]
 workspace = true

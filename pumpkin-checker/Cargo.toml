@@ -1,7 +1,7 @@
 [package]
 name = "pumpkin-checker"
-version = "0.3.0"
 description = "A proof-checker for DRCP proofs generated for FlatZinc models."
+version.workspace = true
 repository.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -17,20 +17,20 @@ exclude = [
 ]
 
 [dependencies]
-pumpkin-core = { version = "0.3.0", path = "../pumpkin-crates/core/" }
-pumpkin-checking = { version = "0.3.0", path = "../pumpkin-crates/checking/" }
-pumpkin-propagators = { version = "0.3.0", path = "../pumpkin-crates/propagators/" }
+pumpkin-core = { version = "0.4.0", path = "../pumpkin-crates/core/" }
+pumpkin-checking = { version = "0.4.0", path = "../pumpkin-crates/checking/" }
+pumpkin-propagators = { version = "0.4.0", path = "../pumpkin-crates/propagators/" }
 anyhow = "1.0.99"
 clap = { version = "4.5.47", features = ["derive"] }
 drcp-format = { version = "0.3.1", path = "../drcp-format" }
 flate2 = "1.1.2"
-fzn-rs = { version = "0.1.0", path = "../fzn-rs" }
+fzn-rs = { version = "0.1.1", path = "../fzn-rs" }
 thiserror = "2.0.16"
 fnv = "1.0.7"
 derive_more = { version = "2.1.1", features = ["from"] }
 
 [dev-dependencies]
-assert_cmd = "2.1.2"
+assert_cmd = "2.2.2"
 
 [lints]
 workspace = true
