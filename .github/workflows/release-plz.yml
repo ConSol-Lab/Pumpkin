@@ -24,7 +24,7 @@ jobs:
     steps:
       - &checkout
         name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -40,7 +40,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Log in to the Container registry
         if: contains(steps.release_plz.outputs.packages_released, 'pumpkin-solver')
-        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        uses: docker/login-action@3864d6aed8ff134b2ed894ce00c87695c709c870
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -48,7 +48,7 @@ jobs:
       - name: Extract metadata (tags, labels) for Docker
         if: contains(steps.release_plz.outputs.packages_released, 'pumpkin-solver')
         id: meta
-        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
+        uses: docker/metadata-action@020b7354dd55a28effcab0f3b19639fe24d3f58b
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -57,7 +57,7 @@ jobs:
       - name: Build and push Docker image
         if: contains(steps.release_plz.outputs.packages_released, 'pumpkin-solver')
         id: push
-        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        uses: docker/build-push-action@ff26911fd365b0233252dfbd8eede1c0e9ef9a51
         with:
           context: .
           file: minizinc/Dockerfile
