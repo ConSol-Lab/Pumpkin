@@ -129,14 +129,15 @@ struct LazyNogoodExplanation {
     /// explanation than when using unit propagation is generated.
     #[bits(1)]
     explains_extended_propagation: bool,
-    /// When extended nogood propagation performed unit propagation, the lazy explanation expects
-    /// the propagated atomic constraint at the 0-th index. However, this invariant is not
-    /// maintained when performing extended nogood propagation, so this index is used to indicate
-    /// the index of the propagating atomic constraint.
-    #[bits(30)]
-    unit_propagation_index: u32,
+    /// Whether the extended nogood propagation was a unit propagation.
     #[bits(1)]
     is_extended_unit_propagation: bool,
+    /// When extended nogood propagation performs unit propagation, the lazy explanation expects
+    /// the propagated atomic constraint at the 0-th index. However, this invariant is not
+    /// maintained when performing extended nogood propagation, so this index is used to indicate
+    /// the [`PredicateId`] of the propagating atomic constraint.
+    #[bits(30)]
+    unit_propagation_index: u32,
 }
 
 /// [`PropagatorConstructor`] for constructing a new instance of the [`NogoodPropagator`] with the
