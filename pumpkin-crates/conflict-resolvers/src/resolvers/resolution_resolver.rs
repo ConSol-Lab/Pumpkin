@@ -114,6 +114,13 @@ pub enum AnalysisMode {
     AllDecision,
 }
 
+/// Indicates whether a [`Predicate`] is redundant or non-redundant when adding it to the nogood.
+#[derive(Clone, Copy, Debug)]
+enum IterativeRedundancyStatus {
+    Redundant,
+    NonRedundant,
+}
+
 impl ConflictResolver for ResolutionResolver {
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) {
         self.learn_nogood(context);
@@ -298,20 +305,6 @@ impl ResolutionResolver {
         // otherwise we add it to the decision predicates which have been discovered previously
         else {
             let predicate_id = self.predicate_id_generator.get_id(predicate);
-            if let ControlFlow::Break(_) =
-                self.check_for_iterative_redundancy(predicate, context, predicate_id)
-            {
-                if dec_level == context.get_checkpoint() {
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed_current_decision_level += 1
-                } else {
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed_previous_decision_level += 1
-                }
-                return;
-            }
             if match mode {
                 AnalysisMode::OneUIP => dec_level == context.get_checkpoint(),
                 AnalysisMode::AllDecision => !context.is_decision_predicate(predicate),
@@ -336,6 +329,21 @@ impl ResolutionResolver {
                     || (!self.to_process_heap.is_key_present(predicate_id)
                         && *self.to_process_heap.get_value(predicate_id) == 0)
                 {
+                    if let IterativeRedundancyStatus::Redundant =
+                        self.check_for_iterative_redundancy(predicate, context, predicate_id)
+                    {
+                        if dec_level == context.get_checkpoint() {
+                            self.statistics
+                                .iterative_minimisation_statistics
+                                .num_removed_current_decision_level += 1
+                        } else {
+                            self.statistics
+                                .iterative_minimisation_statistics
+                                .num_removed_previous_decision_level += 1
+                        }
+                        return;
+                    }
+
                     context.predicate_appeared_in_conflict(predicate);
 
                     // The goal is to traverse predicate in reverse order of the trail.
@@ -381,9 +389,9 @@ impl ResolutionResolver {
         predicate: Predicate,
         context: &mut ConflictAnalysisContext<'_>,
         predicate_id: PredicateId,
-    ) -> ControlFlow<()> {
+    ) -> IterativeRedundancyStatus {
         if !self.iterative_minimisation {
-            return ControlFlow::Continue(());
+            return IterativeRedundancyStatus::NonRedundant;
         }
 
         // We ask the iterative minimiser the status of the predicate.
@@ -416,7 +424,7 @@ impl ResolutionResolver {
 
                 // We know that the element is redundant, so we can indicate that it does not need
                 // to be processed.
-                ControlFlow::Break(())
+                IterativeRedundancyStatus::Redundant
             }
             ProcessingResult::ReplacedPresent { removed } => {
                 // The provided predicate has replaced a multitude of other predicates -> we need
@@ -438,6 +446,11 @@ impl ResolutionResolver {
                     // 2. The removed predicate is from the previous decision level, and we remove
                     //    it from there.
                     if self.to_process_heap.is_key_present(removed_id) {
+                        // The key is not currently present, but it has been assigned a value; we
+                        // need to reset that value to 0.
+                        if predicate_id.index() < self.to_process_heap.len() {
+                            self.to_process_heap.set_value(removed_id, 0);
+                        }
                         self.to_process_heap.delete_key(removed_id);
                     } else if let Some(position) = self
                         .processed_nogood_predicates
@@ -454,7 +467,7 @@ impl ResolutionResolver {
 
                 // We also know that the provided predicate is not redundant so we can add it to
                 // the nogood.
-                ControlFlow::Continue(())
+                IterativeRedundancyStatus::NonRedundant
             }
             ProcessingResult::PossiblyReplacedWithNew {
                 removed: previous,
@@ -492,14 +505,14 @@ impl ResolutionResolver {
 
                         // We can replace the elements with `new_predicate`, so we indicate that we
                         // do not need to add `predicate`.
-                        ControlFlow::Break(())
+                        IterativeRedundancyStatus::Redundant
                     } else {
                         // We cannot replace the elements, so we add `predicate` to the iterative
                         // minimiser.
                         self.iterative_minimiser.apply_predicate(predicate, context);
 
                         // And we indicate that we need to add `predicate` to the nogood.
-                        ControlFlow::Continue(())
+                        IterativeRedundancyStatus::NonRedundant
                     }
                 } else {
                     // If `new_predicate` is from a previous decision level, then we can always
@@ -510,13 +523,13 @@ impl ResolutionResolver {
                     self.to_process_heap.delete_key(predicate_id);
 
                     // And we indicate that we do not need to add `predicate` to the nogood.
-                    ControlFlow::Break(())
+                    IterativeRedundancyStatus::Redundant
                 }
             }
             ProcessingResult::NotRedundant => {
                 // `predicate` is not redundant and we can add it directly to the nogood.
                 self.iterative_minimiser.apply_predicate(predicate, context);
-                ControlFlow::Continue(())
+                IterativeRedundancyStatus::NonRedundant
             }
         }
     }
@@ -548,6 +561,11 @@ impl ResolutionResolver {
             // First, we remove `element`.
             let element_id = self.predicate_id_generator.get_id(element);
             self.to_process_heap.delete_key(element_id);
+            // The key is not currently present, but it has been assigned a value; we
+            // need to reset that value to 0.
+            if element_id.index() < self.to_process_heap.len() {
+                self.to_process_heap.set_value(element_id, 0);
+            }
             self.iterative_minimiser.remove_predicate(element);
             // println!("Removing previous: {element:?}");
 
