@@ -37,6 +37,28 @@ We are actively developing Pumpkin and would be happy to hear from you should yo
 # Citing
 Please cite Pumpkin using the following citation:
 ```
+@inproceedings{marijnissen_et_al:LIPIcs.CP.2026.42,
+  author = {Marijnissen, Imko and Flippo, Maarten and Demirovi\'{c}, Emir},
+  title = {{From Literals to Atomic Constraints: Generalising Conflict-Driven Clause Learning for Constraint Programming}},
+  booktitle = {32nd International Conference on Principles and Practice of Constraint Programming (CP 2026)},
+  pages = {42:1--42:21},
+  series = {Leibniz International Proceedings in Informatics (LIPIcs)},
+  isbn = {978-3-95977-432-1},
+  issn = {1868-8969},
+  year = {2026},
+  volume = {379},
+  editor = {Beldiceanu, Nicolas},
+  publisher = {Schloss Dagstuhl -- Leibniz-Zentrum f{\"u}r Informatik},
+  address = {Dagstuhl, Germany},
+  url = {https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2026.42},
+  urn = {urn:nbn:de:0030-drops-266744},
+  doi = {10.4230/LIPIcs.CP.2026.42},
+  annote = {Keywords: LCG, CP, CDCL, Lazy Literal, Conflict Analysis, Nogood Propagation},
+}
+```
+
+If you are using the proof-logging capabilities of Pumpkin, then please **additionally** include the following citation:
+```
 @InProceedings{flippo_et_al:LIPIcs.CP.2024.11,
   author =	{Flippo, Maarten and Sidorov, Konstantin and Marijnissen, Imko and Smits, Jeff and Demirovi\'{c}, Emir},
   title =	{{A Multi-Stage Proof Logging Framework to Certify the Correctness of CP Solvers}},
