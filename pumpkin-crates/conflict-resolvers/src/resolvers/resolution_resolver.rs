@@ -536,9 +536,6 @@ impl ResolutionResolver {
 
     /// Replaces the provided `element` with `new_predicate` if `new_predicate` would not be the
     /// next element to be resolved upon.
-    ///
-    /// TODO: This does not take into account that `new_predicate` could be the asserting atomic
-    /// constraint.
     fn replace_if_possible_current_level(
         &mut self,
         context: &mut ConflictAnalysisContext<'_>,
@@ -549,12 +546,25 @@ impl ResolutionResolver {
         let heap_value = get_heap_value(new_predicate, context);
 
         // Then we check whether this is a lower value than the current maximum in the heap.
+        //
+        // If it has a higher value than the current maximum in the heap, then we check whether
+        // there is only a single element in the heap, and it is the `element` that we are trying
+        // to replace (i.e., replacing `element` with `new_predicate` would make `new_predicate`
+        // the asserting atomic constraint).
         if heap_value
             < self
                 .to_process_heap
                 .peek_max()
                 .map(|(_, value)| *value)
                 .unwrap_or_default()
+            || (self.to_process_heap.num_nonremoved_elements() == 1
+                && self
+                    .to_process_heap
+                    .peek_max()
+                    .map(|(&predicate_id, _)| {
+                        predicate_id == self.predicate_id_generator.get_id(element)
+                    })
+                    .unwrap())
         {
             // If it is, then we can safely replace `element` with `new_predicate`
             //
