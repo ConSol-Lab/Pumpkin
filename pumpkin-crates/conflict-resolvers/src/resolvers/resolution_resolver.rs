@@ -559,12 +559,22 @@ impl ResolutionResolver {
             // If it is, then we can safely replace `element` with `new_predicate`
             //
             // First, we remove `element`.
-            let element_id = self.predicate_id_generator.get_id(element);
-            self.to_process_heap.delete_key(element_id);
-            // The key is not currently present, but it has been assigned a value; we
-            // need to reset that value to 0.
-            if element_id.index() < self.to_process_heap.len() {
-                self.to_process_heap.set_value(element_id, 0);
+            if context.get_checkpoint_for_predicate(element).unwrap() == context.get_checkpoint() {
+                let element_id = self.predicate_id_generator.get_id(element);
+                self.to_process_heap.delete_key(element_id);
+                // The key is not currently present, but it has been assigned a value; we
+                // need to reset that value to 0.
+                if element_id.index() < self.to_process_heap.len() {
+                    self.to_process_heap.set_value(element_id, 0);
+                }
+            } else {
+                if let Some(index) = self
+                    .processed_nogood_predicates
+                    .iter()
+                    .position(|predicate| *predicate == element)
+                {
+                    let _ = self.processed_nogood_predicates.remove(index);
+                }
             }
             self.iterative_minimiser.remove_predicate(element);
             // println!("Removing previous: {element:?}");
