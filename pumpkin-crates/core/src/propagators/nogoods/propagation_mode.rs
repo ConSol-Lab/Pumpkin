@@ -72,31 +72,16 @@ impl PropagationMode {
                 // Next we split into several cases depending on the states of the to process
                 // predicate.
                 match context.evaluate_predicate_id(nogood_predicates[index]) {
-                    None => {
-                        if !reasons_over_same_domain {
-                            // If the predicate is unassigned and does not reason over the same
-                            // domain as the 0-th predicate, then we have found a new watch.
-                            WatcherProcessingStatus::FoundNewWatch
-                        } else {
-                            // Otherwise, we have found a new watcher, but, since it reasons over
-                            // the same variable as the 0-th predicate, we need to re-use it.
-                            //
-                            // Note that we replace the 0-th predicate with the predicate we are
-                            // currently processing to ensure that during unit propagation the 0-th
-                            // predicate is the one being propagated.
-                            WatcherProcessingStatus::FoundNewWatchButContinue
-                        }
+                    None | Some(false) if !reasons_over_same_domain => {
+                        // If the predicate is unassigned and does not reason over the same
+                        // domain as the 0-th predicate, then we have found a new watch.
+                        WatcherProcessingStatus::FoundNewWatch
                     }
                     Some(false) => {
-                        if !reasons_over_same_domain {
-                            // If the predicate is falsified and does not reason over the same
-                            // domain as the 0-th predicate, then we have found a new watch.
-                            WatcherProcessingStatus::FoundNewWatch
-                        } else {
-                            // Otherwise, we have found a falsified predicate, and we need to
-                            // update the zero-th predicate with this predicate.
-                            WatcherProcessingStatus::FalsifiedZeroth
-                        }
+                        assert!(reasons_over_same_domain);
+                        // Otherwise, we have found a falsified predicate, and we need to
+                        // update the zero-th predicate with this predicate.
+                        WatcherProcessingStatus::FalsifiedZeroth
                     }
                     _ => WatcherProcessingStatus::Continue,
                 }
@@ -160,7 +145,7 @@ impl PropagationMode {
         match self {
             PropagationMode::ExtendedNogoodPropagation => {
                 let propagated_domain = context.get_predicate(nogood_predicates[0]).get_domain();
-                NogoodPropagator::propagate_extended_nogood(
+                NogoodPropagator::extended_nogood_propagation(
                     context,
                     nogood_predicates,
                     propagated_domain,
@@ -389,7 +374,7 @@ impl PropagationMode {
                     // Otherwise, we treat it as a "unit" nogood and we perform propagation and
                     // then do not add the nogood to the database.
 
-                    NogoodPropagator::propagate_extended_nogood(
+                    NogoodPropagator::extended_nogood_propagation(
                         context,
                         &nogood,
                         first_domain,
@@ -462,11 +447,4 @@ pub(crate) enum WatcherProcessingStatus {
     /// This return value ensures that the watcher at index 0 is replaced with the currently
     /// processed predicate.
     FalsifiedZeroth,
-    /// **Only applicable when learning CPIP nogoods** - Indicates that an unsatisfied [`Predicate`]
-    /// has been found but that it reasons over the same variable as the other watcher.
-    ///
-    /// This return value ensures that the watcher at index 0 is replaced with the currently
-    /// processed predicate to ensure that during unit propagation the propagating predicate is
-    /// always placed at position 0.
-    FoundNewWatchButContinue,
 }
