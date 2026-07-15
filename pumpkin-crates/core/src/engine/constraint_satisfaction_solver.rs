@@ -144,10 +144,10 @@ pub enum CoreExtractionResult {
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum ConflictResolverType {
     NoLearning,
-    #[default]
     /// Standard conflict analysis which returns as soon as the first unit implication point is
     /// found (i.e. when a nogood is created which only contains a single predicate from the
     /// current decision level).
+    #[default]
     OneUIP,
     /// An alternative to 1-UIP which stops as soon as the learned nogood only creates decision
     /// predicates.

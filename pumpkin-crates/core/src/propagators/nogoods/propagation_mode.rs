@@ -321,20 +321,28 @@ impl PropagationMode {
         permanent_nogood_ids: &mut Vec<NogoodId>,
         statistics: &mut NogoodPropagatorStatistics,
     ) -> Result<(), Conflict> {
+        #[cfg(feature = "check-propagations")]
+        let mut nogood = input_nogood
+            .iter()
+            .map(|predicate| context.get_id(*predicate))
+            .collect::<Vec<_>>();
+
+        #[cfg(not(feature = "check-propagations"))]
+        let mut nogood = nogood
+            .iter()
+            .map(|predicate| context.get_id(*predicate))
+            .collect::<Vec<_>>();
+
         match self {
             PropagationMode::ExtendedNogoodPropagation => {
                 // We try to find a predicate with a different domain than the 0-th predicate;
                 // this is the invariant that we maintain for the watchers
-                let other = nogood
-                    .iter()
-                    .position(|predicate| predicate.get_domain() != nogood[0].get_domain());
+                let other = nogood.iter().position(|&predicate_id| {
+                    context.get_predicate(predicate_id).get_domain()
+                        != context.get_predicate(nogood[0]).get_domain()
+                });
 
-                let first_domain = nogood[0].get_domain();
-
-                let mut nogood = nogood
-                    .iter()
-                    .map(|predicate| context.get_id(*predicate))
-                    .collect::<Vec<_>>();
+                let first_domain = context.get_predicate(nogood[0]).get_domain();
 
                 if let Some(position) = other {
                     // If we can find predicate which reasons over a different domain than the
@@ -387,18 +395,6 @@ impl PropagationMode {
                 }
             }
             PropagationMode::UnitPropagation => {
-                #[cfg(feature = "check-propagations")]
-                let nogood = input_nogood
-                    .iter()
-                    .map(|predicate| context.get_id(*predicate))
-                    .collect::<Vec<_>>();
-
-                #[cfg(not(feature = "check-propagations"))]
-                let nogood = nogood
-                    .iter()
-                    .map(|predicate| context.get_id(*predicate))
-                    .collect::<Vec<_>>();
-
                 // Add the nogood to the database.
                 //
                 // Currently we always allocate a fresh ID
