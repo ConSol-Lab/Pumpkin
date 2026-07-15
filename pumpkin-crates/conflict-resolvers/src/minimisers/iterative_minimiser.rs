@@ -2,10 +2,13 @@ use pumpkin_checking::VariableState;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::containers::KeyedVec;
 use pumpkin_core::containers::StorageKey;
+use pumpkin_core::create_statistics_struct;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateType;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::statistics::Statistic;
+use pumpkin_core::statistics::StatisticLogger;
 use pumpkin_core::variables::DomainId;
 
 /// A minimiser which iteratively applies rewrite rules based on the semantic meaning of predicates
@@ -13,19 +16,8 @@ use pumpkin_core::variables::DomainId;
 ///
 /// The implementation is heavily inspired by \[1\].
 ///
-/// There are a couple of limitations to note:
-/// - Currently, whenever a hole is created at a lower- or upper-bound, the bound is only moved by 1
-///   (even if there are multiple holes which could cause a higher lower-bound). This simplifies a
-///   lot of the logic.
-/// - Currently, it is unclear how the rules are applied in \[1\]. This means that certain rules are
-///   invalid (for, as of yet, unknown reasons), for example, removing all other elements concerning
-///   `x` when `[x = v]` is added leads to wrong solutions.
-///   - This leads to another slightly nuanced point; which is that when an element is removed from
-///     the nogood, it could be that there are other bounds which should be restored.
-///
-///     For example, it could be that the nogood contains (among others) the predicates `[x >= v]`
-///     and `[x = v + 1]`. In this case, once `[x = v + 1]` gets removed, the lower-bound should be
-///     moved back to `v`.
+/// The current implementation is inefficient, and recalculates current induced domain of a
+/// variable each time a predicate is added to the nogood.
 ///
 /// ## Developer Notes
 /// - The predicates from the previous decision level should also be added to the
@@ -46,9 +38,22 @@ use pumpkin_core::variables::DomainId;
 pub(crate) struct IterativeMinimiser {
     /// Keeps track of the domains induced by the current working nogood.
     state: VariableState<Predicate>,
+    /// Keeps track of the predicates for each [`DomainId`] in the current nogood.
     domains: KeyedVec<DomainId, Vec<Predicate>>,
+    /// For proof logging; keeps track of the predicates which are true at checkpoint 0.
     root_predicates: KeyedVec<DomainId, Vec<Predicate>>,
+    statistics: IterativeMinimiserStatistics,
 }
+
+create_statistics_struct!(IterativeMinimiserStatistics {
+    num_non_redundant: usize,
+    num_redundant: usize,
+    num_removed_by_bound: usize,
+    num_removed_by_hole: usize,
+    num_removed_by_equality: usize,
+    num_removed_by_fixed_domain: usize,
+    num_removed_by_creating_equality: usize,
+});
 
 /// The result of processing a predicate, indicating its redundancy.
 #[derive(Debug, Clone)]
@@ -78,6 +83,18 @@ pub(crate) enum ProcessingResult {
 }
 
 impl IterativeMinimiser {
+    /// Clears the structures.
+    pub(crate) fn clear(&mut self) {
+        self.domains.clear();
+        self.root_predicates.clear();
+        self.state = Default::default();
+    }
+
+    pub(crate) fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        let statistic_logger = statistic_logger.attach_to_prefix("IterativeMinimiser");
+        self.statistics.log(statistic_logger);
+    }
+
     /// Removes the given predicate from the nogood.
     pub(crate) fn remove_predicate(&mut self, predicate: Predicate) {
         let domain = predicate.get_domain();
@@ -193,6 +210,8 @@ impl IterativeMinimiser {
         // - [x = v], [x <= v'] => [x = v]
         // - [x = v], [x >= v'] => [x = v]
         if lower_bound == upper_bound {
+            self.statistics.num_removed_by_fixed_domain += 1;
+
             self.explain_lower_bound_in_proof(predicate, context);
             self.explain_upper_bound_in_proof(predicate, context);
             return ProcessingResult::Redundant;
@@ -201,6 +220,7 @@ impl IterativeMinimiser {
         match predicate.get_predicate_type() {
             PredicateType::LowerBound => {
                 if predicate.get_right_hand_side() == upper_bound {
+                    self.statistics.num_removed_by_creating_equality += 1;
                     self.explain_upper_bound_in_proof(predicate, context);
                     // [x <= v], [x >= v] => [x = v]
                     ProcessingResult::PossiblyReplacedWithNew {
@@ -221,11 +241,14 @@ impl IterativeMinimiser {
                         .collect::<Vec<_>>();
 
                     if !to_remove.is_empty() {
+                        self.statistics.num_removed_by_bound += 1;
                         ProcessingResult::ReplacedPresent { removed: to_remove }
                     } else {
+                        self.statistics.num_non_redundant += 1;
                         ProcessingResult::NotRedundant
                     }
                 } else {
+                    self.statistics.num_redundant += 1;
                     // [x >= v], [x >= v'] => [x >= v] if v > v'
                     self.explain_lower_bound_in_proof(predicate, context);
                     ProcessingResult::Redundant
@@ -234,6 +257,7 @@ impl IterativeMinimiser {
             PredicateType::UpperBound => {
                 // [x >= v], [x <= v] => [x = v]
                 if predicate.get_right_hand_side() == lower_bound {
+                    self.statistics.num_removed_by_creating_equality += 1;
                     self.explain_lower_bound_in_proof(predicate, context);
                     ProcessingResult::PossiblyReplacedWithNew {
                         removed: predicate!(domain >= lower_bound),
@@ -252,11 +276,14 @@ impl IterativeMinimiser {
                         .copied()
                         .collect::<Vec<_>>();
                     if !to_remove.is_empty() {
+                        self.statistics.num_removed_by_bound += 1;
                         ProcessingResult::ReplacedPresent { removed: to_remove }
                     } else {
+                        self.statistics.num_non_redundant += 1;
                         ProcessingResult::NotRedundant
                     }
                 } else {
+                    self.statistics.num_redundant += 1;
                     // [x <= v], [x <= v'] => [x <= v] if v < v'
                     self.explain_upper_bound_in_proof(predicate, context);
                     ProcessingResult::Redundant
@@ -264,6 +291,7 @@ impl IterativeMinimiser {
             }
             PredicateType::NotEqual => {
                 if predicate.get_right_hand_side() == upper_bound {
+                    self.statistics.num_removed_by_hole += 1;
                     // [x <= v], [x != v] => [x <= v - 1]
                     self.explain_upper_bound_in_proof(predicate, context);
                     ProcessingResult::PossiblyReplacedWithNew {
@@ -271,10 +299,12 @@ impl IterativeMinimiser {
                         new_predicate: predicate!(domain <= upper_bound - 1),
                     }
                 } else if predicate.get_right_hand_side() > upper_bound {
+                    self.statistics.num_redundant += 1;
                     // [x <= v], [x != v'] => [x <= v] where v' > v
                     self.explain_upper_bound_in_proof(predicate, context);
                     ProcessingResult::Redundant
                 } else if predicate.get_right_hand_side() == lower_bound {
+                    self.statistics.num_removed_by_hole += 1;
                     // [x >= v], [x != v] => [x <= v + 1]
                     self.explain_lower_bound_in_proof(predicate, context);
                     ProcessingResult::PossiblyReplacedWithNew {
@@ -282,14 +312,27 @@ impl IterativeMinimiser {
                         new_predicate: predicate!(domain >= lower_bound + 1),
                     }
                 } else if predicate.get_right_hand_side() < lower_bound {
+                    self.statistics.num_redundant += 1;
                     // [x >= v], [x != v'] => [x >= v] where v' < v
                     self.explain_lower_bound_in_proof(predicate, context);
                     ProcessingResult::Redundant
                 } else {
+                    self.statistics.num_non_redundant += 1;
                     ProcessingResult::NotRedundant
                 }
             }
-            PredicateType::Equal => ProcessingResult::NotRedundant,
+            PredicateType::Equal => {
+                if self.domains[predicate.get_domain()].is_empty() {
+                    self.statistics.num_non_redundant += 1;
+                    ProcessingResult::NotRedundant
+                } else {
+                    self.statistics.num_removed_by_equality += 1;
+                    // [x ⊗ v], [x = v] => [x = v]
+                    ProcessingResult::ReplacedPresent {
+                        removed: self.domains[predicate.get_domain()].clone(),
+                    }
+                }
+            }
         }
     }
 }

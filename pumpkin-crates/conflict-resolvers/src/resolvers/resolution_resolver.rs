@@ -138,7 +138,12 @@ impl ConflictResolver for ResolutionResolver {
         self.statistics.log(statistic_logger.clone());
         self.semantic_minimiser
             .log_statistics(statistic_logger.clone());
-        self.recursive_minimiser.log_statistics(statistic_logger);
+        self.recursive_minimiser
+            .log_statistics(statistic_logger.clone());
+
+        if self.iterative_minimisation {
+            self.iterative_minimiser.log_statistics(statistic_logger);
+        }
     }
 }
 
@@ -250,7 +255,7 @@ impl ResolutionResolver {
 
         // TODO: make more efficient
         if self.iterative_minimisation {
-            self.iterative_minimiser = IterativeMinimiser::default()
+            self.iterative_minimiser.clear();
         }
     }
 
