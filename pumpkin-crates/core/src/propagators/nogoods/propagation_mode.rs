@@ -49,9 +49,9 @@ pub enum PropagationMode {
     ///
     /// # Bibliography
     /// - \[1\] I. Marijnissen, M. Flippo, and E. Demirović, ‘From Literals to Atomic Constraints:
-    /// Generalising Conflict-Driven Clause Learning for Constraint Programming’, in 32nd
-    /// International Conference on Principles and Practice of Constraint Programming (CP 2026),
-    /// 2026, vol. 379, p. 42:1-42:21.
+    ///   Generalising Conflict-Driven Clause Learning for Constraint Programming’, in 32nd
+    ///   International Conference on Principles and Practice of Constraint Programming (CP 2026),
+    ///   2026, vol. 379, p. 42:1-42:21.
     ExtendedNogoodPropagation,
 }
 
