@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.1](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-core-v0.4.0...pumpkin-core-v0.4.1) - 2026-07-15
+
+### Other
+
+- *(deps)* bump itertools from 0.14.0 to 0.15.0 ([#480](https://github.com/ConSol-Lab/Pumpkin/pull/480))
+
 ## [0.4.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-core-v0.3.0...pumpkin-core-v0.4.0) - 2026-06-23
 
 ### Added

@@ -11,7 +11,7 @@ description = "The core of the Pumpkin constraint programming solver."
 workspace = true
 
 [dependencies]
-pumpkin-checking = { version = "0.4.0", path = "../checking" }
+pumpkin-checking = { version = "0.4.1", path = "../checking" }
 thiserror = "2.0.12"
 log = "0.4.30"
 bitfield = "0.19.4"

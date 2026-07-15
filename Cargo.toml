@@ -26,7 +26,7 @@ authors = [
     "Konstantin Sidorov",
     "Jeff Smits"
 ] # Ordered alphabetically based on last name!
-version = "0.4.0"
+version = "0.4.1"
 
 [patch.crates-io]
 fnv = { git = "https://github.com/servo/rust-fnv", branch = "main" }
