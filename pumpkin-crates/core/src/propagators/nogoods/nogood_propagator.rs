@@ -55,11 +55,7 @@ use crate::variables::DomainId;
 /// A propagator which propagates nogoods (i.e. a list of [`Predicate`]s which cannot all be true
 /// at the same time).
 ///
-/// It should be noted that this propagator is notified about each event which occurs in the solver
-/// (since the propagator does not know which IDs will be present in its learnt clauses).
-///
-/// The idea for propagation is the two-watcher scheme; this is achieved by internally keeping
-/// track of watch lists.
+/// The propagation used is based on the provided [`PropagationMode`].
 #[derive(Clone, Debug)]
 pub struct NogoodPropagator {
     /// The [`PredicateId`]s of the nogoods.

@@ -35,7 +35,7 @@ pub enum PropagationMode {
     /// If both of these conditions hold, then the unassigned predicate is propagated to be false.
     #[default]
     UnitPropagation,
-    /// Uses the extended nogood propagation algorithm.
+    /// Uses the extended nogood propagation algorithm \[1\].
     ///
     /// Extended nogood propagation occurs under the following two conditions:
     ///  - There are no falsified predicates in the nogood.
@@ -46,6 +46,12 @@ pub enum PropagationMode {
     /// removed.
     ///
     /// Note that this approach subsumes unit propagation.
+    ///
+    /// # Bibliography
+    /// - \[1\] I. Marijnissen, M. Flippo, and E. Demirović, ‘From Literals to Atomic Constraints:
+    /// Generalising Conflict-Driven Clause Learning for Constraint Programming’, in 32nd
+    /// International Conference on Principles and Practice of Constraint Programming (CP 2026),
+    /// 2026, vol. 379, p. 42:1-42:21.
     ExtendedNogoodPropagation,
 }
 

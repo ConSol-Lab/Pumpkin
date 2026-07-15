@@ -30,9 +30,7 @@ use crate::minimisers::SemanticMinimiser;
 /// in the solver. This new nogood is added as a constraint to the solver, and the solver
 /// backtracks to the decision level at which the new constraint propagates.
 ///
-/// The [`ResolutionResolver`] can be used in two [`AnalysisMode`]s:
-/// - [`AnalysisMode::OneUIP`] - Resolves until finding the unit implication point.
-/// - [AnalysisMode::AllDecision] - Resolves until the learned nogood contains only decisions.
+/// The [`ResolutionResolver`] learns the nogoods specified by the provided [`AnalysisMode`].
 ///
 /// For an in-depth explanation and overview of CDCL and UIP, see \[1\].
 ///

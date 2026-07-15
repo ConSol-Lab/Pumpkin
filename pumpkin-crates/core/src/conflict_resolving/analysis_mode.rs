@@ -24,12 +24,24 @@ pub enum AnalysisMode {
     /// An alternative to 1-UIP which stops as soon as the learned nogood only creates decision
     /// predicates.
     AllDecision,
-    /// Learns CPIP nogoods (i.e., nogoods which only have predicates from the current decision
-    /// level which reason over a single variable when learning).
+    /// Learns CPIP nogoods \[1\] (i.e., nogoods which only have predicates from the current
+    /// decision level which reason over a single variable when learning).
+    ///
+    /// # Bibliography
+    /// - \[1\] I. Marijnissen, M. Flippo, and E. Demirović, ‘From Literals to Atomic Constraints:
+    ///   Generalising Conflict-Driven Clause Learning for Constraint Programming’, in 32nd
+    ///   International Conference on Principles and Practice of Constraint Programming (CP 2026),
+    ///   2026, vol. 379, p. 42:1-42:21.
     CPIP,
-    /// Learns CPIP nogoods but rather than stopping at the first point where extended nogood
+    /// Learns CPIP nogoods \[1\] but rather than stopping at the first point where extended nogood
     /// propagation can take place, it stops when extended nogood propagation can adjust a bound
     /// upon learning.
+    ///
+    /// # Bibliography
+    /// - \[1\] I. Marijnissen, M. Flippo, and E. Demirović, ‘From Literals to Atomic Constraints:
+    ///   Generalising Conflict-Driven Clause Learning for Constraint Programming’, in 32nd
+    ///   International Conference on Principles and Practice of Constraint Programming (CP 2026),
+    ///   2026, vol. 379, p. 42:1-42:21.
     BoundsCPIP,
 }
 
