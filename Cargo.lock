@@ -986,6 +986,8 @@ dependencies = [
 name = "pumpkin-conflict-resolvers"
 version = "0.4.0"
 dependencies = [
+ "itertools",
+ "log",
  "pumpkin-core",
 ]
 

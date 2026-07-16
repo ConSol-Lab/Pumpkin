@@ -245,6 +245,7 @@ pub enum EnqueueDecision {
 /// priority (i.e., should be propagated before computationally expensive propagators).
 #[derive(Default, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 #[repr(u8)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum Priority {
     High = 0,
     Medium = 1,

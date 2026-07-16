@@ -83,6 +83,13 @@ impl<'a> ExplanationContext<'a> {
     pub fn get_trail_position(&self) -> usize {
         self.trail_position - 1
     }
+
+    /// Returns the [`Predicate`] which is being explained.
+    pub fn get_predicate_to_be_explained(&self) -> Predicate {
+        self.assignments
+            .get_trail_entry(self.trail_position)
+            .predicate
+    }
 }
 
 impl HasAssignments for ExplanationContext<'_> {

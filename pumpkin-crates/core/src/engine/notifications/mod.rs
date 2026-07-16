@@ -187,7 +187,9 @@ impl NotificationEngine {
         let index = watch_list
             .iter()
             .position(|&watched_propagator| watched_propagator == propagator_to_unwatch)
-            .expect("cannot unwatch a (predicate, propagator) pair if it was not watched");
+            .unwrap_or_else(|| {
+                panic!("cannot unwatch ({predicate_id:?}, {propagator_to_unwatch:?}) pair if it was not watched")
+            });
 
         let _ = watch_list.swap_remove(index);
 
@@ -535,6 +537,20 @@ impl NotificationEngine {
             "Expected status of predicate ID to be the same as the one stored in the Assignments"
         );
         result
+    }
+
+    /// Returns whether the [`Predicate`] corresponding to the provided [`PredicateId`] is
+    /// satisfied.
+    pub(crate) fn evaluate_predicate_id(
+        &mut self,
+        predicate_id: PredicateId,
+        assignments: &Assignments,
+    ) -> Option<bool> {
+        self.predicate_notifier.predicate_id_assignments.evaluate(
+            predicate_id,
+            assignments,
+            &mut self.predicate_notifier.predicate_to_id,
+        )
     }
 
     /// Returns whether the [`Predicate`] corresponding to the provided [`PredicateId`] is
