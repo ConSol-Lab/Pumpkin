@@ -1,5 +1,3 @@
-use std::ops::Index;
-use std::ops::IndexMut;
 use std::ops::Range;
 
 use crate::basic_types::PredicateId;
@@ -17,7 +15,8 @@ pub(crate) struct ArenaAllocator {
     /// A list of [`PredicateId`]s representing the nogoods.
     ///
     /// If there is a [`NogoodId`] with value `i`, then the [`PredicateId`] at position `i` will
-    /// contain the length `x` of the nogood. The next `i + 1 + x` elements are then the nogood
+    /// contain the length `x` of the nogood and the [`PredicateId`] at position `i + 1` will
+    /// contain the last-traversed watcher index. The next `i + 2 + x` elements are then the nogood
     /// pointed to by the [`NogoodId`] with value `i`.
     nogoods: Vec<PredicateId>,
     /// Maps each [`NogoodId`] to an index; this is to prevent unnecessary allocations for other
@@ -34,6 +33,12 @@ pub(crate) struct ArenaAllocator {
     /// that a nogood is added to the arena.
     initial_capacity: usize,
 }
+
+/// The index offset which determines how many elements to skip before the actual nogood predicates
+/// begin.
+///
+/// See [`ArenaAllocator::nogoods`] for more information.
+const OFFSET: usize = 2;
 
 #[derive(Clone, Copy, Debug, Hash)]
 pub(crate) struct NogoodIndex(u32);
@@ -76,6 +81,9 @@ impl ArenaAllocator {
         // We push a PredicateId which stores the length of the nogood
         self.nogoods
             .push(PredicateId::create_from_index(nogood.len()));
+        // We also push a PredicateId which stores the last-traversed watcher (defaults to the
+        // first non-watcher element)
+        self.nogoods.push(PredicateId::create_from_index(2));
         self.nogoods.extend(nogood);
 
         nogood_id
@@ -106,27 +114,51 @@ impl ArenaAllocator {
     }
 
     /// Calculates the range of the nogood spanned by the nogood with ID [`NogoodId`].
+    ///
+    /// Does not include any of the information [`PredicateId`]s.
     fn calculate_range_of_nogood(&self, nogood_id: NogoodId) -> Range<usize> {
         let len = self.len_of_nogood(nogood_id);
-        nogood_id.index() + 1..nogood_id.index() + 1 + len
+        nogood_id.index() + OFFSET..nogood_id.index() + OFFSET + len
     }
-}
 
-impl Index<NogoodId> for ArenaAllocator {
-    type Output = [PredicateId];
+    /// Calculates the range of the nogood spanned by the nogood with ID [`NogoodId`].
+    ///
+    /// Includes the [`PredicateId`] storing the last-traversed watcher index as the first element.
+    fn calculate_range_of_nogood_including_last_traversed(
+        &self,
+        nogood_id: NogoodId,
+    ) -> Range<usize> {
+        let len = self.len_of_nogood(nogood_id);
+        nogood_id.index() + OFFSET - 1..nogood_id.index() + OFFSET + len
+    }
 
-    fn index(&self, index: NogoodId) -> &Self::Output {
-        let nogood_range = self.calculate_range_of_nogood(index);
+    /// Returns the nogood pointed to by [`NogoodId`].
+    pub(crate) fn get_nogood(&self, nogood_id: NogoodId) -> &[PredicateId] {
+        let nogood_range = self.calculate_range_of_nogood(nogood_id);
 
         &self.nogoods[nogood_range]
     }
-}
 
-impl IndexMut<NogoodId> for ArenaAllocator {
-    fn index_mut(&mut self, index: NogoodId) -> &mut Self::Output {
-        let nogood_range = self.calculate_range_of_nogood(index);
+    /// Returns a mutable reference to the nogood pointed to by [`NogoodId`].
+    #[allow(unused, reason = "Standard API")]
+    pub(crate) fn get_nogood_mut(&mut self, nogood_id: NogoodId) -> &mut [PredicateId] {
+        let nogood_range = self.calculate_range_of_nogood(nogood_id);
 
         &mut self.nogoods[nogood_range]
+    }
+
+    /// Returns a tuple consisting of a mutable reference to the index of the last-traversed watcher
+    /// and a mutable reference to the nogood pointed to by [`NogoodId`].
+    pub(crate) fn get_nogood_mut_with_last_traversed(
+        &mut self,
+        nogood_id: NogoodId,
+    ) -> (&mut u32, &mut [PredicateId]) {
+        let nogood_range = self.calculate_range_of_nogood_including_last_traversed(nogood_id);
+
+        self.nogoods[nogood_range]
+            .split_first_mut()
+            .map(|(last_traversed, nogood)| (&mut last_traversed.id, nogood))
+            .expect("Expected nogood to be at least of length two")
     }
 }
 
@@ -143,7 +175,7 @@ impl Iterator for NogoodIdIterator<'_> {
             return None;
         }
         let id = NogoodId::create_from_index(self.current_index);
-        self.current_index += self.nogoods[self.current_index].id as usize + 1;
+        self.current_index += self.nogoods[self.current_index].id as usize + OFFSET;
 
         Some(id)
     }
