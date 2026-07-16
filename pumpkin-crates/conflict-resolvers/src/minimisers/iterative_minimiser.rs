@@ -1,5 +1,5 @@
-use pumpkin_checking::VariableState;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
+use pumpkin_core::containers::HashSet;
 use pumpkin_core::containers::KeyedVec;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::create_statistics_struct;
@@ -37,12 +37,89 @@ use pumpkin_core::variables::DomainId;
 #[derive(Debug, Clone, Default)]
 pub(crate) struct IterativeMinimiser {
     /// Keeps track of the domains induced by the current working nogood.
-    state: VariableState<Predicate>,
+    state: KeyedVec<DomainId, IterativeDomain>,
     /// Keeps track of the predicates for each [`DomainId`] in the current nogood.
     domains: KeyedVec<DomainId, Vec<Predicate>>,
     /// For proof logging; keeps track of the predicates which are true at checkpoint 0.
     root_predicates: KeyedVec<DomainId, Vec<Predicate>>,
     statistics: IterativeMinimiserStatistics,
+}
+
+#[derive(Clone, Debug)]
+struct IterativeDomain {
+    lb: i32,
+    ub: i32,
+    holes: HashSet<i32>,
+}
+
+impl Default for IterativeDomain {
+    fn default() -> Self {
+        Self {
+            lb: i32::MIN,
+            ub: i32::MAX,
+            holes: Default::default(),
+        }
+    }
+}
+
+impl IterativeDomain {
+    fn reset(&mut self) {
+        self.lb = i32::MIN;
+        self.ub = i32::MAX;
+        self.holes.clear()
+    }
+
+    fn tighten_lower_bound(&mut self, mut lb: i32) {
+        if self.lb >= lb {
+            return;
+        }
+
+        while self.holes.contains(&lb) {
+            lb += 1;
+        }
+
+        self.lb = lb;
+    }
+
+    fn tighten_upper_bound(&mut self, mut ub: i32) {
+        if self.ub <= ub {
+            return;
+        }
+
+        while self.holes.contains(&ub) {
+            ub -= 1;
+        }
+
+        self.ub = ub;
+    }
+
+    fn apply(&mut self, predicate: &Predicate) -> bool {
+        match predicate.get_predicate_type() {
+            PredicateType::LowerBound => self.tighten_lower_bound(predicate.get_right_hand_side()),
+            PredicateType::UpperBound => self.tighten_upper_bound(predicate.get_right_hand_side()),
+            PredicateType::NotEqual => {
+                if predicate.get_right_hand_side() == self.lb {
+                    self.tighten_lower_bound(self.lb + 1);
+                }
+
+                if predicate.get_right_hand_side() == self.ub {
+                    self.tighten_upper_bound(self.ub - 1);
+                }
+
+                if predicate.get_right_hand_side() > self.lb
+                    && predicate.get_right_hand_side() < self.ub
+                {
+                    let _ = self.holes.insert(predicate.get_right_hand_side());
+                }
+            }
+            PredicateType::Equal => {
+                self.tighten_lower_bound(predicate.get_right_hand_side());
+                self.tighten_upper_bound(predicate.get_right_hand_side());
+            }
+        }
+
+        self.lb <= self.ub
+    }
 }
 
 create_statistics_struct!(IterativeMinimiserStatistics {
@@ -186,22 +263,15 @@ impl IterativeMinimiser {
         }
         self.domains.accomodate(domain, Default::default());
 
-        self.state.reset_domain(domain);
+        self.state.accomodate(domain, Default::default());
+        self.state[domain].reset();
         for predicate in self.domains[predicate.get_domain()].iter() {
-            let consistent = self.state.apply(predicate);
+            let consistent = self.state[domain].apply(predicate);
             assert!(consistent)
         }
 
-        let lower_bound = self
-            .state
-            .lower_bound(&predicate.get_domain())
-            .try_into()
-            .unwrap_or(i32::MIN);
-        let upper_bound = self
-            .state
-            .upper_bound(&predicate.get_domain())
-            .try_into()
-            .unwrap_or(i32::MAX);
+        let lower_bound = self.state[domain].lb;
+        let upper_bound = self.state[domain].ub;
 
         // If the domain is assigned, then the added predicate is redundant.
         //
