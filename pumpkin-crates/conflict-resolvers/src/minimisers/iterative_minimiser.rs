@@ -1,5 +1,4 @@
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
-use pumpkin_core::containers::HashSet;
 use pumpkin_core::containers::KeyedVec;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::create_statistics_struct;
@@ -49,7 +48,7 @@ pub(crate) struct IterativeMinimiser {
 struct IterativeDomain {
     lb: i32,
     ub: i32,
-    holes: HashSet<i32>,
+    holes: Vec<i32>,
 }
 
 impl Default for IterativeDomain {
@@ -109,7 +108,7 @@ impl IterativeDomain {
                 if predicate.get_right_hand_side() > self.lb
                     && predicate.get_right_hand_side() < self.ub
                 {
-                    let _ = self.holes.insert(predicate.get_right_hand_side());
+                    self.holes.push(predicate.get_right_hand_side());
                 }
             }
             PredicateType::Equal => {
