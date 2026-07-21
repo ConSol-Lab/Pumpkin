@@ -1,8 +1,8 @@
 [package]
 name = "pumpkin-solver"
-version = "0.3.0"
 description = "The Pumpkin combinatorial optimisation solver library."
 readme = "../README.md"
+version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
@@ -12,11 +12,11 @@ repository.workspace = true
 clap = { version = "4.5.17", features = ["derive"] }
 env_logger = "0.11.10"
 flatzinc = "0.3.21"
-log = "0.4.27"
-pumpkin-core = { version = "0.3.0", path = "../pumpkin-crates/core/", features = ["clap"] }
-pumpkin-constraints = { version = "0.3.0", path = "../pumpkin-crates/constraints/"}
-pumpkin-propagators = { version = "0.3.0", path = "../pumpkin-crates/propagators/", features=["clap"]}
-pumpkin-conflict-resolvers = { version = "0.3.0", path = "../pumpkin-crates/conflict-resolvers/"}
+log = "0.4.30"
+pumpkin-core = { version = "0.4.0", path = "../pumpkin-crates/core/", features = ["clap"] }
+pumpkin-constraints = { version = "0.4.0", path = "../pumpkin-crates/constraints/"}
+pumpkin-propagators = { version = "0.4.0", path = "../pumpkin-crates/propagators/", features=["clap"]}
+pumpkin-conflict-resolvers = { version = "0.4.0", path = "../pumpkin-crates/conflict-resolvers/"}
 signal-hook = "0.4.4"
 thiserror = "2.0.12"
 

@@ -1,6 +1,6 @@
 [package]
 name = "pumpkin-propagators"
-version = "0.3.0"
+version.workspace = true
 repository.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,8 +11,8 @@ description = "The propagators of the Pumpkin constraint programming solver."
 workspace = true
 
 [dependencies]
-pumpkin-core = { version = "0.3.0", path = "../core" }
-pumpkin-checking = { version = "0.3.0", path = "../checking" }
+pumpkin-core = { version = "0.4.0", path = "../core" }
+pumpkin-checking = { version = "0.4.0", path = "../checking" }
 enumset = "1.1.13"
 bitfield-struct = "0.13.0"
 convert_case = "0.11.0"

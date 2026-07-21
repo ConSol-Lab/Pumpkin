@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.4.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-core-v0.3.0...pumpkin-core-v0.4.0) - 2026-06-23
+
+### Added
+
+- *(pumpkin-core)* Define predicate order and add Predicate::implies ([#426](https://github.com/ConSol-Lab/Pumpkin/pull/426))
+- *(pumpkin-core)* Brancher implements Debug ([#409](https://github.com/ConSol-Lab/Pumpkin/pull/409))
+- *(pumpkin-solver)* Check derived nogoods during search ([#373](https://github.com/ConSol-Lab/Pumpkin/pull/373))
+- Adding IntegerVariable for i32 ([#388](https://github.com/ConSol-Lab/Pumpkin/pull/388))
+- *(pumpkin-proof-processor)* Introduce the proof processor in the main branch ([#371](https://github.com/ConSol-Lab/Pumpkin/pull/371))
+
+### Fixed
+
+- *(pumpkin-core)* Creation and Insertion in Sparse Set ([#395](https://github.com/ConSol-Lab/Pumpkin/pull/395))
+- *(pumpkin-solver)* Update packages and fix duplicate dependencies ([#412](https://github.com/ConSol-Lab/Pumpkin/pull/412))
+- *(pumpkin-core)* Upgrade to rand 0.10 ([#411](https://github.com/ConSol-Lab/Pumpkin/pull/411))
+- *(pumpkin-solver)* Correctly detect when to write zipped proofs ([#372](https://github.com/ConSol-Lab/Pumpkin/pull/372))
+
+### Other
+
+- Use central version number for all pumpkin-* crates ([#470](https://github.com/ConSol-Lab/Pumpkin/pull/470))
+- *(deps)* bump log from 0.4.29 to 0.4.30 ([#458](https://github.com/ConSol-Lab/Pumpkin/pull/458))
+- *(deps)* bump enumset from 1.1.12 to 1.1.13 ([#452](https://github.com/ConSol-Lab/Pumpkin/pull/452))
+- *(deps)* bump enumset from 1.1.11 to 1.1.12 ([#446](https://github.com/ConSol-Lab/Pumpkin/pull/446))
+- *(deps)* bump enumset from 1.1.10 to 1.1.11 ([#441](https://github.com/ConSol-Lab/Pumpkin/pull/441))
+- *(pumpkin-solver)* Remove vergen as a dependency ([#438](https://github.com/ConSol-Lab/Pumpkin/pull/438))
+- Do not collect unnecessarily into solution in `Solver` ([#439](https://github.com/ConSol-Lab/Pumpkin/pull/439))
+- *(pumpkin-core)* Attach `InferenceCode` instead of `Predicate` ([#433](https://github.com/ConSol-Lab/Pumpkin/pull/433))
+- *(deps)* bump convert_case from 0.8.0 to 0.11.0 ([#428](https://github.com/ConSol-Lab/Pumpkin/pull/428))
+- *(deps)* bump downcast-rs from 1.2.1 to 2.0.2 ([#429](https://github.com/ConSol-Lab/Pumpkin/pull/429))
+- *(deps)* bump bitfield from 0.14.0 to 0.19.4 ([#430](https://github.com/ConSol-Lab/Pumpkin/pull/430))
+- *(deps)* bump itertools from 0.13.0 to 0.14.0 ([#427](https://github.com/ConSol-Lab/Pumpkin/pull/427))
+- *(deps)* bump bitfield-struct from 0.9.5 to 0.13.0 ([#421](https://github.com/ConSol-Lab/Pumpkin/pull/421))
+- *(pumpkin-core)* Clarify get_propagation_reason does not clear buffer ([#402](https://github.com/ConSol-Lab/Pumpkin/pull/402))
+- *(pumpkin-core)* Describe unnamed variables in state ([#403](https://github.com/ConSol-Lab/Pumpkin/pull/403))
+- *(pumpkin-core)* Cleanup creation of propagator conflict ([#399](https://github.com/ConSol-Lab/Pumpkin/pull/399))
+- add utility method fixed value and replace is_fixed wherever possible ([#393](https://github.com/ConSol-Lab/Pumpkin/pull/393))
+- clippy warning ([#376](https://github.com/ConSol-Lab/Pumpkin/pull/376))
+
 ## [0.3.0](https://github.com/consol-lab/pumpkin/compare/pumpkin-core-v0.2.2...pumpkin-core-v0.3.0) - 2026-02-10
 
 ### Added
