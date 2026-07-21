@@ -297,6 +297,7 @@ pub(crate) fn build_reason(
     }
 }
 
+/// A wrapper around the notification engine that implements [`EventDispatcher`].
 struct NotificationEngineWatchers<'a> {
     propagator_id: PropagatorId,
     notificaton_engine: &'a mut NotificationEngine,
@@ -304,7 +305,7 @@ struct NotificationEngineWatchers<'a> {
 
 impl EventDispatcher for NotificationEngineWatchers<'_> {
     fn register(&mut self, domain_id: DomainId, events: EnumSet<DomainEvent>, local_id: LocalId) {
-        self.notificaton_engine.watch_all(
+        self.notificaton_engine.register(
             domain_id,
             events,
             PropagatorVarId {

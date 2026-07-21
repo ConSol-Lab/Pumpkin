@@ -45,6 +45,9 @@ pub trait PropagatorConstructor {
     fn add_inference_checkers(&self, _checkers: InferenceCheckers<'_>) {}
 
     /// Create the propagator instance from `Self`.
+    ///
+    /// Alongside the propagator instance, this returns the events for which the propagator should
+    /// be enqueued.
     fn create(
         self,
         context: PropagatorConstructorContext,

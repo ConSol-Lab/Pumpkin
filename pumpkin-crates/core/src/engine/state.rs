@@ -351,7 +351,7 @@ impl State {
             };
 
             self.notification_engine
-                .watch_all(domain_id, events, propagator_var);
+                .register(domain_id, events, propagator_var);
         }
 
         pumpkin_assert_simple!(

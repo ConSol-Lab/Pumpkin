@@ -6,8 +6,10 @@ use crate::propagation::LocalId;
 use crate::variables::DomainId;
 
 /// Anything that can subscribe to domain events.
+///
+/// Typically these are variables.
 pub trait EventTarget {
-    /// Add a registration of self for the given domain events with a local id.
+    /// Indicate that `self` should be registered for the given domain events as the given local ID.
     fn register(
         &self,
         registration: &mut impl EventDispatcher,

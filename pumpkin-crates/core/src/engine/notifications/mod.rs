@@ -109,7 +109,7 @@ impl NotificationEngine {
         self.predicate_notifier.get_predicate(predicate_id)
     }
 
-    pub(crate) fn watch_all(
+    pub(crate) fn register(
         &mut self,
         domain: DomainId,
         events: EnumSet<DomainEvent>,
