@@ -113,7 +113,7 @@ pub trait Propagator: Downcast + DynClone {
 
     /// Returns whether the propagator should be enqueued for propagation when a [`DomainEvent`]
     /// happens to one of the variables the propagator is subscribed to (as registered during
-    /// creation with [`PropagatorConstructor`] using [`PropagatorConstructorContext::register`]).
+    /// creation with [`PropagatorConstructor`].
     ///
     /// This can be used to incrementally maintain data structures or perform propagations, and
     /// should only be used for computationally cheap logic. Expensive computation should be
