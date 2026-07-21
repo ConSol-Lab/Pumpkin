@@ -134,8 +134,7 @@ impl PropagatorConstructorContext<'_> {
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`] when they are undone during
-    /// backtracking. This method is complementary to [`PropagatorConstructorContext::register`],
-    /// the [`LocalId`]s provided to both of these method should be the same for the same variable.
+    /// backtracking. The [`LocalId`]s used to register the variable should be the same here.
     ///
     /// The domain events determine when [`Propagator::notify_backtrack()`] will be called on the
     /// propagator. The [`LocalId`] is internal information related to the propagator,

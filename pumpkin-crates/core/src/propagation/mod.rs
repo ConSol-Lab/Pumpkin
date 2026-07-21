@@ -30,7 +30,7 @@
 //! implement for this trait is [`Propagator::propagate`], which performs the domain reduction.
 //!
 //! A propagator is created by a [`PropagatorConstructor`]. The constructor is responsible for
-//! registering to [`DomainEvents`] (using [`PropagatorConstructorContext::register`]), and setting
+//! registering to [`DomainEvents`] and setting
 //! up the state of the propagator. The constructor is provided a [`PropagatorConstructorContext`],
 //! which has all the available functions allowing the propagator to hook into the solver state.
 //!

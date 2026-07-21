@@ -143,8 +143,6 @@ impl<'a> PropagationContext<'a> {
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`].
-    ///
-    /// See [`PropagatorConstructorContext::register`] for more information.
     pub fn register_domain_event(
         &mut self,
         var: impl IntegerVariable,
