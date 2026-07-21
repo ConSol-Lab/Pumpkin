@@ -206,8 +206,7 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Watcher {
     pub(crate) nogood_id: NogoodId,
-    pub(crate) cached_predicate: PredicateId,
-}
+    pub(crate) cached_predicate: PredicateId,}
 
 /// Keeps track of three tiers of nogoods:
 /// - "low" LBD nogoods
