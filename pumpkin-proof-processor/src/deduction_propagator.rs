@@ -2,6 +2,7 @@ use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::PredicateId;
 use pumpkin_core::propagation::PropagationContext;
@@ -9,6 +10,7 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
@@ -28,7 +30,7 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
     fn create(
         self,
         mut context: PropagatorConstructorContext,
-    ) -> (EventsToRegister, Self::PropagatorImpl) {
+    ) -> ConstructedPropagator<Self::PropagatorImpl> {
         declare_inference_label!(Nogood);
 
         let DeductionPropagatorConstructor {
@@ -48,7 +50,11 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
             active: true,
         };
 
-        (EventsToRegister::empty(), propagator)
+        ConstructedPropagator {
+            registration: EventsToRegister::empty(),
+            checkers: RuntimeCheckers::empty(),
+            propagator,
+        }
     }
 }
 

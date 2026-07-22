@@ -5,7 +5,7 @@ use pumpkin_checking::InferenceChecker;
 #[cfg(feature = "check-propagations")]
 use pumpkin_checking::VariableState;
 
-use crate::containers::HashMap;
+use crate::checkers::CheckerStore;
 use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
@@ -25,11 +25,11 @@ use crate::predicates::PredicateType;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::proof::InferenceLabel;
+use crate::propagation::ConstructedPropagator;
 use crate::propagation::CurrentNogood;
 use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
-#[cfg(feature = "check-propagations")]
-use crate::propagation::InferenceCheckers;
 use crate::propagation::NotificationContext;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
@@ -81,8 +81,8 @@ pub struct State {
 
     statistics: StateStatistics,
 
-    /// Inference checkers to run in the propagation loop.
-    checkers: HashMap<InferenceCode, Vec<BoxedChecker<Predicate>>>,
+    /// Runtime checkers to run in the propagation loop.
+    checkers: CheckerStore,
 }
 
 create_statistics_struct!(StateStatistics {
@@ -112,7 +112,7 @@ impl Default for State {
             notification_engine: NotificationEngine::default(),
             statistics: StateStatistics::default(),
             constraint_tags: KeyGenerator::default(),
-            checkers: HashMap::default(),
+            checkers: CheckerStore::default(),
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are
@@ -334,15 +334,17 @@ impl State {
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
-        #[cfg(feature = "check-propagations")]
-        constructor.add_inference_checkers(InferenceCheckers::new(self));
-
         let original_handle: PropagatorHandle<Constructor::PropagatorImpl> =
             self.propagators.new_propagator().key();
 
         let constructor_context =
             PropagatorConstructorContext::new(original_handle.propagator_id(), self);
-        let (registration, propagator) = constructor.create(constructor_context);
+
+        let ConstructedPropagator {
+            registration,
+            checkers,
+            propagator,
+        } = constructor.create(constructor_context);
 
         for (domain_id, events, local_id) in registration.iter() {
             let propagator_var = PropagatorVarId {
@@ -352,6 +354,10 @@ impl State {
 
             self.notification_engine
                 .register(domain_id, events, propagator_var);
+        }
+
+        for (inference_code, checker) in checkers.into_iter() {
+            self.checkers.add_inference_checker(inference_code, checker);
         }
 
         pumpkin_assert_simple!(
@@ -381,11 +387,14 @@ impl State {
     /// any checker accepts the inference, the inference is accepted.
     pub fn add_inference_checker(
         &mut self,
-        inference_code: InferenceCode,
-        checker: Box<dyn InferenceChecker<Predicate>>,
-    ) {
-        let checkers = self.checkers.entry(inference_code).or_default();
-        checkers.push(BoxedChecker::from(checker));
+        constraint_tag: ConstraintTag,
+        inference_label: impl InferenceLabel,
+        checker: impl InferenceChecker<Predicate> + 'static,
+    ) -> InferenceCode {
+        let inference_code = InferenceCode::new(constraint_tag, inference_label);
+        self.checkers
+            .add_inference_checker(inference_code.clone(), BoxedChecker::new(Box::new(checker)));
+        inference_code
     }
 }
 
@@ -781,31 +790,23 @@ impl State {
     ) {
         let premises: Vec<_> = premises.into_iter().collect();
 
-        let checkers = self
-            .checkers
-            .get(inference_code)
-            .map(|vec| vec.as_slice())
-            .unwrap_or(&[]);
+        let any_checker_accepts_inference =
+            self.checkers
+                .for_inference_code(inference_code)
+                .any(|checker| {
+                    // Construct the variable state for the conflict check.
+                    let variable_state = VariableState::prepare_for_conflict_check(
+                        premises.clone(),
+                        consequent,
+                    )
+                    .unwrap_or_else(|domain| {
+                        panic!(
+                            "inconsistent atomics over domain {domain:?} in inference by {inference_code:?}"
+                        )
+                    });
 
-        assert!(
-            !checkers.is_empty(),
-            "missing checker for inference code {inference_code:?}"
-        );
-
-        let any_checker_accepts_inference = checkers.iter().any(|checker| {
-            // Construct the variable state for the conflict check.
-            let variable_state = VariableState::prepare_for_conflict_check(
-                premises.clone(),
-                consequent,
-            )
-            .unwrap_or_else(|domain| {
-                panic!(
-                    "inconsistent atomics over domain {domain:?} in inference by {inference_code:?}"
-                )
-            });
-
-            checker.check(variable_state, &premises, consequent.as_ref())
-        });
+                    checker.check(variable_state, &premises, consequent.as_ref())
+                });
 
         assert!(
             any_checker_accepts_inference,

@@ -918,16 +918,17 @@ impl ConstraintSatisfactionSolver {
     fn add_nogood(
         &mut self,
         nogood: Vec<Predicate>,
-        inference_code: InferenceCode,
+        constraint_tag: ConstraintTag,
     ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
         let num_trail_entries = self.state.trail_len();
 
-        self.state.add_inference_checker(
-            inference_code.clone(),
-            Box::new(NogoodChecker {
+        let inference_code = self.state.add_inference_checker(
+            constraint_tag,
+            NogoodLabel,
+            NogoodChecker {
                 nogood: nogood.clone().into(),
-            }),
+            },
         );
 
         let (nogood_propagator, mut context) = self
@@ -1010,7 +1011,6 @@ impl ConstraintSatisfactionSolver {
             return Err(ConstraintOperationError::InfeasibleClause);
         }
 
-        let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
         if are_all_falsified_at_root {
             // Since the propagation is not actually performed, we log the inference
             // explicitly here for the proof.
@@ -1019,7 +1019,7 @@ impl ConstraintSatisfactionSolver {
                 .proof_log
                 .log_inference(
                     &mut self.state.constraint_tags,
-                    inference_code,
+                    InferenceCode::new(constraint_tag, NogoodLabel),
                     predicates.iter().copied(),
                     None,
                     &self.state.variable_names,
@@ -1040,7 +1040,7 @@ impl ConstraintSatisfactionSolver {
             return Err(ConstraintOperationError::InfeasibleClause);
         }
 
-        if let Err(constraint_operation_error) = self.add_nogood(predicates, inference_code) {
+        if let Err(constraint_operation_error) = self.add_nogood(predicates, constraint_tag) {
             let _ = self.conclude_proof_unsat();
 
             self.solver_state
