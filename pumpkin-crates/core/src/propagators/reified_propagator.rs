@@ -6,7 +6,6 @@ use pumpkin_checking::InferenceChecker;
 use crate::engine::PropagationStatusCP;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::predicates::Predicate;
-use crate::propagation::ConstructedPropagator;
 use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
@@ -19,6 +18,7 @@ use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::PropagatorSpec;
 use crate::propagation::ReadDomains;
 use crate::propagation::RuntimeCheckers;
 use crate::pumpkin_assert_simple;
@@ -42,13 +42,13 @@ where
     fn create(
         self,
         mut context: PropagatorConstructorContext,
-    ) -> ConstructedPropagator<Self::PropagatorImpl> {
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let ReifiedPropagatorArgs {
             propagator,
             reification_literal,
         } = self;
 
-        let ConstructedPropagator {
+        let PropagatorSpec {
             mut registration,
             propagator,
             checkers,
@@ -91,7 +91,7 @@ where
             reason_buffer: vec![],
         };
 
-        ConstructedPropagator {
+        PropagatorSpec {
             registration,
             checkers: wrapped_checkers,
             propagator,
@@ -484,17 +484,14 @@ mod tests {
     {
         type PropagatorImpl = Self;
 
-        fn create(
-            self,
-            _: PropagatorConstructorContext,
-        ) -> ConstructedPropagator<Self::PropagatorImpl> {
+        fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
             let mut registration = EventsToRegister::empty();
 
             for (index, variable) in self.variables_to_register.iter().enumerate() {
                 registration.add(variable, DomainEvents::ANY_INT, LocalId::from(index as u32));
             }
 
-            ConstructedPropagator {
+            PropagatorSpec {
                 registration,
                 checkers: RuntimeCheckers::empty(),
                 propagator: self,

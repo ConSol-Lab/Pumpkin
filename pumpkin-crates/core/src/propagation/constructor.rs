@@ -36,15 +36,15 @@ pub trait PropagatorConstructor {
     ///
     /// Alongside the propagator instance, this returns the events for which the propagator should
     /// be enqueued.
-    fn create(
-        self,
-        context: PropagatorConstructorContext,
-    ) -> ConstructedPropagator<Self::PropagatorImpl>;
+    fn create(self, context: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl>;
 }
 
 /// The result of [`PropagatorConstructor::create`].
+///
+/// Contains an initialized [`Propagator`], alongside runtime checkers and the events that should
+/// cause the propagator to be enqueued
 #[derive(Clone, Debug)]
-pub struct ConstructedPropagator<P> {
+pub struct PropagatorSpec<P> {
     /// The domain events the propagator needs to be be registered for.
     pub registration: EventsToRegister,
     /// Any runtime checkers that verify the propagator's implementation.

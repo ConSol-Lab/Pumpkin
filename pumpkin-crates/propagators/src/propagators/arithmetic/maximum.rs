@@ -8,7 +8,6 @@ use pumpkin_core::predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
-use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
@@ -17,6 +16,7 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
@@ -38,10 +38,7 @@ where
 {
     type PropagatorImpl = MaximumPropagator<ElementVar, Rhs>;
 
-    fn create(
-        self,
-        _: PropagatorConstructorContext,
-    ) -> ConstructedPropagator<Self::PropagatorImpl> {
+    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let MaximumArgs {
             array,
             rhs,
@@ -75,7 +72,7 @@ where
             inference_code,
         };
 
-        ConstructedPropagator {
+        PropagatorSpec {
             registration: registration.build(),
             checkers: checkers.build(),
             propagator,

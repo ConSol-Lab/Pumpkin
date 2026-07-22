@@ -10,7 +10,6 @@ use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
-use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
@@ -25,6 +24,7 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::propagation::TrailedInteger;
@@ -51,7 +51,7 @@ where
     fn create(
         self,
         mut context: PropagatorConstructorContext,
-    ) -> ConstructedPropagator<Self::PropagatorImpl> {
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let LinearLessOrEqualPropagatorArgs {
             x,
             c,
@@ -87,7 +87,7 @@ where
             reason_buffer: Vec::default(),
         };
 
-        ConstructedPropagator {
+        PropagatorSpec {
             registration: registration.build(),
             checkers: checkers.build(),
             propagator,

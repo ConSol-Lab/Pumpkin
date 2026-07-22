@@ -8,7 +8,6 @@ use pumpkin_core::asserts::pumpkin_assert_extreme;
 use pumpkin_core::conjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
-use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
@@ -20,6 +19,7 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::propagator_conflict;
@@ -111,7 +111,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
     fn create(
         mut self,
         mut context: PropagatorConstructorContext,
-    ) -> ConstructedPropagator<Self::PropagatorImpl> {
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let registration = register_tasks(&self.parameters.tasks, context.reborrow(), true);
         self.updatable_structures
             .reset_all_bounds_and_remove_fixed(context.domains(), &self.parameters);
@@ -140,7 +140,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
             ),
         );
 
-        ConstructedPropagator {
+        PropagatorSpec {
             registration,
             checkers: checkers.build(),
             propagator: self,

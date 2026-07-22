@@ -26,7 +26,6 @@ use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::InferenceLabel;
-use crate::propagation::ConstructedPropagator;
 use crate::propagation::CurrentNogood;
 use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
@@ -36,6 +35,7 @@ use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorId;
+use crate::propagation::PropagatorSpec;
 use crate::propagation::PropagatorVarId;
 use crate::propagation::store::PropagatorStore;
 use crate::pumpkin_assert_advanced;
@@ -340,7 +340,7 @@ impl State {
         let constructor_context =
             PropagatorConstructorContext::new(original_handle.propagator_id(), self);
 
-        let ConstructedPropagator {
+        let PropagatorSpec {
             registration,
             checkers,
             propagator,

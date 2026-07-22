@@ -14,7 +14,6 @@ use pumpkin_core::predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
-use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
@@ -28,6 +27,7 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
@@ -55,7 +55,7 @@ where
     fn create(
         self,
         mut context: PropagatorConstructorContext,
-    ) -> ConstructedPropagator<Self::PropagatorImpl> {
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let LinearNotEqualPropagatorArgs {
             terms,
             rhs,
@@ -94,7 +94,7 @@ where
 
         propagator.recalculate_fixed_variables(context.domains());
 
-        ConstructedPropagator {
+        PropagatorSpec {
             registration: registration.build(),
             checkers: checkers.build(),
             propagator,

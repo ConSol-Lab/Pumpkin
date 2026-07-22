@@ -8,7 +8,6 @@ use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
-use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
@@ -20,6 +19,7 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::propagator_conflict;
@@ -114,7 +114,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstruc
     fn create(
         mut self,
         mut context: PropagatorConstructorContext,
-    ) -> ConstructedPropagator<Self::PropagatorImpl> {
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         // We only register for notifications of backtrack events if incremental backtracking is
         // enabled
         let registration = register_tasks(
@@ -150,7 +150,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstruc
             ),
         );
 
-        ConstructedPropagator {
+        PropagatorSpec {
             registration,
             checkers: checkers.build(),
             propagator: self,

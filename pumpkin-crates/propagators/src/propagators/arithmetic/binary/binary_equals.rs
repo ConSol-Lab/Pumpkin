@@ -16,7 +16,6 @@ use pumpkin_core::predicates::PredicateConstructor;
 use pumpkin_core::predicates::PredicateType;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
-use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
@@ -32,6 +31,7 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::EmptyDomainConflict;
@@ -56,10 +56,7 @@ where
 {
     type PropagatorImpl = BinaryEqualsPropagator<AVar, BVar>;
 
-    fn create(
-        self,
-        _: PropagatorConstructorContext,
-    ) -> ConstructedPropagator<Self::PropagatorImpl> {
+    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let BinaryEqualsPropagatorArgs {
             a,
             b,
@@ -95,7 +92,7 @@ where
             reason: Predicate::trivially_false(),
         };
 
-        ConstructedPropagator {
+        PropagatorSpec {
             registration,
             checkers: checkers.build(),
             propagator,
