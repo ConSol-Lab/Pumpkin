@@ -22,7 +22,6 @@ use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::ExplanationContext;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
@@ -32,7 +31,9 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::EmptyDomainConflict;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
@@ -55,17 +56,7 @@ where
 {
     type PropagatorImpl = BinaryEqualsPropagator<AVar, BVar>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, BinaryEquals),
-            Box::new(BinaryEqualsChecker {
-                lhs: self.a.clone(),
-                rhs: self.b.clone(),
-            }),
-        );
-    }
-
-    fn create(self, _: PropagatorConstructorContext) -> (EventsToRegister, Self::PropagatorImpl) {
+    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let BinaryEqualsPropagatorArgs {
             a,
             b,
@@ -77,6 +68,16 @@ where
             .add(&b, DomainEvents::ANY_INT, LocalId::from(1))
             .build();
 
+        let mut checkers = RuntimeCheckers::builder();
+        let inference_code = checkers.add_inference_checker(
+            constraint_tag,
+            BinaryEquals,
+            BinaryEqualsChecker {
+                lhs: a.clone(),
+                rhs: b.clone(),
+            },
+        );
+
         let propagator = BinaryEqualsPropagator {
             a,
             b,
@@ -84,14 +85,18 @@ where
             a_removed_values: HashSet::default(),
             b_removed_values: HashSet::default(),
 
-            inference_code: InferenceCode::new(constraint_tag, BinaryEquals),
+            inference_code,
 
             has_backtracked: false,
             first_propagation_loop: true,
             reason: Predicate::trivially_false(),
         };
 
-        (registration, propagator)
+        PropagatorSpec {
+            registration,
+            checkers: checkers.build(),
+            propagator,
+        }
     }
 }
 

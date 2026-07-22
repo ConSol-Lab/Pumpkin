@@ -11,8 +11,6 @@ use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
-use pumpkin_core::propagation::EventsToRegister;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
@@ -21,6 +19,8 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::propagator_conflict;
 use pumpkin_core::variables::IntegerVariable;
@@ -111,29 +111,10 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstruc
 {
     type PropagatorImpl = Self;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, TimeTable),
-            Box::new(TimeTableChecker {
-                tasks: self
-                    .parameters
-                    .tasks
-                    .iter()
-                    .map(|task| CheckerTask {
-                        start_time: task.start_variable.clone(),
-                        processing_time: task.processing_time,
-                        resource_usage: task.resource_usage,
-                    })
-                    .collect(),
-                capacity: self.parameters.capacity,
-            }),
-        );
-    }
-
     fn create(
         mut self,
         mut context: PropagatorConstructorContext,
-    ) -> (EventsToRegister, Self::PropagatorImpl) {
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         // We only register for notifications of backtrack events if incremental backtracking is
         // enabled
         let registration = register_tasks(
@@ -148,9 +129,32 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstruc
 
         self.is_time_table_outdated = true;
 
-        self.inference_code = Some(InferenceCode::new(self.constraint_tag, TimeTable));
+        let mut checkers = RuntimeCheckers::builder();
+        self.inference_code = Some(
+            checkers.add_inference_checker(
+                self.constraint_tag,
+                TimeTable,
+                TimeTableChecker {
+                    tasks: self
+                        .parameters
+                        .tasks
+                        .iter()
+                        .map(|task| CheckerTask {
+                            start_time: task.start_variable.clone(),
+                            processing_time: task.processing_time,
+                            resource_usage: task.resource_usage,
+                        })
+                        .collect(),
+                    capacity: self.parameters.capacity,
+                },
+            ),
+        );
 
-        (registration, self)
+        PropagatorSpec {
+            registration,
+            checkers: checkers.build(),
+            propagator: self,
+        }
     }
 }
 

@@ -15,7 +15,6 @@ use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::ExplanationContext;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
@@ -25,7 +24,9 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::propagation::TrailedInteger;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
@@ -47,20 +48,10 @@ where
 {
     type PropagatorImpl = LinearLessOrEqualPropagator<Var>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, LinearBounds),
-            Box::new(LinearLessOrEqualInferenceChecker::new(
-                self.x.clone(),
-                self.c,
-            )),
-        );
-    }
-
     fn create(
         self,
         mut context: PropagatorConstructorContext,
-    ) -> (EventsToRegister, Self::PropagatorImpl) {
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let LinearLessOrEqualPropagatorArgs {
             x,
             c,
@@ -80,16 +71,27 @@ where
 
         let lower_bound_left_hand_side = context.new_trailed_integer(lower_bound_left_hand_side);
 
+        let mut checkers = RuntimeCheckers::builder();
+        let inference_code = checkers.add_inference_checker(
+            constraint_tag,
+            LinearBounds,
+            LinearLessOrEqualInferenceChecker::new(x.clone(), c),
+        );
+
         let propagator = LinearLessOrEqualPropagator {
             x,
             c,
             lower_bound_left_hand_side,
             current_bounds: current_bounds.into(),
-            inference_code: InferenceCode::new(constraint_tag, LinearBounds),
+            inference_code,
             reason_buffer: Vec::default(),
         };
 
-        (registration.build(), propagator)
+        PropagatorSpec {
+            registration: registration.build(),
+            checkers: checkers.build(),
+            propagator,
+        }
     }
 }
 
