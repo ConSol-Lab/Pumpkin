@@ -27,6 +27,10 @@ impl CheckerStore {
             .unwrap_or(itertools::Either::Right(std::iter::empty()))
     }
 
+    /// Add a new inference checker for the inference code.
+    ///
+    /// An inference code can have multiple checkers, so if an inference checker was already
+    /// registered for the given code, this new checker is simply added to the collection.
     pub fn add_inference_checker(
         &mut self,
         inference_code: InferenceCode,
