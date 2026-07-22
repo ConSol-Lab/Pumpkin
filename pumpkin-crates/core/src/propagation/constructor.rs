@@ -34,8 +34,10 @@ pub trait PropagatorConstructor {
 
     /// Create the propagator instance from `Self`.
     ///
-    /// Alongside the propagator instance, this returns the events for which the propagator should
-    /// be enqueued.
+    /// Returns a [`PropagatorSpec`] that contains:
+    /// - the propagator instance,
+    /// - the events for which the propagator should be enqueued,
+    /// - and the runtime checkers that verify the propagator's behavior.
     fn create(self, context: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl>;
 }
 
