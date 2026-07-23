@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.4.0...pumpkin-solver-v0.5.0) - 2026-07-23
+
+### Added
+
+- *(pumpkin-solver,pumpkin-core)* Implement extended nogood propagation and CPIP nogood learning ([#454](https://github.com/ConSol-Lab/Pumpkin/pull/454))
+
+### Other
+
+- Add citation file ([#473](https://github.com/ConSol-Lab/Pumpkin/pull/473))
+- adding CP papers ([#499](https://github.com/ConSol-Lab/Pumpkin/pull/499))
+
 ## [0.4.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.3.0...pumpkin-solver-v0.4.0) - 2026-06-23
 
 ### Added
