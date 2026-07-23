@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-core-v0.4.0...pumpkin-core-v0.5.0) - 2026-07-23
+
+### Added
+
+- *(pumpkin-solver,pumpkin-core)* Implement extended nogood propagation and CPIP nogood learning ([#454](https://github.com/ConSol-Lab/Pumpkin/pull/454))
+
+### Other
+
+- *(pumpkin-solver)* `PropagatorConstructor::create` now returns event registrations ([#456](https://github.com/ConSol-Lab/Pumpkin/pull/456))
+- *(deps)* bump itertools from 0.14.0 to 0.15.0 ([#480](https://github.com/ConSol-Lab/Pumpkin/pull/480))
+
 ## [0.4.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-core-v0.3.0...pumpkin-core-v0.4.0) - 2026-06-23
 
 ### Added
