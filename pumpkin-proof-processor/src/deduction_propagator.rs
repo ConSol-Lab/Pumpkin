@@ -4,6 +4,7 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::PredicateId;
+use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
@@ -20,6 +21,10 @@ pub(crate) struct DeductionPropagatorConstructor {
     pub(crate) nogood: PropositionalConjunction,
     /// The constraint tag of the nogood.
     pub(crate) constraint_tag: ConstraintTag,
+    /// The priority of the propagator.
+    pub(crate) priority: Priority,
+    /// Whether this propagator will perform conflict detection XOR unit propagation
+    pub(crate) conflict_detection: bool,
 }
 
 impl PropagatorConstructor for DeductionPropagatorConstructor {
@@ -34,6 +39,8 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
         let DeductionPropagatorConstructor {
             nogood,
             constraint_tag,
+            priority,
+            conflict_detection,
         } = self;
 
         let ids = nogood
@@ -46,6 +53,8 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
             ids,
             inference_code: InferenceCode::new(constraint_tag, Nogood),
             active: true,
+            propagation_priority: priority,
+            conflict_detection,
         };
 
         (EventsToRegister::empty(), propagator)
@@ -73,6 +82,11 @@ pub(crate) struct DeductionPropagator {
     active: bool,
     /// The inference code for this propagator.
     inference_code: InferenceCode,
+    /// The priority of this propagator.
+    propagation_priority: Priority,
+    /// Whether this propagator is part of the 'conflict detection' stage or the 'unit propagation'
+    /// stage.
+    conflict_detection: bool,
 }
 
 impl DeductionPropagator {
@@ -82,6 +96,10 @@ impl DeductionPropagator {
     /// supported at the moment.
     pub(crate) fn deactivate(&mut self) {
         self.active = false;
+    }
+
+    pub(crate) fn set_priority(&mut self, new_priority: Priority) {
+        self.propagation_priority = new_priority;
     }
 }
 
@@ -106,12 +124,12 @@ impl Propagator for DeductionPropagator {
 
         let num_unassigned_predicates = self.nogood.len() - num_assigned_predicates;
 
-        if num_unassigned_predicates == 0 {
+        if self.conflict_detection && num_unassigned_predicates == 0 {
             return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction: self.nogood.clone(),
                 inference_code: self.inference_code.clone(),
             }));
-        } else if num_unassigned_predicates == 1 {
+        } else if !self.conflict_detection && num_unassigned_predicates == 1 {
             let unassigned_predicate = self
                 .nogood
                 .iter()
