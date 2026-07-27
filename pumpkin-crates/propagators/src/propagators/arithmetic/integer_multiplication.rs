@@ -128,6 +128,16 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     let c_min = context.lower_bound(c);
     let c_max = context.upper_bound(c);
 
+    // First we propagate C; there are several cases:
+    // - a_min >= 0 and b_min >= 0
+    // - a_min <= 0 and b_min >= 0
+    //      - a_max < 0
+    //      - a_max >= 0
+    // - a_min <= 0 and b_min <= 0
+    //      - a_max < 0 and b_max < 0
+    //      - a_max < 0 and b_max >= 0
+    //      - a_max >= 0 and b_max < 0
+    //      - a_max >= 0 and b_max >= 0
     if a_min >= 0 && b_min >= 0 {
         let new_max_c = a_max.saturating_mul(b_max);
         let new_min_c = a_min.saturating_mul(b_min);
