@@ -884,11 +884,6 @@ impl ConstraintSatisfactionSolver {
         }
 
         let handle = self.state.add_propagator(constructor);
-        let result = self.state.propagate_to_fixed_point();
-
-        if let Err(conflict) = result {
-            self.solver_state.declare_conflict(conflict.into());
-        }
 
         if self.solver_state.no_conflict() {
             Ok(handle)
