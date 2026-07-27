@@ -129,30 +129,27 @@ where
     fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> LazyExplanation<'_> {
         let payload = MultiplicationPropagation::from_bits(code);
         let propagated_bound = payload.bound();
-        let trail_position = context.get_trail_position();
-        // The propagated value is carried in the reason code rather than read off the trail
-        // predicate: `a`, `b`, `c` may be `AffineView`s, in which case the predicate actually
-        // posted to the underlying `DomainId` (and hence its right-hand side) is in that
-        // domain's space, not in the view's own logical space that this propagator reasons in.
-        let target = payload.value() as i64;
+        let propagated_value = payload.value() as i64;
 
         self.reason_buffer.clear();
 
+        let trail_position = context.get_trail_position();
+        let a_min = context.lower_bound_at_trail_position(&self.a, trail_position);
+        let a_max = context.upper_bound_at_trail_position(&self.a, trail_position);
+        let b_min = context.lower_bound_at_trail_position(&self.b, trail_position);
+        let b_max = context.upper_bound_at_trail_position(&self.b, trail_position);
+        let c_min = context.lower_bound_at_trail_position(&self.c, trail_position);
+        let c_max = context.upper_bound_at_trail_position(&self.c, trail_position);
+
         match propagated_bound {
             PropagatedBound::CLower | PropagatedBound::CUpper => {
-                let a_min = context.lower_bound_at_trail_position(&self.a, trail_position);
-                let a_max = context.upper_bound_at_trail_position(&self.a, trail_position);
-                let b_min = context.lower_bound_at_trail_position(&self.b, trail_position);
-                let b_max = context.upper_bound_at_trail_position(&self.b, trail_position);
-
-                let is_lower = matches!(propagated_bound, PropagatedBound::CLower);
                 let cited = minimize_reason(
                     a_min as i64,
                     a_max as i64,
                     b_min as i64,
                     b_max as i64,
-                    target,
-                    is_lower,
+                    propagated_value,
+                    matches!(propagated_bound, PropagatedBound::CLower),
                     |a_min, a_max, b_min, b_max| {
                         Some(product_bound_ext(a_min, a_max, b_min, b_max))
                     },
@@ -172,19 +169,13 @@ where
                 }
             }
             PropagatedBound::ALower | PropagatedBound::AUpper => {
-                let c_min = context.lower_bound_at_trail_position(&self.c, trail_position);
-                let c_max = context.upper_bound_at_trail_position(&self.c, trail_position);
-                let b_min = context.lower_bound_at_trail_position(&self.b, trail_position);
-                let b_max = context.upper_bound_at_trail_position(&self.b, trail_position);
-
-                let is_lower = matches!(propagated_bound, PropagatedBound::ALower);
                 let cited = minimize_reason(
                     c_min as i64,
                     c_max as i64,
                     b_min as i64,
                     b_max as i64,
-                    target,
-                    is_lower,
+                    propagated_value,
+                    matches!(propagated_bound, PropagatedBound::ALower),
                     compute_quotient_bound_ext,
                 );
 
@@ -202,19 +193,13 @@ where
                 }
             }
             PropagatedBound::BLower | PropagatedBound::BUpper => {
-                let c_min = context.lower_bound_at_trail_position(&self.c, trail_position);
-                let c_max = context.upper_bound_at_trail_position(&self.c, trail_position);
-                let a_min = context.lower_bound_at_trail_position(&self.a, trail_position);
-                let a_max = context.upper_bound_at_trail_position(&self.a, trail_position);
-
-                let is_lower = matches!(propagated_bound, PropagatedBound::BLower);
                 let cited = minimize_reason(
                     c_min as i64,
                     c_max as i64,
                     a_min as i64,
                     a_max as i64,
-                    target,
-                    is_lower,
+                    propagated_value,
+                    matches!(propagated_bound, PropagatedBound::BLower),
                     compute_quotient_bound_ext,
                 );
 
