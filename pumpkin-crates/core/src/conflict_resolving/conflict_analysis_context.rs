@@ -269,6 +269,7 @@ impl ConflictAnalysisContext<'_> {
         &mut self,
         learned_nogood_predicates: Vec<Predicate>,
         lbd: u32,
+        uses_cpip: bool,
     ) -> usize {
         // important to notify about the conflict _before_ backtracking removes literals from
         // the trail -> although in the current version this does nothing but notify that a
@@ -276,7 +277,8 @@ impl ConflictAnalysisContext<'_> {
         self.restart_strategy
             .notify_conflict(lbd, self.state.assignments.get_pruned_value_count());
 
-        let learned_nogood = LearnedNogood::create_from_vec(learned_nogood_predicates, self);
+        let learned_nogood =
+            LearnedNogood::create_from_vec(learned_nogood_predicates, self, uses_cpip);
 
         let constraint_tag = self.log_deduction(learned_nogood.predicates.iter().copied());
         let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
@@ -355,27 +357,36 @@ impl ConflictAnalysisContext<'_> {
                 //
                 // It could be that the predicate is implied by another unit nogood
 
-                let unit_ic = unit_nogood_inference_codes
-                    .get(&predicate)
-                    .or_else(|| {
-                        // It could be the case that we attempt to get the reason for the predicate
-                        // [x >= v] but that the corresponding unit nogood idea is the one for the
-                        // predicate [x == v]
-                        let domain_id = predicate.get_domain();
-                        let right_hand_side = predicate.get_right_hand_side();
+                let unit_ic = unit_nogood_inference_codes.get(&predicate).or_else(|| {
+                    // It could be the case that we attempt to get the reason for the predicate
+                    // [x >= v] but that the corresponding unit nogood idea is the one for the
+                    // predicate [x == v]
+                    let domain_id = predicate.get_domain();
+                    let right_hand_side = predicate.get_right_hand_side();
 
-                        unit_nogood_inference_codes.get(&predicate!(domain_id == right_hand_side))
-                    })
-                    .expect("Expected to be able to retrieve step id for unit nogood");
+                    unit_nogood_inference_codes.get(&predicate!(domain_id == right_hand_side))
+                });
 
-                let _ = proof_log.log_inference(
-                    &mut state.constraint_tags,
-                    unit_ic.clone(),
-                    [],
-                    Some(predicate),
-                    &state.variable_names,
-                    &state.assignments,
-                );
+                if let Some(unit_ic) = unit_ic {
+                    let _ = proof_log.log_inference(
+                        &mut state.constraint_tags,
+                        unit_ic.clone(),
+                        [],
+                        Some(predicate),
+                        &state.variable_names,
+                        &state.assignments,
+                    );
+                } else {
+                    // Otherwise we log the inference which was used to derive the nogood
+                    let _ = proof_log.log_inference(
+                        &mut state.constraint_tags,
+                        ic.clone(),
+                        reason_buffer.as_ref().iter().copied(),
+                        Some(predicate),
+                        &state.variable_names,
+                        &state.assignments,
+                    );
+                }
             } else {
                 // Otherwise we log the inference which was used to derive the nogood
                 let _ = proof_log.log_inference(

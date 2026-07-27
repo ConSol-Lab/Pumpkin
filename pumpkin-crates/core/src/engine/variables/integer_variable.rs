@@ -10,6 +10,7 @@ use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::predicates::Predicate;
+use crate::propagation::EventTarget;
 
 /// A trait specifying the required behaviour of an integer variable such as retrieving a
 /// lower-bound ([`IntegerVariable::lower_bound`]).
@@ -19,6 +20,7 @@ pub trait IntegerVariable:
     + TransformableVariable<Self::AffineView>
     + Debug
     + CheckerVariable<Predicate>
+    + EventTarget
 {
     type AffineView: IntegerVariable;
 
@@ -49,9 +51,6 @@ pub trait IntegerVariable:
 
     /// Iterate over the values of the domain.
     fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32>;
-
-    /// Register a watch for this variable on the given domain events.
-    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>);
 
     /// Remove the watcher on this variable.
     fn unwatch_all(&self, watchers: &mut Watchers<'_>);

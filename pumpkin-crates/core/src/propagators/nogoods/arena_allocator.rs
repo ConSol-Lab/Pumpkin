@@ -18,11 +18,11 @@ pub(crate) struct ArenaAllocator {
     /// contain the length `x` of the nogood and the [`PredicateId`] at position `i + 1` will
     /// contain the last-traversed watcher index. The next `i + 2 + x` elements are then the nogood
     /// pointed to by the [`NogoodId`] with value `i`.
-    nogoods: Vec<PredicateId>,
+    pub(crate) nogoods: Vec<PredicateId>,
     /// Maps each [`NogoodId`] to an index; this is to prevent unnecessary allocations for other
     /// structures such as the [`NogoodInfo`] which use direct hashing for storing information
     /// about nogoods.
-    nogood_id_to_index: HashMap<NogoodId, NogoodIndex>,
+    pub(crate) nogood_id_to_index: HashMap<NogoodId, NogoodIndex>,
     /// The current index for the next [`NogoodId`] which is entered; see
     /// [`ArenaAllocator::nogood_id_to_index`].
     current_index: u32,
@@ -124,7 +124,8 @@ impl ArenaAllocator {
     /// Calculates the range of the nogood spanned by the nogood with ID [`NogoodId`].
     ///
     /// Includes the [`PredicateId`] storing the last-traversed watcher index as the first element.
-    fn calculate_range_of_nogood_including_last_traversed(
+    #[allow(unused, reason = "Currently inlined due to borrow issues")]
+    pub(crate) fn calculate_range_of_nogood_including_last_traversed(
         &self,
         nogood_id: NogoodId,
     ) -> Range<usize> {
@@ -149,6 +150,7 @@ impl ArenaAllocator {
 
     /// Returns a tuple consisting of a mutable reference to the index of the last-traversed watcher
     /// and a mutable reference to the nogood pointed to by [`NogoodId`].
+    #[allow(unused, reason = "Currently inlined due to borrow issues")]
     pub(crate) fn get_nogood_mut_with_last_traversed(
         &mut self,
         nogood_id: NogoodId,
