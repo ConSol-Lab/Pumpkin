@@ -1,3 +1,5 @@
+#![allow(clippy::double_parens, reason = "originates inside the bitfield macro")]
+use bitfield_struct::bitfield;
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
@@ -125,11 +127,14 @@ where
     }
 
     fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> LazyExplanation<'_> {
-        let propagated_bound = PropagatedBound::from_bits(code);
+        let payload = MultiplicationPropagation::from_bits(code);
+        let propagated_bound = payload.bound();
         let trail_position = context.get_trail_position();
-        let target = context
-            .get_predicate_to_be_explained()
-            .get_right_hand_side() as i64;
+        // The propagated value is carried in the reason code rather than read off the trail
+        // predicate: `a`, `b`, `c` may be `AffineView`s, in which case the predicate actually
+        // posted to the underlying `DomainId` (and hence its right-hand side) is in that
+        // domain's space, not in the view's own logical space that this propagator reasons in.
+        let target = payload.value() as i64;
 
         self.reason_buffer.clear();
 
@@ -250,13 +255,21 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
 
     // c = a * b
     let (c_lo, c_hi) = product_bound(a_min, a_max, b_min, b_max);
+    let c_lo = saturate_i64_to_i32(c_lo);
+    let c_hi = saturate_i64_to_i32(c_hi);
     context.post(
-        predicate![c >= saturate_i64_to_i32(c_lo)],
-        PropagatedBound::CLower as u64,
+        predicate![c >= c_lo],
+        MultiplicationPropagation::new()
+            .with_bound(PropagatedBound::CLower)
+            .with_value(c_lo)
+            .into_bits(),
     )?;
     context.post(
-        predicate![c <= saturate_i64_to_i32(c_hi)],
-        PropagatedBound::CUpper as u64,
+        predicate![c <= c_hi],
+        MultiplicationPropagation::new()
+            .with_bound(PropagatedBound::CUpper)
+            .with_value(c_hi)
+            .into_bits(),
     )?;
 
     // a = c / b
@@ -295,14 +308,22 @@ fn propagate_quotient<VTarget: IntegerVariable>(
     let Some((lo, hi)) = compute_quotient_bound(num_min, num_max, den_min, den_max) else {
         return Ok(());
     };
+    let lo = saturate_i64_to_i32(lo);
+    let hi = saturate_i64_to_i32(hi);
 
     context.post(
-        predicate![target >= saturate_i64_to_i32(lo)],
-        lower_code as u64,
+        predicate![target >= lo],
+        MultiplicationPropagation::new()
+            .with_bound(lower_code)
+            .with_value(lo)
+            .into_bits(),
     )?;
     context.post(
-        predicate![target <= saturate_i64_to_i32(hi)],
-        upper_code as u64,
+        predicate![target <= hi],
+        MultiplicationPropagation::new()
+            .with_bound(upper_code)
+            .with_value(hi)
+            .into_bits(),
     )?;
 
     Ok(())
@@ -310,7 +331,7 @@ fn propagate_quotient<VTarget: IntegerVariable>(
 
 /// Identifies which bound of which variable a lazily-explained propagation is for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u64)]
+#[repr(u8)]
 enum PropagatedBound {
     ALower = 0,
     AUpper = 1,
@@ -321,17 +342,37 @@ enum PropagatedBound {
 }
 
 impl PropagatedBound {
-    const fn from_bits(value: u64) -> Self {
+    const fn into_bits(self) -> u8 {
+        self as _
+    }
+
+    const fn from_bits(value: u8) -> Self {
         match value {
             0 => PropagatedBound::ALower,
             1 => PropagatedBound::AUpper,
             2 => PropagatedBound::BLower,
             3 => PropagatedBound::BUpper,
             4 => PropagatedBound::CLower,
-            5 => PropagatedBound::CUpper,
-            _ => unreachable!(),
+            _ => PropagatedBound::CUpper,
         }
     }
+}
+
+/// The payload carried by a [`pumpkin_core::engine::cp::reason::Reason::DynamicLazy`] reason for
+/// this propagator: which propagation is being explained, and the value that was propagated.
+///
+/// The value has to be carried explicitly rather than read back off the trail predicate in
+/// [`Propagator::lazy_explanation`]: `a`, `b`, `c` may be `AffineView`s, and the predicate that
+/// actually lands on the trail is stated in terms of the underlying `DomainId`, not the view's
+/// own logical space that the rest of this propagator reasons in — its right-hand side would
+/// generally not equal the value this propagator computed and posted.
+#[bitfield(u64)]
+struct MultiplicationPropagation {
+    #[bits(8)]
+    bound: PropagatedBound,
+    value: i32,
+    #[bits(24)]
+    __: u32,
 }
 
 /// Computes `[min E1 .. max E1]` where `E1` is the set of the four corner products of `[a_min ..
@@ -561,11 +602,6 @@ where
     ) -> bool {
         // Independently recompute the same bounds(R)-consistent bound the propagator would
         // derive, using only the cited premises, and confirm it excludes the negated consequent.
-        // Since reasons are now minimized (see `minimize_reason`), a cited premise may leave one
-        // or both operand bounds uncited; those are treated as infinite via `IntExt`, exactly as
-        // `minimize_reason` itself does when testing whether a bound can be dropped. The induced
-        // bounds are `IntExt<i32>`; `.into()` widens them to the `IntExt<i64>` the corner
-        // functions operate on.
         let Some(atomic) = consequent else {
             return false;
         };
@@ -636,6 +672,7 @@ mod tests {
     use pumpkin_core::predicates::PropositionalConjunction;
     use pumpkin_core::propagation::CurrentNogood;
     use pumpkin_core::state::State;
+    use pumpkin_core::variables::TransformableVariable;
 
     use super::*;
     use crate::StateExt;
@@ -677,6 +714,39 @@ mod tests {
 
         // Both factors are non-negative, so the lower bound only needs each factor's own
         // non-negativity, not the full box.
+        let reason = reason_for(&mut state, predicate![c >= 0]);
+        assert_eq!(conjunction!([a >= 1] & [b >= 0]), reason);
+
+        let reason = reason_for(&mut state, predicate![c <= 12]);
+        assert_eq!(conjunction!([a <= 3] & [b >= 0] & [b <= 4]), reason);
+    }
+
+    #[test]
+    fn propagates_correctly_through_a_negative_affine_view() {
+        // Same scenario as `both_positive_propagates_bounds_c`, but `c` is a view `-c_underlying`
+        // rather than a plain `DomainId`. The predicate that actually lands on the trail is
+        // therefore stated in terms of `c_underlying` (with the inequality direction flipped),
+        // and its right-hand side does not equal the value this propagator computed for `c`
+        // itself: `lazy_explanation` must not assume the two coincide.
+        let mut state = State::default();
+        let a = state.new_interval_variable(1, 3, None);
+        let b = state.new_interval_variable(0, 4, None);
+        let c_underlying = state.new_interval_variable(-20, 10, None);
+        let c = c_underlying.scaled(-1);
+
+        let constraint_tag = state.new_constraint_tag();
+        let _ = state.add_propagator(IntegerMultiplicationArgs {
+            a,
+            b,
+            c,
+            constraint_tag,
+        });
+
+        state.propagate_to_fixed_point().expect("no empty domains");
+
+        assert_eq!(state.lower_bound(c), 0);
+        assert_eq!(state.upper_bound(c), 12);
+
         let reason = reason_for(&mut state, predicate![c >= 0]);
         assert_eq!(conjunction!([a >= 1] & [b >= 0]), reason);
 
