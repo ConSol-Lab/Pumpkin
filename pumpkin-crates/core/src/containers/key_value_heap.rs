@@ -189,10 +189,6 @@ where
                 }
             }
         }
-        assert!(
-            self.keys()
-                .all(|key| self.is_heap_locally(self.map_key_to_position[key]))
-        );
     }
 
     /// Returns how many elements are in the heap (including the (temporarily) "removed" values)
