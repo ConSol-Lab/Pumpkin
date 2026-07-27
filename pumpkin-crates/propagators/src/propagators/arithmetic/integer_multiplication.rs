@@ -600,57 +600,32 @@ where
         _premises: &[Atomic],
         consequent: Option<&Atomic>,
     ) -> bool {
-        // Independently recompute the same bounds(R)-consistent bound the propagator would
-        // derive, using only the cited premises, and confirm it excludes the negated consequent.
-        let Some(atomic) = consequent else {
-            return false;
+        let a_min = self.a.induced_lower_bound(&state).into();
+        let a_max = self.a.induced_upper_bound(&state).into();
+        let b_min = self.b.induced_lower_bound(&state).into();
+        let b_max = self.b.induced_upper_bound(&state).into();
+        let c_min = self.c.induced_lower_bound(&state).into();
+        let c_max = self.c.induced_upper_bound(&state).into();
+
+        let check_c = || {
+            let (lo, hi) = product_bound_ext(a_min, a_max, b_min, b_max);
+            is_disjoint(lo, hi, c_min, c_max)
+        };
+        let check_a = || {
+            compute_quotient_bound_ext(c_min, c_max, b_min, b_max)
+                .is_some_and(|(lo, hi)| is_disjoint(lo, hi, a_min, a_max))
+        };
+        let check_b = || {
+            compute_quotient_bound_ext(c_min, c_max, a_min, a_max)
+                .is_some_and(|(lo, hi)| is_disjoint(lo, hi, b_min, b_max))
         };
 
-        if self.c.does_atomic_constrain_self(atomic) {
-            let a_min = self.a.induced_lower_bound(&state).into();
-            let a_max = self.a.induced_upper_bound(&state).into();
-            let b_min = self.b.induced_lower_bound(&state).into();
-            let b_max = self.b.induced_upper_bound(&state).into();
-
-            let (lo, hi) = product_bound_ext(a_min, a_max, b_min, b_max);
-            is_disjoint(
-                lo,
-                hi,
-                self.c.induced_lower_bound(&state).into(),
-                self.c.induced_upper_bound(&state).into(),
-            )
-        } else if self.a.does_atomic_constrain_self(atomic) {
-            let b_min = self.b.induced_lower_bound(&state).into();
-            let b_max = self.b.induced_upper_bound(&state).into();
-            let c_min = self.c.induced_lower_bound(&state).into();
-            let c_max = self.c.induced_upper_bound(&state).into();
-
-            let Some((lo, hi)) = compute_quotient_bound_ext(c_min, c_max, b_min, b_max) else {
-                return false;
-            };
-            is_disjoint(
-                lo,
-                hi,
-                self.a.induced_lower_bound(&state).into(),
-                self.a.induced_upper_bound(&state).into(),
-            )
-        } else if self.b.does_atomic_constrain_self(atomic) {
-            let a_min = self.a.induced_lower_bound(&state).into();
-            let a_max = self.a.induced_upper_bound(&state).into();
-            let c_min = self.c.induced_lower_bound(&state).into();
-            let c_max = self.c.induced_upper_bound(&state).into();
-
-            let Some((lo, hi)) = compute_quotient_bound_ext(c_min, c_max, a_min, a_max) else {
-                return false;
-            };
-            is_disjoint(
-                lo,
-                hi,
-                self.b.induced_lower_bound(&state).into(),
-                self.b.induced_upper_bound(&state).into(),
-            )
-        } else {
-            false
+        match consequent {
+            Some(atomic) if self.c.does_atomic_constrain_self(atomic) => check_c(),
+            Some(atomic) if self.a.does_atomic_constrain_self(atomic) => check_a(),
+            Some(atomic) if self.b.does_atomic_constrain_self(atomic) => check_b(),
+            Some(_) => false,
+            None => check_c() || check_a() || check_b(),
         }
     }
 }
@@ -805,6 +780,72 @@ mod tests {
         new_propagator(&mut state, a, b, c);
 
         let _ = state.propagate_to_fixed_point().unwrap_err();
+    }
+
+    #[test]
+    fn checker_detects_a_pure_conflict_with_no_consequent() {
+        // `consequent: None` is how the checker is invoked for a propagator-reported conflict
+        // that isn't a single propagated predicate (see `VariableState::prepare_for_conflict_check`
+        // and `State::check_conflict`). The checker must not just reject these outright: it needs
+        // to confirm the premises alone are already contradictory.
+        use pumpkin_checking::Comparison;
+        use pumpkin_checking::TestAtomic;
+        use pumpkin_checking::VariableState;
+
+        let premises = [
+            TestAtomic {
+                name: "a",
+                comparison: Comparison::Equal,
+                value: 3,
+            },
+            TestAtomic {
+                name: "b",
+                comparison: Comparison::Equal,
+                value: 4,
+            },
+            TestAtomic {
+                name: "c",
+                comparison: Comparison::Equal,
+                value: 10,
+            },
+        ];
+
+        let state = VariableState::prepare_for_conflict_check(premises, None)
+            .expect("no conflicting atomics");
+
+        let checker = IntegerMultiplicationChecker {
+            a: "a",
+            b: "b",
+            c: "c",
+        };
+
+        // 3 * 4 = 12 != 10, so this is a genuine conflict.
+        assert!(checker.check(state, &premises, None));
+    }
+
+    #[test]
+    fn checker_does_not_report_a_conflict_for_consistent_premises_with_no_consequent() {
+        use pumpkin_checking::Comparison;
+        use pumpkin_checking::TestAtomic;
+        use pumpkin_checking::VariableState;
+
+        let premises = [TestAtomic {
+            name: "a",
+            comparison: Comparison::Equal,
+            value: 3,
+        }];
+
+        let state = VariableState::prepare_for_conflict_check(premises, None)
+            .expect("no conflicting atomics");
+
+        let checker = IntegerMultiplicationChecker {
+            a: "a",
+            b: "b",
+            c: "c",
+        };
+
+        // `b` and `c` are unconstrained, so `a = 3` alone can't be a conflict.
+        assert!(!checker.check(state, &premises, None));
     }
 
     #[test]
