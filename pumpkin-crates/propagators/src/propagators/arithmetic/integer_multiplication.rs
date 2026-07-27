@@ -239,26 +239,22 @@ fn product_bound(a_min: i64, a_max: i64, b_min: i64, b_max: i64) -> (i64, i64) {
 fn quotient_bound(num_min: i64, num_max: i64, den_min: i64, den_max: i64) -> (i64, i64) {
     assert!(den_min > 0 || den_max < 0);
 
-    let lo = [num_min, num_max]
-        .into_iter()
-        .flat_map(|n| {
-            [den_min, den_max]
-                .into_iter()
-                .map(move |d| div_ceil_i64(n, d))
-        })
-        .min()
-        .expect("corners is non-empty");
-    let hi = [num_min, num_max]
-        .into_iter()
-        .flat_map(|n| {
-            [den_min, den_max]
-                .into_iter()
-                .map(move |d| div_floor_i64(n, d))
-        })
-        .max()
-        .expect("corners is non-empty");
+    // E2 = { num_min / den_min, num_min / den_max, num_max / den_min, num_max / den_max }.
+    //
+    // ceil(inf E2) = min(ceil(e) : e in E2), computed exactly per corner rather than through
+    // floating-point division.
+    let inf_e2 = div_ceil_i64(num_min, den_min)
+        .min(div_ceil_i64(num_min, den_max))
+        .min(div_ceil_i64(num_max, den_min))
+        .min(div_ceil_i64(num_max, den_max));
 
-    (lo, hi)
+    // floor(sup E2) = max(floor(e) : e in E2), likewise computed exactly per corner.
+    let sup_e2 = div_floor_i64(num_min, den_min)
+        .max(div_floor_i64(num_min, den_max))
+        .max(div_floor_i64(num_max, den_min))
+        .max(div_floor_i64(num_max, den_max));
+
+    (inf_e2, sup_e2)
 }
 
 /// Computes the tightest range for `target` in `target * denominator = numerator`, or `None` if
@@ -289,15 +285,17 @@ fn compute_quotient_bound(
     let branch_neg = (den_min <= -1).then(|| quotient_bound(num_min, num_max, den_min, -1));
 
     match (branch_pos, branch_neg) {
+        // The recursive call into bnd(c, x_2)(D_ m) will always result in the second
+        // branch of the cases statement in the paper.
         (Some((lo_pos, hi_pos)), Some((lo_neg, hi_neg))) => {
             Some((lo_pos.min(lo_neg), hi_pos.max(hi_neg)))
         }
         (Some(bound), None) | (None, Some(bound)) => Some(bound),
-        // Unreachable in practice: this means `denominator` is fixed to exactly zero, which
-        // would already have forced `numerator`'s bound to include zero (and hence conflicted,
-        // since `numerator` here excludes it) via the `c = a * b` propagation computed earlier
-        // from the same snapshot.
-        (None, None) => None,
+        // This means `denominator` is fixed to exactly zero, which would already have forced
+        // `numerator`'s bound to include zero (and hence conflicted, since `numerator` here
+        // excludes it) via the `c = a * b` propagation computed earlier from the same
+        // snapshot.
+        (None, None) => unreachable!(),
     }
 }
 
