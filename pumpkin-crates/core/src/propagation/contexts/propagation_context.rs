@@ -1,3 +1,5 @@
+use enumset::EnumSet;
+
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
@@ -10,8 +12,10 @@ use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::reason::StoredReason;
 use crate::engine::variables::Literal;
+use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
+use crate::propagation::EventDispatcher;
 use crate::propagation::HasAssignments;
 use crate::propagation::LocalId;
 #[cfg(doc)]
@@ -23,6 +27,7 @@ use crate::propagation::PropagatorVarId;
 #[cfg(doc)]
 use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_simple;
+use crate::variables::DomainId;
 use crate::variables::IntegerVariable;
 
 /// Provided to the propagator when it is notified of a domain event.
@@ -138,21 +143,20 @@ impl<'a> PropagationContext<'a> {
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`].
-    ///
-    /// See [`PropagatorConstructorContext::register`] for more information.
     pub fn register_domain_event(
         &mut self,
         var: impl IntegerVariable,
         domain_events: DomainEvents,
         local_id: LocalId,
     ) {
-        let propagator_var = PropagatorVarId {
-            propagator: self.propagator_id,
-            variable: local_id,
-        };
-
-        let mut watchers = Watchers::new(propagator_var, self.notification_engine);
-        var.watch_all(&mut watchers, domain_events.events());
+        var.register(
+            &mut NotificationEngineWatchers {
+                notificaton_engine: self.notification_engine,
+                propagator_id: self.propagator_id,
+            },
+            domain_events.events(),
+            local_id,
+        );
     }
 
     /// Stop being enqueued for events on the given integer variable.
@@ -209,6 +213,11 @@ impl<'a> PropagationContext<'a> {
     pub(crate) fn is_predicate_id_satisfied(&mut self, predicate_id: PredicateId) -> bool {
         self.notification_engine
             .is_predicate_id_satisfied(predicate_id, self.assignments)
+    }
+
+    pub(crate) fn evaluate_predicate_id(&mut self, predicate_id: PredicateId) -> Option<bool> {
+        self.notification_engine
+            .evaluate_predicate_id(predicate_id, self.assignments)
     }
 
     /// Returns the number of [`PredicateId`]s.
@@ -288,5 +297,24 @@ pub(crate) fn build_reason(
             StoredReason::Eager(conjunction, inference_code)
         }
         Reason::DynamicLazy(code) => StoredReason::DynamicLazy(code),
+    }
+}
+
+/// A wrapper around the notification engine that implements [`EventDispatcher`].
+struct NotificationEngineWatchers<'a> {
+    propagator_id: PropagatorId,
+    notificaton_engine: &'a mut NotificationEngine,
+}
+
+impl EventDispatcher for NotificationEngineWatchers<'_> {
+    fn register(&mut self, domain_id: DomainId, events: EnumSet<DomainEvent>, local_id: LocalId) {
+        self.notificaton_engine.register(
+            domain_id,
+            events,
+            PropagatorVarId {
+                propagator: self.propagator_id,
+                variable: local_id,
+            },
+        );
     }
 }

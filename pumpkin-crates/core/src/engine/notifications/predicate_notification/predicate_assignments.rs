@@ -162,6 +162,21 @@ impl PredicateIdAssignments {
         self.predicate_values[predicate_id].is_falsified()
     }
 
+    pub(crate) fn evaluate(
+        &mut self,
+        predicate_id: PredicateId,
+        assignments: &Assignments,
+        predicate_id_generator: &mut PredicateIdGenerator,
+    ) -> Option<bool> {
+        self.update_if_unknown(predicate_id, assignments, predicate_id_generator);
+
+        match self.predicate_values[predicate_id] {
+            PredicateValue::AssignedTrue => Some(true),
+            PredicateValue::AssignedFalse => Some(false),
+            PredicateValue::Unknown => None,
+        }
+    }
+
     pub(crate) fn synchronise(&mut self, new_checkpoint: usize) {
         // We also need to clear the stored updated predicates; if this is not done, then it can be
         // the case that a predicate is erroneously said to be satisfied/falsified while it is not

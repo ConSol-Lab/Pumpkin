@@ -12,4 +12,6 @@ workspace = true
 
 [dependencies]
 pumpkin-checking = { version = "0.4.0", path = "../checking" }
+itertools = "0.15.0"
+log = "0.4.27"
 pumpkin-core = { version = "0.4.0", path = "../core" }
