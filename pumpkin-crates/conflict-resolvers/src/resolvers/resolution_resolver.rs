@@ -1,6 +1,5 @@
 use std::ops::ControlFlow;
 
-use itertools::Itertools;
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
@@ -333,20 +332,6 @@ impl ResolutionResolver {
                             .iterative_minimisation_statistics
                             .num_removed_previous_decision_level += 1
                     }
-                    assert_eq!(
-                        self.unique_variable_helper.len(),
-                        self.to_process_heap
-                            .keys()
-                            .map(|id| self.predicate_id_generator.get_predicate(id).get_domain())
-                            .unique()
-                            .count(),
-                        "\n{:?}\n\n{:?}",
-                        self.unique_variable_helper,
-                        self.to_process_heap
-                            .keys()
-                            .map(|id| self.predicate_id_generator.get_predicate(id).get_domain())
-                            .counts()
-                    );
                     return;
                 }
 
@@ -369,45 +354,16 @@ impl ResolutionResolver {
                 // by assigning explicitly set predicates the
                 // value `2 * trail_position`, whereas implied predicates get `2 *
                 // trail_position + 1`.
-                let heap_value = if context.get_state().is_on_trail(predicate) {
-                    context
-                        .get_state()
-                        .trail_position(predicate)
-                        .expect("Predicate should be true during conflict analysis")
-                        * 2
-                } else {
-                    context
-                        .get_state()
-                        .trail_position(predicate)
-                        .expect("Predicate should be true during conflict analysis")
-                        * 2
-                        + 1
-                };
+                let heap_value = get_heap_value(predicate, context);
 
                 // We restore the key and since we know that the value is 0, we can safely
                 // increment with `heap_value`
                 self.to_process_heap.restore_key(predicate_id);
-                self.to_process_heap
-                    .increment(predicate_id, heap_value as u32);
+                self.to_process_heap.increment(predicate_id, heap_value);
                 mode.add_predicate_to_nogood(predicate, &mut self.unique_variable_helper);
 
-                assert_eq!(
-                    self.unique_variable_helper.len(),
-                    self.to_process_heap
-                        .keys()
-                        .map(|id| self.predicate_id_generator.get_predicate(id).get_domain())
-                        .unique()
-                        .count(),
-                    "\n{:?}\n\n{:?}",
-                    self.unique_variable_helper,
-                    self.to_process_heap
-                        .keys()
-                        .map(|id| self.predicate_id_generator.get_predicate(id).get_domain())
-                        .counts()
-                );
-
                 pumpkin_assert_moderate!(
-                    *self.to_process_heap.get_value(predicate_id) == heap_value.try_into().unwrap(),
+                    *self.to_process_heap.get_value(predicate_id) == heap_value,
                     "The value in the heap should be the same as was added"
                 )
             }
