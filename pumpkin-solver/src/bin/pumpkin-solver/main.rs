@@ -674,7 +674,7 @@ fn run() -> PumpkinResult<()> {
                 ResolutionResolver::new(
                     AnalysisMode::CPIP,
                     should_minimise_nogoods,
-                    !args.iterative_minimisation,
+                    args.iterative_minimisation,
                 ),
             )?,
             ConflictResolverType::BoundsExtendedCPIP => flatzinc::solve(
