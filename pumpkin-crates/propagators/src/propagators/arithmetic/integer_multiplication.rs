@@ -3,14 +3,16 @@ use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
-use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
+use pumpkin_core::propagation::ExplanationContext;
 use pumpkin_core::propagation::InferenceCheckers;
+use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -70,6 +72,7 @@ where
             b,
             c,
             inference_code: InferenceCode::new(constraint_tag, IntegerMultiplication),
+            reason_buffer: Vec::new(),
         };
 
         (registration, propagator)
@@ -80,12 +83,22 @@ where
 ///
 /// The propagator is bounds(R)-consistent, following Schulte & Stuckey, "When Do Bounds and
 /// Domain Propagation Lead to the Same Search Space?" (ACM TOPLAS 27(3), 2005), §2.3.
+///
+/// Explanations are computed lazily (see [`Propagator::lazy_explanation`]), and are minimized on
+/// demand: a domain bound is only cited in a reason if it is actually necessary to justify the
+/// propagated value, determined by [`minimize_reason`].
 #[derive(Clone, Debug)]
 pub struct IntegerMultiplicationPropagator<VA, VB, VC> {
     a: VA,
     b: VB,
     c: VC,
     inference_code: InferenceCode,
+    /// A re-usable buffer to store the explanation of a propagation. This will contain at most
+    /// four predicates.
+    ///
+    /// This field is only written to in [`Propagator::lazy_explanation`], as that returns a
+    /// slice which needs to be owned somewhere. Hence we put that ownership here.
+    reason_buffer: Vec<Predicate>,
 }
 
 const ID_A: LocalId = LocalId::from(0);
@@ -108,7 +121,117 @@ where
     }
 
     fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
-        perform_propagation(context, &self.a, &self.b, &self.c, &self.inference_code)
+        perform_propagation(context, &self.a, &self.b, &self.c)
+    }
+
+    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> LazyExplanation<'_> {
+        let propagated_bound = PropagatedBound::from_bits(code);
+        let trail_position = context.get_trail_position();
+        let target = context
+            .get_predicate_to_be_explained()
+            .get_right_hand_side() as i64;
+
+        self.reason_buffer.clear();
+
+        match propagated_bound {
+            PropagatedBound::CLower | PropagatedBound::CUpper => {
+                let a_min = context.lower_bound_at_trail_position(&self.a, trail_position);
+                let a_max = context.upper_bound_at_trail_position(&self.a, trail_position);
+                let b_min = context.lower_bound_at_trail_position(&self.b, trail_position);
+                let b_max = context.upper_bound_at_trail_position(&self.b, trail_position);
+
+                let is_lower = matches!(propagated_bound, PropagatedBound::CLower);
+                let cited = minimize_reason(
+                    a_min as i64,
+                    a_max as i64,
+                    b_min as i64,
+                    b_max as i64,
+                    target,
+                    is_lower,
+                    |a_min, a_max, b_min, b_max| {
+                        Some(product_bound_ext(a_min, a_max, b_min, b_max))
+                    },
+                );
+
+                if cited[0] {
+                    self.reason_buffer.push(predicate![self.a >= a_min]);
+                }
+                if cited[1] {
+                    self.reason_buffer.push(predicate![self.a <= a_max]);
+                }
+                if cited[2] {
+                    self.reason_buffer.push(predicate![self.b >= b_min]);
+                }
+                if cited[3] {
+                    self.reason_buffer.push(predicate![self.b <= b_max]);
+                }
+            }
+            PropagatedBound::ALower | PropagatedBound::AUpper => {
+                let c_min = context.lower_bound_at_trail_position(&self.c, trail_position);
+                let c_max = context.upper_bound_at_trail_position(&self.c, trail_position);
+                let b_min = context.lower_bound_at_trail_position(&self.b, trail_position);
+                let b_max = context.upper_bound_at_trail_position(&self.b, trail_position);
+
+                let is_lower = matches!(propagated_bound, PropagatedBound::ALower);
+                let cited = minimize_reason(
+                    c_min as i64,
+                    c_max as i64,
+                    b_min as i64,
+                    b_max as i64,
+                    target,
+                    is_lower,
+                    compute_quotient_bound_ext,
+                );
+
+                if cited[0] {
+                    self.reason_buffer.push(predicate![self.c >= c_min]);
+                }
+                if cited[1] {
+                    self.reason_buffer.push(predicate![self.c <= c_max]);
+                }
+                if cited[2] {
+                    self.reason_buffer.push(predicate![self.b >= b_min]);
+                }
+                if cited[3] {
+                    self.reason_buffer.push(predicate![self.b <= b_max]);
+                }
+            }
+            PropagatedBound::BLower | PropagatedBound::BUpper => {
+                let c_min = context.lower_bound_at_trail_position(&self.c, trail_position);
+                let c_max = context.upper_bound_at_trail_position(&self.c, trail_position);
+                let a_min = context.lower_bound_at_trail_position(&self.a, trail_position);
+                let a_max = context.upper_bound_at_trail_position(&self.a, trail_position);
+
+                let is_lower = matches!(propagated_bound, PropagatedBound::BLower);
+                let cited = minimize_reason(
+                    c_min as i64,
+                    c_max as i64,
+                    a_min as i64,
+                    a_max as i64,
+                    target,
+                    is_lower,
+                    compute_quotient_bound_ext,
+                );
+
+                if cited[0] {
+                    self.reason_buffer.push(predicate![self.c >= c_min]);
+                }
+                if cited[1] {
+                    self.reason_buffer.push(predicate![self.c <= c_max]);
+                }
+                if cited[2] {
+                    self.reason_buffer.push(predicate![self.a >= a_min]);
+                }
+                if cited[3] {
+                    self.reason_buffer.push(predicate![self.a <= a_max]);
+                }
+            }
+        }
+
+        LazyExplanation {
+            predicates: self.reason_buffer.as_slice(),
+            inference_code: self.inference_code.clone(),
+        }
     }
 }
 
@@ -117,144 +240,111 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     a: &VA,
     b: &VB,
     c: &VC,
-    inference_code: &InferenceCode,
 ) -> PropagationStatusCP {
-    let a_min = context.lower_bound(a);
-    let a_max = context.upper_bound(a);
-    let b_min = context.lower_bound(b);
-    let b_max = context.upper_bound(b);
-    let c_min = context.lower_bound(c);
-    let c_max = context.upper_bound(c);
+    let a_min = context.lower_bound(a) as i64;
+    let a_max = context.upper_bound(a) as i64;
+    let b_min = context.lower_bound(b) as i64;
+    let b_max = context.upper_bound(b) as i64;
+    let c_min = context.lower_bound(c) as i64;
+    let c_max = context.upper_bound(c) as i64;
 
     // c = a * b
-    let (c_lo, c_hi) = product_bound(a_min as i64, a_max as i64, b_min as i64, b_max as i64);
-    let ab_reason = conjunction!([a >= a_min] & [a <= a_max] & [b >= b_min] & [b <= b_max]);
+    let (c_lo, c_hi) = product_bound(a_min, a_max, b_min, b_max);
     context.post(
         predicate![c >= saturate_i64_to_i32(c_lo)],
-        (ab_reason.clone(), inference_code),
+        PropagatedBound::CLower as u64,
     )?;
     context.post(
         predicate![c <= saturate_i64_to_i32(c_hi)],
-        (ab_reason, inference_code),
+        PropagatedBound::CUpper as u64,
     )?;
 
     // a = c / b
     propagate_quotient(
         &mut context,
-        Operand {
-            var: c,
-            min: c_min,
-            max: c_max,
-        },
-        Operand {
-            var: b,
-            min: b_min,
-            max: b_max,
-        },
+        (c_min, c_max),
+        (b_min, b_max),
         a,
-        inference_code,
+        (PropagatedBound::ALower, PropagatedBound::AUpper),
     )?;
 
     // b = c / a
     propagate_quotient(
         &mut context,
-        Operand {
-            var: c,
-            min: c_min,
-            max: c_max,
-        },
-        Operand {
-            var: a,
-            min: a_min,
-            max: a_max,
-        },
+        (c_min, c_max),
+        (a_min, a_max),
         b,
-        inference_code,
+        (PropagatedBound::BLower, PropagatedBound::BUpper),
     )?;
 
     Ok(())
-}
-
-/// One of the two operand variables in `target * denominator = numerator`, together with the
-/// domain bounds it was snapshotted at.
-struct Operand<'a, V> {
-    var: &'a V,
-    min: i32,
-    max: i32,
 }
 
 /// Propagates the bounds of `target` in `target * denominator = numerator`.
-fn propagate_quotient<VNum: IntegerVariable, VDen: IntegerVariable, VTarget: IntegerVariable>(
+fn propagate_quotient<VTarget: IntegerVariable>(
     context: &mut PropagationContext,
-    numerator: Operand<VNum>,
-    denominator: Operand<VDen>,
+    numerator: (i64, i64),
+    denominator: (i64, i64),
     target: &VTarget,
-    inference_code: &InferenceCode,
+    codes: (PropagatedBound, PropagatedBound),
 ) -> PropagationStatusCP {
-    let Some((lo, hi)) = compute_quotient_bound(
-        numerator.min as i64,
-        numerator.max as i64,
-        denominator.min as i64,
-        denominator.max as i64,
-    ) else {
+    let (num_min, num_max) = numerator;
+    let (den_min, den_max) = denominator;
+    let (lower_code, upper_code) = codes;
+
+    let Some((lo, hi)) = compute_quotient_bound(num_min, num_max, den_min, den_max) else {
         return Ok(());
     };
 
-    let reason = conjunction!(
-        [numerator.var >= numerator.min]
-            & [numerator.var <= numerator.max]
-            & [denominator.var >= denominator.min]
-            & [denominator.var <= denominator.max]
-    );
-
     context.post(
         predicate![target >= saturate_i64_to_i32(lo)],
-        (reason.clone(), inference_code),
+        lower_code as u64,
     )?;
     context.post(
         predicate![target <= saturate_i64_to_i32(hi)],
-        (reason, inference_code),
+        upper_code as u64,
     )?;
 
     Ok(())
+}
+
+/// Identifies which bound of which variable a lazily-explained propagation is for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u64)]
+enum PropagatedBound {
+    ALower = 0,
+    AUpper = 1,
+    BLower = 2,
+    BUpper = 3,
+    CLower = 4,
+    CUpper = 5,
+}
+
+impl PropagatedBound {
+    const fn from_bits(value: u64) -> Self {
+        match value {
+            0 => PropagatedBound::ALower,
+            1 => PropagatedBound::AUpper,
+            2 => PropagatedBound::BLower,
+            3 => PropagatedBound::BUpper,
+            4 => PropagatedBound::CLower,
+            5 => PropagatedBound::CUpper,
+            _ => unreachable!(),
+        }
+    }
 }
 
 /// Computes `[min E1 .. max E1]` where `E1` is the set of the four corner products of `[a_min ..
 /// a_max] x [b_min .. b_max]`.
 fn product_bound(a_min: i64, a_max: i64, b_min: i64, b_max: i64) -> (i64, i64) {
-    // Each factor is within `i32` range, so the product comfortably fits in `i64` without
-    // overflowing.
-    let corners = [a_min * b_min, a_min * b_max, a_max * b_min, a_max * b_max];
+    let (lo, hi) = product_bound_ext(
+        IntExt::Int(a_min),
+        IntExt::Int(a_max),
+        IntExt::Int(b_min),
+        IntExt::Int(b_max),
+    );
 
-    (
-        corners.into_iter().min().expect("corners is non-empty"),
-        corners.into_iter().max().expect("corners is non-empty"),
-    )
-}
-
-/// Computes `[ceil(inf E2) .. floor(sup E2)]` where `E2` is the set of the four corner quotients
-/// of `[num_min .. num_max] / [den_min .. den_max]`.
-///
-/// Assumes `[den_min .. den_max]` does not contain zero.
-fn quotient_bound(num_min: i64, num_max: i64, den_min: i64, den_max: i64) -> (i64, i64) {
-    assert!(den_min > 0 || den_max < 0);
-
-    // E2 = { num_min / den_min, num_min / den_max, num_max / den_min, num_max / den_max }.
-    //
-    // ceil(inf E2) = min(ceil(e) : e in E2), computed exactly per corner rather than through
-    // floating-point division.
-    let inf_e2 = div_ceil_i64(num_min, den_min)
-        .min(div_ceil_i64(num_min, den_max))
-        .min(div_ceil_i64(num_max, den_min))
-        .min(div_ceil_i64(num_max, den_max));
-
-    // floor(sup E2) = max(floor(e) : e in E2), likewise computed exactly per corner.
-    let sup_e2 = div_floor_i64(num_min, den_min)
-        .max(div_floor_i64(num_min, den_max))
-        .max(div_floor_i64(num_max, den_min))
-        .max(div_floor_i64(num_max, den_max));
-
-    (inf_e2, sup_e2)
+    (expect_finite(lo), expect_finite(hi))
 }
 
 /// Computes the tightest range for `target` in `target * denominator = numerator`, or `None` if
@@ -265,64 +355,184 @@ fn compute_quotient_bound(
     den_min: i64,
     den_max: i64,
 ) -> Option<(i64, i64)> {
-    let den_straddles_zero = den_min <= 0 && den_max >= 0;
-    let num_straddles_zero = num_min <= 0 && num_max >= 0;
+    let (lo, hi) = compute_quotient_bound_ext(
+        IntExt::Int(num_min),
+        IntExt::Int(num_max),
+        IntExt::Int(den_min),
+        IntExt::Int(den_max),
+    )?;
+
+    Some((expect_finite(lo), expect_finite(hi)))
+}
+
+/// Panics if `value` is not [`IntExt::Int`]. Only used where the caller can prove the value must
+/// be finite (e.g. because every input was finite).
+fn expect_finite(value: IntExt<i64>) -> i64 {
+    value
+        .as_int()
+        .expect("all inputs were finite, so the result must be finite too")
+}
+
+/// The [`IntExt<i64>`]-generalized form of [`product_bound`]; see its documentation.
+///
+/// The propagator's actual output is always computed from finite domain bounds, and is always
+/// itself finite. Infinities only ever arise from [`minimize_reason`], which relaxes individual
+/// domain bounds to determine whether they are actually necessary to justify a propagated value;
+/// a relaxed bound that turns the recomputed value into (or through) an infinity is one that
+/// cannot be dropped from the reason.
+fn product_bound_ext(
+    a_min: IntExt<i64>,
+    a_max: IntExt<i64>,
+    b_min: IntExt<i64>,
+    b_max: IntExt<i64>,
+) -> (IntExt<i64>, IntExt<i64>) {
+    let corners = [a_min * b_min, a_min * b_max, a_max * b_min, a_max * b_max];
+
+    (
+        corners.into_iter().min().expect("corners is non-empty"),
+        corners.into_iter().max().expect("corners is non-empty"),
+    )
+}
+
+/// Computes `[ceil(inf E2) .. floor(sup E2)]` where `E2` is the set of the four corner quotients
+/// of `[num_min .. num_max] / [den_min .. den_max]`, generalized to [`IntExt<i64>`] operands.
+/// Assumes `[den_min .. den_max]` does not contain zero.
+///
+/// A corner division that is indeterminate (infinity divided by infinity) is treated
+/// conservatively rather than propagated as an error: `None` becomes `NegativeInf` for the
+/// `ceil`/min aggregation and `PositiveInf` for the `floor`/max aggregation, so that an
+/// indeterminate corner can never cause [`minimize_reason`] to *overestimate* how tight the true
+/// bound is. This only ever costs some generality, deep inside an already-heavily-relaxed reason
+/// — never soundness.
+fn quotient_bound_ext(
+    num_min: IntExt<i64>,
+    num_max: IntExt<i64>,
+    den_min: IntExt<i64>,
+    den_max: IntExt<i64>,
+) -> (IntExt<i64>, IntExt<i64>) {
+    let ceil = |n: IntExt<i64>, d: IntExt<i64>| n.div_ceil(d).unwrap_or(IntExt::NegativeInf);
+    let floor = |n: IntExt<i64>, d: IntExt<i64>| n.div_floor(d).unwrap_or(IntExt::PositiveInf);
+
+    let inf_e2 = ceil(num_min, den_min)
+        .min(ceil(num_min, den_max))
+        .min(ceil(num_max, den_min))
+        .min(ceil(num_max, den_max));
+
+    let sup_e2 = floor(num_min, den_min)
+        .max(floor(num_min, den_max))
+        .max(floor(num_max, den_min))
+        .max(floor(num_max, den_max));
+
+    (inf_e2, sup_e2)
+}
+
+/// The [`IntExt<i64>`]-generalized form of [`compute_quotient_bound`]; see its documentation.
+fn compute_quotient_bound_ext(
+    num_min: IntExt<i64>,
+    num_max: IntExt<i64>,
+    den_min: IntExt<i64>,
+    den_max: IntExt<i64>,
+) -> Option<(IntExt<i64>, IntExt<i64>)> {
+    let zero = IntExt::Int(0);
+    let den_straddles_zero = den_min <= zero && den_max >= zero;
+    let num_straddles_zero = num_min <= zero && num_max >= zero;
 
     if den_straddles_zero && num_straddles_zero {
-        // Both the numerator and the denominator could be zero, so no value of `target` can be
-        // ruled out.
         return None;
     }
 
     if !den_straddles_zero {
-        return Some(quotient_bound(num_min, num_max, den_min, den_max));
+        return Some(quotient_bound_ext(num_min, num_max, den_min, den_max));
     }
 
-    // `denominator` contains zero but `numerator` does not, so `denominator` cannot actually be
-    // zero (that would force `numerator` to be zero too). Split `denominator`'s domain at zero
-    // and combine the bound derived from each half.
-    let branch_pos = (den_max >= 1).then(|| quotient_bound(num_min, num_max, 1, den_max));
-    let branch_neg = (den_min <= -1).then(|| quotient_bound(num_min, num_max, den_min, -1));
+    let branch_pos = (den_max >= IntExt::Int(1))
+        .then(|| quotient_bound_ext(num_min, num_max, IntExt::Int(1), den_max));
+    let branch_neg = (den_min <= IntExt::Int(-1))
+        .then(|| quotient_bound_ext(num_min, num_max, den_min, IntExt::Int(-1)));
 
     match (branch_pos, branch_neg) {
-        // The recursive call into bnd(c, x_2)(D_ m) will always result in the second
-        // branch of the cases statement in the paper.
         (Some((lo_pos, hi_pos)), Some((lo_neg, hi_neg))) => {
             Some((lo_pos.min(lo_neg), hi_pos.max(hi_neg)))
         }
         (Some(bound), None) | (None, Some(bound)) => Some(bound),
         // This means `denominator` is fixed to exactly zero, which would already have forced
         // `numerator`'s bound to include zero (and hence conflicted, since `numerator` here
-        // excludes it) via the `c = a * b` propagation computed earlier from the same
-        // snapshot.
+        // excludes it) via the `c = a * b` propagation computed earlier from the same snapshot.
         (None, None) => unreachable!(),
     }
 }
 
-/// Division with rounding up. Assumes `denominator != 0` and that neither operand is close
-/// enough to `i64::MIN`/`i64::MAX` to overflow (guaranteed here since both are derived from
-/// `i32` values).
-fn div_ceil_i64(numerator: i64, denominator: i64) -> i64 {
-    let d = numerator / denominator;
-    let r = numerator % denominator;
-    if (r > 0 && denominator > 0) || (r < 0 && denominator < 0) {
-        d + 1
-    } else {
-        d
-    }
-}
+/// Greedily drops bounds from the initial "cite everything" reason for `[v0_min, v0_max, v1_min,
+/// v1_max]`, relaxing each to the appropriate infinity, keeping the drop only if `bound_fn`
+/// recomputed with the relaxed value still justifies `target` (i.e. is still `>= target` when
+/// `is_lower`, or `<= target` otherwise). Returns which of the four bounds remain necessary.
+///
+/// Relaxing a bound can only loosen the value `bound_fn` computes, so sufficiency is monotone in
+/// the cited set: a single greedy pass is enough to reach a sound, irredundant (no further bound
+/// can be dropped) reason, though not necessarily the smallest one possible.
+fn minimize_reason(
+    v0_min: i64,
+    v0_max: i64,
+    v1_min: i64,
+    v1_max: i64,
+    target: i64,
+    is_lower: bool,
+    bound_fn: impl Fn(
+        IntExt<i64>,
+        IntExt<i64>,
+        IntExt<i64>,
+        IntExt<i64>,
+    ) -> Option<(IntExt<i64>, IntExt<i64>)>,
+) -> [bool; 4] {
+    let finite = [
+        IntExt::Int(v0_min),
+        IntExt::Int(v0_max),
+        IntExt::Int(v1_min),
+        IntExt::Int(v1_max),
+    ];
+    let relaxed = [
+        IntExt::NegativeInf,
+        IntExt::PositiveInf,
+        IntExt::NegativeInf,
+        IntExt::PositiveInf,
+    ];
 
-/// Division with rounding down. Assumes `denominator != 0` and that neither operand is close
-/// enough to `i64::MIN`/`i64::MAX` to overflow (guaranteed here since both are derived from
-/// `i32` values).
-fn div_floor_i64(numerator: i64, denominator: i64) -> i64 {
-    let d = numerator / denominator;
-    let r = numerator % denominator;
-    if (r > 0 && denominator < 0) || (r < 0 && denominator > 0) {
-        d - 1
-    } else {
-        d
+    let is_sufficient = |cited: [bool; 4]| {
+        let get = |i: usize| if cited[i] { finite[i] } else { relaxed[i] };
+        let value = match bound_fn(get(0), get(1), get(2), get(3)) {
+            Some((lo, hi)) => {
+                if is_lower {
+                    lo
+                } else {
+                    hi
+                }
+            }
+            None => {
+                if is_lower {
+                    IntExt::NegativeInf
+                } else {
+                    IntExt::PositiveInf
+                }
+            }
+        };
+
+        if is_lower {
+            value >= IntExt::Int(target)
+        } else {
+            value <= IntExt::Int(target)
+        }
+    };
+
+    let mut cited = [true; 4];
+    for i in 0..4 {
+        let mut candidate = cited;
+        candidate[i] = false;
+        if is_sufficient(candidate) {
+            cited = candidate;
+        }
     }
+
+    cited
 }
 
 fn saturate_i64_to_i32(value: i64) -> i32 {
@@ -350,56 +560,58 @@ where
         consequent: Option<&Atomic>,
     ) -> bool {
         // Independently recompute the same bounds(R)-consistent bound the propagator would
-        // derive, using only the cited premises (via `induced_*_bound`), and confirm it excludes
-        // the negated consequent. The propagator's reasons always cite the *full* range of both
-        // operand variables (never a single corner-specific bound, and never the target's own
-        // bound), so the two operands' induced bounds are always finite here.
+        // derive, using only the cited premises, and confirm it excludes the negated consequent.
+        // Since reasons are now minimized (see `minimize_reason`), a cited premise may leave one
+        // or both operand bounds uncited; those are treated as infinite via `IntExt`, exactly as
+        // `minimize_reason` itself does when testing whether a bound can be dropped. The induced
+        // bounds are `IntExt<i32>`; `.into()` widens them to the `IntExt<i64>` the corner
+        // functions operate on.
         let Some(atomic) = consequent else {
             return false;
         };
 
         if self.c.does_atomic_constrain_self(atomic) {
-            let a_min = expect_finite(self.a.induced_lower_bound(&state));
-            let a_max = expect_finite(self.a.induced_upper_bound(&state));
-            let b_min = expect_finite(self.b.induced_lower_bound(&state));
-            let b_max = expect_finite(self.b.induced_upper_bound(&state));
+            let a_min = self.a.induced_lower_bound(&state).into();
+            let a_max = self.a.induced_upper_bound(&state).into();
+            let b_min = self.b.induced_lower_bound(&state).into();
+            let b_max = self.b.induced_upper_bound(&state).into();
 
-            let (lo, hi) = product_bound(a_min, a_max, b_min, b_max);
+            let (lo, hi) = product_bound_ext(a_min, a_max, b_min, b_max);
             is_disjoint(
                 lo,
                 hi,
-                self.c.induced_lower_bound(&state),
-                self.c.induced_upper_bound(&state),
+                self.c.induced_lower_bound(&state).into(),
+                self.c.induced_upper_bound(&state).into(),
             )
         } else if self.a.does_atomic_constrain_self(atomic) {
-            let b_min = expect_finite(self.b.induced_lower_bound(&state));
-            let b_max = expect_finite(self.b.induced_upper_bound(&state));
-            let c_min = expect_finite(self.c.induced_lower_bound(&state));
-            let c_max = expect_finite(self.c.induced_upper_bound(&state));
+            let b_min = self.b.induced_lower_bound(&state).into();
+            let b_max = self.b.induced_upper_bound(&state).into();
+            let c_min = self.c.induced_lower_bound(&state).into();
+            let c_max = self.c.induced_upper_bound(&state).into();
 
-            let Some((lo, hi)) = compute_quotient_bound(c_min, c_max, b_min, b_max) else {
+            let Some((lo, hi)) = compute_quotient_bound_ext(c_min, c_max, b_min, b_max) else {
                 return false;
             };
             is_disjoint(
                 lo,
                 hi,
-                self.a.induced_lower_bound(&state),
-                self.a.induced_upper_bound(&state),
+                self.a.induced_lower_bound(&state).into(),
+                self.a.induced_upper_bound(&state).into(),
             )
         } else if self.b.does_atomic_constrain_self(atomic) {
-            let a_min = expect_finite(self.a.induced_lower_bound(&state));
-            let a_max = expect_finite(self.a.induced_upper_bound(&state));
-            let c_min = expect_finite(self.c.induced_lower_bound(&state));
-            let c_max = expect_finite(self.c.induced_upper_bound(&state));
+            let a_min = self.a.induced_lower_bound(&state).into();
+            let a_max = self.a.induced_upper_bound(&state).into();
+            let c_min = self.c.induced_lower_bound(&state).into();
+            let c_max = self.c.induced_upper_bound(&state).into();
 
-            let Some((lo, hi)) = compute_quotient_bound(c_min, c_max, a_min, a_max) else {
+            let Some((lo, hi)) = compute_quotient_bound_ext(c_min, c_max, a_min, a_max) else {
                 return false;
             };
             is_disjoint(
                 lo,
                 hi,
-                self.b.induced_lower_bound(&state),
-                self.b.induced_upper_bound(&state),
+                self.b.induced_lower_bound(&state).into(),
+                self.b.induced_upper_bound(&state).into(),
             )
         } else {
             false
@@ -407,22 +619,18 @@ where
     }
 }
 
-fn expect_finite(bound: IntExt) -> i64 {
-    bound
-        .as_int()
-        .expect(
-            "the multiplication propagator's reasons always cite the full range of the two \
-             operand variables",
-        )
-        .into()
-}
-
-fn is_disjoint(lo: i64, hi: i64, induced_lo: IntExt, induced_hi: IntExt) -> bool {
-    induced_hi < saturate_i64_to_i32(lo) || induced_lo > saturate_i64_to_i32(hi)
+fn is_disjoint(
+    lo: IntExt<i64>,
+    hi: IntExt<i64>,
+    induced_lo: IntExt<i64>,
+    induced_hi: IntExt<i64>,
+) -> bool {
+    induced_hi < lo || induced_lo > hi
 }
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_core::conjunction;
     use pumpkin_core::predicate;
     use pumpkin_core::predicates::Predicate;
     use pumpkin_core::predicates::PropositionalConjunction;
@@ -467,17 +675,13 @@ mod tests {
         state.assert_bounds(b, 0, 4);
         state.assert_bounds(c, 0, 12);
 
+        // Both factors are non-negative, so the lower bound only needs each factor's own
+        // non-negativity, not the full box.
         let reason = reason_for(&mut state, predicate![c >= 0]);
-        assert_eq!(
-            conjunction!([a >= 1] & [a <= 3] & [b >= 0] & [b <= 4]),
-            reason
-        );
+        assert_eq!(conjunction!([a >= 1] & [b >= 0]), reason);
 
         let reason = reason_for(&mut state, predicate![c <= 12]);
-        assert_eq!(
-            conjunction!([a >= 1] & [a <= 3] & [b >= 0] & [b <= 4]),
-            reason
-        );
+        assert_eq!(conjunction!([a <= 3] & [b >= 0] & [b <= 4]), reason);
     }
 
     #[test]
@@ -560,11 +764,10 @@ mod tests {
         // E2 = {10/2, 10/5, 20/2, 20/5} = {5, 2, 10, 4}.
         state.assert_bounds(b, 2, 10);
 
+        // c's upper bound isn't needed: even with c unboundedly large, a <= 5 already caps how
+        // small b = c/a can be forced to be relative to any larger c.
         let reason = reason_for(&mut state, predicate![b >= 2]);
-        assert_eq!(
-            conjunction!([c >= 10] & [c <= 20] & [a >= 2] & [a <= 5]),
-            reason
-        );
+        assert_eq!(conjunction!([c >= 10] & [a >= 2] & [a <= 5]), reason);
     }
 
     #[test]
@@ -597,17 +800,14 @@ mod tests {
         // Combined hull: [-6, 6].
         state.assert_bounds(a, -6, 6);
 
+        // `b` isn't needed at all: since c is fixed at 6, any a <= -7 would force |a * b| >= 7
+        // for every nonzero integer b, and b = 0 gives a * b = 0 - so no integer b makes a * b =
+        // 6 true, regardless of what b is allowed to be. Symmetrically for a >= 7.
         let reason = reason_for(&mut state, predicate![a >= -6]);
-        assert_eq!(
-            conjunction!([b >= -2] & [b <= 4] & [c >= 6] & [c <= 6]),
-            reason
-        );
+        assert_eq!(conjunction!([c >= 6] & [c <= 6]), reason);
 
         let reason = reason_for(&mut state, predicate![a <= 6]);
-        assert_eq!(
-            conjunction!([b >= -2] & [b <= 4] & [c >= 6] & [c <= 6]),
-            reason
-        );
+        assert_eq!(conjunction!([c >= 6] & [c <= 6]), reason);
     }
 
     #[test]
