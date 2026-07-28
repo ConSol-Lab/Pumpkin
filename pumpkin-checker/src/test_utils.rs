@@ -1,10 +1,8 @@
 //! Contains a bunch of utilities to help write tests for the checker.
 
 use std::num::NonZero;
-use std::rc::Rc;
 
 use drcp_format::ConstraintId;
-use drcp_format::IntAtomic;
 
 /// Create a constraint ID from the given number.
 ///
@@ -89,19 +87,4 @@ macro_rules! fact {
             consequent: None,
         }
     };
-}
-
-pub(crate) fn deduction(
-    id: u32,
-    premises: impl Into<Vec<IntAtomic<Rc<str>, i32>>>,
-    sequence: impl IntoIterator<Item = u32>,
-) -> drcp_format::Deduction<Rc<str>, i32> {
-    drcp_format::Deduction {
-        constraint_id: constraint_id(id),
-        premises: premises.into(),
-        sequence: sequence
-            .into_iter()
-            .map(|id| NonZero::new(id).expect("constraint ids should be non-zero"))
-            .collect(),
-    }
 }

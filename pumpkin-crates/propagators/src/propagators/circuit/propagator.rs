@@ -8,6 +8,7 @@ use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
@@ -17,8 +18,8 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::Conflict;
+use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -36,22 +37,17 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for CircuitConstructo
     fn create(
         self,
         mut context: pumpkin_core::propagation::PropagatorConstructorContext,
-    ) -> Self::PropagatorImpl {
-        self.successors
-            .iter()
-            .enumerate()
-            .for_each(|(index, successor)| {
-                context.register(
-                    successor.clone(),
-                    DomainEvents::ASSIGN,
-                    LocalId::from(index as u32),
-                );
-                context.register_backtrack(
-                    successor.clone(),
-                    DomainEvents::ASSIGN,
-                    LocalId::from(index as u32),
-                );
-            });
+    ) -> (EventsToRegister, Self::PropagatorImpl) {
+        let mut registration = EventsToRegister::builder();
+        for (index, successor) in self.successors.iter().enumerate() {
+            registration =
+                registration.add(successor, DomainEvents::ASSIGN, LocalId::from(index as u32));
+            context.register_backtrack(
+                successor.clone(),
+                DomainEvents::ASSIGN,
+                LocalId::from(index as u32),
+            );
+        }
 
         let mut recently_fixed = FixedBitSet::with_capacity(self.successors.len());
         for (index, var) in self.successors.iter().enumerate() {
@@ -60,12 +56,15 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for CircuitConstructo
             }
         }
 
-        CircuitPropagator {
-            first_iteration: true,
-            successors: self.successors,
-            inference_code: InferenceCode::new(self.constraint_tag, CircuitPrevent),
-            recently_fixed,
-        }
+        (
+            registration.build(),
+            CircuitPropagator {
+                first_iteration: true,
+                successors: self.successors,
+                inference_code: InferenceCode::new(self.constraint_tag, CircuitPrevent),
+                recently_fixed,
+            },
+        )
     }
 
     fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
@@ -140,8 +139,7 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
         for (i, successor) in self.successors.iter().enumerate() {
             context.post(
                 predicate!(successor != (i + 1) as i32),
-                conjunction!(),
-                &self.inference_code,
+                (conjunction!(), &self.inference_code),
             )?;
         }
         Ok(())
@@ -186,8 +184,7 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
                 let reason = self.create_prevent_explanation(context.domains(), &chain);
                 context.post(
                     predicate!(self.successors[next] != index_to_domain_value(unmarked)),
-                    reason,
-                    &self.inference_code,
+                    (reason, &self.inference_code),
                 )?;
             }
         }

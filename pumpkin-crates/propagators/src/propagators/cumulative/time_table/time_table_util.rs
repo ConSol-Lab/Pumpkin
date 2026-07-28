@@ -11,7 +11,7 @@ use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::results::PropagationStatusCP;
+use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
 use crate::cumulative::CumulativeParameters;

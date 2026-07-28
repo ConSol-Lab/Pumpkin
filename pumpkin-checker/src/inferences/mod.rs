@@ -4,15 +4,25 @@ mod linear;
 mod nogood;
 mod time_table;
 
+use pumpkin_checking::SupportingInference;
 use pumpkin_checking::VariableState;
 
 use crate::model::Atomic;
 use crate::model::Model;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Fact {
     pub premises: Vec<Atomic>,
     pub consequent: Option<Atomic>,
+}
+
+impl From<SupportingInference<Atomic>> for Fact {
+    fn from(value: SupportingInference<Atomic>) -> Self {
+        Fact {
+            premises: value.premises,
+            consequent: value.consequent,
+        }
+    }
 }
 
 impl Fact {

@@ -85,8 +85,7 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVar
 
             context.post(
                 predicate![propagating_task.start_variable >= time_point + 1],
-                reason,
-                inference_code,
+                (reason, inference_code),
             )?;
         }
 
@@ -203,8 +202,7 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVar
                     propagating_task.start_variable
                         <= time_point - propagating_task.processing_time
                 ],
-                reason,
-                inference_code,
+                (reason, inference_code),
             )?;
         }
 

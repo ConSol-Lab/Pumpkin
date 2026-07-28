@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use enum_map::Enum;
 
 #[cfg(doc)]
@@ -33,7 +35,7 @@ use crate::statistics::StatisticLogger;
 ///
 /// If the [`Brancher`] (or any component thereof) is implemented incorrectly then the
 /// behaviour of the solver is undefined.
-pub trait Brancher {
+pub trait Brancher: Debug {
     /// Logs statistics of the brancher using the provided [`StatisticLogger`].
     ///
     /// It is recommended to create a struct through the [`create_statistics_struct!`] macro!

@@ -10,6 +10,11 @@ use crate::engine::notifications::Watchers;
 use crate::engine::variables::AffineView;
 use crate::engine::variables::IntegerVariable;
 use crate::predicates::Predicate;
+use crate::predicates::PredicateConstructor;
+use crate::predicates::PredicateType;
+use crate::propagation::EventDispatcher;
+use crate::propagation::EventTarget;
+use crate::propagation::LocalId;
 use crate::pumpkin_assert_simple;
 
 /// A structure which represents the most basic [`IntegerVariable`]; it is simply the id which links
@@ -27,6 +32,17 @@ impl DomainId {
 
     pub fn id(&self) -> u32 {
         self.id
+    }
+}
+
+impl EventTarget for DomainId {
+    fn register(
+        &self,
+        registration: &mut impl EventDispatcher,
+        events: EnumSet<DomainEvent>,
+        local_id: LocalId,
+    ) {
+        registration.register(*self, events, local_id);
     }
 }
 
@@ -153,10 +169,6 @@ impl IntegerVariable for DomainId {
         assignment.get_domain_iterator(*self)
     }
 
-    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
-        watchers.watch_all(*self, events);
-    }
-
     fn unwatch_all(&self, watchers: &mut Watchers<'_>) {
         watchers.unwatch_all(*self);
     }
@@ -188,6 +200,26 @@ impl TransformableVariable<AffineView<DomainId>> for DomainId {
 
     fn offset(&self, offset: i32) -> AffineView<DomainId> {
         AffineView::new(*self, 1, offset)
+    }
+}
+
+impl PredicateConstructor for DomainId {
+    type Value = i32;
+
+    fn equality_predicate(&self, bound: Self::Value) -> Predicate {
+        Predicate::new(*self, PredicateType::Equal, bound)
+    }
+
+    fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
+        Predicate::new(*self, PredicateType::LowerBound, bound)
+    }
+
+    fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
+        Predicate::new(*self, PredicateType::UpperBound, bound)
+    }
+
+    fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
+        Predicate::new(*self, PredicateType::NotEqual, bound)
     }
 }
 

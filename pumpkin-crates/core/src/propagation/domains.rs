@@ -58,6 +58,14 @@ pub trait ReadDomains {
     /// currently unassigned.
     fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool>;
 
+    /// Returns whether the provided [`Predicate`] is assigned (either true or false) or is
+    /// assigned at the provided trail position.
+    fn evaluate_predicate_at_trail_position(
+        &self,
+        predicate: Predicate,
+        trail_position: usize,
+    ) -> Option<bool>;
+
     /// Returns whether the provided [`Literal`] is assigned (either true or false) or is
     /// currently unassigned.
     fn evaluate_literal(&self, literal: Literal) -> Option<bool>;
@@ -76,8 +84,8 @@ pub trait ReadDomains {
     /// fixed).
     fn is_fixed<Var: IntegerVariable>(&self, var: &Var) -> bool;
 
-    /// Returns the fixed value if the domain of the given variable is singleton (i.e., the variable
-    /// is fixed).
+    /// Returns the fixed value if the domain of the given variable is singleton (i.e., the
+    /// variable is fixed).
     fn fixed_value<Var: IntegerVariable>(&self, var: &Var) -> Option<i32>;
 
     /// Returns the lowest value in the domain of `var`.
@@ -273,5 +281,14 @@ impl<T: HasAssignments> ReadDomains for T {
 
     fn number_of_domains(&self) -> u32 {
         self.assignments().num_domains()
+    }
+
+    fn evaluate_predicate_at_trail_position(
+        &self,
+        predicate: Predicate,
+        trail_position: usize,
+    ) -> Option<bool> {
+        self.assignments()
+            .evaluate_predicate_at_trail_position(predicate, trail_position)
     }
 }

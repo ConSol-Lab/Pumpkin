@@ -7,7 +7,7 @@ use std::fmt::Formatter;
 use crate::propagation::EnqueueDecision;
 use super::WatchListPropositional;
 use crate::basic_types::Inconsistency;
-use crate::basic_types::PropagationStatusCP;
+use crate::engine::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;

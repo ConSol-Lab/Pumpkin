@@ -7,7 +7,7 @@ use crate::variables::*;
 
 macro_rules! python_constraint {
     ($name:ident : $constraint_func:ident { $($field:ident : $type:ty),+ $(,)? }) => {
-        #[pyclass]
+        #[pyclass(from_py_object)]
         #[derive(Clone)]
         pub(crate) struct $name {
             constraint_tag: Tag,

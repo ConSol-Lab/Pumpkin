@@ -2,14 +2,15 @@ use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::PredicateId;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::Conflict;
+use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 
 /// The [`PropagatorConstructor`] for the [`DeductionPropagator`].
@@ -24,7 +25,10 @@ pub(crate) struct DeductionPropagatorConstructor {
 impl PropagatorConstructor for DeductionPropagatorConstructor {
     type PropagatorImpl = DeductionPropagator;
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(
+        self,
+        mut context: PropagatorConstructorContext,
+    ) -> (EventsToRegister, Self::PropagatorImpl) {
         declare_inference_label!(Nogood);
 
         let DeductionPropagatorConstructor {
@@ -37,12 +41,14 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
             .map(|&predicate| context.register_predicate(predicate))
             .collect();
 
-        DeductionPropagator {
+        let propagator = DeductionPropagator {
             nogood,
             ids,
             inference_code: InferenceCode::new(constraint_tag, Nogood),
             active: true,
-        }
+        };
+
+        (EventsToRegister::empty(), propagator)
     }
 }
 
@@ -124,7 +130,7 @@ impl Propagator for DeductionPropagator {
                 // This will never fail, as the predicate is known to be unassigned. So
                 // this propagator only returns explicit conflicts and never empty
                 // domain conflicts.
-                context.post(!unassigned_predicate, explanation, &self.inference_code)?;
+                context.post(!unassigned_predicate, (explanation, &self.inference_code))?;
             }
         }
 

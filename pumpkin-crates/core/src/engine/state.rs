@@ -5,7 +5,6 @@ use pumpkin_checking::InferenceChecker;
 #[cfg(feature = "check-propagations")]
 use pumpkin_checking::VariableState;
 
-use crate::basic_types::PropagatorConflict;
 use crate::containers::HashMap;
 use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
@@ -13,16 +12,17 @@ use crate::engine::Assignments;
 use crate::engine::ConstraintProgrammingTrailEntry;
 use crate::engine::DebugHelper;
 use crate::engine::PropagatorQueue;
-#[cfg(test)]
-use crate::engine::Reason;
 use crate::engine::TrailedValues;
 use crate::engine::VariableNames;
+#[cfg(test)]
+use crate::engine::cp::reason::StoredReason;
 use crate::engine::notifications::NotificationEngine;
-use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
+#[cfg(test)]
+use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::CurrentNogood;
@@ -36,12 +36,15 @@ use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorId;
+use crate::propagation::PropagatorVarId;
 use crate::propagation::store::PropagatorStore;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
 use crate::results::SolutionReference;
+use crate::state::Conflict;
+use crate::state::EmptyDomainConflict;
 use crate::state::PropagatorHandle;
 use crate::statistics::StatisticLogger;
 use crate::statistics::log_statistic;
@@ -96,77 +99,6 @@ create_statistics_struct!(StateStatistics {
     /// a learned nogood) occurs.
     num_backjumps: u64,
 });
-
-/// Information concerning the conflict returned by [`State::propagate_to_fixed_point`].
-///
-/// Two (related) conflicts can happen:
-/// 1) a propagator explicitly detects a conflict.
-/// 2) a propagator post a domain change that results in a variable having an empty domain.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Conflict {
-    /// A conflict raised explicitly by a propagator.
-    Propagator(PropagatorConflict),
-    /// A conflict caused by an empty domain for a variable occurring.
-    EmptyDomain(EmptyDomainConflict),
-}
-
-impl From<EmptyDomainConflict> for Conflict {
-    fn from(value: EmptyDomainConflict) -> Self {
-        Conflict::EmptyDomain(value)
-    }
-}
-
-impl From<PropagatorConflict> for Conflict {
-    fn from(value: PropagatorConflict) -> Self {
-        Conflict::Propagator(value)
-    }
-}
-
-/// A conflict because a domain became empty.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EmptyDomainConflict {
-    /// The predicate that caused a domain to become empty.
-    pub trigger_predicate: Predicate,
-    /// The [`InferenceCode`] that accompanies triggered the conflict.
-    ///
-    /// If the empty domain is not triggered by a propagation, this is [`None`].
-    pub trigger_inference_code: Option<InferenceCode>,
-
-    /// The reason for [`EmptyDomainConflict::trigger_predicate`] to be true.
-    ///
-    /// If the empty domain is not triggered by a propagation, this is [`None`].
-    pub(crate) trigger_reason: Option<ReasonRef>,
-}
-
-impl EmptyDomainConflict {
-    /// The domain that became empty.
-    pub fn domain(&self) -> DomainId {
-        self.trigger_predicate.get_domain()
-    }
-
-    /// Returns the reason for the [`EmptyDomainConflict::trigger_predicate`] being propagated to
-    /// true while it is already false in the [`State`].
-    pub fn get_reason(
-        &self,
-        state: &mut State,
-        reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
-        current_nogood: CurrentNogood,
-    ) {
-        if let Some(reason_ref) = self.trigger_reason {
-            let _ = state.reason_store.get_or_compute(
-                reason_ref,
-                ExplanationContext::new(
-                    &state.assignments,
-                    current_nogood,
-                    state.trail_len(),
-                    &mut state.notification_engine,
-                ),
-                &mut state.propagators,
-                reason_buffer,
-            );
-        }
-    }
-}
 
 impl Default for State {
     fn default() -> Self {
@@ -245,6 +177,10 @@ impl State {
     /// The name is used in solver traces to identify individual domains. They are required to be
     /// unique. If the state already contains a domain with the given name, then this function
     /// will panic.
+    ///
+    /// Variables can be unnamed. In that case, `None` can be provided as the name. However,
+    /// when the solver queries the name (e.g. when logging a proof), and no name exists for a
+    /// domain, the solver will crash.
     ///
     /// Creation of new domains is not influenced by the current checkpoint of the state. If
     /// a domain is created at a non-zero checkpoint, then it will _not_ 'disappear' when
@@ -406,7 +342,17 @@ impl State {
 
         let constructor_context =
             PropagatorConstructorContext::new(original_handle.propagator_id(), self);
-        let propagator = constructor.create(constructor_context);
+        let (registration, propagator) = constructor.create(constructor_context);
+
+        for (domain_id, events, local_id) in registration.iter() {
+            let propagator_var = PropagatorVarId {
+                propagator: original_handle.propagator_id(),
+                variable: local_id,
+            };
+
+            self.notification_engine
+                .register(domain_id, events, propagator_var);
+        }
 
         pumpkin_assert_simple!(
             propagator.priority() as u8 <= 3,
@@ -513,7 +459,6 @@ impl State {
             .post_predicate(predicate, None, &mut self.notification_engine)
             .map_err(|_| EmptyDomainConflict {
                 trigger_predicate: predicate,
-                trigger_inference_code: None,
                 trigger_reason: None,
             })
     }
@@ -522,7 +467,7 @@ impl State {
     fn post_with_reason(
         &mut self,
         predicate: Predicate,
-        reason: impl Into<Reason>,
+        reason: PropositionalConjunction,
         inference_code: InferenceCode,
         propagator_id: PropagatorId,
     ) -> Result<(), EmptyDomainConflict> {
@@ -530,29 +475,24 @@ impl State {
 
         let modification_result = self.assignments.post_predicate(
             predicate,
-            Some((slot.reason_ref(), inference_code.clone())),
+            Some(slot.reason_ref()),
             &mut self.notification_engine,
         );
 
         match modification_result {
             Ok(false) => Ok(()),
             Ok(true) => {
-                use crate::propagation::build_reason;
-
-                let _ = slot.populate(propagator_id, build_reason(reason, None));
+                let _ = slot.populate(propagator_id, StoredReason::Eager(reason, inference_code));
                 Ok(())
             }
             Err(_) => {
-                use crate::propagation::build_reason;
-
-                let _ = slot.populate(propagator_id, build_reason(reason, None));
-                let (trigger_predicate, trigger_reason, trigger_inference_code) =
+                let _ = slot.populate(propagator_id, StoredReason::Eager(reason, inference_code));
+                let (trigger_predicate, trigger_reason) =
                     self.assignments.remove_last_trail_element();
 
                 Err(EmptyDomainConflict {
                     trigger_predicate,
                     trigger_reason: Some(trigger_reason),
-                    trigger_inference_code: Some(trigger_inference_code),
                 })
             }
         }
@@ -765,12 +705,12 @@ impl State {
         for trail_index in first_propagation_index..self.assignments.num_trail_entries() {
             let entry = self.assignments.get_trail_entry(trail_index);
 
-            let (reason_ref, inference_code) = entry
+            let reason_ref = entry
                 .reason
                 .expect("propagations should only be checked after propagations");
 
             reason_buffer.clear();
-            let reason_exists = self.reason_store.get_or_compute(
+            let inference_code = self.reason_store.get_or_compute(
                 reason_ref,
                 ExplanationContext::without_working_nogood(
                     &self.assignments,
@@ -780,7 +720,6 @@ impl State {
                 &mut self.propagators,
                 &mut reason_buffer,
             );
-            assert!(reason_exists, "all propagations have reasons");
 
             self.run_checker(
                 std::mem::take(&mut reason_buffer),
@@ -893,12 +832,12 @@ impl State {
         &mut self,
         trail_position: usize,
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
-    ) {
+    ) -> InferenceCode {
         let entry = self.trail_entry(trail_position);
-        let (reason_ref, _) = entry
+        let reason_ref = entry
             .reason
             .expect("Added by a propagator and must therefore have a reason");
-        let _ = self.reason_store.get_or_compute(
+        self.reason_store.get_or_compute(
             reason_ref,
             ExplanationContext::without_working_nogood(
                 &self.assignments,
@@ -907,7 +846,7 @@ impl State {
             ),
             &mut self.propagators,
             reason_buffer,
-        );
+        )
     }
     /// Get the reason for a predicate being true and store it in `reason_buffer`.
     ///
@@ -917,7 +856,8 @@ impl State {
     /// The provided `current_nogood` can be used by the propagator to provide a different reason;
     /// use [`CurrentNogood::empty`] otherwise.
     ///
-    /// All the predicates in the returned slice will evaluate to `true`.
+    /// All the predicates appended to the `reason_buffer` will evaluate to `true`. The buffer
+    /// is _not_ cleared before predicates are appended.
     ///
     /// If the provided predicate is not true, then this method will panic.
     pub fn get_propagation_reason(
@@ -955,7 +895,7 @@ impl State {
         // We distinguish between three cases:
         // 1) The predicate is explicitly present on the trail.
         if trail_entry.predicate == predicate {
-            let (reason_ref, inference_code) = trail_entry.reason?;
+            let reason_ref = trail_entry.reason?;
 
             let explanation_context = ExplanationContext::new(
                 &self.assignments,
@@ -964,14 +904,12 @@ impl State {
                 &mut self.notification_engine,
             );
 
-            let reason_exists = self.reason_store.get_or_compute(
+            let inference_code = self.reason_store.get_or_compute(
                 reason_ref,
                 explanation_context,
                 &mut self.propagators,
                 reason_buffer,
             );
-
-            assert!(reason_exists, "reason reference should not be stale");
 
             Some(inference_code)
         }

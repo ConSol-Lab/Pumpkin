@@ -1,5 +1,6 @@
 mod deduction_propagator;
 mod model;
+mod predicate_heap;
 mod processor;
 mod variables;
 
@@ -12,7 +13,10 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use anyhow::Context;
 use clap::Parser;
+use clap_verbosity_flag::InfoLevel;
+use clap_verbosity_flag::Verbosity;
 use drcp_format::reader::ProofReader;
 use drcp_format::writer::ProofWriter;
 use pumpkin_core::containers::StorageKey;
@@ -32,6 +36,9 @@ use crate::variables::Variables;
 
 #[derive(Parser)]
 struct Cli {
+    #[command(flatten)]
+    verbose: Verbosity<InfoLevel>,
+
     /// Path to the model file (.fzn).
     model_path: PathBuf,
 
@@ -43,13 +50,20 @@ struct Cli {
 }
 
 fn main() -> anyhow::Result<()> {
-    env_logger::init();
-
     let cli = Cli::parse();
 
-    let proof_processor = parse_model(&cli.model_path)?;
-    let proof_reader = create_proof_reader(&cli.scaffold_path)?;
-    let proof_writer = create_proof_writer(&cli.full_proof_path)?;
+    env_logger::Builder::new()
+        .format_timestamp(None)
+        .format_target(false)
+        .filter_level(cli.verbose.log_level_filter())
+        .target(env_logger::Target::Stdout)
+        .init();
+
+    let proof_processor = parse_model(&cli.model_path).with_context(|| "Failed to parse model")?;
+    let proof_reader =
+        create_proof_reader(&cli.scaffold_path).with_context(|| "Failed to read proof")?;
+    let proof_writer = create_proof_writer(&cli.full_proof_path)
+        .with_context(|| "Failed to create proof writer")?;
 
     proof_processor.process(proof_reader, proof_writer)?;
 

@@ -8,7 +8,6 @@ use crate::engine::predicates::predicate::PredicateType;
 use crate::engine::variables::DomainGeneratorIterator;
 use crate::engine::variables::DomainId;
 use crate::predicate;
-use crate::proof::InferenceCode;
 use crate::pumpkin_assert_eq_moderate;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
@@ -108,8 +107,6 @@ impl Assignments {
     }
 
     pub(crate) fn get_trail_entry(&self, index: usize) -> ConstraintProgrammingTrailEntry {
-        // The clone is required because of InferenceCode is not copy. However, it is a
-        // reference-counted type, so cloning is cheap.
         self.trail[index].clone()
     }
 
@@ -397,15 +394,13 @@ impl Assignments {
     }
 }
 
-pub(crate) type AssignmentReason = (ReasonRef, InferenceCode);
-
 // methods to change the domains
 impl Assignments {
     fn tighten_lower_bound(
         &mut self,
         domain_id: DomainId,
         new_lower_bound: i32,
-        reason: Option<AssignmentReason>,
+        reason: Option<ReasonRef>,
     ) -> Result<bool, EmptyDomain> {
         // No need to do any changes if the new lower bound is weaker.
         if new_lower_bound <= self.get_lower_bound(domain_id) {
@@ -445,7 +440,7 @@ impl Assignments {
         &mut self,
         domain_id: DomainId,
         new_upper_bound: i32,
-        reason: Option<AssignmentReason>,
+        reason: Option<ReasonRef>,
     ) -> Result<bool, EmptyDomain> {
         // No need to do any changes if the new upper bound is weaker.
         if new_upper_bound >= self.get_upper_bound(domain_id) {
@@ -485,7 +480,7 @@ impl Assignments {
         &mut self,
         domain_id: DomainId,
         assigned_value: i32,
-        reason: Option<AssignmentReason>,
+        reason: Option<ReasonRef>,
     ) -> Result<bool, EmptyDomain> {
         let mut update_took_place = false;
 
@@ -532,7 +527,7 @@ impl Assignments {
         &mut self,
         domain_id: DomainId,
         removed_value_from_domain: i32,
-        reason: Option<AssignmentReason>,
+        reason: Option<ReasonRef>,
     ) -> Result<bool, EmptyDomain> {
         // No need to do any changes if the value is not present anyway.
         if !self.domains[domain_id].contains(removed_value_from_domain) {
@@ -583,7 +578,7 @@ impl Assignments {
     pub(crate) fn post_predicate(
         &mut self,
         predicate: Predicate,
-        reason: Option<AssignmentReason>,
+        reason: Option<ReasonRef>,
         notification_engine: &mut NotificationEngine,
     ) -> Result<bool, EmptyDomain> {
         let (lower_bound_before, upper_bound_before) = self.bounds[predicate.get_domain()];
@@ -668,6 +663,84 @@ impl Assignments {
         }
     }
 
+    /// Determines whether the provided [`Predicate`] holds at the provided trail position. In case
+    /// the predicate is not assigned yet (neither true nor false), returns None.
+    pub(crate) fn evaluate_predicate_at_trail_position(
+        &self,
+        predicate: Predicate,
+        trail_position: usize,
+    ) -> Option<bool> {
+        let domain_id = predicate.get_domain();
+        let value = predicate.get_right_hand_side();
+
+        match predicate.get_predicate_type() {
+            PredicateType::LowerBound => {
+                if self.get_lower_bound_at_trail_position(domain_id, trail_position) >= value {
+                    Some(true)
+                } else if self.get_upper_bound_at_trail_position(domain_id, trail_position) < value
+                {
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            PredicateType::UpperBound => {
+                if self.get_upper_bound_at_trail_position(domain_id, trail_position) <= value {
+                    Some(true)
+                } else if self.get_lower_bound_at_trail_position(domain_id, trail_position) > value
+                {
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            PredicateType::NotEqual => {
+                if !self.is_value_in_domain_at_trail_position(domain_id, value, trail_position) {
+                    Some(true)
+                } else if let Some(assigned_value) =
+                    self.get_assigned_value_at_trail_position(&domain_id, trail_position)
+                {
+                    // Previous branch concluded the value is not in the domain, so if the variable
+                    // is assigned, then it is assigned to the not equals value.
+                    pumpkin_assert_simple!(assigned_value == value);
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            PredicateType::Equal => {
+                if !self.is_value_in_domain_at_trail_position(domain_id, value, trail_position) {
+                    Some(false)
+                } else if let Some(assigned_value) =
+                    self.get_assigned_value_at_trail_position(&domain_id, trail_position)
+                {
+                    pumpkin_assert_moderate!(assigned_value == value);
+                    Some(true)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    pub(crate) fn get_assigned_value_at_trail_position<Var: IntegerVariable>(
+        &self,
+        var: &Var,
+        trail_position: usize,
+    ) -> Option<i32> {
+        self.is_domain_assigned_at_trail_position(var, trail_position)
+            .then(|| var.lower_bound(self))
+    }
+
+    pub(crate) fn is_domain_assigned_at_trail_position<Var: IntegerVariable>(
+        &self,
+        var: &Var,
+        trail_position: usize,
+    ) -> bool {
+        var.lower_bound_at_trail_position(self, trail_position)
+            == var.upper_bound_at_trail_position(self, trail_position)
+    }
+
     pub(crate) fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
         self.evaluate_predicate(predicate)
             .is_some_and(|truth_value| truth_value)
@@ -750,15 +823,15 @@ impl Assignments {
     }
 
     /// todo: This is a temporary hack, not to be used in general.
-    pub(crate) fn remove_last_trail_element(&mut self) -> (Predicate, ReasonRef, InferenceCode) {
+    pub(crate) fn remove_last_trail_element(&mut self) -> (Predicate, ReasonRef) {
         let entry = self.trail.pop().unwrap();
         let domain_id = entry.predicate.get_domain();
         self.domains[domain_id].undo_trail_entry(&entry);
         self.update_bounds_snapshot(domain_id);
 
-        let (reason, inference_code) = entry.reason.unwrap();
+        let reason_ref = entry.reason.unwrap();
 
-        (entry.predicate, reason, inference_code)
+        (entry.predicate, reason_ref)
     }
 
     /// Get the number of values pruned from all the domains.
@@ -781,7 +854,7 @@ impl Assignments {
             .iter()
             .find_map(|entry| {
                 if entry.predicate == predicate {
-                    entry.reason.as_ref().map(|(reason_ref, _)| *reason_ref)
+                    entry.reason
                 } else {
                     None
                 }
@@ -800,7 +873,7 @@ pub(crate) struct ConstraintProgrammingTrailEntry {
     /// Stores the a reference to the reason in the `ReasonStore`, only makes sense if a
     /// propagation  took place, e.g., does _not_ make sense in the case of a decision or if
     /// the update was due  to synchronisation from the propositional trail.
-    pub(crate) reason: Option<AssignmentReason>,
+    pub(crate) reason: Option<ReasonRef>,
 }
 
 #[derive(Clone, Copy, Debug)]

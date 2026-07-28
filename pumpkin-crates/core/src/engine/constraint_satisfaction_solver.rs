@@ -50,6 +50,7 @@ use crate::propagation::store::PropagatorHandle;
 use crate::propagators::nogoods::NogoodChecker;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
+use crate::propagators::nogoods::PropagationMode;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_ne_moderate;
@@ -143,8 +144,22 @@ pub enum CoreExtractionResult {
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum ConflictResolverType {
     NoLearning,
+    /// Standard conflict analysis which returns as soon as the first unit implication point is
+    /// found (i.e. when a nogood is created which only contains a single predicate from the
+    /// current decision level).
     #[default]
-    UIP,
+    OneUIP,
+    /// An alternative to 1-UIP which stops as soon as the learned nogood only creates decision
+    /// predicates.
+    AllDecision,
+    /// Learns CPIP nogoods (i.e., nogoods which only have predicates from the current decision
+    /// level which reason over a single variable when learning) in combination with extended nogood
+    /// propagation.
+    ExtendedCPIP,
+    /// Learns CPIP nogoods in combination with extended nogood propagation but rather than stopping
+    /// at the first point where extended nogood propagation can take place, it stops when
+    /// extended nogood propagation can adjust a bound upon learning.
+    BoundsExtendedCPIP,
 }
 
 /// Options for the [`Solver`] which determine how it behaves.
@@ -162,6 +177,7 @@ pub struct SatisfactionSolverOptions {
     pub learning_options: LearningOptions,
     /// The number of MBs which are preallocated by the nogood propagator.
     pub memory_preallocated: usize,
+    pub analysis_mode: ConflictResolverType,
 }
 
 impl Default for SatisfactionSolverOptions {
@@ -173,6 +189,7 @@ impl Default for SatisfactionSolverOptions {
             proof_log: ProofLog::default(),
             learning_options: LearningOptions::default(),
             memory_preallocated: 50,
+            analysis_mode: ConflictResolverType::default(),
         }
     }
 }
@@ -204,6 +221,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn complete_proof(&mut self) {
+        #[derive(Debug)]
         struct DummyBrancher;
 
         impl Brancher for DummyBrancher {
@@ -253,6 +271,16 @@ impl ConstraintSatisfactionSolver {
         let handle = state.add_propagator(NogoodPropagatorConstructor::new(
             (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
             solver_options.learning_options,
+            match solver_options.analysis_mode {
+                ConflictResolverType::OneUIP | ConflictResolverType::AllDecision => {
+                    PropagationMode::UnitPropagation
+                }
+                ConflictResolverType::ExtendedCPIP | ConflictResolverType::BoundsExtendedCPIP => {
+                    PropagationMode::ExtendedNogoodPropagation
+                }
+                ConflictResolverType::NoLearning => PropagationMode::default(),
+            },
+            solver_options.learning_options.nogood_propagator_priority,
         ));
 
         ConstraintSatisfactionSolver {
@@ -437,7 +465,7 @@ impl ConstraintSatisfactionSolver {
                         continue;
                     }
 
-                    ConflictAnalysisContext::get_propagation_reason_inner(
+                    let _ = ConflictAnalysisContext::get_propagation_reason_inner(
                         predicate,
                         CurrentNogood::empty(),
                         context.proof_log,
@@ -755,9 +783,13 @@ impl ConstraintSatisfactionSolver {
 
         for trail_idx in start_trail_index..self.state.trail_len() {
             let entry = self.state.trail_entry(trail_idx);
-            let (_, inference_code) = entry
-                .reason
-                .expect("Added by a propagator and must therefore have a reason");
+
+            // Get the conjunction of predicates explaining the propagation along with the
+            // InferenceCode identifying the explanation algorithm.
+            let mut reason = vec![];
+            let inference_code = self
+                .state
+                .get_propagation_reason_trail_entry(trail_idx, &mut reason);
 
             if !self.internal_parameters.proof_log.is_logging_inferences() {
                 // In case we are not logging inferences, we only need to keep track
@@ -768,11 +800,6 @@ impl ConstraintSatisfactionSolver {
                     .insert(entry.predicate, inference_code);
                 continue;
             }
-
-            // Get the conjunction of predicates explaining the propagation.
-            let mut reason = vec![];
-            self.state
-                .get_propagation_reason_trail_entry(trail_idx, &mut reason);
 
             let propagated = entry.predicate;
 
@@ -983,7 +1010,23 @@ impl ConstraintSatisfactionSolver {
             return Err(ConstraintOperationError::InfeasibleClause);
         }
 
+        let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
         if are_all_falsified_at_root {
+            // Since the propagation is not actually performed, we log the inference
+            // explicitly here for the proof.
+            let _ = self
+                .internal_parameters
+                .proof_log
+                .log_inference(
+                    &mut self.state.constraint_tags,
+                    inference_code,
+                    predicates.iter().copied(),
+                    None,
+                    &self.state.variable_names,
+                    &self.state.assignments,
+                )
+                .expect("failed to write to proof");
+
             finalize_proof(FinalizingContext {
                 conflict: predicates.into(),
                 proof_log: &mut self.internal_parameters.proof_log,
@@ -997,7 +1040,6 @@ impl ConstraintSatisfactionSolver {
             return Err(ConstraintOperationError::InfeasibleClause);
         }
 
-        let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
         if let Err(constraint_operation_error) = self.add_nogood(predicates, inference_code) {
             let _ = self.conclude_proof_unsat();
 

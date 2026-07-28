@@ -23,7 +23,6 @@ pr_body = """
 ```text
 {{ release.breaking_changes }}
 ```{% endif %}{% endfor %}
-{% endif %}
 ---
 This PR was generated with [release-plz](https://github.com/release-plz/release-plz/).
 """

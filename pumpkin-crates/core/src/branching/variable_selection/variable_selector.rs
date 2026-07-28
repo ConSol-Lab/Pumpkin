@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 #[cfg(doc)]
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
@@ -14,7 +16,7 @@ use crate::engine::variables::DomainId;
 /// A trait containing the interface for [`VariableSelector`]s,
 /// specifying the appropriate hooks into the solver and the methods required for selecting
 /// variables.
-pub trait VariableSelector<Var> {
+pub trait VariableSelector<Var>: Debug {
     /// Determines which variable to select next if there are any left to branch on.
     /// Should only return [`None`] when all variables which have been passed to the
     /// [`VariableSelector`] have been assigned. Otherwise it should return the variable to

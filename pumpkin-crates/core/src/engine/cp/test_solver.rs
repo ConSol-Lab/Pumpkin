@@ -25,6 +25,7 @@ use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorId;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
+use crate::propagators::nogoods::PropagationMode;
 use crate::state::Conflict;
 use crate::state::EmptyDomainConflict;
 use crate::state::PropagatorHandle;
@@ -43,6 +44,8 @@ impl Default for TestSolver {
         let handle = state.add_propagator(NogoodPropagatorConstructor::new(
             0,
             LearningOptions::default(),
+            PropagationMode::UnitPropagation,
+            crate::propagation::Priority::High,
         ));
         let mut solver = Self {
             state,

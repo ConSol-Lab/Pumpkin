@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.3.0...pumpkin-solver-v0.4.0) - 2026-06-23
+
+### Added
+
+- *(pumpkin-solver)* Check derived nogoods during search ([#373](https://github.com/ConSol-Lab/Pumpkin/pull/373))
+- *(pumpkin-solver)* Expose version and git commit in crate ([#404](https://github.com/ConSol-Lab/Pumpkin/pull/404))
+- *(pumpkin-proof-processor)* Introduce the proof processor in the main branch ([#371](https://github.com/ConSol-Lab/Pumpkin/pull/371))
+
+### Fixed
+
+- README links + updating component overview ([#453](https://github.com/ConSol-Lab/Pumpkin/pull/453))
+- *(pumpkin-solver)* Update packages and fix duplicate dependencies ([#412](https://github.com/ConSol-Lab/Pumpkin/pull/412))
+- *(pumpkin-solver)* New clippy suggestion ([#410](https://github.com/ConSol-Lab/Pumpkin/pull/410))
+
+### Other
+
+- Use central version number for all pumpkin-* crates ([#470](https://github.com/ConSol-Lab/Pumpkin/pull/470))
+- add CPAIOR26 and ICAPS26 papers to README ([#465](https://github.com/ConSol-Lab/Pumpkin/pull/465))
+- *(deps)* bump log from 0.4.29 to 0.4.30 ([#458](https://github.com/ConSol-Lab/Pumpkin/pull/458))
+- avoid rebuilding unnecessarily ([#450](https://github.com/ConSol-Lab/Pumpkin/pull/450))
+- *(deps)* bump cc from 1.2.61 to 1.2.62 ([#447](https://github.com/ConSol-Lab/Pumpkin/pull/447))
+- *(pumpkin-solver)* Remove vergen as a dependency ([#438](https://github.com/ConSol-Lab/Pumpkin/pull/438))
+- *(deps)* bump cc from 1.2.60 to 1.2.61 ([#437](https://github.com/ConSol-Lab/Pumpkin/pull/437))
+- *(deps)* bump signal-hook from 0.3.18 to 0.4.4 ([#431](https://github.com/ConSol-Lab/Pumpkin/pull/431))
+- *(deps)* bump stringcase from 0.3.0 to 0.4.0 ([#422](https://github.com/ConSol-Lab/Pumpkin/pull/422))
+- *(deps)* bump env_logger from 0.10.2 to 0.11.10 ([#419](https://github.com/ConSol-Lab/Pumpkin/pull/419))
+- update README papers ([#391](https://github.com/ConSol-Lab/Pumpkin/pull/391))
+- *(pumpkin-solver)* Don't pin a checker version for tests
+
 ## [0.3.0](https://github.com/consol-lab/pumpkin/compare/pumpkin-solver-v0.2.2...pumpkin-solver-v0.3.0) - 2026-02-10
 
 ### Fixed

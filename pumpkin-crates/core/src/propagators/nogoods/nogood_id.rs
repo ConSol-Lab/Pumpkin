@@ -14,3 +14,13 @@ impl StorageKey for NogoodId {
         NogoodId { id: index as u32 }
     }
 }
+
+impl NogoodId {
+    pub(crate) const fn into_bits(self) -> u32 {
+        self.id
+    }
+
+    pub(crate) const fn from_bits(value: u32) -> Self {
+        Self { id: value }
+    }
+}

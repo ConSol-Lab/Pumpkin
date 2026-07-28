@@ -1,3 +1,4 @@
+use pumpkin_core::asserts::pumpkin_assert_eq_simple;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
@@ -7,6 +8,7 @@ use pumpkin_core::create_statistics_struct;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::CurrentNogood;
+use pumpkin_core::state::PredicateHeap;
 use pumpkin_core::statistics::moving_averages::CumulativeMovingAverage;
 use pumpkin_core::statistics::moving_averages::MovingAverage;
 
@@ -31,6 +33,9 @@ pub struct RecursiveMinimiser {
     allowed_decision_levels: HashSet<usize>, // could consider direct hashing here
     label_assignments: HashMap<Predicate, Option<Label>>,
 
+    /// The predicates which need to be explained in the proof.
+    predicates_to_log: PredicateHeap,
+
     statistics: RecursiveMinimiserStatistics,
 }
 
@@ -45,15 +50,31 @@ impl NogoodMinimiser for RecursiveMinimiser {
 
         self.initialise_minimisation_data_structures(nogood, context);
 
+        // For each predicate in the learned nogood, check whether it is implied by other
+        // predicates in the nogood.
+        for predicate in nogood.iter().copied() {
+            self.compute_label(predicate, context, nogood);
+
+            // If the predicate is removable, mark it to be explained.
+            if context.is_proof_logging_inferences()
+                && self.get_predicate_label(predicate) == Label::Removable
+            {
+                self.predicates_to_log.push(predicate, context.get_state());
+            }
+        }
+
+        if context.is_proof_logging_inferences() {
+            self.add_inferences_for_removed_predicates(context);
+        }
+
         // Iterate over each predicate and check whether it is a dominated predicate.
         let mut end_position: usize = 0;
         let initial_nogood_size = nogood.len();
         for i in 0..initial_nogood_size {
             let learned_predicate = nogood[i];
 
-            self.compute_label(learned_predicate, context, nogood);
-
             let label = self.get_predicate_label(learned_predicate);
+
             // Keep the predicate in case it was not deemed deemed redundant.
             // Note that in other cases, since 'end_position' is not incremented,
             // the predicate is effectively removed.
@@ -123,7 +144,7 @@ impl RecursiveMinimiser {
         // Due to ownership rules, we have to take ownership of the reason.
         // TODO: Reuse the allocation if it becomes a bottleneck.
         let mut reason = vec![];
-        context.get_propagation_reason(
+        let _ = context.get_propagation_reason_without_proof_log(
             input_predicate,
             CurrentNogood::from(current_nogood),
             &mut reason,
@@ -136,10 +157,6 @@ impl RecursiveMinimiser {
                 .unwrap()
                 == 0
             {
-                // The minimisation can introduce new inferences in the proof. If those inferences
-                // contain root-level antecedents, which we identified here, we need to make sure
-                // the proof is aware that that root-level assignment is used.
-                context.explain_root_assignment(antecedent_predicate);
                 continue;
             }
 
@@ -167,6 +184,7 @@ impl RecursiveMinimiser {
                 }
             }
         }
+
         // If the code reaches this part (it did not get into one of the previous 'return'
         // statements, so all antecedents of the literal are either KEEP or REMOVABLE),
         // meaning this literal is REMOVABLE.
@@ -221,7 +239,8 @@ impl RecursiveMinimiser {
         nogood: &Vec<Predicate>,
         context: &ConflictAnalysisContext,
     ) {
-        pumpkin_assert_simple!(self.current_depth == 0);
+        pumpkin_assert_eq_simple!(self.current_depth, 0);
+        pumpkin_assert_simple!(self.predicates_to_log.is_empty());
 
         // Mark literals from the initial learned nogood.
         for &predicate in nogood {
@@ -247,7 +266,8 @@ impl RecursiveMinimiser {
     }
 
     fn clean_up_minimisation(&mut self) {
-        pumpkin_assert_simple!(self.current_depth == 0);
+        pumpkin_assert_eq_simple!(self.current_depth, 0);
+        pumpkin_assert_simple!(self.predicates_to_log.is_empty());
 
         self.allowed_decision_levels.clear();
         self.label_assignments.clear();
@@ -256,6 +276,34 @@ impl RecursiveMinimiser {
     fn is_at_max_allowed_depth(&self) -> bool {
         pumpkin_assert_moderate!(self.current_depth <= 500);
         self.current_depth == 500
+    }
+
+    /// Adds the inferences for predicates that will be removed from the learned nogood.
+    ///
+    /// Assumes `self.predicates_to_log` is initialized with the predicates that have the
+    /// `Removable` label.
+    fn add_inferences_for_removed_predicates(&mut self, context: &mut ConflictAnalysisContext) {
+        while let Some(predicate) = self.predicates_to_log.pop() {
+            if context.get_checkpoint_for_predicate(predicate).unwrap() == 0 {
+                context.explain_root_assignment(predicate);
+                continue;
+            }
+
+            if [Label::Keep, Label::Poison].contains(&self.get_predicate_label(predicate)) {
+                continue;
+            }
+
+            let mut reason_buffer = vec![];
+            let _ = context.get_propagation_reason(
+                predicate,
+                CurrentNogood::empty(),
+                &mut reason_buffer,
+            );
+
+            for antecedent in reason_buffer {
+                self.predicates_to_log.push(antecedent, context.get_state());
+            }
+        }
     }
 }
 

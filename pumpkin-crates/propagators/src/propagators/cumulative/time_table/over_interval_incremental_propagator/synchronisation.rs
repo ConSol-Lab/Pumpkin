@@ -1,8 +1,8 @@
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::Conflict;
+use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::debug::are_mergeable;

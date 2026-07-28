@@ -13,8 +13,10 @@ use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::ExplanationContext;
 use pumpkin_core::propagation::InferenceCheckers;
+use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
@@ -25,7 +27,7 @@ use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::propagation::TrailedInteger;
-use pumpkin_core::results::PropagationStatusCP;
+use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -55,7 +57,10 @@ where
         );
     }
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(
+        self,
+        mut context: PropagatorConstructorContext,
+    ) -> (EventsToRegister, Self::PropagatorImpl) {
         let LinearLessOrEqualPropagatorArgs {
             x,
             c,
@@ -65,26 +70,26 @@ where
         let mut lower_bound_left_hand_side = 0_i64;
         let mut current_bounds = vec![];
 
+        let mut registration = EventsToRegister::builder();
         for (i, x_i) in x.iter().enumerate() {
-            context.register(
-                x_i.clone(),
-                DomainEvents::LOWER_BOUND,
-                LocalId::from(i as u32),
-            );
+            registration =
+                registration.add(x_i, DomainEvents::LOWER_BOUND, LocalId::from(i as u32));
             lower_bound_left_hand_side += context.lower_bound(x_i) as i64;
             current_bounds.push(context.new_trailed_integer(context.lower_bound(x_i) as i64));
         }
 
         let lower_bound_left_hand_side = context.new_trailed_integer(lower_bound_left_hand_side);
 
-        LinearLessOrEqualPropagator {
+        let propagator = LinearLessOrEqualPropagator {
             x,
             c,
             lower_bound_left_hand_side,
             current_bounds: current_bounds.into(),
             inference_code: InferenceCode::new(constraint_tag, LinearBounds),
             reason_buffer: Vec::default(),
-        }
+        };
+
+        (registration.build(), propagator)
     }
 }
 
@@ -166,7 +171,7 @@ where
         "LinearLeq"
     }
 
-    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> &[Predicate] {
+    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> LazyExplanation<'_> {
         let i = code as usize;
 
         self.reason_buffer.clear();
@@ -183,7 +188,10 @@ where
                 }
             }));
 
-        &self.reason_buffer
+        LazyExplanation {
+            predicates: self.reason_buffer.as_slice(),
+            inference_code: self.inference_code.clone(),
+        }
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
@@ -222,7 +230,7 @@ where
             let bound = self.c - (lower_bound_left_hand_side - context.lower_bound(x_i));
 
             if context.upper_bound(x_i) > bound {
-                context.post(predicate![x_i <= bound], i, &self.inference_code)?;
+                context.post(predicate![x_i <= bound], i)?;
             }
         }
 
@@ -279,7 +287,7 @@ where
                     })
                     .collect();
 
-                context.post(predicate![x_i <= bound], reason, &self.inference_code)?;
+                context.post(predicate![x_i <= bound], (reason, &self.inference_code))?;
             }
         }
 
@@ -324,89 +332,95 @@ where
     }
 }
 
-#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
-    use pumpkin_core::TestSolver;
     use pumpkin_core::conjunction;
+    use pumpkin_core::predicate;
+    use pumpkin_core::predicates::Predicate;
+    use pumpkin_core::predicates::PropositionalConjunction;
+    use pumpkin_core::propagation::CurrentNogood;
+    use pumpkin_core::state::State;
 
     use super::*;
+    use crate::StateExt;
 
     #[test]
     fn test_bounds_are_propagated() {
-        let mut solver = TestSolver::default();
-        let x = solver.new_variable(1, 5);
-        let y = solver.new_variable(0, 10);
+        let mut state = State::default();
+        let x = state.new_interval_variable(1, 5, None);
+        let y = state.new_interval_variable(0, 10, None);
 
-        let constraint_tag = solver.new_constraint_tag();
+        let constraint_tag = state.new_constraint_tag();
 
-        let propagator = solver
-            .new_propagator(LinearLessOrEqualPropagatorArgs {
-                x: [x, y].into(),
-                c: 7,
-                constraint_tag,
-            })
-            .expect("no empty domains");
+        let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
+            x: [x, y].into(),
+            c: 7,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
 
-        solver.propagate(propagator).expect("non-empty domain");
-
-        solver.assert_bounds(x, 1, 5);
-        solver.assert_bounds(y, 0, 6);
+        state.assert_bounds(x, 1, 5);
+        state.assert_bounds(y, 0, 6);
     }
 
     #[test]
     fn test_explanations() {
-        let mut solver = TestSolver::default();
-        let x = solver.new_variable(1, 5);
-        let y = solver.new_variable(0, 10);
-        let constraint_tag = solver.new_constraint_tag();
+        let mut state = State::default();
+        let x = state.new_interval_variable(1, 5, None);
+        let y = state.new_interval_variable(0, 10, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let propagator = solver
-            .new_propagator(LinearLessOrEqualPropagatorArgs {
-                x: [x, y].into(),
-                c: 7,
-                constraint_tag,
-            })
-            .expect("no empty domains");
+        let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
+            x: [x, y].into(),
+            c: 7,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
 
-        solver.propagate(propagator).expect("non-empty domain");
-
-        let reason = solver.get_reason_int(predicate![y <= 6]);
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![y <= 6],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
+        );
+        let reason: PropositionalConjunction = reason_buffer.into();
 
         assert_eq!(conjunction!([x >= 1]), reason);
     }
 
     #[test]
     fn overflow_leads_to_conflict() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
-        let x = solver.new_variable(i32::MAX, i32::MAX);
-        let y = solver.new_variable(1, 1);
-        let constraint_tag = solver.new_constraint_tag();
+        let x = state.new_interval_variable(i32::MAX, i32::MAX, None);
+        let y = state.new_interval_variable(1, 1, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(LinearLessOrEqualPropagatorArgs {
-                x: [x, y].into(),
-                c: i32::MAX,
-                constraint_tag,
-            })
+        let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
+            x: [x, y].into(),
+            c: i32::MAX,
+            constraint_tag,
+        });
+        let _ = state
+            .propagate_to_fixed_point()
             .expect_err("Expected overflow to be detected");
     }
 
     #[test]
     fn underflow_leads_to_no_propagation() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
-        let x = solver.new_variable(i32::MIN, i32::MIN);
-        let y = solver.new_variable(-1, -1);
-        let constraint_tag = solver.new_constraint_tag();
+        let x = state.new_interval_variable(i32::MIN, i32::MIN, None);
+        let y = state.new_interval_variable(-1, -1, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(LinearLessOrEqualPropagatorArgs {
-                x: [x, y].into(),
-                c: i32::MIN,
-                constraint_tag,
-            })
+        let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
+            x: [x, y].into(),
+            c: i32::MIN,
+            constraint_tag,
+        });
+        state
+            .propagate_to_fixed_point()
             .expect("Expected no error to be detected");
     }
 }
