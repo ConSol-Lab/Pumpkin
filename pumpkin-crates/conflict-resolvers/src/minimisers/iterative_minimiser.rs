@@ -1,8 +1,6 @@
 #[cfg(doc)]
 use std::collections::BTreeSet;
 
-#[cfg(doc)]
-use pumpkin_checking::VariableState;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::containers::KeyedVec;
 use pumpkin_core::containers::StorageKey;
@@ -51,7 +49,7 @@ pub(crate) struct IterativeMinimiser {
 
 /// A simple representation of a domain.
 ///
-/// Differs from [`VariableState`] by not allowing infinity as bounds, and using a [`Vec`] instead
+/// Differs from `VariableState` by not allowing infinity as bounds, and using a [`Vec`] instead
 /// of a [`BTreeSet`] for storing the holes (to improve efficiency).
 #[derive(Clone, Debug)]
 struct IterativeDomain {
