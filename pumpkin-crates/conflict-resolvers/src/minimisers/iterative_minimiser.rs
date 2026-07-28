@@ -1,3 +1,8 @@
+#[cfg(doc)]
+use std::collections::BTreeSet;
+
+#[cfg(doc)]
+use pumpkin_checking::VariableState;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::containers::KeyedVec;
 use pumpkin_core::containers::StorageKey;
@@ -44,6 +49,10 @@ pub(crate) struct IterativeMinimiser {
     statistics: IterativeMinimiserStatistics,
 }
 
+/// A simple representation of a domain.
+///
+/// Differs from [`VariableState`] by not allowing infinity as bounds, and using a [`Vec`] instead
+/// of a [`BTreeSet`] for storing the holes (to improve efficiency).
 #[derive(Clone, Debug)]
 struct IterativeDomain {
     lb: i32,
@@ -62,12 +71,17 @@ impl Default for IterativeDomain {
 }
 
 impl IterativeDomain {
+    /// Resets the [`IterativeDomain`] to the maximum bounds, and removes the holes.
     fn reset(&mut self) {
         self.lb = i32::MIN;
         self.ub = i32::MAX;
         self.holes.clear()
     }
 
+    /// Tightens the lower-bound to `lb`.
+    ///
+    /// Note that this can lead to a lower-bound which is larger than `lb` due to holes in the
+    /// domain.
     fn tighten_lower_bound(&mut self, mut lb: i32) {
         if self.lb >= lb {
             return;
@@ -80,6 +94,10 @@ impl IterativeDomain {
         self.lb = lb;
     }
 
+    /// Tightens the upper-bound to `ub`.
+    ///
+    /// Note that this can lead to a upper-bound which is smaller than `ub` due to holes in the
+    /// domain.
     fn tighten_upper_bound(&mut self, mut ub: i32) {
         if self.ub <= ub {
             return;
@@ -92,6 +110,7 @@ impl IterativeDomain {
         self.ub = ub;
     }
 
+    /// Applies the provided [`Predicate`] to the [`IterativeDomain`].
     fn apply(&mut self, predicate: &Predicate) -> bool {
         match predicate.get_predicate_type() {
             PredicateType::LowerBound => self.tighten_lower_bound(predicate.get_right_hand_side()),
@@ -122,12 +141,19 @@ impl IterativeDomain {
 }
 
 create_statistics_struct!(IterativeMinimiserStatistics {
+    /// The number of non-redundant predicates encountered.
     num_non_redundant: usize,
+    /// The number of redundant predicates encountered.
     num_redundant: usize,
+    /// The number of predicates removed by a bound.
     num_removed_by_bound: usize,
+    /// The number of predicates removed by a hole.
     num_removed_by_hole: usize,
+    /// The number of predicates removed by an equality.
     num_removed_by_equality: usize,
+    /// The number of predicates removed because the domain is fixed.
     num_removed_by_fixed_domain: usize,
+    /// The number of predicates removed because an equality was created.
     num_removed_by_creating_equality: usize,
 });
 
@@ -192,7 +218,6 @@ impl IterativeMinimiser {
         predicate: Predicate,
         context: &ConflictAnalysisContext,
     ) {
-        // println!("APPLYING {predicate:?}");
         let domain = predicate.get_domain();
         self.domains.accomodate(domain, Default::default());
         self.domains[domain].push(predicate);
@@ -306,6 +331,11 @@ impl IterativeMinimiser {
                         })
                         .copied()
                         .collect::<Vec<_>>();
+
+                    if !to_remove.is_empty() {
+                        self.statistics.num_removed_by_bound += 1;
+                    }
+
                     ProcessingResult::PossiblyReplacedWithNew {
                         potentially_removed: predicate!(domain <= upper_bound),
                         new_predicate: predicate!(domain == upper_bound),
@@ -354,6 +384,11 @@ impl IterativeMinimiser {
                         })
                         .copied()
                         .collect::<Vec<_>>();
+
+                    if !to_remove.is_empty() {
+                        self.statistics.num_removed_by_bound += 1;
+                    }
+
                     ProcessingResult::PossiblyReplacedWithNew {
                         potentially_removed: predicate!(domain >= lower_bound),
                         new_predicate: predicate!(domain == lower_bound),
