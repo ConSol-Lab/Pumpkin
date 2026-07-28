@@ -732,6 +732,12 @@ impl ResolutionResolver {
     }
 }
 
+/// Returns the value assigned to the provided [`Predicate`] in the heap.
+///
+/// The idea is that implied predicates (i.e., predicates which are not explicitly on the trail)
+/// should be resolved upon before the predicates which are explicitly on the trail.
+///
+/// Panics if the provided [`Predicate`] is not currently true on the trail.
 fn get_heap_value(predicate: Predicate, context: &mut ConflictAnalysisContext<'_>) -> u32 {
     if context.get_state().is_on_trail(predicate) {
         context
