@@ -308,11 +308,9 @@ impl Domain {
 
         self.upper_bound = IntExt::Int(bound);
 
-        if bound < i32::MAX {
-            // Note the '+ 1' to keep the elements <= the upper bound instead of <
-            // the upper bound.
-            let _ = self.holes.split_off(&(bound + 1));
-        }
+        // Note the '+ 1' to keep the elements <= the upper bound instead of <
+        // the upper bound.
+        let _ = self.holes.split_off(&(bound + 1));
 
         // Take care of the condition where the new bound is already a hole in the domain.
         if self.holes.contains(&bound) {
