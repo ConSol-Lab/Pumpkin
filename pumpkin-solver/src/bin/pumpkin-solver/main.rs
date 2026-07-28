@@ -178,8 +178,8 @@ struct Args {
     /// If this flag is present then the minimisation is turned on.
     ///
     /// Possible values: bool
-    #[arg(long = "iterative-minimisation", verbatim_doc_comment)]
-    iterative_minimisation: bool,
+    #[arg(long = "no-iterative-minimisation", verbatim_doc_comment)]
+    no_iterative_minimisation: bool,
 
     /// Decides the sequence based on which the restarts are performed.
     ///
@@ -650,7 +650,7 @@ fn run() -> PumpkinResult<()> {
                 ResolutionResolver::new(
                     AnalysisMode::OneUIP,
                     !args.no_learning_clause_minimisation,
-                    args.iterative_minimisation,
+                    !args.no_iterative_minimisation,
                 ),
             )?,
             ConflictResolverType::ExtendedCPIP => flatzinc::solve(
@@ -674,7 +674,7 @@ fn run() -> PumpkinResult<()> {
                 ResolutionResolver::new(
                     AnalysisMode::CPIP,
                     should_minimise_nogoods,
-                    args.iterative_minimisation,
+                    !args.no_iterative_minimisation,
                 ),
             )?,
             ConflictResolverType::BoundsExtendedCPIP => flatzinc::solve(
@@ -698,7 +698,7 @@ fn run() -> PumpkinResult<()> {
                 ResolutionResolver::new(
                     AnalysisMode::BoundsCPIP,
                     should_minimise_nogoods,
-                    args.iterative_minimisation,
+                    !args.no_iterative_minimisation,
                 ),
             )?,
             ConflictResolverType::AllDecision => flatzinc::solve(
@@ -722,7 +722,7 @@ fn run() -> PumpkinResult<()> {
                 ResolutionResolver::new(
                     AnalysisMode::AllDecision,
                     should_minimise_nogoods,
-                    args.iterative_minimisation,
+                    !args.no_iterative_minimisation,
                 ),
             )?,
         },

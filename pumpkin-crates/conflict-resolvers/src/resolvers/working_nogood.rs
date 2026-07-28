@@ -94,8 +94,15 @@ impl WorkingNogood {
         }
     }
 
-    fn add_predicate_previous_checkpoint(&mut self, predicate: Predicate) {
+    fn add_predicate_previous_checkpoint(
+        &mut self,
+        predicate: Predicate,
+        context: &ConflictAnalysisContext<'_>,
+    ) {
         self.processed_nogood_predicates.push(predicate);
+        if self.iterative_minimisation {
+            self.iterative_minimiser.apply_predicate(predicate, context);
+        }
     }
 
     fn add_predicate_root_level(
@@ -114,6 +121,16 @@ impl WorkingNogood {
         }
         // Then we delete the key if it was present.
         self.to_process_heap.delete_key(predicate_id);
+    }
+
+    fn remove_predicate_previous_checkpoint(&mut self, removed_predicate: Predicate) {
+        if let Some(position) = self
+            .processed_nogood_predicates
+            .iter()
+            .position(|predicate| *predicate == removed_predicate)
+        {
+            let _ = self.processed_nogood_predicates.remove(position);
+        }
     }
 }
 
@@ -247,7 +264,7 @@ impl WorkingNogood {
         } else {
             // We do not check for duplicate, we simply add the predicate.
             // Semantic minimisation will later remove duplicates and do other processing.
-            self.add_predicate_previous_checkpoint(predicate);
+            self.add_predicate_previous_checkpoint(predicate, context);
         }
     }
 
@@ -398,18 +415,9 @@ impl WorkingNogood {
                     removed_predicate,
                     &mut self.unique_variable_helper,
                 );
-                // The key is not currently present, but it has been assigned a value; we
-                // need to reset that value to 0.
-                if removed_id.index() < self.to_process_heap.len() {
-                    self.to_process_heap.set_value(removed_id, 0);
-                }
-                self.to_process_heap.delete_key(removed_id);
-            } else if let Some(position) = self
-                .processed_nogood_predicates
-                .iter()
-                .position(|predicate| *predicate == removed_predicate)
-            {
-                let _ = self.processed_nogood_predicates.remove(position);
+                self.remove_predicate_from_heap(removed_id);
+            } else {
+                self.remove_predicate_previous_checkpoint(removed_predicate);
             }
         }
     }
@@ -457,21 +465,11 @@ impl WorkingNogood {
                     mode.remove_predicate_from_nogood(element, &mut self.unique_variable_helper);
                 }
 
-                // The key is not currently present, but it has been assigned a value; we
-                // need to reset that value to 0.
-                if element_id.index() < self.to_process_heap.len() {
-                    self.to_process_heap.set_value(element_id, 0);
-                }
-                self.to_process_heap.delete_key(element_id);
+                self.remove_predicate_from_heap(element_id);
             } else {
-                if let Some(index) = self
-                    .processed_nogood_predicates
-                    .iter()
-                    .position(|predicate| *predicate == element)
-                {
-                    let _ = self.processed_nogood_predicates.remove(index);
-                }
+                self.remove_predicate_previous_checkpoint(element);
             }
+
             self.iterative_minimiser.remove_predicate(element);
 
             // Then we add it to the current nogood.
