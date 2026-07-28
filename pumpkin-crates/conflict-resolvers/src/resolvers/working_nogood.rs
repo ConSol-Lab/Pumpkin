@@ -72,6 +72,7 @@ pub(crate) enum ReplacementStatus {
 }
 
 impl WorkingNogood {
+    /// Adds a predicate to the current working nogood which is from the current checkpoint.
     fn add_predicate_current_checkpoint(
         &mut self,
         predicate: Predicate,
@@ -79,57 +80,98 @@ impl WorkingNogood {
         predicate_id_generator: &mut PredicateIdGenerator,
         mode: AnalysisMode,
     ) {
-        // We restore the key and since we know that the value is 0, we can safely
-        // increment with `heap_value`
+        // We first retrieve the value that the predicate will get in the heap
         let heap_value = get_heap_value(predicate, context);
+        // And its corresponding predicate id
         let predicate_id = predicate_id_generator.get_id(predicate);
 
+        // Next, we restore the key in the heap
         self.to_process_heap.restore_key(predicate_id);
+        // And increment its value
         self.to_process_heap.increment(predicate_id, heap_value);
 
+        // We also update the unique variable helper structure
         mode.add_predicate_to_nogood(predicate, &mut self.unique_variable_helper);
 
+        // If we are performing iterative minimisation, then we also add it to the iterative
+        // minimiser
         if self.iterative_minimisation {
             self.iterative_minimiser.apply_predicate(predicate, context);
         }
     }
 
+    /// Adds a predicate to the current working nogood which is from the current checkpoint.
     fn add_predicate_previous_checkpoint(
         &mut self,
         predicate: Predicate,
         context: &ConflictAnalysisContext<'_>,
     ) {
+        // We push it directly into a vector since we do not need to resolve upon it
         self.processed_nogood_predicates.push(predicate);
+
+        // If we are performing iterative minimisation, then we also add it to the iterative
+        // minimiser
         if self.iterative_minimisation {
             self.iterative_minimiser.apply_predicate(predicate, context);
         }
     }
 
+    /// Adds a predicate to the current working nogood which is from the root-level.
     fn add_predicate_root_level(
         &mut self,
         predicate: Predicate,
         context: &ConflictAnalysisContext<'_>,
     ) {
+        // We do not add it to the nogood, but we add it to the iterative minimiser if it is used
         if self.iterative_minimisation {
             self.iterative_minimiser.apply_predicate(predicate, context);
         }
     }
 
-    fn remove_predicate_from_heap(&mut self, predicate_id: PredicateId) {
+    /// Removes a predicate from the current working nogood which is from the current decision
+    /// level.
+    fn remove_predicate_from_current_checkpoint(
+        &mut self,
+        predicate: Predicate,
+        predicate_id: PredicateId,
+        mode: AnalysisMode,
+    ) {
+        // We first check whether the element is actually present in the heap
+        if self.to_process_heap.is_key_present(predicate_id) {
+            // If it is, then we update the unique variable helper structure
+            mode.remove_predicate_from_nogood(predicate, &mut self.unique_variable_helper);
+
+            // And we update the iterative minimiser if it is used
+            if self.iterative_minimisation {
+                self.iterative_minimiser.remove_predicate(predicate);
+            }
+        }
+
+        // Next, we set its value to 0
         if predicate_id.index() < self.to_process_heap.len() {
             self.to_process_heap.set_value(predicate_id, 0);
         }
-        // Then we delete the key if it was present.
+        // Then we delete the key
         self.to_process_heap.delete_key(predicate_id);
     }
 
+    /// Removes a predicate from the current working nogood which is from the previous decision
+    /// level.
     fn remove_predicate_previous_checkpoint(&mut self, removed_predicate: Predicate) {
+        // We first try to find the position of the predicate
         if let Some(position) = self
             .processed_nogood_predicates
             .iter()
             .position(|predicate| *predicate == removed_predicate)
         {
+            // If we can find the position, then we remove it from the processed noogod predicates
             let _ = self.processed_nogood_predicates.remove(position);
+
+            // If we are performing iterative minimisation, then we also remove it from the
+            // iterative minimiser
+            if self.iterative_minimisation {
+                self.iterative_minimiser.remove_predicate(removed_predicate);
+            }
         }
     }
 }
@@ -153,6 +195,17 @@ impl WorkingNogood {
             self.iterative_minimiser.clear();
         }
         self.unique_variable_helper.clear();
+    }
+
+    pub(crate) fn pop_predicate_from_conflict_nogood(
+        &mut self,
+        predicate_id_generator: &mut PredicateIdGenerator,
+        mode: AnalysisMode,
+    ) -> Predicate {
+        let next_predicate_id = self.to_process_heap.pop_max().unwrap();
+        let predicate = predicate_id_generator.get_predicate(next_predicate_id);
+        mode.remove_predicate_from_nogood(predicate, &mut self.unique_variable_helper);
+        predicate
     }
 
     /// Add the predicate to the current conflict nogood if we know it needs to be added.
@@ -268,17 +321,6 @@ impl WorkingNogood {
         }
     }
 
-    pub(crate) fn pop_predicate_from_conflict_nogood(
-        &mut self,
-        predicate_id_generator: &mut PredicateIdGenerator,
-        mode: AnalysisMode,
-    ) -> Predicate {
-        let next_predicate_id = self.to_process_heap.pop_max().unwrap();
-        let predicate = predicate_id_generator.get_predicate(next_predicate_id);
-        mode.remove_predicate_from_nogood(predicate, &mut self.unique_variable_helper);
-        predicate
-    }
-
     /// Checks whether the provided [`Predicate`] is redundant given the current working nogood.
     pub(crate) fn check_for_iterative_redundancy(
         &mut self,
@@ -301,7 +343,7 @@ impl WorkingNogood {
         match process_predicate {
             ProcessingResult::Redundant => {
                 // The provided predicate is redundant.
-                self.remove_predicate_from_heap(predicate_id);
+                self.remove_predicate_from_current_checkpoint(predicate, predicate_id, mode);
 
                 self.iterative_minimisation_statistics.num_removed += 1;
 
@@ -356,7 +398,11 @@ impl WorkingNogood {
                             mode,
                         )
                     {
-                        self.remove_predicate_from_heap(predicate_id);
+                        self.remove_predicate_from_current_checkpoint(
+                            predicate,
+                            predicate_id,
+                            mode,
+                        );
 
                         // We can replace the elements with `new_predicate`, so we indicate that we
                         // do not need to add `predicate`.
@@ -376,7 +422,7 @@ impl WorkingNogood {
                         mode,
                     );
 
-                    self.remove_predicate_from_heap(predicate_id);
+                    self.remove_predicate_from_current_checkpoint(predicate, predicate_id, mode);
 
                     // And we indicate that we do not need to add `predicate` to the nogood.
                     IterativeRedundancyStatus::Redundant
@@ -401,9 +447,6 @@ impl WorkingNogood {
         for removed_predicate in removed {
             self.iterative_minimisation_statistics.num_removed += 1;
 
-            // And we also remove it from the iterative minimiser itself.
-            self.iterative_minimiser.remove_predicate(removed_predicate);
-
             let removed_id = predicate_id_generator.get_id(removed_predicate);
             // We differentiate between two cases:
             // 1. The removed predicate is from the current decision level and we need to remove it
@@ -411,11 +454,7 @@ impl WorkingNogood {
             // 2. The removed predicate is from the previous decision level, and we remove it from
             //    there.
             if self.to_process_heap.is_key_present(removed_id) {
-                mode.remove_predicate_from_nogood(
-                    removed_predicate,
-                    &mut self.unique_variable_helper,
-                );
-                self.remove_predicate_from_heap(removed_id);
+                self.remove_predicate_from_current_checkpoint(removed_predicate, removed_id, mode);
             } else {
                 self.remove_predicate_previous_checkpoint(removed_predicate);
             }
@@ -461,16 +500,11 @@ impl WorkingNogood {
             // First, we remove `element`.
             if context.get_checkpoint_for_predicate(element).unwrap() == context.get_checkpoint() {
                 let element_id = predicate_id_generator.get_id(element);
-                if self.to_process_heap.is_key_present(element_id) {
-                    mode.remove_predicate_from_nogood(element, &mut self.unique_variable_helper);
-                }
 
-                self.remove_predicate_from_heap(element_id);
+                self.remove_predicate_from_current_checkpoint(element, element_id, mode);
             } else {
                 self.remove_predicate_previous_checkpoint(element);
             }
-
-            self.iterative_minimiser.remove_predicate(element);
 
             // Then we add it to the current nogood.
             self.add_predicate_to_conflict_nogood(
