@@ -278,6 +278,40 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     Ok(())
 }
 
+/// Computes `[min E1 .. max E1]` where `E1` is the set of the four corner products of `[a_min ..
+/// a_max] x [b_min .. b_max]`.
+fn product_bound(a_min: i64, a_max: i64, b_min: i64, b_max: i64) -> (i64, i64) {
+    let (lo, hi) = product_bound_ext(
+        IntExt::Int(a_min),
+        IntExt::Int(a_max),
+        IntExt::Int(b_min),
+        IntExt::Int(b_max),
+    );
+
+    (expect_finite(lo), expect_finite(hi))
+}
+
+/// The [`IntExt<i64>`]-generalized form of [`product_bound`]; see its documentation.
+///
+/// The propagator's actual output is always computed from finite domain bounds, and is always
+/// itself finite. Infinities only ever arise from [`minimize_reason`], which relaxes individual
+/// domain bounds to determine whether they are actually necessary to justify a propagated value;
+/// a relaxed bound that turns the recomputed value into (or through) an infinity is one that
+/// cannot be dropped from the reason.
+fn product_bound_ext(
+    a_min: IntExt<i64>,
+    a_max: IntExt<i64>,
+    b_min: IntExt<i64>,
+    b_max: IntExt<i64>,
+) -> (IntExt<i64>, IntExt<i64>) {
+    let corners = [a_min * b_min, a_min * b_max, a_max * b_min, a_max * b_max];
+
+    (
+        corners.into_iter().min().expect("corners is non-empty"),
+        corners.into_iter().max().expect("corners is non-empty"),
+    )
+}
+
 /// Propagates the bounds of `target` in `target * denominator = numerator`.
 fn propagate_quotient<VTarget: IntegerVariable>(
     context: &mut PropagationContext,
@@ -312,6 +346,92 @@ fn propagate_quotient<VTarget: IntegerVariable>(
     )?;
 
     Ok(())
+}
+
+/// Computes the tightest range for `target` in `target * denominator = numerator`, or `None` if
+/// no propagation is possible.
+fn compute_quotient_bound(
+    num_min: i64,
+    num_max: i64,
+    den_min: i64,
+    den_max: i64,
+) -> Option<(i64, i64)> {
+    let (lo, hi) = compute_quotient_bound_ext(
+        IntExt::Int(num_min),
+        IntExt::Int(num_max),
+        IntExt::Int(den_min),
+        IntExt::Int(den_max),
+    )?;
+
+    Some((expect_finite(lo), expect_finite(hi)))
+}
+
+/// The [`IntExt<i64>`]-generalized form of [`compute_quotient_bound`]; see its documentation.
+fn compute_quotient_bound_ext(
+    num_min: IntExt<i64>,
+    num_max: IntExt<i64>,
+    den_min: IntExt<i64>,
+    den_max: IntExt<i64>,
+) -> Option<(IntExt<i64>, IntExt<i64>)> {
+    let zero = IntExt::Int(0);
+    let den_straddles_zero = den_min <= zero && den_max >= zero;
+    let num_straddles_zero = num_min <= zero && num_max >= zero;
+
+    if den_straddles_zero && num_straddles_zero {
+        return None;
+    }
+
+    if !den_straddles_zero {
+        return Some(quotient_bound_ext(num_min, num_max, den_min, den_max));
+    }
+
+    let branch_pos = (den_max >= IntExt::Int(1))
+        .then(|| quotient_bound_ext(num_min, num_max, IntExt::Int(1), den_max));
+    let branch_neg = (den_min <= IntExt::Int(-1))
+        .then(|| quotient_bound_ext(num_min, num_max, den_min, IntExt::Int(-1)));
+
+    match (branch_pos, branch_neg) {
+        (Some((lo_pos, hi_pos)), Some((lo_neg, hi_neg))) => {
+            Some((lo_pos.min(lo_neg), hi_pos.max(hi_neg)))
+        }
+        (Some(bound), None) | (None, Some(bound)) => Some(bound),
+        // This means `denominator` is fixed to exactly zero, which would already have forced
+        // `numerator`'s bound to include zero (and hence conflicted, since `numerator` here
+        // excludes it) via the `c = a * b` propagation computed earlier from the same snapshot.
+        (None, None) => unreachable!(),
+    }
+}
+
+/// Computes `[ceil(inf E2) .. floor(sup E2)]` where `E2` is the set of the four corner quotients
+/// of `[num_min .. num_max] / [den_min .. den_max]`, generalized to [`IntExt<i64>`] operands.
+/// Assumes `[den_min .. den_max]` does not contain zero.
+///
+/// A corner division that is indeterminate (infinity divided by infinity) is treated
+/// conservatively rather than propagated as an error: `None` becomes `NegativeInf` for the
+/// `ceil`/min aggregation and `PositiveInf` for the `floor`/max aggregation, so that an
+/// indeterminate corner can never cause [`minimize_reason`] to *overestimate* how tight the true
+/// bound is. This only ever costs some generality, deep inside an already-heavily-relaxed reason
+/// — never soundness.
+fn quotient_bound_ext(
+    num_min: IntExt<i64>,
+    num_max: IntExt<i64>,
+    den_min: IntExt<i64>,
+    den_max: IntExt<i64>,
+) -> (IntExt<i64>, IntExt<i64>) {
+    let ceil = |n: IntExt<i64>, d: IntExt<i64>| n.div_ceil(d).unwrap_or(IntExt::NegativeInf);
+    let floor = |n: IntExt<i64>, d: IntExt<i64>| n.div_floor(d).unwrap_or(IntExt::PositiveInf);
+
+    let inf_e2 = ceil(num_min, den_min)
+        .min(ceil(num_min, den_max))
+        .min(ceil(num_max, den_min))
+        .min(ceil(num_max, den_max));
+
+    let sup_e2 = floor(num_min, den_min)
+        .max(floor(num_min, den_max))
+        .max(floor(num_max, den_min))
+        .max(floor(num_max, den_max));
+
+    (inf_e2, sup_e2)
 }
 
 /// Identifies which bound of which variable a lazily-explained propagation is for.
@@ -358,134 +478,6 @@ struct MultiplicationPropagation {
     value: i32,
     #[bits(24)]
     __: u32,
-}
-
-/// Computes `[min E1 .. max E1]` where `E1` is the set of the four corner products of `[a_min ..
-/// a_max] x [b_min .. b_max]`.
-fn product_bound(a_min: i64, a_max: i64, b_min: i64, b_max: i64) -> (i64, i64) {
-    let (lo, hi) = product_bound_ext(
-        IntExt::Int(a_min),
-        IntExt::Int(a_max),
-        IntExt::Int(b_min),
-        IntExt::Int(b_max),
-    );
-
-    (expect_finite(lo), expect_finite(hi))
-}
-
-/// Computes the tightest range for `target` in `target * denominator = numerator`, or `None` if
-/// no propagation is possible.
-fn compute_quotient_bound(
-    num_min: i64,
-    num_max: i64,
-    den_min: i64,
-    den_max: i64,
-) -> Option<(i64, i64)> {
-    let (lo, hi) = compute_quotient_bound_ext(
-        IntExt::Int(num_min),
-        IntExt::Int(num_max),
-        IntExt::Int(den_min),
-        IntExt::Int(den_max),
-    )?;
-
-    Some((expect_finite(lo), expect_finite(hi)))
-}
-
-/// Panics if `value` is not [`IntExt::Int`]. Only used where the caller can prove the value must
-/// be finite (e.g. because every input was finite).
-fn expect_finite(value: IntExt<i64>) -> i64 {
-    value
-        .as_int()
-        .expect("all inputs were finite, so the result must be finite too")
-}
-
-/// The [`IntExt<i64>`]-generalized form of [`product_bound`]; see its documentation.
-///
-/// The propagator's actual output is always computed from finite domain bounds, and is always
-/// itself finite. Infinities only ever arise from [`minimize_reason`], which relaxes individual
-/// domain bounds to determine whether they are actually necessary to justify a propagated value;
-/// a relaxed bound that turns the recomputed value into (or through) an infinity is one that
-/// cannot be dropped from the reason.
-fn product_bound_ext(
-    a_min: IntExt<i64>,
-    a_max: IntExt<i64>,
-    b_min: IntExt<i64>,
-    b_max: IntExt<i64>,
-) -> (IntExt<i64>, IntExt<i64>) {
-    let corners = [a_min * b_min, a_min * b_max, a_max * b_min, a_max * b_max];
-
-    (
-        corners.into_iter().min().expect("corners is non-empty"),
-        corners.into_iter().max().expect("corners is non-empty"),
-    )
-}
-
-/// Computes `[ceil(inf E2) .. floor(sup E2)]` where `E2` is the set of the four corner quotients
-/// of `[num_min .. num_max] / [den_min .. den_max]`, generalized to [`IntExt<i64>`] operands.
-/// Assumes `[den_min .. den_max]` does not contain zero.
-///
-/// A corner division that is indeterminate (infinity divided by infinity) is treated
-/// conservatively rather than propagated as an error: `None` becomes `NegativeInf` for the
-/// `ceil`/min aggregation and `PositiveInf` for the `floor`/max aggregation, so that an
-/// indeterminate corner can never cause [`minimize_reason`] to *overestimate* how tight the true
-/// bound is. This only ever costs some generality, deep inside an already-heavily-relaxed reason
-/// — never soundness.
-fn quotient_bound_ext(
-    num_min: IntExt<i64>,
-    num_max: IntExt<i64>,
-    den_min: IntExt<i64>,
-    den_max: IntExt<i64>,
-) -> (IntExt<i64>, IntExt<i64>) {
-    let ceil = |n: IntExt<i64>, d: IntExt<i64>| n.div_ceil(d).unwrap_or(IntExt::NegativeInf);
-    let floor = |n: IntExt<i64>, d: IntExt<i64>| n.div_floor(d).unwrap_or(IntExt::PositiveInf);
-
-    let inf_e2 = ceil(num_min, den_min)
-        .min(ceil(num_min, den_max))
-        .min(ceil(num_max, den_min))
-        .min(ceil(num_max, den_max));
-
-    let sup_e2 = floor(num_min, den_min)
-        .max(floor(num_min, den_max))
-        .max(floor(num_max, den_min))
-        .max(floor(num_max, den_max));
-
-    (inf_e2, sup_e2)
-}
-
-/// The [`IntExt<i64>`]-generalized form of [`compute_quotient_bound`]; see its documentation.
-fn compute_quotient_bound_ext(
-    num_min: IntExt<i64>,
-    num_max: IntExt<i64>,
-    den_min: IntExt<i64>,
-    den_max: IntExt<i64>,
-) -> Option<(IntExt<i64>, IntExt<i64>)> {
-    let zero = IntExt::Int(0);
-    let den_straddles_zero = den_min <= zero && den_max >= zero;
-    let num_straddles_zero = num_min <= zero && num_max >= zero;
-
-    if den_straddles_zero && num_straddles_zero {
-        return None;
-    }
-
-    if !den_straddles_zero {
-        return Some(quotient_bound_ext(num_min, num_max, den_min, den_max));
-    }
-
-    let branch_pos = (den_max >= IntExt::Int(1))
-        .then(|| quotient_bound_ext(num_min, num_max, IntExt::Int(1), den_max));
-    let branch_neg = (den_min <= IntExt::Int(-1))
-        .then(|| quotient_bound_ext(num_min, num_max, den_min, IntExt::Int(-1)));
-
-    match (branch_pos, branch_neg) {
-        (Some((lo_pos, hi_pos)), Some((lo_neg, hi_neg))) => {
-            Some((lo_pos.min(lo_neg), hi_pos.max(hi_neg)))
-        }
-        (Some(bound), None) | (None, Some(bound)) => Some(bound),
-        // This means `denominator` is fixed to exactly zero, which would already have forced
-        // `numerator`'s bound to include zero (and hence conflicted, since `numerator` here
-        // excludes it) via the `c = a * b` propagation computed earlier from the same snapshot.
-        (None, None) => unreachable!(),
-    }
 }
 
 /// Greedily drops bounds from the initial "cite everything" reason for `[v0_min, v0_max, v1_min,
@@ -622,6 +614,14 @@ fn is_disjoint(
     induced_hi: IntExt<i64>,
 ) -> bool {
     induced_hi < lo || induced_lo > hi
+}
+
+/// Panics if `value` is not [`IntExt::Int`]. Only used where the caller can prove the value must
+/// be finite (e.g. because every input was finite).
+fn expect_finite(value: IntExt<i64>) -> i64 {
+    value
+        .as_int()
+        .expect("all inputs were finite, so the result must be finite too")
 }
 
 #[cfg(test)]
