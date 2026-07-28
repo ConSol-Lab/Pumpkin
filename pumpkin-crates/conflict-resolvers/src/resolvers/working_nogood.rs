@@ -72,6 +72,52 @@ pub(crate) enum ReplacementStatus {
 }
 
 impl WorkingNogood {
+    fn add_predicate_current_checkpoint(
+        &mut self,
+        predicate: Predicate,
+        context: &mut ConflictAnalysisContext<'_>,
+        predicate_id_generator: &mut PredicateIdGenerator,
+        mode: AnalysisMode,
+    ) {
+        // We restore the key and since we know that the value is 0, we can safely
+        // increment with `heap_value`
+        let heap_value = get_heap_value(predicate, context);
+        let predicate_id = predicate_id_generator.get_id(predicate);
+
+        self.to_process_heap.restore_key(predicate_id);
+        self.to_process_heap.increment(predicate_id, heap_value);
+
+        mode.add_predicate_to_nogood(predicate, &mut self.unique_variable_helper);
+
+        if self.iterative_minimisation {
+            self.iterative_minimiser.apply_predicate(predicate, context);
+        }
+    }
+
+    fn add_predicate_previous_checkpoint(&mut self, predicate: Predicate) {
+        self.processed_nogood_predicates.push(predicate);
+    }
+
+    fn add_predicate_root_level(
+        &mut self,
+        predicate: Predicate,
+        context: &ConflictAnalysisContext<'_>,
+    ) {
+        if self.iterative_minimisation {
+            self.iterative_minimiser.apply_predicate(predicate, context);
+        }
+    }
+
+    fn remove_predicate_from_heap(&mut self, predicate_id: PredicateId) {
+        if predicate_id.index() < self.to_process_heap.len() {
+            self.to_process_heap.set_value(predicate_id, 0);
+        }
+        // Then we delete the key if it was present.
+        self.to_process_heap.delete_key(predicate_id);
+    }
+}
+
+impl WorkingNogood {
     pub(crate) fn log_statistics(&self, statistic_logger: StatisticLogger) {
         if self.iterative_minimisation {
             self.iterative_minimisation_statistics
@@ -116,9 +162,7 @@ impl WorkingNogood {
         if dec_level == 0 {
             context.explain_root_assignment(predicate);
 
-            if self.iterative_minimisation {
-                self.iterative_minimiser.apply_predicate(predicate, context);
-            }
+            self.add_predicate_root_level(predicate, context);
         }
         // 1UIP
         // If the variables are from the current decision level then we want to potentially add
@@ -188,11 +232,12 @@ impl WorkingNogood {
                 // trail_position + 1`.
                 let heap_value = get_heap_value(predicate, context);
 
-                // We restore the key and since we know that the value is 0, we can safely
-                // increment with `heap_value`
-                self.to_process_heap.restore_key(predicate_id);
-                self.to_process_heap.increment(predicate_id, heap_value);
-                mode.add_predicate_to_nogood(predicate, &mut self.unique_variable_helper);
+                self.add_predicate_current_checkpoint(
+                    predicate,
+                    context,
+                    predicate_id_generator,
+                    mode,
+                );
 
                 pumpkin_assert_moderate!(
                     *self.to_process_heap.get_value(predicate_id) == heap_value,
@@ -202,7 +247,7 @@ impl WorkingNogood {
         } else {
             // We do not check for duplicate, we simply add the predicate.
             // Semantic minimisation will later remove duplicates and do other processing.
-            self.processed_nogood_predicates.push(predicate);
+            self.add_predicate_previous_checkpoint(predicate);
         }
     }
 
@@ -239,14 +284,7 @@ impl WorkingNogood {
         match process_predicate {
             ProcessingResult::Redundant => {
                 // The provided predicate is redundant.
-                //
-                // The key is not currently present, but it has been assigned a value; we need
-                // to reset that value to 0.
-                if predicate_id.index() < self.to_process_heap.len() {
-                    self.to_process_heap.set_value(predicate_id, 0);
-                }
-                // Then we delete the key if it was present.
-                self.to_process_heap.delete_key(predicate_id);
+                self.remove_predicate_from_heap(predicate_id);
 
                 self.iterative_minimisation_statistics.num_removed += 1;
 
@@ -257,10 +295,6 @@ impl WorkingNogood {
             ProcessingResult::ReplacedPresent { removed } => {
                 // First, we remove the predicates.
                 self.remove_predicates(removed, predicate_id_generator, mode);
-
-                // Then we apply the provided predicate to the domain after removing all of the
-                // previous predicates.
-                self.iterative_minimiser.apply_predicate(predicate, context);
 
                 // We also know that the provided predicate is not redundant so we can add it to
                 // the nogood.
@@ -305,17 +339,12 @@ impl WorkingNogood {
                             mode,
                         )
                     {
-                        self.to_process_heap.set_value(predicate_id, 0);
-                        self.to_process_heap.delete_key(predicate_id);
+                        self.remove_predicate_from_heap(predicate_id);
 
                         // We can replace the elements with `new_predicate`, so we indicate that we
                         // do not need to add `predicate`.
                         IterativeRedundancyStatus::Redundant
                     } else {
-                        // We cannot replace the elements, so we add `predicate` to the iterative
-                        // minimiser.
-                        self.iterative_minimiser.apply_predicate(predicate, context);
-
                         // And we indicate that we need to add `predicate` to the nogood.
                         IterativeRedundancyStatus::NonRedundant
                     }
@@ -330,18 +359,13 @@ impl WorkingNogood {
                         mode,
                     );
 
-                    self.to_process_heap.set_value(predicate_id, 0);
-                    self.to_process_heap.delete_key(predicate_id);
+                    self.remove_predicate_from_heap(predicate_id);
 
                     // And we indicate that we do not need to add `predicate` to the nogood.
                     IterativeRedundancyStatus::Redundant
                 }
             }
-            ProcessingResult::NotRedundant => {
-                // `predicate` is not redundant and we can add it directly to the nogood.
-                self.iterative_minimiser.apply_predicate(predicate, context);
-                IterativeRedundancyStatus::NonRedundant
-            }
+            ProcessingResult::NotRedundant => IterativeRedundancyStatus::NonRedundant,
         }
     }
 
