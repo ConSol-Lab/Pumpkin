@@ -6,6 +6,7 @@ use pumpkin_core::containers::HashMap;
 use pumpkin_core::containers::KeyValueHeap;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::create_statistics_struct;
+use pumpkin_core::predicates::Lbd;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateIdGenerator;
 use pumpkin_core::propagation::PredicateId;
@@ -41,6 +42,8 @@ pub(crate) struct WorkingNogood {
     /// The structure used for iterative minimisation.
     pub(crate) iterative_minimiser: IterativeMinimiser,
     pub(crate) iterative_minimisation_statistics: IterativeMinimisationStatistics,
+    /// Computes the LBD for nogoods.
+    lbd_helper: Lbd,
 }
 
 create_statistics_struct!(IterativeMinimisationStatistics {
@@ -69,6 +72,20 @@ pub(crate) enum IterativeRedundancyStatus {
 pub(crate) enum ReplacementStatus {
     NotReplaced,
     Replaced,
+}
+
+impl WorkingNogood {
+    pub(crate) fn new(iterative_minimisation: bool) -> Self {
+        Self {
+            to_process_heap: Default::default(),
+            processed_nogood_predicates: Default::default(),
+            unique_variable_helper: Default::default(),
+            iterative_minimisation,
+            iterative_minimiser: Default::default(),
+            iterative_minimisation_statistics: Default::default(),
+            lbd_helper: Default::default(),
+        }
+    }
 }
 
 impl WorkingNogood {
@@ -173,6 +190,11 @@ impl WorkingNogood {
                 self.iterative_minimiser.remove_predicate(removed_predicate);
             }
         }
+    }
+
+    pub(crate) fn lbd(&mut self, context: &mut ConflictAnalysisContext<'_>) -> u32 {
+        self.lbd_helper
+            .compute_lbd(&self.processed_nogood_predicates, context)
     }
 }
 

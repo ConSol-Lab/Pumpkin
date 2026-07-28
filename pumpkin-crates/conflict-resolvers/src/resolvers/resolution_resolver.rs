@@ -3,7 +3,6 @@ use pumpkin_core::conflict_resolving::AnalysisMode;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_core::create_statistics_struct;
-use pumpkin_core::predicates::Lbd;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateIdGenerator;
 use pumpkin_core::propagation::ReadDomains;
@@ -42,8 +41,6 @@ pub struct ResolutionResolver {
     mode: AnalysisMode,
     /// Re-usable buffer which reasons are written into.
     reason_buffer: Vec<Predicate>,
-    /// Computes the LBD for nogoods.
-    lbd_helper: Lbd,
     /// A minimiser which recursively determines whether a predicate is redundant in the nogood.
     recursive_minimiser: RecursiveMinimiser,
     /// A minimiser which determines whether a predicate is redundant in the nogood based on its
@@ -99,9 +96,7 @@ impl ConflictResolver for ResolutionResolver {
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) {
         self.learn_nogood(context);
 
-        let lbd = self
-            .lbd_helper
-            .compute_lbd(&self.working_nogood.processed_nogood_predicates, context);
+        let lbd = self.working_nogood.lbd(context);
 
         // Update statistics
         self.statistics
@@ -150,19 +145,11 @@ impl ResolutionResolver {
             mode,
             predicate_id_generator: Default::default(),
             reason_buffer: Default::default(),
-            lbd_helper: Default::default(),
             recursive_minimiser: Default::default(),
             semantic_minimiser: Default::default(),
             statistics: Default::default(),
             should_minimise,
-            working_nogood: WorkingNogood {
-                to_process_heap: Default::default(),
-                processed_nogood_predicates: Default::default(),
-                unique_variable_helper: Default::default(),
-                iterative_minimisation,
-                iterative_minimiser: Default::default(),
-                iterative_minimisation_statistics: Default::default(),
-            },
+            working_nogood: WorkingNogood::new(iterative_minimisation),
         }
     }
 
