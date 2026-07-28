@@ -3,6 +3,8 @@ use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
 
+use crate::circuit::domain_value_to_index;
+
 #[derive(Debug, Clone)]
 pub struct CircuitChecker<Var> {
     pub successors: Box<[Var]>,
@@ -19,28 +21,36 @@ where
         _premises: &[Atomic],
         _consequent: Option<&Atomic>,
     ) -> bool {
+        // Try all the successors as possible starting points
         for successor in self.successors.iter() {
+            // Skip if successor is not yet fixed
             let Some(next_node) = successor.induced_fixed_value(&state) else {
                 continue;
             };
 
-            // circuit is 1-indexed
-            let mut next_idx = usize::try_from(next_node).unwrap() - 1;
+            // Otherwise, we find the index of the successor in the chain.
+            let mut next_idx = domain_value_to_index(next_node);
 
+            // We keep track of the visited elements.
             let mut visited = FixedBitSet::with_capacity(self.successors.len());
 
             loop {
-                if visited.contains(next_idx) && visited.count_ones(..) < self.successors.len() {
-                    return true;
+                if visited.contains(next_idx) {
+                    // If we have already seen the node, then we check whether it is a subtour or a
+                    // full circuit
+                    return visited.count_ones(..) < self.successors.len();
                 }
 
+                // Otherwise, we mark the successor as visited.
                 visited.insert(next_idx);
 
                 let Some(next_node) = self.successors[next_idx].induced_fixed_value(&state) else {
+                    // If there is no fixed successor, then we move to the next element.
                     break;
                 };
 
-                next_idx = usize::try_from(next_node).unwrap() - 1;
+                // Then we move to the next value in the chain.
+                next_idx = domain_value_to_index(next_node);
             }
         }
 

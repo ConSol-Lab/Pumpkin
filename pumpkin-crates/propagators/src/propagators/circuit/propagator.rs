@@ -311,12 +311,12 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
 const VALUE_OFFSET: usize = 1;
 
 #[inline]
-fn domain_value_to_index(domain_value: i32) -> usize {
+pub(crate) fn domain_value_to_index(domain_value: i32) -> usize {
     domain_value as usize - VALUE_OFFSET
 }
 
 #[inline]
-fn index_to_domain_value(index: usize) -> i32 {
+pub(crate) fn index_to_domain_value(index: usize) -> i32 {
     index as i32 + VALUE_OFFSET as i32
 }
 
