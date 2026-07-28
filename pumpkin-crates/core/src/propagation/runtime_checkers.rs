@@ -5,8 +5,12 @@ use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::InferenceLabel;
+#[cfg(doc)]
+use crate::propagation::PropagatorConstructor;
 
 /// Holds the runtime checkers that are added by a propagator.
+///
+/// Used when creating a new propagator in [`PropagatorConstructor::create`].
 #[derive(Clone, Debug)]
 pub struct RuntimeCheckers {
     inference_checkers: Vec<(InferenceCode, BoxedChecker<Predicate>)>,

@@ -10,6 +10,9 @@ use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
 
 /// Owns the runtime checkers present in the solver.
+///
+/// The runtime checkers consist of:
+/// - inference checkers, which verify that propagations are sound.
 #[derive(Clone, Debug, Default)]
 pub struct CheckerStore {
     inference_codes: HashMap<InferenceCode, Vec<BoxedChecker<Predicate>>>,

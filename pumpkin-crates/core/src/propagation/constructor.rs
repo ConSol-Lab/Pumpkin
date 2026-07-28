@@ -44,7 +44,7 @@ pub trait PropagatorConstructor {
 /// The result of [`PropagatorConstructor::create`].
 ///
 /// Contains an initialized [`Propagator`], alongside runtime checkers and the events that should
-/// cause the propagator to be enqueued
+/// cause the propagator to be enqueued.
 #[derive(Clone, Debug)]
 pub struct PropagatorSpec<P> {
     /// The domain events the propagator needs to be be registered for.
