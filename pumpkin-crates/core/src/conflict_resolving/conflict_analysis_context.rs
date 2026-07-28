@@ -64,10 +64,6 @@ impl ConflictAnalysisContext<'_> {
         self.state
     }
 
-    pub fn trail_position(&self, predicate: Predicate) -> Option<usize> {
-        self.assignments().get_trail_position(&predicate)
-    }
-
     /// Apply a [`Predicate`] to the [`State`].
     ///
     /// Returns `true` if a change to a domain occured, and `false` if the given [`Predicate`] was
