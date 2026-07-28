@@ -80,8 +80,12 @@ pub struct ResolutionResolver {
     ///
     /// Note that semantic minimisation is always applied to remove duplicates.
     should_minimise: bool,
-    iterative_minimisation: bool,
 
+    /// Whether to perform iterative minimisation.
+    ///
+    /// Iterative minimisation is semantic minimisation applied *while* resolving.
+    iterative_minimisation: bool,
+    /// The structure used for iterative minimisation.
     iterative_minimiser: IterativeMinimiser,
 }
 
