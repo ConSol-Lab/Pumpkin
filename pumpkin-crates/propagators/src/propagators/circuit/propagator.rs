@@ -38,7 +38,9 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for CircuitConstructo
         self,
         mut context: pumpkin_core::propagation::PropagatorConstructorContext,
     ) -> (EventsToRegister, Self::PropagatorImpl) {
+        let mut recently_fixed = FixedBitSet::with_capacity(self.successors.len());
         let mut registration = EventsToRegister::builder();
+
         for (index, successor) in self.successors.iter().enumerate() {
             registration =
                 registration.add(successor, DomainEvents::ASSIGN, LocalId::from(index as u32));
@@ -47,11 +49,8 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for CircuitConstructo
                 DomainEvents::ASSIGN,
                 LocalId::from(index as u32),
             );
-        }
 
-        let mut recently_fixed = FixedBitSet::with_capacity(self.successors.len());
-        for (index, var) in self.successors.iter().enumerate() {
-            if context.is_fixed(var) {
+            if context.is_fixed(successor) {
                 recently_fixed.insert(index);
             }
         }
@@ -136,6 +135,11 @@ impl<Var: IntegerVariable + 'static> Propagator for CircuitPropagator<Var> {
 
 impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
     fn remove_self_loops(&self, context: &mut PropagationContext) -> PropagationStatusCP {
+        if self.successors.len() == 1 {
+            // There is only a single possible cycle; generally this case would not occur.
+            return Ok(());
+        }
+
         for (i, successor) in self.successors.iter().enumerate() {
             context.post(
                 predicate!(successor != (i + 1) as i32),
