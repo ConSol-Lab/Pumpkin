@@ -202,11 +202,6 @@ impl ResolutionResolver {
             let next_predicate = self
                 .working_nogood
                 .pop_predicate_from_conflict_nogood(&mut self.predicate_id_generator, self.mode);
-            if self.working_nogood.iterative_minimisation {
-                self.working_nogood
-                    .iterative_minimiser
-                    .remove_predicate(next_predicate);
-            }
 
             // 2) Get the reason for the predicate and add it to the nogood.
             self.reason_buffer.clear();
@@ -234,12 +229,6 @@ impl ResolutionResolver {
         self.extract_final_nogood(context);
     }
 
-    /// Clears all data structures to prepare for the new conflict analysis.
-    fn clean_up(&mut self) {
-        self.predicate_id_generator.clear();
-        self.working_nogood.clean_up();
-    }
-
     fn extract_final_nogood(&mut self, context: &mut ConflictAnalysisContext) {
         // The final nogood is composed of the predicates encountered from the lower decision
         // levels, plus the predicate(s) remaining in the heap.
@@ -256,6 +245,7 @@ impl ResolutionResolver {
             .cpip_statistics
             .average_number_of_predicates_describing_domain_cpip
             .add_term(num_removed);
+
         if num_removed == 1 {
             self.statistics.cpip_statistics.num_regular_nogood_learned += 1;
         } else {
@@ -314,5 +304,11 @@ impl ResolutionResolver {
         for predicate in self.working_nogood.processed_nogood_predicates.iter() {
             context.predicate_appeared_in_conflict(*predicate);
         }
+    }
+
+    /// Clears all data structures to prepare for the new conflict analysis.
+    fn clean_up(&mut self) {
+        self.predicate_id_generator.clear();
+        self.working_nogood.clean_up();
     }
 }

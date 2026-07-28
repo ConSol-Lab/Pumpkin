@@ -55,25 +55,6 @@ create_statistics_struct!(IterativeMinimisationStatistics {
     num_removed_previous_decision_level: usize
 });
 
-/// Indicates whether a [`Predicate`] is redundant or non-redundant when adding it to the nogood.
-#[derive(Clone, Copy, Debug)]
-pub(crate) enum IterativeRedundancyStatus {
-    Redundant,
-    NonRedundant,
-}
-
-/// Indicates whether a [`Predicate`] was replaced during iterative minimisation.
-///
-/// If we have the case that the predicates [x >= v] and [x <= v] are present in the nogood, then
-/// we can potentially replace it with [x == v]. However, if [x == v] would be the next predicate
-/// to be resolved upon, then we cannot add it to the nogood. Hence, we indicate whether this
-/// replacement is possible using this enum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ReplacementStatus {
-    NotReplaced,
-    Replaced,
-}
-
 impl WorkingNogood {
     pub(crate) fn new(iterative_minimisation: bool) -> Self {
         Self {
@@ -88,6 +69,7 @@ impl WorkingNogood {
     }
 }
 
+/// Internal methods for removing from/adding to the working nogood.
 impl WorkingNogood {
     /// Adds a predicate to the current working nogood which is from the current checkpoint.
     fn add_predicate_current_checkpoint(
@@ -191,13 +173,9 @@ impl WorkingNogood {
             }
         }
     }
-
-    pub(crate) fn lbd(&mut self, context: &mut ConflictAnalysisContext<'_>) -> u32 {
-        self.lbd_helper
-            .compute_lbd(&self.processed_nogood_predicates, context)
-    }
 }
 
+/// Methods for interacting with the working nogood.
 impl WorkingNogood {
     pub(crate) fn log_statistics(&self, statistic_logger: StatisticLogger) {
         if self.iterative_minimisation {
@@ -219,6 +197,7 @@ impl WorkingNogood {
         self.unique_variable_helper.clear();
     }
 
+    /// Returns the next [`Predicate`] to resolve upon based on the trail.
     pub(crate) fn pop_predicate_from_conflict_nogood(
         &mut self,
         predicate_id_generator: &mut PredicateIdGenerator,
@@ -226,7 +205,13 @@ impl WorkingNogood {
     ) -> Predicate {
         let next_predicate_id = self.to_process_heap.pop_max().unwrap();
         let predicate = predicate_id_generator.get_predicate(next_predicate_id);
+
         mode.remove_predicate_from_nogood(predicate, &mut self.unique_variable_helper);
+
+        if self.iterative_minimisation {
+            self.iterative_minimiser.remove_predicate(predicate);
+        }
+
         predicate
     }
 
@@ -286,7 +271,7 @@ impl WorkingNogood {
             if !self.to_process_heap.is_key_present(predicate_id)
                 && *self.to_process_heap.get_value(predicate_id) == 0
             {
-                if let IterativeRedundancyStatus::Redundant = self.check_for_iterative_redundancy(
+                if self.is_redundant(
                     predicate,
                     context,
                     predicate_id,
@@ -342,18 +327,23 @@ impl WorkingNogood {
             self.add_predicate_previous_checkpoint(predicate, context);
         }
     }
+}
 
-    /// Checks whether the provided [`Predicate`] is redundant given the current working nogood.
-    pub(crate) fn check_for_iterative_redundancy(
+/// Methods which reason about the semantic redundancy during conflict analysis.
+impl WorkingNogood {
+    /// Returns true if the provided [`Predicate`] was redundant and false otherwise.
+    ///
+    /// Note that this method also adjusts internal data structures
+    pub(crate) fn is_redundant(
         &mut self,
         predicate: Predicate,
         context: &mut ConflictAnalysisContext<'_>,
         predicate_id: PredicateId,
         predicate_id_generator: &mut PredicateIdGenerator,
         mode: AnalysisMode,
-    ) -> IterativeRedundancyStatus {
+    ) -> bool {
         if !self.iterative_minimisation {
-            return IterativeRedundancyStatus::NonRedundant;
+            return false;
         }
 
         // We ask the iterative minimiser the status of the predicate.
@@ -371,15 +361,15 @@ impl WorkingNogood {
 
                 // We know that the element is redundant, so we can indicate that it does not need
                 // to be processed.
-                IterativeRedundancyStatus::Redundant
+                true
             }
             ProcessingResult::ReplacedPresent { removed } => {
                 // First, we remove the predicates.
-                self.remove_predicates(removed, predicate_id_generator, mode);
+                self.remove_redundant_predicates(removed, predicate_id_generator, mode);
 
                 // We also know that the provided predicate is not redundant so we can add it to
                 // the nogood.
-                IterativeRedundancyStatus::NonRedundant
+                false
             }
             ProcessingResult::PossiblyReplacedWithNew {
                 potentially_removed: previous,
@@ -402,7 +392,7 @@ impl WorkingNogood {
                 self.iterative_minimisation_statistics.num_removed += 1;
 
                 // First, we remove the predicates that are removed either way.
-                self.remove_predicates(removed, predicate_id_generator, mode);
+                self.remove_redundant_predicates(removed, predicate_id_generator, mode);
 
                 // We split into two cases:
                 // 1. The new predicate is of the current decision level.
@@ -411,15 +401,13 @@ impl WorkingNogood {
                     == context.get_checkpoint()
                 {
                     // Next, we check whether we can replace the elements with `new_predicate`.
-                    if ReplacementStatus::Replaced
-                        == self.replace_if_possible_current_level(
-                            context,
-                            previous,
-                            new_predicate,
-                            predicate_id_generator,
-                            mode,
-                        )
-                    {
+                    if self.was_replaced(
+                        context,
+                        previous,
+                        new_predicate,
+                        predicate_id_generator,
+                        mode,
+                    ) {
                         self.remove_predicate_from_current_checkpoint(
                             predicate,
                             predicate_id,
@@ -428,10 +416,10 @@ impl WorkingNogood {
 
                         // We can replace the elements with `new_predicate`, so we indicate that we
                         // do not need to add `predicate`.
-                        IterativeRedundancyStatus::Redundant
+                        true
                     } else {
                         // And we indicate that we need to add `predicate` to the nogood.
-                        IterativeRedundancyStatus::NonRedundant
+                        false
                     }
                 } else {
                     // If `new_predicate` is from a previous decision level, then we can always
@@ -447,16 +435,16 @@ impl WorkingNogood {
                     self.remove_predicate_from_current_checkpoint(predicate, predicate_id, mode);
 
                     // And we indicate that we do not need to add `predicate` to the nogood.
-                    IterativeRedundancyStatus::Redundant
+                    true
                 }
             }
-            ProcessingResult::NotRedundant => IterativeRedundancyStatus::NonRedundant,
+            ProcessingResult::NotRedundant => false,
         }
     }
 
     /// Removes the provided predicates from the predicates to be resolved upon, or the ones
     /// already in the nogood.
-    fn remove_predicates(
+    fn remove_redundant_predicates(
         &mut self,
         removed: Vec<Predicate>,
         predicate_id_generator: &mut PredicateIdGenerator,
@@ -483,16 +471,18 @@ impl WorkingNogood {
         }
     }
 
-    /// Replaces the provided `element` with `new_predicate` if `new_predicate` would not be the
-    /// next element to be resolved upon.
-    fn replace_if_possible_current_level(
+    /// Returns true if `element` could be replaced by `new_predicate` and false otherwise.
+    ///
+    /// A replacement is not possible if `new_predicate` would be the next element to be resolved
+    /// upon when added.
+    fn was_replaced(
         &mut self,
         context: &mut ConflictAnalysisContext<'_>,
         element: Predicate,
         new_predicate: Predicate,
         predicate_id_generator: &mut PredicateIdGenerator,
         mode: AnalysisMode,
-    ) -> ReplacementStatus {
+    ) -> bool {
         // We first calculate the value in the heap of the new_predicate.
         let heap_value = get_heap_value(new_predicate, context);
 
@@ -537,11 +527,11 @@ impl WorkingNogood {
             );
 
             // And we return that `element` was removed.
-            return ReplacementStatus::Replaced;
+            return true;
         }
 
         // `new_predicate` would be the element to be removed, so we cannot replace `element`.
-        ReplacementStatus::NotReplaced
+        false
     }
 
     /// Replaces `element` with `new_predicate`, where we know that `new_predicate` and `element`
@@ -577,6 +567,12 @@ impl WorkingNogood {
 
         // Next, we add the `new_predicate` to the nogood.
         self.add_predicate_to_conflict_nogood(new_predicate, mode, context, predicate_id_generator);
+    }
+
+    /// Calculates the literal block distance (LBD) of the nogood.
+    pub(crate) fn lbd(&mut self, context: &mut ConflictAnalysisContext<'_>) -> u32 {
+        self.lbd_helper
+            .compute_lbd(&self.processed_nogood_predicates, context)
     }
 }
 
