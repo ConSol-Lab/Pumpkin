@@ -395,17 +395,13 @@ impl ResolutionResolver {
             ProcessingResult::Redundant => {
                 // The provided predicate is redundant.
                 //
-                // We first check whether the key is not present.
-                if !self.to_process_heap.is_key_present(predicate_id) {
-                    // The key is not currently present, but it has been assigned a value; we need
-                    // to reset that value to 0.
-                    if predicate_id.index() < self.to_process_heap.len() {
-                        self.to_process_heap.set_value(predicate_id, 0);
-                    }
-
-                    // Then we delete the key if it was present.
-                    self.to_process_heap.delete_key(predicate_id);
+                // The key is not currently present, but it has been assigned a value; we need
+                // to reset that value to 0.
+                if predicate_id.index() < self.to_process_heap.len() {
+                    self.to_process_heap.set_value(predicate_id, 0);
                 }
+                // Then we delete the key if it was present.
+                self.to_process_heap.delete_key(predicate_id);
 
                 self.statistics
                     .iterative_minimisation_statistics
@@ -416,47 +412,8 @@ impl ResolutionResolver {
                 IterativeRedundancyStatus::Redundant
             }
             ProcessingResult::ReplacedPresent { removed } => {
-                // The provided predicate has replaced a multitude of other predicates -> we need
-                // to remove all of these predicates.
-                //
-                // Hence, we go over all of the removed predicates.
-                for removed_predicate in removed {
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed += 1;
-
-                    // And we also remove it from the iterative minimiser itself.
-                    self.iterative_minimiser.remove_predicate(removed_predicate);
-
-                    let removed_id = self.predicate_id_generator.get_id(removed_predicate);
-                    // We differentiate between two cases:
-                    // 1. The removed predicate is from the current decision level and we need to
-                    //    remove it from the heap.
-                    // 2. The removed predicate is from the previous decision level, and we remove
-                    //    it from there.
-                    if self.to_process_heap.is_key_present(removed_id) {
-                        self.mode.remove_predicate_from_nogood(
-                            predicate,
-                            &mut self.unique_variable_helper,
-                        );
-                        // The key is not currently present, but it has been assigned a value; we
-                        // need to reset that value to 0.
-                        if predicate_id.index() < self.to_process_heap.len() {
-                            self.to_process_heap.set_value(removed_id, 0);
-                        }
-                        self.to_process_heap.delete_key(removed_id);
-                    } else if let Some(position) = self
-                        .processed_nogood_predicates
-                        .iter()
-                        .position(|predicate| *predicate == removed_predicate)
-                    {
-                        self.mode.remove_predicate_from_nogood(
-                            predicate,
-                            &mut self.unique_variable_helper,
-                        );
-                        let _ = self.processed_nogood_predicates.remove(position);
-                    }
-                }
+                // First, we remove the predicates.
+                self.remove_predicates(removed);
 
                 // Then we apply the provided predicate to the domain after removing all of the
                 // previous predicates.
@@ -467,8 +424,9 @@ impl ResolutionResolver {
                 IterativeRedundancyStatus::NonRedundant
             }
             ProcessingResult::PossiblyReplacedWithNew {
-                removed: previous,
+                potentially_removed: previous,
                 new_predicate,
+                removed,
             } => {
                 // Adding the new predicate would lead it to be replaced with another predicate
                 // (e.g. we are adding [x >= 5] and run into the situation that [x >= 5] /\ [x != 5]
@@ -486,6 +444,9 @@ impl ResolutionResolver {
                 self.statistics
                     .iterative_minimisation_statistics
                     .num_removed += 1;
+
+                // First, we remove the predicates that are removed either way.
+                self.remove_predicates(removed);
 
                 // We split into two cases:
                 // 1. The new predicate is of the current decision level.
@@ -527,6 +488,48 @@ impl ResolutionResolver {
                 // `predicate` is not redundant and we can add it directly to the nogood.
                 self.iterative_minimiser.apply_predicate(predicate, context);
                 IterativeRedundancyStatus::NonRedundant
+            }
+        }
+    }
+
+    /// Removes the provided predicates from the predicates to be resolved upon, or the ones
+    /// already in the nogood.
+    fn remove_predicates(&mut self, removed: Vec<Predicate>) {
+        // The provided predicate has replaced a multitude of other predicates -> we need
+        // to remove all of these predicates.
+        //
+        // Hence, we go over all of the removed predicates.
+        for removed_predicate in removed {
+            self.statistics
+                .iterative_minimisation_statistics
+                .num_removed += 1;
+
+            // And we also remove it from the iterative minimiser itself.
+            self.iterative_minimiser.remove_predicate(removed_predicate);
+
+            let removed_id = self.predicate_id_generator.get_id(removed_predicate);
+            // We differentiate between two cases:
+            // 1. The removed predicate is from the current decision level and we need to remove it
+            //    from the heap.
+            // 2. The removed predicate is from the previous decision level, and we remove it from
+            //    there.
+            if self.to_process_heap.is_key_present(removed_id) {
+                self.mode.remove_predicate_from_nogood(
+                    removed_predicate,
+                    &mut self.unique_variable_helper,
+                );
+                // The key is not currently present, but it has been assigned a value; we
+                // need to reset that value to 0.
+                if removed_id.index() < self.to_process_heap.len() {
+                    self.to_process_heap.set_value(removed_id, 0);
+                }
+                self.to_process_heap.delete_key(removed_id);
+            } else if let Some(position) = self
+                .processed_nogood_predicates
+                .iter()
+                .position(|predicate| *predicate == removed_predicate)
+            {
+                let _ = self.processed_nogood_predicates.remove(position);
             }
         }
     }
@@ -573,12 +576,12 @@ impl ResolutionResolver {
                         .remove_predicate_from_nogood(element, &mut self.unique_variable_helper);
                 }
 
-                self.to_process_heap.delete_key(element_id);
                 // The key is not currently present, but it has been assigned a value; we
                 // need to reset that value to 0.
                 if element_id.index() < self.to_process_heap.len() {
                     self.to_process_heap.set_value(element_id, 0);
                 }
+                self.to_process_heap.delete_key(element_id);
             } else {
                 if let Some(index) = self
                     .processed_nogood_predicates

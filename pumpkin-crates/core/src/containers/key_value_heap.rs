@@ -100,9 +100,6 @@ where
     pub fn pop_max(&mut self) -> Option<Key> {
         if !self.has_no_nonremoved_elements() {
             let best_key = self.map_position_to_key[0];
-            pumpkin_assert_moderate!(0 == self.map_key_to_position[best_key]);
-            self.delete_key(best_key);
-
             pumpkin_assert_moderate!({
                 let best_value = *self.get_value(best_key);
                 if let Some((_, value)) = self.peek_max() {
@@ -111,6 +108,9 @@ where
                     true
                 }
             });
+            pumpkin_assert_moderate!(0 == self.map_key_to_position[best_key]);
+            self.delete_key(best_key);
+
             Some(best_key)
         } else {
             None

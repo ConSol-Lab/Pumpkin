@@ -142,17 +142,21 @@ pub(crate) enum ProcessingResult {
     /// e.g., [x >= 5] can replace [x >= 2].
     ReplacedPresent { removed: Vec<Predicate> },
     /// The predicate to process was replaced with
-    /// [`ProcessingResult::PossiblyReplacedWithNew::new_predicate`] and it also removed
-    /// [`ProcessingResult::PossiblyReplacedWithNew::removed`].
+    /// [`ProcessingResult::PossiblyReplacedWithNew::new_predicate`], it also possibly removed
+    /// [`ProcessingResult::PossiblyReplacedWithNew::potentially_removed`] (if it exists), and it
+    /// removed [`ProcessingResult::PossiblyReplacedWithNew::removed`].
     ///
     /// Note that it is not always possible to replace with `new_predicate` (since it can lead to
-    /// infinite loops), so it is not guaranteed that `new_predicate` is added.
+    /// infinite loops), so it is not guaranteed that `new_predicate` is added. The final field is
+    /// necessary to ensure that the predicates are correctly removed in case `new_predicate` is
+    /// **not** added.
     ///
     /// e.g., if [x >= 5] is in the nogood, and the predicate [x <= 5] is added, then [x >= 5] is
     /// removed and replaced with [x == 5] (and [x <= 5] is not added).
     PossiblyReplacedWithNew {
-        removed: Predicate,
+        potentially_removed: Predicate,
         new_predicate: Predicate,
+        removed: Vec<Predicate>,
     },
     /// The predicate was found to be not redundant.
     NotRedundant,
@@ -292,9 +296,20 @@ impl IterativeMinimiser {
                     self.statistics.num_removed_by_creating_equality += 1;
                     self.explain_upper_bound_in_proof(predicate, context);
                     // [x <= v], [x >= v] => [x = v]
+                    let to_remove = self.domains[predicate.get_domain()]
+                        .iter()
+                        .filter(|element| {
+                            element.is_lower_bound_predicate()
+                                || (element.is_not_equal_predicate()
+                                    && element.get_right_hand_side()
+                                        < predicate.get_right_hand_side())
+                        })
+                        .copied()
+                        .collect::<Vec<_>>();
                     ProcessingResult::PossiblyReplacedWithNew {
-                        removed: predicate!(domain <= upper_bound),
+                        potentially_removed: predicate!(domain <= upper_bound),
                         new_predicate: predicate!(domain == upper_bound),
+                        removed: to_remove,
                     }
                 } else if predicate.get_right_hand_side() > lower_bound {
                     // [x >= v], [x >= v'] => [x >= v'] if v' > v
@@ -328,9 +343,21 @@ impl IterativeMinimiser {
                 if predicate.get_right_hand_side() == lower_bound {
                     self.statistics.num_removed_by_creating_equality += 1;
                     self.explain_lower_bound_in_proof(predicate, context);
+
+                    let to_remove = self.domains[predicate.get_domain()]
+                        .iter()
+                        .filter(|element| {
+                            element.is_upper_bound_predicate()
+                                || (element.is_not_equal_predicate()
+                                    && element.get_right_hand_side()
+                                        > predicate.get_right_hand_side())
+                        })
+                        .copied()
+                        .collect::<Vec<_>>();
                     ProcessingResult::PossiblyReplacedWithNew {
-                        removed: predicate!(domain >= lower_bound),
+                        potentially_removed: predicate!(domain >= lower_bound),
                         new_predicate: predicate!(domain == lower_bound),
+                        removed: to_remove,
                     }
                 } else if predicate.get_right_hand_side() < upper_bound {
                     // [x <= v], [x <= v'] => [x <= v'] if v' < v
@@ -364,8 +391,9 @@ impl IterativeMinimiser {
                     // [x <= v], [x != v] => [x <= v - 1]
                     self.explain_upper_bound_in_proof(predicate, context);
                     ProcessingResult::PossiblyReplacedWithNew {
-                        removed: predicate!(domain <= upper_bound),
+                        potentially_removed: predicate!(domain <= upper_bound),
                         new_predicate: predicate!(domain <= upper_bound - 1),
+                        removed: vec![],
                     }
                 } else if predicate.get_right_hand_side() > upper_bound {
                     self.statistics.num_redundant += 1;
@@ -377,8 +405,9 @@ impl IterativeMinimiser {
                     // [x >= v], [x != v] => [x <= v + 1]
                     self.explain_lower_bound_in_proof(predicate, context);
                     ProcessingResult::PossiblyReplacedWithNew {
-                        removed: predicate!(domain >= lower_bound),
+                        potentially_removed: predicate!(domain >= lower_bound),
                         new_predicate: predicate!(domain >= lower_bound + 1),
+                        removed: vec![],
                     }
                 } else if predicate.get_right_hand_side() < lower_bound {
                     self.statistics.num_redundant += 1;
