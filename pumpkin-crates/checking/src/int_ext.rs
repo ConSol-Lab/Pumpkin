@@ -45,9 +45,9 @@ macro_rules! impl_ops {
     ($type:ty) => {
         impl NumExt for $type {
             fn div_ceil(self, other: Self) -> Self {
-                // TODO: The source is taken from the standard library nightly implementation of this
-                // function and div_floor. Once they are stabilized, these definitions can be removed.
-                // Tracking issue: https://github.com/rust-lang/rust/issues/88581
+                // TODO: The source is taken from the standard library nightly implementation of
+                // this function and div_floor. Once they are stabilized, these definitions
+                // can be removed. Tracking issue: https://github.com/rust-lang/rust/issues/88581
                 let d = self / other;
                 let r = self % other;
                 if (r > 0 && other > 0) || (r < 0 && other < 0) {
@@ -79,8 +79,8 @@ macro_rules! impl_ops {
                 match (*self, other) {
                     (Int(n), Int(d)) => Some(Int(<$type as NumExt>::div_ceil(n, d))),
 
-                    // A finite value divided by an unboundedly large denominator approaches, but for
-                    // integers never exceeds, zero.
+                    // A finite value divided by an unboundedly large denominator approaches, but
+                    // for integers never exceeds, zero.
                     (Int(_), NegativeInf | PositiveInf) => Some(Int(0)),
 
                     (PositiveInf, Int(d)) => {
