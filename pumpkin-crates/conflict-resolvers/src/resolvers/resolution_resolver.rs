@@ -116,8 +116,11 @@ create_statistics_struct!(
 });
 
 create_statistics_struct!(IterativeMinimisationStatistics {
+    /// The number of removed predicates by iterative minimisation.
     num_removed: usize,
+    /// The number of removed predicates from the current decision level.
     num_removed_current_decision_level: usize,
+    /// The number of removed predicates from the previous decision level.
     num_removed_previous_decision_level: usize
 });
 
