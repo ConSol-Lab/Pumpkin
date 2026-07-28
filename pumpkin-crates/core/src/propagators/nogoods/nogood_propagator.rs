@@ -35,7 +35,9 @@ use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::PropagatorSpec;
 use crate::propagation::ReadDomains;
+use crate::propagation::RuntimeCheckers;
 use crate::propagators::nogoods::PropagationMode;
 use crate::propagators::nogoods::WatcherProcessingStatus;
 use crate::propagators::nogoods::arena_allocator::ArenaAllocator;
@@ -170,10 +172,7 @@ impl NogoodPropagatorConstructor {
 impl PropagatorConstructor for NogoodPropagatorConstructor {
     type PropagatorImpl = NogoodPropagator;
 
-    fn create(
-        self,
-        context: PropagatorConstructorContext,
-    ) -> (EventsToRegister, Self::PropagatorImpl) {
+    fn create(self, context: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let propagator = NogoodPropagator {
             statistics: NogoodPropagatorStatistics::default(),
             handle: PropagatorHandle::new(context.propagator_id),
@@ -193,7 +192,11 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             priority: self.priority,
         };
 
-        (EventsToRegister::empty(), propagator)
+        PropagatorSpec {
+            registration: EventsToRegister::empty(),
+            checkers: RuntimeCheckers::empty(),
+            propagator,
+        }
     }
 }
 
