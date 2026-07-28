@@ -1,5 +1,3 @@
-use std::ops::ControlFlow;
-
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
@@ -128,6 +126,18 @@ create_statistics_struct!(IterativeMinimisationStatistics {
 enum IterativeRedundancyStatus {
     Redundant,
     NonRedundant,
+}
+
+/// Indicates whether a [`Predicate`] was replaced during iterative minimisation.
+///
+/// If we have the case that the predicates [x >= v] and [x <= v] are present in the nogood, then
+/// we can potentially replace it with [x == v]. However, if [x == v] would be the next predicate
+/// to be resolved upon, then we cannot add it to the nogood. Hence, we indicate whether this
+/// replacement is possible using this enum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReplacementStatus {
+    NotReplaced,
+    Replaced,
 }
 
 impl ConflictResolver for ResolutionResolver {
@@ -455,8 +465,8 @@ impl ResolutionResolver {
                     == context.get_checkpoint()
                 {
                     // Next, we check whether we can replace the elements with `new_predicate`.
-                    if let ControlFlow::Break(_) =
-                        self.replace_if_possible_current_level(context, previous, new_predicate)
+                    if ReplacementStatus::Replaced
+                        == self.replace_if_possible_current_level(context, previous, new_predicate)
                     {
                         self.to_process_heap.set_value(predicate_id, 0);
                         self.to_process_heap.delete_key(predicate_id);
@@ -541,7 +551,7 @@ impl ResolutionResolver {
         context: &mut ConflictAnalysisContext<'_>,
         element: Predicate,
         new_predicate: Predicate,
-    ) -> ControlFlow<()> {
+    ) -> ReplacementStatus {
         // We first calculate the value in the heap of the new_predicate.
         let heap_value = get_heap_value(new_predicate, context);
 
@@ -597,11 +607,11 @@ impl ResolutionResolver {
             self.add_predicate_to_conflict_nogood(new_predicate, self.mode, context);
 
             // And we return that `element` was removed.
-            return ControlFlow::Break(());
+            return ReplacementStatus::Replaced;
         }
 
         // `new_predicate` would be the element to be removed, so we cannot replace `element`.
-        ControlFlow::Continue(())
+        ReplacementStatus::NotReplaced
     }
 
     /// Replaces `element` with `new_predicate`, where we know that `new_predicate` and `element`
