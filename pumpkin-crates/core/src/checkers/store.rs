@@ -15,7 +15,8 @@ use crate::proof::InferenceCode;
 /// - inference checkers, which verify that propagations are sound.
 #[derive(Clone, Debug, Default)]
 pub struct CheckerStore {
-    inference_codes: HashMap<InferenceCode, Vec<BoxedChecker<Predicate>>>,
+    /// For each inference code we associate possibly many inference checkers.
+    inference_checkers: HashMap<InferenceCode, Vec<BoxedChecker<Predicate>>>,
 }
 
 impl CheckerStore {
@@ -24,7 +25,7 @@ impl CheckerStore {
         &self,
         inference_code: &InferenceCode,
     ) -> impl ExactSizeIterator<Item = &BoxedChecker<Predicate>> {
-        self.inference_codes
+        self.inference_checkers
             .get(inference_code)
             .map(|checkers| itertools::Either::Left(checkers.iter()))
             .unwrap_or(itertools::Either::Right(std::iter::empty()))
@@ -39,7 +40,7 @@ impl CheckerStore {
         inference_code: InferenceCode,
         checker: BoxedChecker<Predicate>,
     ) {
-        self.inference_codes
+        self.inference_checkers
             .entry(inference_code.clone())
             .or_default()
             .push(checker);

@@ -356,8 +356,13 @@ impl State {
                 .register(domain_id, events, propagator_var);
         }
 
-        for (inference_code, checker) in checkers.into_iter() {
-            self.checkers.add_inference_checker(inference_code, checker);
+        if cfg!(feature = "check-propagations") {
+            // Only register the checkers when this feature is enabled. This is an if statement
+            // instead of a #[cfg(...)] to avoid the 'unused variable' warning that we would
+            // otherwise get on `self.checkers`.
+            for (inference_code, checker) in checkers.into_iter() {
+                self.checkers.add_inference_checker(inference_code, checker);
+            }
         }
 
         pumpkin_assert_simple!(
