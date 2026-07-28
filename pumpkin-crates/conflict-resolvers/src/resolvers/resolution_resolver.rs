@@ -98,6 +98,12 @@ impl Default for ResolutionResolver {
 create_statistics_struct!(
     /// The statistics related to clause learning
     LearnedNogoodStatistics {
+        nogood_statistics: NogoodStatistics,
+        iterative_minimisation_statistics: IterativeMinimisationStatistics,
+        cpip_statistics: CpipStatistics,
+});
+
+create_statistics_struct!(NogoodStatistics {
         /// The average number of elements in the conflict explanation
         average_conflict_size: CumulativeMovingAverage<u64>,
         /// The number of learned clauses which have a size of 1
@@ -108,7 +114,9 @@ create_statistics_struct!(
         average_backtrack_amount: CumulativeMovingAverage<u64>,
         /// The average literal-block distance (LBD) metric for newly added learned nogoods
         average_lbd: CumulativeMovingAverage<u64>,
-        iterative_minimisation_statistics: IterativeMinimisationStatistics,
+});
+
+create_statistics_struct!(CpipStatistics {
         /// The average number of predicates which describe the domain of the propagating variable when
         /// using CPIP learning.
         average_number_of_predicates_describing_domain_cpip: CumulativeMovingAverage<usize>,
@@ -116,7 +124,6 @@ create_statistics_struct!(
         num_cpip_nogood_learned: usize,
         /// The number of nogoods which one predicate concerning the propagating variable.
         num_regular_nogood_learned: usize,
-
 });
 
 create_statistics_struct!(IterativeMinimisationStatistics {
@@ -156,10 +163,14 @@ impl ConflictResolver for ResolutionResolver {
             .compute_lbd(&self.processed_nogood_predicates, context);
 
         // Update statistics
-        self.statistics.average_lbd.add_term(lbd as u64);
-        self.statistics.num_unit_nogoods_learned +=
+        self.statistics
+            .nogood_statistics
+            .average_lbd
+            .add_term(lbd as u64);
+        self.statistics.nogood_statistics.num_unit_nogoods_learned +=
             (self.processed_nogood_predicates.len() == 1) as u64;
         self.statistics
+            .nogood_statistics
             .average_learned_nogood_length
             .add_term(self.processed_nogood_predicates.len() as u64);
 
@@ -170,20 +181,31 @@ impl ConflictResolver for ResolutionResolver {
         );
 
         self.statistics
+            .nogood_statistics
             .average_backtrack_amount
             .add_term((context.get_checkpoint() - backtrack_level) as u64);
     }
 
     fn log_statistics(&self, statistic_logger: StatisticLogger) {
-        self.statistics.log(statistic_logger.clone());
+        self.statistics
+            .nogood_statistics
+            .log(statistic_logger.clone());
+        if self.iterative_minimisation {
+            self.statistics
+                .iterative_minimisation_statistics
+                .log(statistic_logger.clone());
+            self.iterative_minimiser
+                .log_statistics(statistic_logger.clone());
+        }
+        if self.mode.uses_cpip() {
+            self.statistics
+                .cpip_statistics
+                .log(statistic_logger.clone());
+        }
+
         self.semantic_minimiser
             .log_statistics(statistic_logger.clone());
-        self.recursive_minimiser
-            .log_statistics(statistic_logger.clone());
-
-        if self.iterative_minimisation {
-            self.iterative_minimiser.log_statistics(statistic_logger);
-        }
+        self.recursive_minimiser.log_statistics(statistic_logger);
     }
 }
 
@@ -220,6 +242,7 @@ impl ResolutionResolver {
         let num_initial_conflict_predicates =
             self.to_process_heap.num_nonremoved_elements() + self.processed_nogood_predicates.len();
         self.statistics
+            .nogood_statistics
             .average_conflict_size
             .add_term(num_initial_conflict_predicates as u64);
 
@@ -677,12 +700,13 @@ impl ResolutionResolver {
         );
 
         self.statistics
+            .cpip_statistics
             .average_number_of_predicates_describing_domain_cpip
             .add_term(num_removed);
         if num_removed == 1 {
-            self.statistics.num_regular_nogood_learned += 1;
+            self.statistics.cpip_statistics.num_regular_nogood_learned += 1;
         } else {
-            self.statistics.num_cpip_nogood_learned += 1;
+            self.statistics.cpip_statistics.num_cpip_nogood_learned += 1;
         }
 
         // First we minimise the nogood using semantic minimisation to remove duplicates but we
