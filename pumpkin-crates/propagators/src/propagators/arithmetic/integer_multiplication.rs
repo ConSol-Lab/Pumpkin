@@ -95,11 +95,10 @@ pub struct IntegerMultiplicationPropagator<VA, VB, VC> {
     b: VB,
     c: VC,
     inference_code: InferenceCode,
-    /// A re-usable buffer to store the explanation of a propagation. This will contain at most
-    /// four predicates.
-    ///
-    /// This field is only written to in [`Propagator::lazy_explanation`], as that returns a
-    /// slice which needs to be owned somewhere. Hence we put that ownership here.
+    /// A re-usable buffer holding the explanation of the most recently explained propagation, at
+    /// most four predicates.
+    // Owned here, rather than a local in `lazy_explanation`, because that method returns a slice
+    // borrowed from it.
     reason_buffer: Vec<Predicate>,
 }
 
@@ -128,10 +127,8 @@ where
 
     fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> LazyExplanation<'_> {
         let payload = MultiplicationPropagation::from_bits(code);
-        let propagated_bound = payload.bound();
-        let propagated_value = payload.value() as i64;
-
-        self.reason_buffer.clear();
+        let bound = payload.bound();
+        let target = payload.value() as i64;
 
         let trail_position = context.get_trail_position();
         let a_min = context.lower_bound_at_trail_position(&self.a, trail_position);
@@ -141,81 +138,44 @@ where
         let c_min = context.lower_bound_at_trail_position(&self.c, trail_position);
         let c_max = context.upper_bound_at_trail_position(&self.c, trail_position);
 
-        match propagated_bound {
-            PropagatedBound::CLower | PropagatedBound::CUpper => {
-                let cited = minimize_reason(
-                    a_min as i64,
-                    a_max as i64,
-                    b_min as i64,
-                    b_max as i64,
-                    propagated_value,
-                    matches!(propagated_bound, PropagatedBound::CLower),
-                    |a_min, a_max, b_min, b_max| {
-                        Some(product_bound_ext(a_min, a_max, b_min, b_max))
-                    },
-                );
-
-                if cited[0] {
-                    self.reason_buffer.push(predicate![self.a >= a_min]);
-                }
-                if cited[1] {
-                    self.reason_buffer.push(predicate![self.a <= a_max]);
-                }
-                if cited[2] {
-                    self.reason_buffer.push(predicate![self.b >= b_min]);
-                }
-                if cited[3] {
-                    self.reason_buffer.push(predicate![self.b <= b_max]);
-                }
-            }
-            PropagatedBound::ALower | PropagatedBound::AUpper => {
-                let cited = minimize_reason(
-                    c_min as i64,
-                    c_max as i64,
-                    b_min as i64,
-                    b_max as i64,
-                    propagated_value,
-                    matches!(propagated_bound, PropagatedBound::ALower),
-                    compute_quotient_bound_ext,
-                );
-
-                if cited[0] {
-                    self.reason_buffer.push(predicate![self.c >= c_min]);
-                }
-                if cited[1] {
-                    self.reason_buffer.push(predicate![self.c <= c_max]);
-                }
-                if cited[2] {
-                    self.reason_buffer.push(predicate![self.b >= b_min]);
-                }
-                if cited[3] {
-                    self.reason_buffer.push(predicate![self.b <= b_max]);
-                }
-            }
-            PropagatedBound::BLower | PropagatedBound::BUpper => {
-                let cited = minimize_reason(
-                    c_min as i64,
-                    c_max as i64,
-                    a_min as i64,
-                    a_max as i64,
-                    propagated_value,
-                    matches!(propagated_bound, PropagatedBound::BLower),
-                    compute_quotient_bound_ext,
-                );
-
-                if cited[0] {
-                    self.reason_buffer.push(predicate![self.c >= c_min]);
-                }
-                if cited[1] {
-                    self.reason_buffer.push(predicate![self.c <= c_max]);
-                }
-                if cited[2] {
-                    self.reason_buffer.push(predicate![self.a >= a_min]);
-                }
-                if cited[3] {
-                    self.reason_buffer.push(predicate![self.a <= a_max]);
-                }
-            }
+        self.reason_buffer.clear();
+        match bound {
+            PropagatedBound::CLower | PropagatedBound::CUpper => minimize_reason(
+                &mut self.reason_buffer,
+                [
+                    CitableBound::lower(predicate![self.a >= a_min], a_min as i64),
+                    CitableBound::upper(predicate![self.a <= a_max], a_max as i64),
+                    CitableBound::lower(predicate![self.b >= b_min], b_min as i64),
+                    CitableBound::upper(predicate![self.b <= b_max], b_max as i64),
+                ],
+                target,
+                bound.is_lower(),
+                |a_min, a_max, b_min, b_max| Some(product_bound_ext(a_min, a_max, b_min, b_max)),
+            ),
+            PropagatedBound::ALower | PropagatedBound::AUpper => minimize_reason(
+                &mut self.reason_buffer,
+                [
+                    CitableBound::lower(predicate![self.c >= c_min], c_min as i64),
+                    CitableBound::upper(predicate![self.c <= c_max], c_max as i64),
+                    CitableBound::lower(predicate![self.b >= b_min], b_min as i64),
+                    CitableBound::upper(predicate![self.b <= b_max], b_max as i64),
+                ],
+                target,
+                bound.is_lower(),
+                compute_quotient_bound_ext,
+            ),
+            PropagatedBound::BLower | PropagatedBound::BUpper => minimize_reason(
+                &mut self.reason_buffer,
+                [
+                    CitableBound::lower(predicate![self.c >= c_min], c_min as i64),
+                    CitableBound::upper(predicate![self.c <= c_max], c_max as i64),
+                    CitableBound::lower(predicate![self.a >= a_min], a_min as i64),
+                    CitableBound::upper(predicate![self.a <= a_max], a_max as i64),
+                ],
+                target,
+                bound.is_lower(),
+                compute_quotient_bound_ext,
+            ),
         }
 
         LazyExplanation {
@@ -292,18 +252,17 @@ fn product_bound(a_min: i64, a_max: i64, b_min: i64, b_max: i64) -> (i64, i64) {
 }
 
 /// The [`IntExt<i64>`]-generalized form of [`product_bound`]; see its documentation.
-///
-/// The propagator's actual output is always computed from finite domain bounds, and is always
-/// itself finite. Infinities only ever arise from [`minimize_reason`], which relaxes individual
-/// domain bounds to determine whether they are actually necessary to justify a propagated value;
-/// a relaxed bound that turns the recomputed value into (or through) an infinity is one that
-/// cannot be dropped from the reason.
 fn product_bound_ext(
     a_min: IntExt<i64>,
     a_max: IntExt<i64>,
     b_min: IntExt<i64>,
     b_max: IntExt<i64>,
 ) -> (IntExt<i64>, IntExt<i64>) {
+    // The propagator's actual output is always computed from finite domain bounds, and is always
+    // itself finite. Infinities only ever arise from `minimize_reason`, which relaxes individual
+    // domain bounds to determine whether they are actually necessary to justify a propagated
+    // value; a relaxed bound that turns the recomputed value into (or through) an infinity is one
+    // that cannot be dropped from the reason.
     let corners = [a_min * b_min, a_min * b_max, a_max * b_min, a_max * b_max];
 
     (
@@ -405,19 +364,18 @@ fn compute_quotient_bound_ext(
 /// Computes `[ceil(inf E2) .. floor(sup E2)]` where `E2` is the set of the four corner quotients
 /// of `[num_min .. num_max] / [den_min .. den_max]`, generalized to [`IntExt<i64>`] operands.
 /// Assumes `[den_min .. den_max]` does not contain zero.
-///
-/// A corner division that is indeterminate (infinity divided by infinity) is treated
-/// conservatively rather than propagated as an error: `None` becomes `NegativeInf` for the
-/// `ceil`/min aggregation and `PositiveInf` for the `floor`/max aggregation, so that an
-/// indeterminate corner can never cause [`minimize_reason`] to *overestimate* how tight the true
-/// bound is. This only ever costs some generality, deep inside an already-heavily-relaxed reason
-/// — never soundness.
 fn quotient_bound_ext(
     num_min: IntExt<i64>,
     num_max: IntExt<i64>,
     den_min: IntExt<i64>,
     den_max: IntExt<i64>,
 ) -> (IntExt<i64>, IntExt<i64>) {
+    // A corner division that is indeterminate (infinity divided by infinity) is treated
+    // conservatively rather than propagated as an error: `None` becomes `NegativeInf` for the
+    // `ceil`/min aggregation and `PositiveInf` for the `floor`/max aggregation, so that an
+    // indeterminate corner can never cause `minimize_reason` to *overestimate* how tight the true
+    // bound is. This only ever costs some generality, deep inside an already-heavily-relaxed
+    // reason — never soundness.
     let ceil = |n: IntExt<i64>, d: IntExt<i64>| n.div_ceil(d).unwrap_or(IntExt::NegativeInf);
     let floor = |n: IntExt<i64>, d: IntExt<i64>| n.div_floor(d).unwrap_or(IntExt::PositiveInf);
 
@@ -447,6 +405,14 @@ enum PropagatedBound {
 }
 
 impl PropagatedBound {
+    /// Whether this identifies a lower bound (`>=`) rather than an upper bound (`<=`).
+    const fn is_lower(self) -> bool {
+        matches!(
+            self,
+            PropagatedBound::ALower | PropagatedBound::BLower | PropagatedBound::CLower
+        )
+    }
+
     const fn into_bits(self) -> u8 {
         self as _
     }
@@ -465,34 +431,55 @@ impl PropagatedBound {
 
 /// The payload carried by a [`pumpkin_core::engine::cp::reason::Reason::DynamicLazy`] reason for
 /// this propagator: which propagation is being explained, and the value that was propagated.
-///
-/// The value has to be carried explicitly rather than read back off the trail predicate in
-/// [`Propagator::lazy_explanation`]: `a`, `b`, `c` may be `AffineView`s, and the predicate that
-/// actually lands on the trail is stated in terms of the underlying `DomainId`, not the view's
-/// own logical space that the rest of this propagator reasons in — its right-hand side would
-/// generally not equal the value this propagator computed and posted.
 #[bitfield(u64)]
 struct MultiplicationPropagation {
     #[bits(8)]
     bound: PropagatedBound,
+    // The value has to be carried explicitly rather than read back off the trail predicate in
+    // `Propagator::lazy_explanation`: `a`, `b`, `c` may be `AffineView`s, and the predicate that
+    // actually lands on the trail is stated in terms of the underlying `DomainId`, not the view's
+    // own logical space that the rest of this propagator reasons in — its right-hand side would
+    // generally not equal the value this propagator computed and posted.
     value: i32,
     #[bits(24)]
     __: u32,
 }
 
-/// Greedily drops bounds from the initial "cite everything" reason for `[v0_min, v0_max, v1_min,
-/// v1_max]`, relaxing each to the appropriate infinity, keeping the drop only if `bound_fn`
-/// recomputed with the relaxed value still justifies `target` (i.e. is still `>= target` when
-/// `is_lower`, or `<= target` otherwise). Returns which of the four bounds remain necessary.
-///
-/// Relaxing a bound can only loosen the value `bound_fn` computes, so sufficiency is monotone in
-/// the cited set: a single greedy pass is enough to reach a sound, irredundant (no further bound
-/// can be dropped) reason, though not necessarily the smallest one possible.
+/// A domain bound that may be cited to justify a propagated value: the predicate that states it,
+/// and the value it relaxes to when [`minimize_reason`] tests whether it can be dropped instead.
+struct CitableBound {
+    predicate: Predicate,
+    exact: i64,
+    relaxed: IntExt<i64>,
+}
+
+impl CitableBound {
+    /// A lower bound `exact`, which relaxes to [`IntExt::NegativeInf`] when dropped.
+    fn lower(predicate: Predicate, exact: i64) -> Self {
+        CitableBound {
+            predicate,
+            exact,
+            relaxed: IntExt::NegativeInf,
+        }
+    }
+
+    /// An upper bound `exact`, which relaxes to [`IntExt::PositiveInf`] when dropped.
+    fn upper(predicate: Predicate, exact: i64) -> Self {
+        CitableBound {
+            predicate,
+            exact,
+            relaxed: IntExt::PositiveInf,
+        }
+    }
+}
+
+/// Greedily drops bounds from the initial "cite everything" reason for `bounds`, keeping the drop
+/// only if `bound_fn`, recomputed with the relaxed value, still justifies `target` (i.e. is still
+/// `>= target` when `is_lower`, or `<= target` otherwise). Appends the predicates of the bounds
+/// that remain necessary to `buffer`.
 fn minimize_reason(
-    v0_min: i64,
-    v0_max: i64,
-    v1_min: i64,
-    v1_max: i64,
+    buffer: &mut Vec<Predicate>,
+    bounds: [CitableBound; 4],
     target: i64,
     is_lower: bool,
     bound_fn: impl Fn(
@@ -501,37 +488,13 @@ fn minimize_reason(
         IntExt<i64>,
         IntExt<i64>,
     ) -> Option<(IntExt<i64>, IntExt<i64>)>,
-) -> [bool; 4] {
-    let finite = [
-        IntExt::Int(v0_min),
-        IntExt::Int(v0_max),
-        IntExt::Int(v1_min),
-        IntExt::Int(v1_max),
-    ];
-    let relaxed = [
-        IntExt::NegativeInf,
-        IntExt::PositiveInf,
-        IntExt::NegativeInf,
-        IntExt::PositiveInf,
-    ];
-
-    let is_sufficient = |cited: [bool; 4]| {
-        let get = |i: usize| if cited[i] { finite[i] } else { relaxed[i] };
-        let value = match bound_fn(get(0), get(1), get(2), get(3)) {
-            Some((lo, hi)) => {
-                if is_lower {
-                    lo
-                } else {
-                    hi
-                }
-            }
-            None => {
-                if is_lower {
-                    IntExt::NegativeInf
-                } else {
-                    IntExt::PositiveInf
-                }
-            }
+) {
+    let is_sufficient = |values: [IntExt<i64>; 4]| {
+        let value = match bound_fn(values[0], values[1], values[2], values[3]) {
+            Some((lo, _)) if is_lower => lo,
+            Some((_, hi)) => hi,
+            None if is_lower => IntExt::NegativeInf,
+            None => IntExt::PositiveInf,
         };
 
         if is_lower {
@@ -541,22 +504,36 @@ fn minimize_reason(
         }
     };
 
-    let mut cited = [true; 4];
+    let mut values = bounds.each_ref().map(|bound| IntExt::Int(bound.exact));
+    let mut kept = [true; 4];
+
+    // Relaxing a bound can only loosen the value `bound_fn` computes, so sufficiency is monotone
+    // in the cited set: a single greedy pass is enough to reach a sound, irredundant (no further
+    // bound can be dropped) reason, though not necessarily the smallest one possible.
     for i in 0..4 {
-        let mut candidate = cited;
-        candidate[i] = false;
-        if is_sufficient(candidate) {
-            cited = candidate;
+        let exact = values[i];
+        values[i] = bounds[i].relaxed;
+        if is_sufficient(values) {
+            kept[i] = false;
+        } else {
+            values[i] = exact;
         }
     }
 
-    cited
+    buffer.extend(
+        bounds
+            .into_iter()
+            .zip(kept)
+            .filter_map(|(bound, kept)| kept.then_some(bound.predicate)),
+    );
 }
 
+/// Clamps `value` into the range representable by `i32`.
 fn saturate_i64_to_i32(value: i64) -> i32 {
     value.clamp(i32::MIN as i64, i32::MAX as i64) as i32
 }
 
+/// Verifies that a claimed inference for `a * b = c` is actually implied by its premises.
 #[derive(Clone, Debug)]
 pub struct IntegerMultiplicationChecker<VA, VB, VC> {
     pub a: VA,
@@ -607,6 +584,7 @@ where
     }
 }
 
+/// Returns whether `[induced_lo, induced_hi]` shares no value with `[lo, hi]`.
 fn is_disjoint(
     lo: IntExt<i64>,
     hi: IntExt<i64>,
