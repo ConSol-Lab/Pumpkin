@@ -255,6 +255,7 @@ impl IterativeMinimiser {
         }
     }
 
+    /// Explains the upper-bound in the proof log.
     fn explain_upper_bound_in_proof(
         &self,
         predicate: Predicate,
