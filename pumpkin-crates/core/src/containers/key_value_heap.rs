@@ -56,8 +56,8 @@ impl<Key, Value> KeyValueHeap<Key, Value> {
 
 impl<Key, Value> KeyValueHeap<Key, Value>
 where
-    Key: StorageKey + Copy + std::fmt::Debug,
-    Value: AddAssign<Value> + DivAssign<Value> + PartialOrd + Default + Copy + std::fmt::Debug,
+    Key: StorageKey + Copy,
+    Value: AddAssign<Value> + DivAssign<Value> + PartialOrd + Default + Copy,
 {
     /// Get the keys in the heap.
     ///
@@ -131,17 +131,21 @@ where
         }
     }
 
+    /// Sets the value of the element of `key` to `value`.
+    ///
+    /// The worst-case time-complexity of this operation is O(logn); average case is likely to be
+    /// better.
     pub fn set_value(&mut self, key: Key, value: Value) {
         if key.index() < self.len() {
             let position = self.map_key_to_position[key];
             let value_before = *self.get_value(key);
             self.values[position] = value;
-            // Recall that increment may be applied to keys not present
-            // So we only apply sift up in case the key is present
             if self.is_key_present(key) {
                 if value_before < *self.get_value(key) {
+                    // We sift up if the new value is larger than the previous value.
                     self.sift_up(position);
                 } else if value_before > *self.get_value(key) {
+                    // We sift down if the new value is smaller than the previous value.
                     self.sift_down(position);
                 }
             }
