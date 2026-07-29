@@ -16,14 +16,14 @@
 
 Pumpkin is a combinatorial optimisation solver developed within the [ConSol Lab](https://github.com/ConSol-Lab) at TU Delft. It is based on the (lazy clause generation) constraint programming paradigm.
 
-Our goal is to keep the solver efficient, easy to use, and well-documented. The solver is written in pure Rust and follows Rust best practices, making it straightforward to download and compile.
+Our goal is to keep the solver efficient, easy to use, and well-documented. The solver is written in pure Rust and follows Rust best practices, making it straightforward to download and compile. Beyond being a solver, Pumpkin also serves as a research vehicle for the lab — a platform for prototyping and studying new solving techniques, several of which are described in our [publications](#publications-involving-pumpkin).
 
 A unique feature of Pumpkin is that it can produce certificates of infeasibility and optimality, which can be checked independently of the solver using our formally verified checker. See our [CP'24](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2024.11) and [CP'26](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2026.24) papers for details.
 
-### 🥈🥉 Silver (fixed search) and bronze (free search) at the [2026 MiniZinc Challenge](https://www.minizinc.org/challenge/2026/results/)
-### 🥉 Bronze (fixed search) at the [2025 MiniZinc Challenge](https://www.minizinc.org/challenge/2025/results/)
-
 </p>
+
+<h3 align="center">🥈🥉 Silver (fixed search) and bronze (free search) at the <a href="https://www.minizinc.org/challenge/2026/results/">2026 MiniZinc Challenge</a></h3>
+<h3 align="center">🥉 Bronze (fixed search) at the <a href="https://www.minizinc.org/challenge/2025/results/">2025 MiniZinc Challenge</a></h3>
 
 <br clear="left"/>
 
@@ -43,7 +43,7 @@ A unique feature of Pumpkin is that it can produce certificates of infeasibility
 
 ## Features
 
-Pumpkin can produce certificates of infeasibility and optimality, checkable using our formally verified checker.
+Pumpkin can produce certificates of infeasibility and optimality, checkable using our [formally verified checker](https://github.com/ConSol-Lab/fzn-drcp-check).
 
 Pumpkin currently supports integer variables and the following (global) constraints:
 
@@ -74,7 +74,7 @@ To clone the project, run:
 git clone https://github.com/ConSol-Lab/Pumpkin.git
 ```
 
-Since Pumpkin is written in pure Rust, it is easy to install! After cloning, you can build the project using a version of [Rust](https://www.rust-lang.org/tools/install) (1.72.1+) using the following commands:
+Since Pumpkin is written in pure Rust, it is easy to install! After cloning, you can build the project using the most recent stable version of [Rust](https://www.rust-lang.org/tools/install) using the following commands:
 
 ```sh
 cargo build           # Creates a non-optimized build with debug info
@@ -149,8 +149,8 @@ cargo +nightly fmt
 
 Pumpkin is developed within the [ConSol Lab](https://github.com/ConSol-Lab) at TU Delft.
 
-- **Emir Demirović** — Principal Investigator
-- **Maarten Flippo**, **Imko Marijnissen** — Core developers, with [contributions from others](https://github.com/ConSol-Lab/Pumpkin/graphs/contributors?all=1)
+- **Emir Demirović**: Principal Investigator.
+- **Maarten Flippo**, **Imko Marijnissen**: Core developers, with [contributions from others](https://github.com/ConSol-Lab/Pumpkin/graphs/contributors?all=1).
 
 ## Publications Involving Pumpkin
 
