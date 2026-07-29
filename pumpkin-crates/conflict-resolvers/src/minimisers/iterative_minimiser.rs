@@ -2,6 +2,7 @@
 use std::collections::BTreeSet;
 
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
+use pumpkin_core::containers::HashMap;
 use pumpkin_core::containers::KeyedVec;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::create_statistics_struct;
@@ -41,7 +42,7 @@ pub(crate) struct IterativeMinimiser {
     /// Keeps track of the domains induced by the current working nogood.
     state: IterativeDomain,
     /// Keeps track of the predicates for each [`DomainId`] in the current nogood.
-    domains: KeyedVec<DomainId, Vec<Predicate>>,
+    domains: HashMap<DomainId, Vec<Predicate>>,
     /// For proof logging; keeps track of the predicates which are true at checkpoint 0.
     root_predicates: KeyedVec<DomainId, Vec<Predicate>>,
     statistics: IterativeMinimiserStatistics,
@@ -201,11 +202,15 @@ impl IterativeMinimiser {
     /// Removes the given predicate from the nogood.
     pub(crate) fn remove_predicate(&mut self, predicate: Predicate) {
         let domain = predicate.get_domain();
-        while let Some(to_remove_position) = self.domains[domain]
+        while let Some(to_remove_position) = self.domains[&domain]
             .iter()
             .position(|element| *element == predicate)
         {
-            let _ = self.domains[domain].swap_remove(to_remove_position);
+            let _ = self
+                .domains
+                .get_mut(&domain)
+                .unwrap()
+                .swap_remove(to_remove_position);
         }
     }
 
@@ -217,8 +222,8 @@ impl IterativeMinimiser {
     ) {
         let domain = predicate.get_domain();
 
-        self.domains.accomodate(domain, Default::default());
-        self.domains[domain].push(predicate);
+        let entry = self.domains.entry(domain).or_default();
+        entry.push(predicate);
 
         if context.is_proof_logging_inferences()
             && context.get_checkpoint_for_predicate(predicate) == Some(0)
@@ -285,13 +290,17 @@ impl IterativeMinimiser {
         context: &mut ConflictAnalysisContext,
     ) -> ProcessingResult {
         let domain = predicate.get_domain();
-        if domain.index() >= self.domains.len() || self.domains[domain].is_empty() {
+        let Some(predicates) = self.domains.get(&domain) else {
+            return ProcessingResult::NotRedundant;
+        };
+
+        if predicates.is_empty() {
             return ProcessingResult::NotRedundant;
         }
 
         self.state.reset();
 
-        for predicate in self.domains[predicate.get_domain()].iter() {
+        for predicate in predicates.iter() {
             let consistent = self.state.apply(predicate);
             assert!(consistent)
         }
@@ -319,7 +328,7 @@ impl IterativeMinimiser {
                     self.statistics.num_removed_by_creating_equality += 1;
                     self.explain_upper_bound_in_proof(predicate, context);
                     // [x <= v], [x >= v] => [x = v]
-                    let to_remove = self.domains[predicate.get_domain()]
+                    let to_remove = predicates
                         .iter()
                         .filter(|element| {
                             element.is_lower_bound_predicate()
@@ -341,7 +350,7 @@ impl IterativeMinimiser {
                     }
                 } else if predicate.get_right_hand_side() > lower_bound {
                     // [x >= v], [x >= v'] => [x >= v'] if v' > v
-                    let to_remove = self.domains[predicate.get_domain()]
+                    let to_remove = predicates
                         .iter()
                         .filter(|element| {
                             element.is_lower_bound_predicate()
@@ -372,7 +381,7 @@ impl IterativeMinimiser {
                     self.statistics.num_removed_by_creating_equality += 1;
                     self.explain_lower_bound_in_proof(predicate, context);
 
-                    let to_remove = self.domains[predicate.get_domain()]
+                    let to_remove = predicates
                         .iter()
                         .filter(|element| {
                             element.is_upper_bound_predicate()
@@ -394,7 +403,7 @@ impl IterativeMinimiser {
                     }
                 } else if predicate.get_right_hand_side() < upper_bound {
                     // [x <= v], [x <= v'] => [x <= v'] if v' < v
-                    let to_remove = self.domains[predicate.get_domain()]
+                    let to_remove = predicates
                         .iter()
                         .filter(|element| {
                             element.is_upper_bound_predicate()
@@ -453,14 +462,14 @@ impl IterativeMinimiser {
                 }
             }
             PredicateType::Equal => {
-                if self.domains[predicate.get_domain()].is_empty() {
+                if predicates.is_empty() {
                     self.statistics.num_non_redundant += 1;
                     ProcessingResult::NotRedundant
                 } else {
                     self.statistics.num_removed_by_equality += 1;
                     // [x ⊗ v], [x = v] => [x = v]
                     ProcessingResult::ReplacedPresent {
-                        removed: self.domains[predicate.get_domain()].clone(),
+                        removed: predicates.clone(),
                     }
                 }
             }
