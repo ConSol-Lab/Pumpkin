@@ -202,7 +202,7 @@ impl IterativeMinimiser {
     /// Removes the given predicate from the nogood.
     pub(crate) fn remove_predicate(&mut self, predicate: Predicate) {
         let domain = predicate.get_domain();
-        while let Some(to_remove_position) = self.domains[&domain]
+        if let Some(to_remove_position) = self.domains[&domain]
             .iter()
             .position(|element| *element == predicate)
         {
