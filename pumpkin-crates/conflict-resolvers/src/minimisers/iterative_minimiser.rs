@@ -349,24 +349,49 @@ impl IterativeMinimiser {
                         removed: to_remove,
                     }
                 } else if predicate.get_right_hand_side() > lower_bound {
-                    // [x >= v], [x >= v'] => [x >= v'] if v' > v
-                    let to_remove = predicates
-                        .iter()
-                        .filter(|element| {
-                            element.is_lower_bound_predicate()
-                                || (element.is_not_equal_predicate()
-                                    && element.get_right_hand_side()
-                                        < predicate.get_right_hand_side())
-                        })
-                        .copied()
-                        .collect::<Vec<_>>();
-
-                    if !to_remove.is_empty() {
+                    if self.state.holes.contains(&predicate.get_right_hand_side()) {
+                        // [x >= v], [x != v] => [x <= v + 1]
                         self.statistics.num_removed_by_bound += 1;
-                        ProcessingResult::ReplacedPresent { removed: to_remove }
+                        let to_remove = predicates
+                            .iter()
+                            .filter(|element| {
+                                element.is_lower_bound_predicate()
+                                    || (element.is_not_equal_predicate()
+                                        && element.get_right_hand_side()
+                                            < predicate.get_right_hand_side())
+                            })
+                            .copied()
+                            .collect::<Vec<_>>();
+
+                        ProcessingResult::PossiblyReplacedWithNew {
+                            potentially_removed: predicate!(
+                                domain != predicate.get_right_hand_side()
+                            ),
+                            new_predicate: predicate!(
+                                domain >= predicate.get_right_hand_side() + 1
+                            ),
+                            removed: to_remove,
+                        }
                     } else {
-                        self.statistics.num_non_redundant += 1;
-                        ProcessingResult::NotRedundant
+                        // [x >= v], [x >= v'] => [x >= v'] if v' > v
+                        let to_remove = predicates
+                            .iter()
+                            .filter(|element| {
+                                element.is_lower_bound_predicate()
+                                    || (element.is_not_equal_predicate()
+                                        && element.get_right_hand_side()
+                                            < predicate.get_right_hand_side())
+                            })
+                            .copied()
+                            .collect::<Vec<_>>();
+
+                        if !to_remove.is_empty() {
+                            self.statistics.num_removed_by_bound += 1;
+                            ProcessingResult::ReplacedPresent { removed: to_remove }
+                        } else {
+                            self.statistics.num_non_redundant += 1;
+                            ProcessingResult::NotRedundant
+                        }
                     }
                 } else {
                     self.statistics.num_redundant += 1;
@@ -402,23 +427,48 @@ impl IterativeMinimiser {
                         removed: to_remove,
                     }
                 } else if predicate.get_right_hand_side() < upper_bound {
-                    // [x <= v], [x <= v'] => [x <= v'] if v' < v
-                    let to_remove = predicates
-                        .iter()
-                        .filter(|element| {
-                            element.is_upper_bound_predicate()
-                                || (element.is_not_equal_predicate()
-                                    && element.get_right_hand_side()
-                                        > predicate.get_right_hand_side())
-                        })
-                        .copied()
-                        .collect::<Vec<_>>();
-                    if !to_remove.is_empty() {
+                    if self.state.holes.contains(&predicate.get_right_hand_side()) {
+                        // [x <= v], [x != v] => [x <= v - 1]
                         self.statistics.num_removed_by_bound += 1;
-                        ProcessingResult::ReplacedPresent { removed: to_remove }
+                        let to_remove = predicates
+                            .iter()
+                            .filter(|element| {
+                                element.is_upper_bound_predicate()
+                                    || (element.is_not_equal_predicate()
+                                        && element.get_right_hand_side()
+                                            > predicate.get_right_hand_side())
+                            })
+                            .copied()
+                            .collect::<Vec<_>>();
+
+                        ProcessingResult::PossiblyReplacedWithNew {
+                            potentially_removed: predicate!(
+                                domain != predicate.get_right_hand_side()
+                            ),
+                            new_predicate: predicate!(
+                                domain <= predicate.get_right_hand_side() - 1
+                            ),
+                            removed: to_remove,
+                        }
                     } else {
-                        self.statistics.num_non_redundant += 1;
-                        ProcessingResult::NotRedundant
+                        // [x <= v], [x <= v'] => [x <= v'] if v' < v
+                        let to_remove = predicates
+                            .iter()
+                            .filter(|element| {
+                                element.is_upper_bound_predicate()
+                                    || (element.is_not_equal_predicate()
+                                        && element.get_right_hand_side()
+                                            > predicate.get_right_hand_side())
+                            })
+                            .copied()
+                            .collect::<Vec<_>>();
+                        if !to_remove.is_empty() {
+                            self.statistics.num_removed_by_bound += 1;
+                            ProcessingResult::ReplacedPresent { removed: to_remove }
+                        } else {
+                            self.statistics.num_non_redundant += 1;
+                            ProcessingResult::NotRedundant
+                        }
                     }
                 } else {
                     self.statistics.num_redundant += 1;
