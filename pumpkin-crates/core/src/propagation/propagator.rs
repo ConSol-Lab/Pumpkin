@@ -113,7 +113,7 @@ pub trait Propagator: Downcast + DynClone {
 
     /// Returns whether the propagator should be enqueued for propagation when a [`DomainEvent`]
     /// happens to one of the variables the propagator is subscribed to (as registered during
-    /// creation with [`PropagatorConstructor`] using [`PropagatorConstructorContext::register`]).
+    /// creation with [`PropagatorConstructor`].
     ///
     /// This can be used to incrementally maintain data structures or perform propagations, and
     /// should only be used for computationally cheap logic. Expensive computation should be
@@ -245,6 +245,7 @@ pub enum EnqueueDecision {
 /// priority (i.e., should be propagated before computationally expensive propagators).
 #[derive(Default, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 #[repr(u8)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum Priority {
     High = 0,
     Medium = 1,

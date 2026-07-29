@@ -9,14 +9,16 @@ use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::InferenceCheckers;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -43,7 +45,7 @@ where
 {
     type PropagatorImpl = DivisionPropagator<VA, VB, VC>;
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, context: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let DivisionArgs {
             numerator,
             denominator,
@@ -56,29 +58,35 @@ where
             "Denominator cannot contain 0"
         );
 
-        context.register(numerator.clone(), DomainEvents::BOUNDS, ID_NUMERATOR);
-        context.register(denominator.clone(), DomainEvents::BOUNDS, ID_DENOMINATOR);
-        context.register(rhs.clone(), DomainEvents::BOUNDS, ID_RHS);
+        let registration = EventsToRegister::builder()
+            .add(&numerator, DomainEvents::BOUNDS, ID_NUMERATOR)
+            .add(&denominator, DomainEvents::BOUNDS, ID_DENOMINATOR)
+            .add(&rhs, DomainEvents::BOUNDS, ID_RHS)
+            .build();
 
-        let inference_code = InferenceCode::new(constraint_tag, Division);
+        let mut checkers = RuntimeCheckers::builder();
+        let inference_code = checkers.add_inference_checker(
+            constraint_tag,
+            Division,
+            IntegerDivisionChecker {
+                numerator: numerator.clone(),
+                denominator: denominator.clone(),
+                rhs: rhs.clone(),
+            },
+        );
 
-        DivisionPropagator {
+        let propagator = DivisionPropagator {
             numerator,
             denominator,
             rhs,
             inference_code,
-        }
-    }
+        };
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, Division),
-            Box::new(IntegerDivisionChecker {
-                numerator: self.numerator.clone(),
-                denominator: self.denominator.clone(),
-                rhs: self.rhs.clone(),
-            }),
-        );
+        PropagatorSpec {
+            registration,
+            checkers: checkers.build(),
+            propagator,
+        }
     }
 }
 
