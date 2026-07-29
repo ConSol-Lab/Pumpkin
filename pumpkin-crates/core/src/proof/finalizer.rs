@@ -29,6 +29,10 @@ pub(crate) struct FinalizingContext<'a> {
 /// predicate is propagated by a propagator, it would have been logged as a root-level propagation
 /// by the solver prior to reaching this function.
 pub(crate) fn finalize_proof(context: FinalizingContext<'_>) {
+    if !context.proof_log.is_logging_proof() {
+        return;
+    }
+
     let mut to_explain = BTreeMap::new();
     to_explain.extend(context.conflict.iter().map(|&predicate| {
         (
@@ -140,14 +144,14 @@ pub(crate) fn explain_root_assignment(
     context: &mut RootExplanationContext<'_>,
     predicate: Predicate,
 ) {
+    if !context.proof_log.is_logging_inferences() {
+        return;
+    }
+
     assert_eq!(
         context.state.get_checkpoint_for_predicate(predicate),
         Some(0)
     );
-
-    if !context.proof_log.is_logging_inferences() {
-        return;
-    }
 
     let to_explain = BTreeMap::from([(
         context
