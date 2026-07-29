@@ -205,7 +205,7 @@ impl IterativeMinimiser {
             .iter()
             .position(|element| *element == predicate)
         {
-            let _ = self.domains[domain].remove(to_remove_position);
+            let _ = self.domains[domain].swap_remove(to_remove_position);
         }
     }
 
