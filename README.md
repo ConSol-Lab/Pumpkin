@@ -1,11 +1,12 @@
 # Pumpkin
 
-[![Build Status](https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml/badge.svg)](https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 [![Pumpkin on crates.io](https://img.shields.io/crates/v/pumpkin-solver?label=pumpkin-solver)](https://crates.io/crates/pumpkin-solver)
-[![docs.rs](https://img.shields.io/docsrs/pumpkin-solver)](https://docs.rs/pumpkin-solver)
 [![DRCP Format on crates.io](https://img.shields.io/crates/v/drcp-format?label=drcp-format)](https://crates.io/crates/drcp-format)
 [![Pumpkin on PyPI](https://img.shields.io/pypi/v/pumpkin_solver)](https://pypi.org/project/pumpkin-solver/)
+[![Build Status](https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml/badge.svg)](https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml)
+[![docs.rs](https://img.shields.io/docsrs/pumpkin-solver)](https://docs.rs/pumpkin-solver)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+
 
 <p align="center">
     <img align="left" width="50%" src="https://github.com/ConSol-Lab/Pumpkin/raw/main/pumpkin.svg" alt="ASCII art pumpkin logo">
