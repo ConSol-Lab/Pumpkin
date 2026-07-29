@@ -105,20 +105,26 @@ pub struct NogoodPropagator {
 create_statistics_struct!(NogoodPropagatorStatistics {
     /// Records the number of unit propagations.
     num_unit_propagations: usize,
-    /// Records the number of calls to the extended nogood propagation algorithm.
-    num_extended_propagation_calls: usize,
-    /// Records the number of variables propagated by extended nogood propagation.
-    num_variables_propagated: usize,
-    /// Records the number of lower-bounds propagated by extended nogood propagation.
-    num_extended_lower_bound_propagations: usize,
-    /// Records the number of upper-bounds propagated by extended nogood propagation.
-    num_extended_upper_bound_propagations: usize,
-    /// Records the number of disequalities propagated by extended nogood propagation.
-    num_extended_disequality_propagations: usize,
-    /// The average number of [`Predicate`]s describing the propagated domain when performing
-    /// extended nogood propagation.
-    average_num_predicates_describing_domain_when_propagating_extended: CumulativeMovingAverage<usize>
+    extended_propagation_statistics: ExtendedPropagationStatistics
 });
+
+create_statistics_struct!(
+    ExtendedPropagationStatistics {
+        /// Records the number of calls to the extended nogood propagation algorithm.
+        num_extended_propagation_calls: usize,
+        /// Records the number of variables propagated by extended nogood propagation.
+        num_variables_propagated: usize,
+        /// Records the number of lower-bounds propagated by extended nogood propagation.
+        num_extended_lower_bound_propagations: usize,
+        /// Records the number of upper-bounds propagated by extended nogood propagation.
+        num_extended_upper_bound_propagations: usize,
+        /// Records the number of disequalities propagated by extended nogood propagation.
+        num_extended_disequality_propagations: usize,
+        /// The average number of [`Predicate`]s describing the propagated domain when performing
+        /// extended nogood propagation.
+        average_num_predicates_describing_domain_when_propagating_extended: CumulativeMovingAverage<usize>
+    }
+);
 
 /// The information necessary to calculate the explanation for a propagation.
 #[bitfield(u64)]
@@ -293,7 +299,15 @@ impl Propagator for NogoodPropagator {
     }
 
     fn log_statistics(&self, statistic_logger: StatisticLogger) {
-        self.statistics.log(statistic_logger);
+        self.statistics
+            .num_unit_propagations
+            .log(statistic_logger.clone());
+
+        if self.propagation_mode == PropagationMode::ExtendedNogoodPropagation {
+            self.statistics
+                .extended_propagation_statistics
+                .log(statistic_logger);
+        }
     }
 
     #[allow(
@@ -689,7 +703,9 @@ impl NogoodPropagator {
         statistics: &mut NogoodPropagatorStatistics,
         nogood_id: Option<NogoodId>,
     ) -> Result<(), Conflict> {
-        statistics.num_extended_propagation_calls += 1;
+        statistics
+            .extended_propagation_statistics
+            .num_extended_propagation_calls += 1;
 
         let (
             exceptions,
@@ -726,6 +742,7 @@ impl NogoodPropagator {
         }
 
         statistics
+            .extended_propagation_statistics
             .average_num_predicates_describing_domain_when_propagating_extended
             .add_term(num_describing_domain);
 
@@ -845,7 +862,9 @@ impl NogoodPropagator {
                 // last two are    satisfied; then the fact that [x != 7] is true,
                 // does not matter for    the propagation of [x <= 10] to hold, but
                 // [x != 15] is required in the    explanation
-                statistics.num_extended_upper_bound_propagations += 1;
+                statistics
+                    .extended_propagation_statistics
+                    .num_extended_upper_bound_propagations += 1;
                 let reason = if let Some(nogood_id) = nogood_id {
                     Reason::DynamicLazy(
                         LazyNogoodExplanation::new()
@@ -876,7 +895,9 @@ impl NogoodPropagator {
                 let result = context.post(predicate!(propagated_domain <= ub), reason);
 
                 if result.is_err() {
-                    statistics.num_variables_propagated += 1;
+                    statistics
+                        .extended_propagation_statistics
+                        .num_variables_propagated += 1;
                 }
                 result?
             }
@@ -910,7 +931,9 @@ impl NogoodPropagator {
                 //    last two are satisfied; then the fact that [x != 10] is true,
                 //    does not matter for the propagation of [x >= 7] to hold, but
                 //    [x != 5] is required in the explanation
-                statistics.num_extended_lower_bound_propagations += 1;
+                statistics
+                    .extended_propagation_statistics
+                    .num_extended_lower_bound_propagations += 1;
                 let reason = if let Some(nogood_id) = nogood_id {
                     Reason::DynamicLazy(
                         LazyNogoodExplanation::new()
@@ -941,7 +964,9 @@ impl NogoodPropagator {
                 let result = context.post(predicate!(propagated_domain >= lb), reason);
 
                 if result.is_err() {
-                    statistics.num_variables_propagated += 1;
+                    statistics
+                        .extended_propagation_statistics
+                        .num_variables_propagated += 1;
                 }
                 result?
             }
@@ -994,7 +1019,9 @@ impl NogoodPropagator {
                 && context.contains(&propagated_domain, value_in_domain)
             {
                 propagated = true;
-                statistics.num_extended_disequality_propagations += 1;
+                statistics
+                    .extended_propagation_statistics
+                    .num_extended_disequality_propagations += 1;
                 let reason = if let Some(nogood_id) = nogood_id {
                     Reason::DynamicLazy(
                         LazyNogoodExplanation::new()
@@ -1018,14 +1045,18 @@ impl NogoodPropagator {
                 };
                 let result = context.post(predicate!(propagated_domain != value_in_domain), reason);
                 if result.is_err() {
-                    statistics.num_variables_propagated += 1;
+                    statistics
+                        .extended_propagation_statistics
+                        .num_variables_propagated += 1;
                 }
                 result?
             }
         }
 
         if propagated {
-            statistics.num_variables_propagated += 1;
+            statistics
+                .extended_propagation_statistics
+                .num_variables_propagated += 1;
         }
 
         Ok(())

@@ -39,7 +39,7 @@ use pumpkin_core::variables::DomainId;
 #[derive(Debug, Clone, Default)]
 pub(crate) struct IterativeMinimiser {
     /// Keeps track of the domains induced by the current working nogood.
-    state: KeyedVec<DomainId, IterativeDomain>,
+    state: IterativeDomain,
     /// Keeps track of the predicates for each [`DomainId`] in the current nogood.
     domains: KeyedVec<DomainId, Vec<Predicate>>,
     /// For proof logging; keeps track of the predicates which are true at checkpoint 0.
@@ -191,7 +191,6 @@ impl IterativeMinimiser {
     pub(crate) fn clear(&mut self) {
         self.domains.clear();
         self.root_predicates.clear();
-        self.state = Default::default();
     }
 
     pub(crate) fn log_statistics(&self, statistic_logger: StatisticLogger) {
@@ -217,6 +216,7 @@ impl IterativeMinimiser {
         context: &ConflictAnalysisContext,
     ) {
         let domain = predicate.get_domain();
+
         self.domains.accomodate(domain, Default::default());
         self.domains[domain].push(predicate);
 
@@ -288,17 +288,16 @@ impl IterativeMinimiser {
         if domain.index() >= self.domains.len() || self.domains[domain].is_empty() {
             return ProcessingResult::NotRedundant;
         }
-        self.domains.accomodate(domain, Default::default());
 
-        self.state.accomodate(domain, Default::default());
-        self.state[domain].reset();
+        self.state.reset();
+
         for predicate in self.domains[predicate.get_domain()].iter() {
-            let consistent = self.state[domain].apply(predicate);
+            let consistent = self.state.apply(predicate);
             assert!(consistent)
         }
 
-        let lower_bound = self.state[domain].lb;
-        let upper_bound = self.state[domain].ub;
+        let lower_bound = self.state.lb;
+        let upper_bound = self.state.ub;
 
         // If the domain is assigned, then the added predicate is redundant.
         //

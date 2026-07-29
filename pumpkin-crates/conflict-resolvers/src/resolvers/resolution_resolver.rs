@@ -130,7 +130,7 @@ impl ConflictResolver for ResolutionResolver {
         if self.mode.uses_cpip() {
             self.statistics
                 .cpip_statistics
-                .log(statistic_logger.clone());
+                .log(statistic_logger.attach_to_prefix("IterativeMinimisation"));
         }
 
         self.semantic_minimiser
