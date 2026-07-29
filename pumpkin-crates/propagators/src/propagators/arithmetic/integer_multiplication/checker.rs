@@ -52,7 +52,7 @@ where
             Some(atomic) if self.c.does_atomic_constrain_self(atomic) => check_c(),
             Some(atomic) if self.a.does_atomic_constrain_self(atomic) => check_a(),
             Some(atomic) if self.b.does_atomic_constrain_self(atomic) => check_b(),
-            Some(_) => false,
+            Some(_) => unreachable!(),
             None => check_c() || check_a() || check_b(),
         }
     }

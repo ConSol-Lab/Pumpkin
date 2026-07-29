@@ -1,5 +1,6 @@
 use pumpkin_checking::IntExt;
 use pumpkin_core::predicate;
+use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::ExplanationContext;
 use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::Priority;
@@ -9,20 +10,19 @@ use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
+use crate::arithmetic::integer_multiplication::explainer::MultiplicationPropagation;
+use crate::arithmetic::integer_multiplication::explainer::PropagatedBound;
+
 use super::explainer::IntegerMultiplicationExplainer;
-use super::shared::MultiplicationPropagation;
-use super::shared::PropagatedBound;
 use super::shared::compute_quotient_bound_ext;
 use super::shared::product_bound_ext;
 
-/// A propagator for maintaining the constraint `a * b = c`.
+/// A bounds(R)-consistent propagator for maintaining the constraint `a * b = c`.
 ///
-/// The propagator is bounds(R)-consistent, following Schulte & Stuckey, "When Do Bounds and
-/// Domain Propagation Lead to the Same Search Space?" (ACM TOPLAS 27(3), 2005), §2.3.
+/// # Bibliography
 ///
-/// Explanations are computed lazily (see [`Propagator::lazy_explanation`]) by an internal
-/// `IntegerMultiplicationExplainer`, which minimizes each reason on demand: a domain bound is
-/// only cited if it is actually necessary to justify the propagated value.
+/// \[1\] C. Schulte & P. Stuckey, When Do Bounds and Domain Propagation Lead to the Same Search
+/// Space? ACM Transactions of Programming Languages. 2025.
 #[derive(Clone, Debug)]
 pub struct IntegerMultiplicationPropagator<VA, VB, VC> {
     a: VA,
@@ -32,7 +32,9 @@ pub struct IntegerMultiplicationPropagator<VA, VB, VC> {
 }
 
 impl<VA, VB, VC> IntegerMultiplicationPropagator<VA, VB, VC> {
-    pub(super) fn new(a: VA, b: VB, c: VC, explainer: IntegerMultiplicationExplainer) -> Self {
+    pub(super) fn new(a: VA, b: VB, c: VC, inference_code: InferenceCode) -> Self {
+        let explainer = IntegerMultiplicationExplainer::new(inference_code);
+
         IntegerMultiplicationPropagator { a, b, c, explainer }
     }
 }
@@ -77,6 +79,9 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     let c_max = context.upper_bound(c) as i64;
 
     // c = a * b
+    //
+    // c \in [inf E .. sup E] where
+    // E = {inf a * inf b, inf a * sup b, sup a * inf b, sup a * sup b}
     let (c_lo, c_hi) = product_bound(a_min, a_max, b_min, b_max);
     let c_lo = saturate_i64_to_i32(c_lo);
     let c_hi = saturate_i64_to_i32(c_hi);
@@ -206,7 +211,7 @@ mod tests {
     use pumpkin_core::state::State;
     use pumpkin_core::variables::TransformableVariable;
 
-    use super::super::IntegerMultiplicationArgs;
+    use super::super::IntegerMultiplicationConstructor;
     use crate::StateExt;
 
     fn reason_for(state: &mut State, predicate: Predicate) -> PropositionalConjunction {
@@ -222,7 +227,7 @@ mod tests {
         c: pumpkin_core::variables::DomainId,
     ) {
         let constraint_tag = state.new_constraint_tag();
-        let _ = state.add_propagator(IntegerMultiplicationArgs {
+        let _ = state.add_propagator(IntegerMultiplicationConstructor {
             a,
             b,
             c,
@@ -267,7 +272,7 @@ mod tests {
         let c = c_underlying.scaled(-1);
 
         let constraint_tag = state.new_constraint_tag();
-        let _ = state.add_propagator(IntegerMultiplicationArgs {
+        let _ = state.add_propagator(IntegerMultiplicationConstructor {
             a,
             b,
             c,

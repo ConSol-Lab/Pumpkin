@@ -1,3 +1,6 @@
+#![allow(clippy::double_parens, reason = "originates inside the bitfield macro")]
+
+use bitfield_struct::bitfield;
 use pumpkin_checking::IntExt;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
@@ -7,21 +10,17 @@ use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::variables::IntegerVariable;
 
-use super::shared::MultiplicationPropagation;
-use super::shared::PropagatedBound;
 use super::shared::compute_quotient_bound_ext;
 use super::shared::product_bound_ext;
 
 /// Builds the lazy explanation for a propagation performed by
 /// [`super::propagator::IntegerMultiplicationPropagator`], minimizing which domain bounds are
-/// actually cited in the resulting reason.
+/// actually needed in the resulting reason.
 #[derive(Clone, Debug)]
 pub(super) struct IntegerMultiplicationExplainer {
     inference_code: InferenceCode,
     /// A re-usable buffer holding the explanation of the most recently explained propagation, at
     /// most four predicates.
-    // Owned here, rather than a local in `explain`, because that method returns a slice borrowed
-    // from it.
     reason_buffer: Vec<Predicate>,
 }
 
@@ -44,7 +43,6 @@ impl IntegerMultiplicationExplainer {
         c: &VC,
     ) -> LazyExplanation<'_> {
         let bound = payload.bound();
-        let target = payload.value() as i64;
 
         let trail_position = context.get_trail_position();
         let a_min = context.lower_bound_at_trail_position(a, trail_position);
@@ -55,41 +53,39 @@ impl IntegerMultiplicationExplainer {
         let c_max = context.upper_bound_at_trail_position(c, trail_position);
 
         self.reason_buffer.clear();
+
         match bound {
             PropagatedBound::CLower | PropagatedBound::CUpper => minimize_reason(
                 &mut self.reason_buffer,
                 [
-                    CitableBound::lower(predicate![a >= a_min], a_min as i64),
-                    CitableBound::upper(predicate![a <= a_max], a_max as i64),
-                    CitableBound::lower(predicate![b >= b_min], b_min as i64),
-                    CitableBound::upper(predicate![b <= b_max], b_max as i64),
+                    PossiblyRedundantPredicate::lower(predicate![a >= a_min], a_min as i64),
+                    PossiblyRedundantPredicate::upper(predicate![a <= a_max], a_max as i64),
+                    PossiblyRedundantPredicate::lower(predicate![b >= b_min], b_min as i64),
+                    PossiblyRedundantPredicate::upper(predicate![b <= b_max], b_max as i64),
                 ],
-                target,
-                bound.is_lower(),
+                payload,
                 |a_min, a_max, b_min, b_max| Some(product_bound_ext(a_min, a_max, b_min, b_max)),
             ),
             PropagatedBound::ALower | PropagatedBound::AUpper => minimize_reason(
                 &mut self.reason_buffer,
                 [
-                    CitableBound::lower(predicate![c >= c_min], c_min as i64),
-                    CitableBound::upper(predicate![c <= c_max], c_max as i64),
-                    CitableBound::lower(predicate![b >= b_min], b_min as i64),
-                    CitableBound::upper(predicate![b <= b_max], b_max as i64),
+                    PossiblyRedundantPredicate::lower(predicate![c >= c_min], c_min as i64),
+                    PossiblyRedundantPredicate::upper(predicate![c <= c_max], c_max as i64),
+                    PossiblyRedundantPredicate::lower(predicate![b >= b_min], b_min as i64),
+                    PossiblyRedundantPredicate::upper(predicate![b <= b_max], b_max as i64),
                 ],
-                target,
-                bound.is_lower(),
+                payload,
                 compute_quotient_bound_ext,
             ),
             PropagatedBound::BLower | PropagatedBound::BUpper => minimize_reason(
                 &mut self.reason_buffer,
                 [
-                    CitableBound::lower(predicate![c >= c_min], c_min as i64),
-                    CitableBound::upper(predicate![c <= c_max], c_max as i64),
-                    CitableBound::lower(predicate![a >= a_min], a_min as i64),
-                    CitableBound::upper(predicate![a <= a_max], a_max as i64),
+                    PossiblyRedundantPredicate::lower(predicate![c >= c_min], c_min as i64),
+                    PossiblyRedundantPredicate::upper(predicate![c <= c_max], c_max as i64),
+                    PossiblyRedundantPredicate::lower(predicate![a >= a_min], a_min as i64),
+                    PossiblyRedundantPredicate::upper(predicate![a <= a_max], a_max as i64),
                 ],
-                target,
-                bound.is_lower(),
+                payload,
                 compute_quotient_bound_ext,
             ),
         }
@@ -101,18 +97,25 @@ impl IntegerMultiplicationExplainer {
     }
 }
 
-/// A domain bound that may be cited to justify a propagated value: the predicate that states it,
-/// and the value it relaxes to when [`minimize_reason`] tests whether it can be dropped instead.
-struct CitableBound {
+/// A domain bound that may be used to justify a propagated value.
+///
+/// Combines the predicate that states it, and the value it relaxes to when [`minimize_reason`]
+/// tests whether it can be dropped instead.
+struct PossiblyRedundantPredicate {
+    /// The predicate
     predicate: Predicate,
+    /// The value for this bound (may not match the RHS in the predicate due to views).
     exact: i64,
+    /// The value to relax to to test whether the predicate is redundant.
+    ///
+    /// This is either [`IntExt::NegativeInf`] or [`IntExt::PositiveInf`].
     relaxed: IntExt<i64>,
 }
 
-impl CitableBound {
+impl PossiblyRedundantPredicate {
     /// A lower bound `exact`, which relaxes to [`IntExt::NegativeInf`] when dropped.
     fn lower(predicate: Predicate, exact: i64) -> Self {
-        CitableBound {
+        PossiblyRedundantPredicate {
             predicate,
             exact,
             relaxed: IntExt::NegativeInf,
@@ -121,7 +124,7 @@ impl CitableBound {
 
     /// An upper bound `exact`, which relaxes to [`IntExt::PositiveInf`] when dropped.
     fn upper(predicate: Predicate, exact: i64) -> Self {
-        CitableBound {
+        PossiblyRedundantPredicate {
             predicate,
             exact,
             relaxed: IntExt::PositiveInf,
@@ -129,15 +132,14 @@ impl CitableBound {
     }
 }
 
-/// Greedily drops bounds from the initial "cite everything" reason for `bounds`, keeping the drop
-/// only if `bound_fn`, recomputed with the relaxed value, still justifies `target` (i.e. is still
-/// `>= target` when `is_lower`, or `<= target` otherwise). Appends the predicates of the bounds
-/// that remain necessary to `buffer`.
+/// Greedily drops bounds from the initial "use everything" reason for `bounds`.
+///
+/// In order, for each bound it is dropped if, when relaxing it, the `bound_fn` still justifies the
+/// propagation we are explaining. Every bound that is deemed necessary is appended to `buffer`.
 fn minimize_reason(
     buffer: &mut Vec<Predicate>,
-    bounds: [CitableBound; 4],
-    target: i64,
-    is_lower: bool,
+    bounds: [PossiblyRedundantPredicate; 4],
+    payload: MultiplicationPropagation,
     bound_fn: impl Fn(
         IntExt<i64>,
         IntExt<i64>,
@@ -145,41 +147,87 @@ fn minimize_reason(
         IntExt<i64>,
     ) -> Option<(IntExt<i64>, IntExt<i64>)>,
 ) {
-    let is_sufficient = |values: [IntExt<i64>; 4]| {
-        let value = match bound_fn(values[0], values[1], values[2], values[3]) {
-            Some((lo, _)) if is_lower => lo,
-            Some((_, hi)) => hi,
-            None if is_lower => IntExt::NegativeInf,
-            None => IntExt::PositiveInf,
-        };
-
-        if is_lower {
-            value >= IntExt::Int(target)
-        } else {
-            value <= IntExt::Int(target)
-        }
-    };
+    let is_lower = payload.bound().is_lower();
 
     let mut values = bounds.each_ref().map(|bound| IntExt::Int(bound.exact));
-    let mut kept = [true; 4];
 
-    // Relaxing a bound can only loosen the value `bound_fn` computes, so sufficiency is monotone
-    // in the cited set: a single greedy pass is enough to reach a sound, irredundant (no further
-    // bound can be dropped) reason, though not necessarily the smallest one possible.
+    // Iterate through the values, and determine which ones can be removed. Results in a subset
+    // minimal explanation, not a minimum explanation.
     for i in 0..4 {
         let exact = values[i];
         values[i] = bounds[i].relaxed;
-        if is_sufficient(values) {
-            kept[i] = false;
+
+        let propagated_value_with_relaxed_bound =
+            match bound_fn(values[0], values[1], values[2], values[3]) {
+                Some((lo, _)) if is_lower => lo,
+                Some((_, hi)) => hi,
+                None if is_lower => IntExt::NegativeInf,
+                None => IntExt::PositiveInf,
+            };
+
+        let propagates_weaker = if is_lower {
+            propagated_value_with_relaxed_bound >= IntExt::Int(payload.value() as i64)
         } else {
+            propagated_value_with_relaxed_bound <= IntExt::Int(payload.value() as i64)
+        };
+
+        if !propagates_weaker {
             values[i] = exact;
+            buffer.push(bounds[i].predicate);
         }
     }
+}
 
-    buffer.extend(
-        bounds
-            .into_iter()
-            .zip(kept)
-            .filter_map(|(bound, kept)| kept.then_some(bound.predicate)),
-    );
+/// Identifies which bound of which variable a lazily-explained propagation is for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub(super) enum PropagatedBound {
+    ALower = 0,
+    AUpper = 1,
+    BLower = 2,
+    BUpper = 3,
+    CLower = 4,
+    CUpper = 5,
+}
+
+impl PropagatedBound {
+    /// Whether this identifies a lower bound (`>=`) rather than an upper bound (`<=`).
+    pub(super) const fn is_lower(self) -> bool {
+        matches!(
+            self,
+            PropagatedBound::ALower | PropagatedBound::BLower | PropagatedBound::CLower
+        )
+    }
+
+    const fn into_bits(self) -> u8 {
+        self as _
+    }
+
+    const fn from_bits(value: u8) -> Self {
+        match value {
+            0 => PropagatedBound::ALower,
+            1 => PropagatedBound::AUpper,
+            2 => PropagatedBound::BLower,
+            3 => PropagatedBound::BUpper,
+            4 => PropagatedBound::CLower,
+            _ => PropagatedBound::CUpper,
+        }
+    }
+}
+
+/// The payload carried by a [`pumpkin_core::engine::cp::reason::Reason::DynamicLazy`] reason for
+/// the integer multiplication propagator: which propagation is being explained, and the value
+/// that was propagated.
+#[bitfield(u64)]
+pub(super) struct MultiplicationPropagation {
+    #[bits(8)]
+    pub(super) bound: PropagatedBound,
+    // The value has to be carried explicitly rather than read back off the trail predicate in
+    // `IntegerMultiplicationExplainer::explain`: `a`, `b`, `c` may be `AffineView`s, and the
+    // predicate that actually lands on the trail is stated in terms of the underlying `DomainId`,
+    // not the view's own logical space that the rest of this propagator reasons in — its
+    // right-hand side would generally not equal the value this propagator computed and posted.
+    pub(super) value: i32,
+    #[bits(24)]
+    __: u32,
 }
