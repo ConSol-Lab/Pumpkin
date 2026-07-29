@@ -1,12 +1,12 @@
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::proof::ConstraintTag;
-use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::checker::IntegerMultiplicationChecker;
@@ -37,18 +37,7 @@ where
 {
     type PropagatorImpl = IntegerMultiplicationPropagator<VA, VB, VC>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, IntegerMultiplication),
-            Box::new(IntegerMultiplicationChecker {
-                a: self.a.clone(),
-                b: self.b.clone(),
-                c: self.c.clone(),
-            }),
-        );
-    }
-
-    fn create(self, _: PropagatorConstructorContext) -> (EventsToRegister, Self::PropagatorImpl) {
+    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let IntegerMultiplicationConstructor {
             a,
             b,
@@ -62,9 +51,23 @@ where
             .add(&c, DomainEvents::BOUNDS, ID_C)
             .build();
 
-        let inference_code = InferenceCode::new(constraint_tag, IntegerMultiplication);
+        let mut checkers = RuntimeCheckers::builder();
+        let inference_code = checkers.add_inference_checker(
+            constraint_tag,
+            IntegerMultiplication,
+            IntegerMultiplicationChecker {
+                a: a.clone(),
+                b: b.clone(),
+                c: c.clone(),
+            },
+        );
+
         let propagator = IntegerMultiplicationPropagator::new(a, b, c, inference_code);
 
-        (registration, propagator)
+        PropagatorSpec {
+            registration,
+            checkers: checkers.build(),
+            propagator,
+        }
     }
 }

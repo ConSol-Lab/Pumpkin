@@ -10,12 +10,11 @@ use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
-use crate::arithmetic::integer_multiplication::explainer::MultiplicationPropagation;
-use crate::arithmetic::integer_multiplication::explainer::PropagatedBound;
-
 use super::explainer::IntegerMultiplicationExplainer;
 use super::shared::compute_quotient_bound_ext;
 use super::shared::product_bound_ext;
+use crate::arithmetic::integer_multiplication::explainer::MultiplicationPropagation;
+use crate::arithmetic::integer_multiplication::explainer::PropagatedBound;
 
 /// A bounds(R)-consistent propagator for maintaining the constraint `a * b = c`.
 ///

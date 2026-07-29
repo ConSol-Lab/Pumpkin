@@ -31,6 +31,7 @@ The solver currently supports integer variables and a number of (global) constra
 
 We are actively developing Pumpkin and would be happy to hear from you should you have any questions or feature requests!
 
+### :2nd_place_medal: :3rd_place_medal: Pumpkin won the silver medal in the fixed search track and the bronze medal in the free search track of the [2026 MiniZinc Challenge](https://www.minizinc.org/challenge/2026/results/)!
 ### :3rd_place_medal: Pumpkin won the bronze medal in the fixed search track of the [2025 MiniZinc Challenge](https://www.minizinc.org/challenge/2025/results/)!
 
 
