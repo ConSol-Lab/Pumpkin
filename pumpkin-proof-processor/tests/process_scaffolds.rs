@@ -28,7 +28,7 @@ accept_proof!(root_propagation_unsatisfiable, no_trimming);
 
 accept_proof!(rcpsp_00);
 
-accept_proof!(market_split_u3_01);
+accept_proof!(market_split_u3_01, no_trimming);
 accept_proof!(market_split_u3_02, no_trimming);
 accept_proof!(market_split_u3_03, no_trimming);
 accept_proof!(market_split_u3_04, no_trimming);

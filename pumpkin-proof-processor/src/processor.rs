@@ -420,11 +420,11 @@ impl ProofProcessor {
             self.state
                 .get_propagator_mut(posted_deduction.conflict_detection_handle)
                 .expect("All handles are valid")
-                .set_priority(Priority::High);
+                .set_priority(Priority::VeryLow);
             self.state
                 .get_propagator_mut(posted_deduction.unit_prop_handle)
                 .expect("All handles are valid")
-                .set_priority(Priority::High);
+                .set_priority(Priority::VeryLow);
         } else {
             // In this case we have to explain by 'root propagation' and no deductions
             // were used. The predicate is propagated by a propagator.
@@ -463,11 +463,11 @@ impl ProofProcessor {
         self.state
             .get_propagator_mut(posted_deduction.conflict_detection_handle)
             .expect("All handles are valid")
-            .set_priority(Priority::High);
+            .set_priority(Priority::VeryLow);
         self.state
             .get_propagator_mut(posted_deduction.unit_prop_handle)
             .expect("All handles are valid")
-            .set_priority(Priority::High);
+            .set_priority(Priority::VeryLow);
         let inferences = self.explain_current_conflict(&mut nogood_stack, conflict);
 
         // Log the empty clause to the proof.
@@ -668,11 +668,11 @@ impl ProofProcessor {
             self.state
                 .get_propagator_mut(posted_deduction.conflict_detection_handle)
                 .expect("All handles are valid")
-                .set_priority(Priority::High);
+                .set_priority(Priority::VeryLow);
             self.state
                 .get_propagator_mut(posted_deduction.unit_prop_handle)
                 .expect("All handles are valid")
-                .set_priority(Priority::High);
+                .set_priority(Priority::VeryLow);
         }
     }
 }

@@ -42,7 +42,6 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
             priority,
             conflict_detection,
         } = self;
-
         let ids = nogood
             .iter()
             .map(|&predicate| context.register_predicate(predicate))
@@ -153,5 +152,9 @@ impl Propagator for DeductionPropagator {
         }
 
         Ok(())
+    }
+
+    fn priority(&self) -> Priority {
+        self.propagation_priority
     }
 }
