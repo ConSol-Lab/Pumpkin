@@ -23,8 +23,8 @@ A unique feature of Pumpkin is that it can produce certificates of infeasibility
 
 </p>
 
-<h3 align="center">🥈🥉 Silver (fixed search) and bronze (free search) at the <a href="https://www.minizinc.org/challenge/2026/results/">2026 MiniZinc Challenge</a></h3>
-<h3 align="center">🥉 Bronze (fixed search) at the <a href="https://www.minizinc.org/challenge/2025/results/">2025 MiniZinc Challenge</a></h3>
+<p align="center"><strong>🥈🥉 Silver (fixed search) and bronze (free search) at the <a href="https://www.minizinc.org/challenge/2026/results/">2026 MiniZinc Challenge</a></strong></p>
+<p align="center"><strong>🥉 Bronze (fixed search) at the <a href="https://www.minizinc.org/challenge/2025/results/">2025 MiniZinc Challenge</a></strong></p>
 
 <br clear="left"/>
 
