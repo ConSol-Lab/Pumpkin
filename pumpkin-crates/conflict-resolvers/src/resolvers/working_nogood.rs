@@ -103,26 +103,24 @@ impl WorkingNogood {
     fn add_predicate_previous_checkpoint(
         &mut self,
         predicate: Predicate,
-        context: &ConflictAnalysisContext<'_>,
+        context: &mut ConflictAnalysisContext<'_>,
+        predicate_id_generator: &mut PredicateIdGenerator,
+        mode: AnalysisMode,
     ) {
         // We push it directly into a vector since we do not need to resolve upon it
         self.processed_nogood_predicates.push(predicate);
 
         // If we are performing iterative minimisation, then we also add it to the iterative
         // minimiser
-        if self.iterative_minimisation {
-            self.iterative_minimiser.apply_predicate(predicate, context);
-        }
-    }
-
-    /// Adds a predicate to the current working nogood which is from the root-level.
-    fn add_predicate_root_level(
-        &mut self,
-        predicate: Predicate,
-        context: &ConflictAnalysisContext<'_>,
-    ) {
-        // We do not add it to the nogood, but we add it to the iterative minimiser if it is used
-        if self.iterative_minimisation {
+        if self.iterative_minimisation
+            && !self.is_redundant(
+                predicate,
+                context,
+                predicate_id_generator.get_id(predicate),
+                predicate_id_generator,
+                mode,
+            )
+        {
             self.iterative_minimiser.apply_predicate(predicate, context);
         }
     }
@@ -238,8 +236,6 @@ impl WorkingNogood {
         // Ignore root level predicates.
         if dec_level == 0 {
             context.explain_root_assignment(predicate);
-
-            self.add_predicate_root_level(predicate, context);
         }
         // 1UIP
         // If the variables are from the current decision level then we want to potentially add
@@ -324,7 +320,12 @@ impl WorkingNogood {
         } else {
             // We do not check for duplicate, we simply add the predicate.
             // Semantic minimisation will later remove duplicates and do other processing.
-            self.add_predicate_previous_checkpoint(predicate, context);
+            self.add_predicate_previous_checkpoint(
+                predicate,
+                context,
+                predicate_id_generator,
+                mode,
+            );
         }
     }
 }
