@@ -187,7 +187,7 @@ impl AnalysisMode {
                     );
                     previous_predicate = Some(predicate);
 
-                    working_nogood.add_predicate_previous_checkpoint(
+                    working_nogood.add_asserting_predicate(
                         predicate,
                         context,
                         predicate_id_generator,
@@ -198,7 +198,7 @@ impl AnalysisMode {
             AnalysisMode::OneUIP | AnalysisMode::AllDecision => {
                 if working_nogood.num_current_checkpoint() > 0 {
                     let predicate = working_nogood.pop_max_predicate(predicate_id_generator, *self);
-                    working_nogood.add_predicate_previous_checkpoint(
+                    working_nogood.add_asserting_predicate(
                         predicate,
                         context,
                         predicate_id_generator,

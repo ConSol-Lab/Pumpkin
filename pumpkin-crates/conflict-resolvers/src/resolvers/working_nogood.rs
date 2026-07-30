@@ -1,3 +1,5 @@
+use pumpkin_core::asserts::pumpkin_assert_advanced;
+use pumpkin_core::asserts::pumpkin_assert_eq_simple;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
@@ -99,7 +101,7 @@ impl WorkingNogood {
     }
 
     /// Adds a predicate to the current working nogood which is from the current checkpoint.
-    pub(crate) fn add_predicate_previous_checkpoint(
+    fn add_predicate_previous_checkpoint(
         &mut self,
         predicate: Predicate,
         context: &mut ConflictAnalysisContext<'_>,
@@ -194,6 +196,33 @@ impl WorkingNogood {
         self.to_process_heap.keys()
     }
 
+    /// Adds an asserting predicate to the [`WorkingNogood`].
+    ///
+    /// **Note** - This can be called multiple times when using CPIP nogoods (see
+    /// [`AnalysisMode`]).
+    pub(crate) fn add_asserting_predicate(
+        &mut self,
+        predicate: Predicate,
+        context: &mut ConflictAnalysisContext<'_>,
+        predicate_id_generator: &mut PredicateIdGenerator,
+        mode: AnalysisMode,
+    ) {
+        // We push it directly into a vector since we do not need to resolve upon it
+        self.processed_nogood_predicates.push(predicate);
+
+        pumpkin_assert_advanced!(
+            !self.iterative_minimisation
+                || !self.is_redundant(
+                    predicate,
+                    context,
+                    predicate_id_generator.get_id(predicate),
+                    predicate_id_generator,
+                    mode
+                ),
+            "The asserting predicate should not be redundant"
+        );
+    }
+
     /// Returns the learned nogood from the [`WorkingNogood`], clearing its internal data
     /// structures.
     pub(crate) fn drain_learned_nogood(
@@ -204,6 +233,8 @@ impl WorkingNogood {
         context: &mut ConflictAnalysisContext,
     ) -> impl Iterator<Item = Predicate> {
         let num_removed = mode.remove_final_predicates(predicate_id_generator, self, context);
+
+        pumpkin_assert_eq_simple!(self.num_current_checkpoint(), 0);
 
         statistics
             .average_number_of_predicates_describing_domain_cpip
