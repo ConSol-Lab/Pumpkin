@@ -229,7 +229,7 @@ impl AnalysisMode {
     ///
     /// A helper is passed which contains how many times a [`DomainId`] appears in the current
     /// nogood.
-    pub(crate) fn add_predicate_to_nogood(
+    pub(crate) fn predicate_added_to_nogood(
         &self,
         predicate: Predicate,
         unique_variable_helper: &mut HashMap<DomainId, u32>,
@@ -251,7 +251,7 @@ impl AnalysisMode {
     ///
     /// A helper is passed which contains how many times a [`DomainId`] appears in the current
     /// nogood.
-    pub(crate) fn remove_predicate_from_nogood(
+    pub(crate) fn predicate_removed_from_nogood(
         &self,
         predicate: Predicate,
         unique_variable_helper: &mut HashMap<DomainId, u32>,

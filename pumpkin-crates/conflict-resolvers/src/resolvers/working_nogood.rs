@@ -89,7 +89,7 @@ impl WorkingNogood {
         self.to_process_heap.increment(predicate_id, heap_value);
 
         // We also update the unique variable helper structure
-        mode.add_predicate_to_nogood(predicate, &mut self.unique_variable_helper);
+        mode.predicate_added_to_nogood(predicate, &mut self.unique_variable_helper);
 
         // If we are performing iterative minimisation, then we also add it to the iterative
         // minimiser
@@ -135,7 +135,7 @@ impl WorkingNogood {
         // We first check whether the element is actually present in the heap
         if self.to_process_heap.is_key_present(predicate_id) {
             // If it is, then we update the unique variable helper structure
-            mode.remove_predicate_from_nogood(predicate, &mut self.unique_variable_helper);
+            mode.predicate_removed_from_nogood(predicate, &mut self.unique_variable_helper);
 
             // And we update the iterative minimiser if it is used
             if self.iterative_minimisation {
@@ -257,7 +257,7 @@ impl WorkingNogood {
         let next_predicate_id = self.to_process_heap.pop_max().unwrap();
         let predicate = predicate_id_generator.get_predicate(next_predicate_id);
 
-        mode.remove_predicate_from_nogood(predicate, &mut self.unique_variable_helper);
+        mode.predicate_removed_from_nogood(predicate, &mut self.unique_variable_helper);
 
         if self.iterative_minimisation {
             self.iterative_minimiser.remove_predicate(predicate);
