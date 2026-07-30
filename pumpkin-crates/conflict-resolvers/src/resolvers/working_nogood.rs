@@ -1,49 +1,49 @@
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
-use pumpkin_core::conflict_resolving::AnalysisMode;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::containers::HashMap;
 use pumpkin_core::containers::KeyValueHeap;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::create_statistics_struct;
-use pumpkin_core::predicates::Lbd;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateIdGenerator;
 use pumpkin_core::propagation::PredicateId;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::state::CurrentNogood;
 use pumpkin_core::statistics::Statistic;
 use pumpkin_core::statistics::StatisticLogger;
+use pumpkin_core::statistics::moving_averages::MovingAverage;
 use pumpkin_core::variables::DomainId;
 
 use crate::minimisers::IterativeMinimiser;
 use crate::minimisers::ProcessingResult;
+use crate::resolvers::AnalysisMode;
+use crate::resolvers::CpipStatistics;
 
 #[derive(Debug, Clone)]
 pub(crate) struct WorkingNogood {
     /// Heap containing the predicates which still need to be processed; sorted non-increasing
     /// based on trail-index where implied predicates are processed first.
-    pub(crate) to_process_heap: KeyValueHeap<PredicateId, u32>,
+    to_process_heap: KeyValueHeap<PredicateId, u32>,
     /// Predicates which have been processed and have been determined to be (potentially) part of
     /// the nogood.
     ///
     /// Note that this structure may contain duplicates which are removed at the end by semantic
     /// minimisation.
-    pub(crate) processed_nogood_predicates: Vec<Predicate>,
+    processed_nogood_predicates: Vec<Predicate>,
     /// A helper for keeping track of how many [`Predicate`]s concerning a specific [`DomainId`]
     /// are present in the working nogood.
     ///
     /// This is used when determining when to stop resolving when using CPIP learning (see
     /// [`AnalysisMode::CPIP`]).
-    pub(crate) unique_variable_helper: HashMap<DomainId, u32>,
+    unique_variable_helper: HashMap<DomainId, u32>,
     /// Whether to perform iterative minimisation.
     ///
     /// Iterative minimisation is semantic minimisation applied *while* resolving.
-    pub(crate) iterative_minimisation: bool,
+    iterative_minimisation: bool,
     /// The structure used for iterative minimisation.
-    pub(crate) iterative_minimiser: IterativeMinimiser,
-    pub(crate) iterative_minimisation_statistics: IterativeMinimisationStatistics,
-    /// Computes the LBD for nogoods.
-    lbd_helper: Lbd,
+    iterative_minimiser: IterativeMinimiser,
+    iterative_minimisation_statistics: IterativeMinimisationStatistics,
 }
 
 create_statistics_struct!(IterativeMinimisationStatistics {
@@ -64,7 +64,6 @@ impl WorkingNogood {
             iterative_minimisation,
             iterative_minimiser: Default::default(),
             iterative_minimisation_statistics: Default::default(),
-            lbd_helper: Default::default(),
         }
     }
 }
@@ -175,6 +174,71 @@ impl WorkingNogood {
 
 /// Methods for interacting with the working nogood.
 impl WorkingNogood {
+    /// Returns the number of elements in the [`WorkingNogood`] from the current checkpoint.
+    pub(crate) fn num_current_checkpoint(&self) -> usize {
+        self.to_process_heap.num_nonremoved_elements()
+    }
+
+    /// Returns the number of elements in the [`WorkingNogood`] from a previous checkpoint.
+    pub(crate) fn num_previous_checkpoint(&self) -> usize {
+        self.processed_nogood_predicates.len()
+    }
+
+    /// Returns the number of unique variables in the [`WorkingNogood`] from the current checkpoint.
+    pub(crate) fn num_unique_variables_current_checkpoint(&self) -> usize {
+        self.unique_variable_helper.len()
+    }
+
+    /// Returns the [`PredicateId`]s in the [`WorkingNogood`] from the current_checkpoint.
+    pub(crate) fn predicate_ids_current_checkpoint(&self) -> impl Iterator<Item = PredicateId> {
+        self.to_process_heap.keys()
+    }
+
+    /// Returns the learned nogood from the [`WorkingNogood`], clearing its internal data
+    /// structures.
+    pub(crate) fn drain_learned_nogood(
+        &mut self,
+        predicate_id_generator: &mut PredicateIdGenerator,
+        mode: AnalysisMode,
+        statistics: &mut CpipStatistics,
+    ) -> impl Iterator<Item = Predicate> {
+        let num_removed = mode.remove_final_predicates(
+            &mut self.to_process_heap,
+            predicate_id_generator,
+            &mut self.processed_nogood_predicates,
+        );
+
+        statistics
+            .average_number_of_predicates_describing_domain_cpip
+            .add_term(num_removed);
+        if num_removed == 1 {
+            statistics.num_regular_nogood_learned += 1;
+        } else {
+            statistics.num_cpip_nogood_learned += 1;
+        }
+
+        // Next, we clear the internal structures so that it can be used again.
+        self.to_process_heap.clear();
+        if self.iterative_minimisation {
+            self.iterative_minimiser.clear();
+        }
+        self.unique_variable_helper.clear();
+
+        self.processed_nogood_predicates.drain(..)
+    }
+
+    /// Returns a [`CurrentNogood`] based on the [`WorkingNogood`].
+    pub(crate) fn get_current_nogood<'a>(
+        &'a self,
+        predicate_id_generator: &'a PredicateIdGenerator,
+    ) -> CurrentNogood<'a> {
+        CurrentNogood::new(
+            &self.to_process_heap,
+            &self.processed_nogood_predicates,
+            predicate_id_generator,
+        )
+    }
+
     pub(crate) fn log_statistics(&self, statistic_logger: StatisticLogger) {
         if self.iterative_minimisation {
             self.iterative_minimisation_statistics
@@ -184,19 +248,8 @@ impl WorkingNogood {
         }
     }
 
-    pub(crate) fn clean_up(&mut self) {
-        self.processed_nogood_predicates.clear();
-        self.to_process_heap.clear();
-
-        // TODO: make more efficient
-        if self.iterative_minimisation {
-            self.iterative_minimiser.clear();
-        }
-        self.unique_variable_helper.clear();
-    }
-
     /// Returns the next [`Predicate`] to resolve upon based on the trail.
-    pub(crate) fn pop_predicate_from_conflict_nogood(
+    pub(crate) fn pop_max_predicate(
         &mut self,
         predicate_id_generator: &mut PredicateIdGenerator,
         mode: AnalysisMode,
@@ -568,12 +621,6 @@ impl WorkingNogood {
 
         // Next, we add the `new_predicate` to the nogood.
         self.add_predicate_to_conflict_nogood(new_predicate, mode, context, predicate_id_generator);
-    }
-
-    /// Calculates the literal block distance (LBD) of the nogood.
-    pub(crate) fn lbd(&mut self, context: &mut ConflictAnalysisContext<'_>) -> u32 {
-        self.lbd_helper
-            .compute_lbd(&self.processed_nogood_predicates, context)
     }
 }
 

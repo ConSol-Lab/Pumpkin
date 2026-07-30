@@ -1,18 +1,19 @@
 use std::collections::hash_map::Entry;
 
 use itertools::Itertools;
+use pumpkin_core::asserts::pumpkin_assert_moderate;
+use pumpkin_core::asserts::pumpkin_assert_simple;
+use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
+use pumpkin_core::containers::HashMap;
+use pumpkin_core::containers::KeyValueHeap;
+use pumpkin_core::predicates::Predicate;
+use pumpkin_core::predicates::PredicateIdGenerator;
+use pumpkin_core::predicates::PredicateType;
+use pumpkin_core::propagation::PredicateId;
+use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::variables::DomainId;
 
-use crate::basic_types::PredicateId;
-use crate::conflict_resolving::ConflictAnalysisContext;
-use crate::containers::HashMap;
-use crate::containers::KeyValueHeap;
-use crate::predicates::Predicate;
-use crate::predicates::PredicateIdGenerator;
-use crate::predicates::PredicateType;
-use crate::propagation::ReadDomains;
-use crate::pumpkin_assert_moderate;
-use crate::pumpkin_assert_simple;
-use crate::variables::DomainId;
+use crate::resolvers::WorkingNogood;
 
 /// Determines the different type of resolution-based analysis modes that are supported.
 #[derive(Debug, Clone, Copy)]
@@ -50,7 +51,7 @@ impl AnalysisMode {
     /// be processed further.
     ///
     /// If false is returned, then the provided [`Predicate`] is added directly to the nogood.
-    pub fn predicate_should_be_processed(
+    pub(crate) fn predicate_should_be_processed(
         &self,
         predicate: Predicate,
         decision_level: usize,
@@ -70,25 +71,24 @@ impl AnalysisMode {
     }
 
     /// Returns whether to continue resolving.
-    pub fn should_continue_resolving(
+    pub(crate) fn should_continue_resolving(
         &self,
-        to_process_heap: &KeyValueHeap<PredicateId, u32>,
         predicate_id_generator: &mut PredicateIdGenerator,
-        unique_variable_helper: &mut HashMap<DomainId, u32>,
+        working_nogood: &WorkingNogood,
     ) -> bool {
         match self {
             AnalysisMode::OneUIP => {
                 // We wait until there is only a single element from the current decision level
                 // left.
-                to_process_heap.num_nonremoved_elements() > 1
+                working_nogood.num_current_checkpoint() > 1
             }
             AnalysisMode::AllDecision => {
                 // We wait until there are only decisions left.
-                to_process_heap.num_nonremoved_elements() > 0
+                working_nogood.num_current_checkpoint() > 0
             }
             AnalysisMode::CPIP => {
                 // We wait until there are only elements over a single variable left.
-                unique_variable_helper.len() > 1
+                working_nogood.num_unique_variables_current_checkpoint() > 1
             }
             AnalysisMode::BoundsCPIP => {
                 // We wait until extended nogood propagation can propagate a bound.
@@ -100,8 +100,8 @@ impl AnalysisMode {
                 // - There are only holes present
                 // - There is an equality present (would necessarily lead to a single predicate due
                 //   to semantic minimisation)
-                let present_domain_ids = to_process_heap
-                    .keys()
+                let present_domain_ids = working_nogood
+                    .predicate_ids_current_checkpoint()
                     .map(|predicate_id| {
                         predicate_id_generator
                             .get_predicate(predicate_id)
@@ -118,7 +118,7 @@ impl AnalysisMode {
                     // propagation can take place.
                     let (mut lower_bounds, mut upper_bounds, mut _disequalities, mut equalities) =
                         (0, 0, 0, 0);
-                    for predicate_id in to_process_heap.keys() {
+                    for predicate_id in working_nogood.predicate_ids_current_checkpoint() {
                         let predicate = predicate_id_generator.get_predicate(predicate_id);
                         match predicate.get_predicate_type() {
                             PredicateType::LowerBound => lower_bounds += 1,
@@ -148,7 +148,7 @@ impl AnalysisMode {
     /// [`AnalysisMode::should_continue_resolving`] returned false (e.g., when finding the 1UIP, the
     /// `to_process_heap` will contain the asserting predicate) and returns the number of
     /// elements which were left in the `to_process_heap`.
-    pub fn remove_final_predicates(
+    pub(crate) fn remove_final_predicates(
         &self,
         to_process_heap: &mut KeyValueHeap<PredicateId, u32>,
         predicate_id_generator: &mut PredicateIdGenerator,
@@ -212,7 +212,7 @@ impl AnalysisMode {
 
     /// Removes the element with the highest value from `to_process_heap` and returns the
     /// corresponding [`Predicate`].
-    pub fn pop_predicate_from_conflict_nogood(
+    pub(crate) fn pop_predicate_from_conflict_nogood(
         to_process_heap: &mut KeyValueHeap<PredicateId, u32>,
         predicate_id_generator: &mut PredicateIdGenerator,
     ) -> Predicate {
@@ -221,7 +221,7 @@ impl AnalysisMode {
     }
 
     /// Whether the analysis mode learns CPIP nogoods.
-    pub fn uses_cpip(&self) -> bool {
+    pub(crate) fn uses_cpip(&self) -> bool {
         matches!(self, AnalysisMode::CPIP | AnalysisMode::BoundsCPIP)
     }
 
@@ -229,7 +229,7 @@ impl AnalysisMode {
     ///
     /// A helper is passed which contains how many times a [`DomainId`] appears in the current
     /// nogood.
-    pub fn add_predicate_to_nogood(
+    pub(crate) fn add_predicate_to_nogood(
         &self,
         predicate: Predicate,
         unique_variable_helper: &mut HashMap<DomainId, u32>,
@@ -251,7 +251,7 @@ impl AnalysisMode {
     ///
     /// A helper is passed which contains how many times a [`DomainId`] appears in the current
     /// nogood.
-    pub fn remove_predicate_from_nogood(
+    pub(crate) fn remove_predicate_from_nogood(
         &self,
         predicate: Predicate,
         unique_variable_helper: &mut HashMap<DomainId, u32>,

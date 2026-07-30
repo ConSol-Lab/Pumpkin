@@ -1,12 +1,11 @@
 use pumpkin_core::asserts::pumpkin_assert_advanced;
-use pumpkin_core::conflict_resolving::AnalysisMode;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_core::create_statistics_struct;
+use pumpkin_core::predicates::Lbd;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateIdGenerator;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::state::CurrentNogood;
 use pumpkin_core::statistics::Statistic;
 use pumpkin_core::statistics::StatisticLogger;
 use pumpkin_core::statistics::moving_averages::CumulativeMovingAverage;
@@ -16,6 +15,7 @@ use crate::minimisers::NogoodMinimiser;
 use crate::minimisers::RecursiveMinimiser;
 use crate::minimisers::SemanticMinimisationMode;
 use crate::minimisers::SemanticMinimiser;
+use crate::resolvers::AnalysisMode;
 use crate::resolvers::WorkingNogood;
 
 /// [`ConflictResolver`] which resolves conflicts according to the CDCL procedure.
@@ -46,6 +46,8 @@ pub struct ResolutionResolver {
     /// A minimiser which determines whether a predicate is redundant in the nogood based on its
     /// semantic meaning.
     semantic_minimiser: SemanticMinimiser,
+    /// Computes the LBD for nogoods.
+    lbd_helper: Lbd,
 
     /// The statistics of the learned nogoods.
     statistics: LearnedNogoodStatistics,
@@ -94,9 +96,9 @@ create_statistics_struct!(CpipStatistics {
 
 impl ConflictResolver for ResolutionResolver {
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) {
-        self.learn_nogood(context);
+        let learned_nogood = self.learn_nogood(context);
 
-        let lbd = self.working_nogood.lbd(context);
+        let lbd = self.lbd_helper.compute_lbd(&learned_nogood, context);
 
         // Update statistics
         self.statistics
@@ -104,17 +106,14 @@ impl ConflictResolver for ResolutionResolver {
             .average_lbd
             .add_term(lbd as u64);
         self.statistics.nogood_statistics.num_unit_nogoods_learned +=
-            (self.working_nogood.processed_nogood_predicates.len() == 1) as u64;
+            (learned_nogood.len() == 1) as u64;
         self.statistics
             .nogood_statistics
             .average_learned_nogood_length
-            .add_term(self.working_nogood.processed_nogood_predicates.len() as u64);
+            .add_term(learned_nogood.len() as u64);
 
-        let backtrack_level = context.process_learned_nogood(
-            self.working_nogood.processed_nogood_predicates.clone(),
-            lbd,
-            self.mode.uses_cpip(),
-        );
+        let backtrack_level =
+            context.process_learned_nogood(learned_nogood, lbd, self.mode.uses_cpip());
 
         self.statistics
             .nogood_statistics
@@ -150,10 +149,11 @@ impl ResolutionResolver {
             statistics: Default::default(),
             should_minimise,
             working_nogood: WorkingNogood::new(iterative_minimisation),
+            lbd_helper: Default::default(),
         }
     }
 
-    pub(crate) fn learn_nogood(&mut self, context: &mut ConflictAnalysisContext) {
+    pub(crate) fn learn_nogood(&mut self, context: &mut ConflictAnalysisContext) -> Vec<Predicate> {
         self.clean_up();
 
         let conflict_nogood = context.get_conflict_nogood();
@@ -169,15 +169,13 @@ impl ResolutionResolver {
         }
 
         // Record conflict nogood size statistics.
-        let num_initial_conflict_predicates = self
-            .working_nogood
-            .to_process_heap
-            .num_nonremoved_elements()
-            + self.working_nogood.processed_nogood_predicates.len();
         self.statistics
             .nogood_statistics
             .average_conflict_size
-            .add_term(num_initial_conflict_predicates as u64);
+            .add_term(
+                (self.working_nogood.num_current_checkpoint()
+                    + self.working_nogood.num_previous_checkpoint()) as u64,
+            );
 
         // In the case of 1UIP
         // Keep refining the conflict nogood until there is only one predicate from the current
@@ -190,29 +188,25 @@ impl ResolutionResolver {
         // When posting the decision [x = v], it gets decomposed into two decisions ([x >= v] & [x
         // <= v]). In this case there will be two predicates left from the current decision
         // level, and both will be decisions. This is accounted for below.
-        while self.mode.should_continue_resolving(
-            &self.working_nogood.to_process_heap,
-            &mut self.predicate_id_generator,
-            &mut self.working_nogood.unique_variable_helper,
-        ) {
+        while self
+            .mode
+            .should_continue_resolving(&mut self.predicate_id_generator, &self.working_nogood)
+        {
             // Replace the predicate from the nogood that has been assigned last on the trail.
             //
             // This is done in two steps:
             // 1) Pop the predicate last assigned on the trail from the nogood.
             let next_predicate = self
                 .working_nogood
-                .pop_predicate_from_conflict_nogood(&mut self.predicate_id_generator, self.mode);
+                .pop_max_predicate(&mut self.predicate_id_generator, self.mode);
 
             // 2) Get the reason for the predicate and add it to the nogood.
             self.reason_buffer.clear();
 
             let _ = context.get_propagation_reason(
                 next_predicate,
-                CurrentNogood::new(
-                    &self.working_nogood.to_process_heap,
-                    &self.working_nogood.processed_nogood_predicates,
-                    &self.predicate_id_generator,
-                ),
+                self.working_nogood
+                    .get_current_nogood(&self.predicate_id_generator),
                 &mut self.reason_buffer,
             );
 
@@ -226,31 +220,23 @@ impl ResolutionResolver {
             }
         }
 
-        self.extract_final_nogood(context);
+        self.extract_final_nogood(context)
     }
 
-    fn extract_final_nogood(&mut self, context: &mut ConflictAnalysisContext) {
+    fn extract_final_nogood(&mut self, context: &mut ConflictAnalysisContext) -> Vec<Predicate> {
         // The final nogood is composed of the predicates encountered from the lower decision
         // levels, plus the predicate(s) remaining in the heap.
 
         // Depending on what mode we are in, we first remove the elements which are remaining in
         // the heap.
-        let num_removed = self.mode.remove_final_predicates(
-            &mut self.working_nogood.to_process_heap,
-            &mut self.predicate_id_generator,
-            &mut self.working_nogood.processed_nogood_predicates,
-        );
-
-        self.statistics
-            .cpip_statistics
-            .average_number_of_predicates_describing_domain_cpip
-            .add_term(num_removed);
-
-        if num_removed == 1 {
-            self.statistics.cpip_statistics.num_regular_nogood_learned += 1;
-        } else {
-            self.statistics.cpip_statistics.num_cpip_nogood_learned += 1;
-        }
+        let mut learned_nogood = self
+            .working_nogood
+            .drain_learned_nogood(
+                &mut self.predicate_id_generator,
+                self.mode,
+                &mut self.statistics.cpip_statistics,
+            )
+            .collect::<Vec<_>>();
 
         // First we minimise the nogood using semantic minimisation to remove duplicates but we
         // avoid equality merging (since some of these literals could potentailly be removed by
@@ -263,52 +249,45 @@ impl ResolutionResolver {
         } else {
             SemanticMinimisationMode::DisableEqualityMerging
         });
-        self.semantic_minimiser.minimise(
-            context,
-            &mut self.working_nogood.processed_nogood_predicates,
-        );
+        self.semantic_minimiser
+            .minimise(context, &mut learned_nogood);
 
         if self.should_minimise {
             // Then we perform recursive minimisation to remove the dominated predicates
-            self.recursive_minimiser.minimise(
-                context,
-                &mut self.working_nogood.processed_nogood_predicates,
-            );
+            self.recursive_minimiser
+                .minimise(context, &mut learned_nogood);
 
             // We perform a final semantic minimisation call which allows the merging of the
             // equality predicates which remain in the nogood
             self.semantic_minimiser
                 .set_mode(SemanticMinimisationMode::EnableEqualityMerging);
-            self.semantic_minimiser.minimise(
-                context,
-                &mut self.working_nogood.processed_nogood_predicates,
-            );
+            self.semantic_minimiser
+                .minimise(context, &mut learned_nogood);
         }
 
         pumpkin_assert_advanced!(
-            self.working_nogood
-                .processed_nogood_predicates
+            learned_nogood
                 .iter()
                 .filter(|p| context.evaluate_predicate(**p) == Some(true))
                 .count()
-                >= self.working_nogood.processed_nogood_predicates.len() - 1,
+                >= learned_nogood.len() - 1,
             "Not all predicates evaluated to true: {:?}",
-            self.working_nogood
-                .processed_nogood_predicates
+            learned_nogood
                 .iter()
                 .filter(|p| context.evaluate_predicate(**p) != Some(true))
                 .collect::<Vec<_>>()
         );
 
         // TODO: asserting predicate may be bumped twice, probably not a problem.
-        for predicate in self.working_nogood.processed_nogood_predicates.iter() {
+        for predicate in learned_nogood.iter() {
             context.predicate_appeared_in_conflict(*predicate);
         }
+
+        learned_nogood
     }
 
     /// Clears all data structures to prepare for the new conflict analysis.
     fn clean_up(&mut self) {
         self.predicate_id_generator.clear();
-        self.working_nogood.clean_up();
     }
 }
