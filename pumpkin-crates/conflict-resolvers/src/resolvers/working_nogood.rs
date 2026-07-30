@@ -99,7 +99,7 @@ impl WorkingNogood {
     }
 
     /// Adds a predicate to the current working nogood which is from the current checkpoint.
-    fn add_predicate_previous_checkpoint(
+    pub(crate) fn add_predicate_previous_checkpoint(
         &mut self,
         predicate: Predicate,
         context: &mut ConflictAnalysisContext<'_>,
@@ -201,12 +201,9 @@ impl WorkingNogood {
         predicate_id_generator: &mut PredicateIdGenerator,
         mode: AnalysisMode,
         statistics: &mut CpipStatistics,
+        context: &mut ConflictAnalysisContext,
     ) -> impl Iterator<Item = Predicate> {
-        let num_removed = mode.remove_final_predicates(
-            &mut self.to_process_heap,
-            predicate_id_generator,
-            &mut self.processed_nogood_predicates,
-        );
+        let num_removed = mode.remove_final_predicates(predicate_id_generator, self, context);
 
         statistics
             .average_number_of_predicates_describing_domain_cpip

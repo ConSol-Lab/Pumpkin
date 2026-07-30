@@ -235,6 +235,7 @@ impl ResolutionResolver {
                 &mut self.predicate_id_generator,
                 self.mode,
                 &mut self.statistics.cpip_statistics,
+                context,
             )
             .collect::<Vec<_>>();
 

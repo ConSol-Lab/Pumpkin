@@ -1,15 +1,14 @@
 use std::collections::hash_map::Entry;
 
 use itertools::Itertools;
+use pumpkin_core::asserts::pumpkin_assert_eq_simple;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::containers::HashMap;
-use pumpkin_core::containers::KeyValueHeap;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateIdGenerator;
 use pumpkin_core::predicates::PredicateType;
-use pumpkin_core::propagation::PredicateId;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::variables::DomainId;
 
@@ -150,23 +149,23 @@ impl AnalysisMode {
     /// elements which were left in the `to_process_heap`.
     pub(crate) fn remove_final_predicates(
         &self,
-        to_process_heap: &mut KeyValueHeap<PredicateId, u32>,
         predicate_id_generator: &mut PredicateIdGenerator,
-        processed_nogood_predicates: &mut Vec<Predicate>,
+        working_nogood: &mut WorkingNogood,
+        context: &mut ConflictAnalysisContext,
     ) -> usize {
-        let num_removed = to_process_heap.num_nonremoved_elements();
+        let num_removed = working_nogood.num_current_checkpoint();
 
         match self {
             AnalysisMode::CPIP | AnalysisMode::BoundsCPIP => {
                 // When using extended UIP, we need to ensure that all of the remaining predicates
                 // are added to the domain.
                 pumpkin_assert_simple!(
-                    to_process_heap.num_nonremoved_elements() > 0,
+                    working_nogood.num_current_checkpoint() > 0,
                     "There should be at least one element in the final nogood"
                 );
                 pumpkin_assert_moderate!(
-                    to_process_heap
-                        .keys()
+                    working_nogood
+                        .predicate_ids_current_checkpoint()
                         .map(|predicate_id| predicate_id_generator
                             .get_predicate(predicate_id)
                             .get_domain())
@@ -176,28 +175,35 @@ impl AnalysisMode {
                     "There should be only one variable in the final nogood from teh current decision level"
                 );
 
-                let propagating_domain = predicate_id_generator
-                    .get_predicate(*to_process_heap.peek_max().unwrap().0)
-                    .get_domain();
-
                 // We need to add all of the remaining predicates to the nogood; due to the way in
                 // which the extended UIP is calculated, this could be multiple elements.
-                while to_process_heap.num_nonremoved_elements() > 0 {
-                    let predicate = Self::pop_predicate_from_conflict_nogood(
-                        to_process_heap,
-                        predicate_id_generator,
+                let mut previous_predicate: Option<Predicate> = None;
+                while working_nogood.num_current_checkpoint() > 0 {
+                    let predicate = working_nogood.pop_max_predicate(predicate_id_generator, *self);
+
+                    pumpkin_assert_eq_simple!(
+                        previous_predicate.unwrap_or(predicate).get_domain(),
+                        predicate.get_domain()
                     );
-                    pumpkin_assert_simple!(predicate.get_domain() == propagating_domain);
-                    processed_nogood_predicates.push(predicate);
+                    previous_predicate = Some(predicate);
+
+                    working_nogood.add_predicate_previous_checkpoint(
+                        predicate,
+                        context,
+                        predicate_id_generator,
+                        *self,
+                    );
                 }
             }
             AnalysisMode::OneUIP | AnalysisMode::AllDecision => {
-                if to_process_heap.num_nonremoved_elements() > 0 {
-                    let last_predicate = Self::pop_predicate_from_conflict_nogood(
-                        to_process_heap,
+                if working_nogood.num_current_checkpoint() > 0 {
+                    let predicate = working_nogood.pop_max_predicate(predicate_id_generator, *self);
+                    working_nogood.add_predicate_previous_checkpoint(
+                        predicate,
+                        context,
                         predicate_id_generator,
+                        *self,
                     );
-                    processed_nogood_predicates.push(last_predicate);
                 } else {
                     pumpkin_assert_simple!(
                         matches!(self, AnalysisMode::AllDecision),
@@ -208,16 +214,6 @@ impl AnalysisMode {
         }
 
         num_removed
-    }
-
-    /// Removes the element with the highest value from `to_process_heap` and returns the
-    /// corresponding [`Predicate`].
-    pub(crate) fn pop_predicate_from_conflict_nogood(
-        to_process_heap: &mut KeyValueHeap<PredicateId, u32>,
-        predicate_id_generator: &mut PredicateIdGenerator,
-    ) -> Predicate {
-        let next_predicate_id = to_process_heap.pop_max().unwrap();
-        predicate_id_generator.get_predicate(next_predicate_id)
     }
 
     /// Whether the analysis mode learns CPIP nogoods.
