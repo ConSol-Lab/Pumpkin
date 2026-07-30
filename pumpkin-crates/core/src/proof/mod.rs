@@ -42,7 +42,7 @@ use crate::variables::Literal;
 #[derive(Debug, Default)]
 pub struct ProofLog {
     internal_proof: Option<ProofImpl>,
-    supporting_inferences: Vec<SupportingInference<Predicate>>,
+    pub(crate) supporting_inferences: Vec<SupportingInference<Predicate>>,
 }
 
 impl ProofLog {

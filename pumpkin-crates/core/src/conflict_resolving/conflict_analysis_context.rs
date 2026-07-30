@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 
+use pumpkin_checking::SupportingInference;
+
 use crate::Random;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
@@ -29,10 +31,12 @@ use crate::proof::explain_root_assignment;
 use crate::propagation::CurrentNogood;
 use crate::propagation::ExplanationContext;
 use crate::propagation::HasAssignments;
+use crate::propagation::ReadDomains;
 use crate::propagators::nogoods::NogoodChecker;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_eq_simple;
 use crate::state::PropagatorHandle;
+use crate::variables::DomainId;
 
 /// Used during conflict analysis to provide the necessary information.
 ///
@@ -196,6 +200,32 @@ impl ConflictAnalysisContext<'_> {
             },
             predicate,
         );
+    }
+
+    pub fn add_supporting_inference(&mut self, domain_id: DomainId) {
+        if cfg!(feature = "check-deductions") {
+            self.proof_log
+                .supporting_inferences
+                .push(SupportingInference {
+                    premises: vec![],
+                    consequent: Some(predicate!(domain_id <= self.initial_lower_bound(domain_id))),
+                });
+            self.proof_log
+                .supporting_inferences
+                .push(SupportingInference {
+                    premises: vec![],
+                    consequent: Some(predicate!(domain_id >= self.initial_upper_bound(domain_id))),
+                });
+
+            for hole in self.initial_holes(domain_id) {
+                self.proof_log
+                    .supporting_inferences
+                    .push(SupportingInference {
+                        premises: vec![],
+                        consequent: Some(predicate!(domain_id != hole)),
+                    });
+            }
+        }
     }
 
     /// Log an inference to the proof.

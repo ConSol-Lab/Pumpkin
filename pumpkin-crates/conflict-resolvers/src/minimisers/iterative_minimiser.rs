@@ -71,10 +71,12 @@ impl Default for IterativeDomain {
 
 impl IterativeDomain {
     /// Resets the [`IterativeDomain`] to the maximum bounds, and removes the holes.
-    fn reset(&mut self) {
-        self.lb = i32::MIN;
-        self.ub = i32::MAX;
-        self.holes.clear()
+    fn reset(&mut self, domain_id: DomainId, context: &mut ConflictAnalysisContext) {
+        self.lb = context.initial_lower_bound(domain_id);
+        self.ub = context.initial_upper_bound(domain_id);
+        self.holes = context.initial_holes(domain_id);
+
+        context.add_supporting_inference(domain_id);
     }
 
     /// Tightens the lower-bound to `lb`.
@@ -298,7 +300,7 @@ impl IterativeMinimiser {
             return ProcessingResult::NotRedundant;
         }
 
-        self.state.reset();
+        self.state.reset(domain, context);
 
         for predicate in predicates.iter() {
             let consistent = self.state.apply(predicate);
