@@ -80,6 +80,18 @@ impl WorkingNogood {
         predicate_id_generator: &mut PredicateIdGenerator,
         mode: AnalysisMode,
     ) {
+        if self.is_redundant(
+            predicate,
+            context,
+            predicate_id_generator.get_id(predicate),
+            predicate_id_generator,
+            mode,
+        ) {
+            self.iterative_minimisation_statistics
+                .num_removed_current_decision_level += 1;
+            return;
+        }
+
         // We first retrieve the value that the predicate will get in the heap
         let heap_value = get_heap_value(predicate, context);
         // And its corresponding predicate id
@@ -93,8 +105,6 @@ impl WorkingNogood {
         // We also update the unique variable helper structure
         mode.predicate_added_to_nogood(predicate, &mut self.unique_variable_helper);
 
-        // If we are performing iterative minimisation, then we also add it to the iterative
-        // minimiser
         if self.iterative_minimisation {
             self.iterative_minimiser.apply_predicate(predicate, context);
         }
@@ -108,20 +118,24 @@ impl WorkingNogood {
         predicate_id_generator: &mut PredicateIdGenerator,
         mode: AnalysisMode,
     ) {
+        if self.is_redundant(
+            predicate,
+            context,
+            predicate_id_generator.get_id(predicate),
+            predicate_id_generator,
+            mode,
+        ) {
+            self.iterative_minimisation_statistics
+                .num_removed_previous_decision_level += 1;
+            return;
+        }
+
         // We push it directly into a vector since we do not need to resolve upon it
         self.processed_nogood_predicates.push(predicate);
 
         // If we are performing iterative minimisation, then we also add it to the iterative
         // minimiser
-        if self.iterative_minimisation
-            && !self.is_redundant(
-                predicate,
-                context,
-                predicate_id_generator.get_id(predicate),
-                predicate_id_generator,
-                mode,
-            )
-        {
+        if self.iterative_minimisation {
             self.iterative_minimiser.apply_predicate(predicate, context);
         }
     }
@@ -348,23 +362,6 @@ impl WorkingNogood {
             if !self.to_process_heap.is_key_present(predicate_id)
                 && *self.to_process_heap.get_value(predicate_id) == 0
             {
-                if self.is_redundant(
-                    predicate,
-                    context,
-                    predicate_id,
-                    predicate_id_generator,
-                    mode,
-                ) {
-                    if dec_level == context.get_checkpoint() {
-                        self.iterative_minimisation_statistics
-                            .num_removed_current_decision_level += 1
-                    } else {
-                        self.iterative_minimisation_statistics
-                            .num_removed_previous_decision_level += 1
-                    }
-                    return;
-                }
-
                 context.predicate_appeared_in_conflict(predicate);
 
                 // The goal is to traverse predicate in reverse order of the trail.
@@ -399,8 +396,6 @@ impl WorkingNogood {
                 )
             }
         } else {
-            // We do not check for duplicate, we simply add the predicate.
-            // Semantic minimisation will later remove duplicates and do other processing.
             self.add_predicate_previous_checkpoint(
                 predicate,
                 context,
@@ -580,6 +575,7 @@ impl WorkingNogood {
                 .peek_max()
                 .map(|(_, value)| *value)
                 .unwrap_or_default()
+            || self.to_process_heap.num_nonremoved_elements() == 0
             || (self.to_process_heap.num_nonremoved_elements() == 1
                 && self
                     .to_process_heap

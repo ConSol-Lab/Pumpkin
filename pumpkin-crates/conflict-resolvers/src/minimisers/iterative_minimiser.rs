@@ -506,6 +506,9 @@ impl IterativeMinimiser {
                     // [x >= v], [x != v'] => [x >= v] where v' < v
                     self.explain_lower_bound_in_proof(predicate, context);
                     ProcessingResult::Redundant
+                } else if self.state.holes.contains(&predicate.get_right_hand_side()) {
+                    self.statistics.num_redundant += 1;
+                    ProcessingResult::Redundant
                 } else {
                     self.statistics.num_non_redundant += 1;
                     ProcessingResult::NotRedundant
