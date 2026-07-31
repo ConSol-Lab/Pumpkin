@@ -167,8 +167,8 @@ struct Args {
     /// Strengthening for Satisfiability Solvers - Allen van Gelder (2011)".
     ///
     /// Possible values: bool
-    #[arg(long = "recursive-minimisation", verbatim_doc_comment)]
-    recursive_minimisation: bool,
+    #[arg(long = "no-recursive-minimisation", verbatim_doc_comment)]
+    no_recursive_minimisation: bool,
 
     /// Decides whether to apply semantic minimisation during conflict analysis; according to the
     /// idea proposed in "Semantic Learning for Lazy Clause Generation - Feydy et al. (2013)".
@@ -580,12 +580,10 @@ fn run() -> PumpkinResult<()> {
         nogood_propagator_priority: args.nogood_propagator_priority,
     };
 
-    let should_minimise_nogoods = !args.recursive_minimisation;
     let solver_options = SolverOptions {
         // 1 MB is 1_000_000 bytes
         memory_preallocated: args.memory_preallocated,
         restart_options,
-        should_minimise_nogoods,
         random_generator: SmallRng::seed_from_u64(args.random_seed),
         proof_log,
         learning_options,
@@ -597,6 +595,9 @@ fn run() -> PumpkinResult<()> {
         .instance_path
         .to_str()
         .ok_or(PumpkinError::invalid_instance(args.instance_path.display()))?;
+
+    let recursive_minimisation = !args.no_recursive_minimisation;
+    let iterative_minimisation = !args.no_iterative_minimisation;
 
     match file_format {
         FileFormat::CnfDimacsPLine => cnf_problem(solver_options, time_limit, instance_path)?,
@@ -647,8 +648,8 @@ fn run() -> PumpkinResult<()> {
                 },
                 ResolutionResolver::new(
                     AnalysisMode::OneUIP,
-                    !args.recursive_minimisation,
-                    !args.no_iterative_minimisation,
+                    recursive_minimisation,
+                    iterative_minimisation,
                 ),
             )?,
             ConflictResolverType::ExtendedCPIP => flatzinc::solve(
@@ -671,8 +672,8 @@ fn run() -> PumpkinResult<()> {
                 },
                 ResolutionResolver::new(
                     AnalysisMode::CPIP,
-                    should_minimise_nogoods,
-                    !args.no_iterative_minimisation,
+                    recursive_minimisation,
+                    iterative_minimisation,
                 ),
             )?,
             ConflictResolverType::BoundsExtendedCPIP => flatzinc::solve(
@@ -695,8 +696,8 @@ fn run() -> PumpkinResult<()> {
                 },
                 ResolutionResolver::new(
                     AnalysisMode::BoundsCPIP,
-                    should_minimise_nogoods,
-                    !args.no_iterative_minimisation,
+                    recursive_minimisation,
+                    iterative_minimisation,
                 ),
             )?,
             ConflictResolverType::AllDecision => flatzinc::solve(
@@ -719,8 +720,8 @@ fn run() -> PumpkinResult<()> {
                 },
                 ResolutionResolver::new(
                     AnalysisMode::AllDecision,
-                    should_minimise_nogoods,
-                    !args.no_iterative_minimisation,
+                    recursive_minimisation,
+                    iterative_minimisation,
                 ),
             )?,
         },

@@ -167,8 +167,6 @@ pub enum ConflictResolverType {
 pub struct SatisfactionSolverOptions {
     /// The options used by the restart strategy.
     pub restart_options: RestartOptions,
-    /// Whether learned clause minimisation should take place
-    pub should_minimise_nogoods: bool,
     /// A random number generator which is used by the [`Solver`] to determine randomised values.
     pub random_generator: SmallRng,
     /// The proof log for the solver.
@@ -184,7 +182,6 @@ impl Default for SatisfactionSolverOptions {
     fn default() -> Self {
         SatisfactionSolverOptions {
             restart_options: RestartOptions::default(),
-            should_minimise_nogoods: true,
             random_generator: SmallRng::seed_from_u64(42),
             proof_log: ProofLog::default(),
             learning_options: LearningOptions::default(),
