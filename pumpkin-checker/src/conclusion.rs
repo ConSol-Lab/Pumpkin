@@ -9,13 +9,9 @@ pub fn verify_conclusion(
     conclusion: &drcp_format::Conclusion<Rc<str>, i32>,
 ) -> bool {
     // First we ensure the conclusion type matches the solve item in the model.
-    match (&model.objective, conclusion) {
-        (Some(_), drcp_format::Conclusion::Unsat)
-        | (None, drcp_format::Conclusion::DualBound(_)) => return false,
-
-        _ => {}
+    if let (None, drcp_format::Conclusion::DualBound(_)) = (&model.objective, conclusion) {
+        return false;
     }
-
     // We iterate in reverse order, since it is likely that the conclusion is based on a constraint
     // towards the end of the proof.
     model.iter_constraints().rev().any(|(_, constraint)| {
@@ -103,6 +99,6 @@ mod tests {
         #[allow(trivial_casts, reason = "otherwise we need a temporary variable")]
         let _ = model.add_constraint(constraint_id(1), Nogood::from([] as [Atomic; _]));
 
-        assert!(!verify_conclusion(&model, &Unsat));
+        assert!(verify_conclusion(&model, &Unsat));
     }
 }
