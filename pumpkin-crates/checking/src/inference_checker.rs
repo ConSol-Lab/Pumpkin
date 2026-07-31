@@ -30,8 +30,8 @@ impl<Atomic: AtomicConstraint> Clone for BoxedChecker<Atomic> {
     }
 }
 
-impl<Atomic: AtomicConstraint> From<Box<dyn InferenceChecker<Atomic>>> for BoxedChecker<Atomic> {
-    fn from(value: Box<dyn InferenceChecker<Atomic>>) -> Self {
+impl<Atomic: AtomicConstraint> BoxedChecker<Atomic> {
+    pub fn new(value: Box<dyn InferenceChecker<Atomic>>) -> Self {
         BoxedChecker(value)
     }
 }
