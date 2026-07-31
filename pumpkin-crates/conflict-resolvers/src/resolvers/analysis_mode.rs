@@ -1,8 +1,6 @@
 use std::collections::hash_map::Entry;
 
 use itertools::Itertools;
-use pumpkin_core::asserts::pumpkin_assert_eq_simple;
-use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::containers::HashMap;
@@ -141,77 +139,6 @@ impl AnalysisMode {
                 }
             }
         }
-    }
-
-    /// Removes and returns the number of left-over predicates from the current checkpoint in the
-    /// [`WorkingNogood`] after [`AnalysisMode::should_continue_resolving`] returned false.
-    pub(crate) fn remove_final_predicates(
-        &self,
-        predicate_id_generator: &mut PredicateIdGenerator,
-        working_nogood: &mut WorkingNogood,
-        context: &mut ConflictAnalysisContext,
-    ) -> usize {
-        let num_removed = working_nogood.num_current_checkpoint();
-
-        match self {
-            AnalysisMode::CPIP | AnalysisMode::BoundsCPIP => {
-                // When using extended UIP, we need to ensure that all of the remaining predicates
-                // are added to the domain.
-                pumpkin_assert_simple!(
-                    working_nogood.num_current_checkpoint() > 0,
-                    "There should be at least one element in the final nogood"
-                );
-                pumpkin_assert_moderate!(
-                    working_nogood
-                        .predicate_ids_current_checkpoint()
-                        .map(|predicate_id| predicate_id_generator
-                            .get_predicate(predicate_id)
-                            .get_domain())
-                        .unique()
-                        .count()
-                        == 1,
-                    "There should be only one variable in the final nogood from teh current decision level"
-                );
-
-                // We need to add all of the remaining predicates to the nogood; due to the way in
-                // which the extended UIP is calculated, this could be multiple elements.
-                let mut previous_predicate: Option<Predicate> = None;
-                while working_nogood.num_current_checkpoint() > 0 {
-                    let predicate = working_nogood.pop_max_predicate(predicate_id_generator, *self);
-
-                    pumpkin_assert_eq_simple!(
-                        previous_predicate.unwrap_or(predicate).get_domain(),
-                        predicate.get_domain()
-                    );
-                    previous_predicate = Some(predicate);
-
-                    working_nogood.add_asserting_predicate(
-                        predicate,
-                        context,
-                        predicate_id_generator,
-                        *self,
-                    );
-                }
-            }
-            AnalysisMode::OneUIP | AnalysisMode::AllDecision => {
-                if working_nogood.num_current_checkpoint() > 0 {
-                    let predicate = working_nogood.pop_max_predicate(predicate_id_generator, *self);
-                    working_nogood.add_asserting_predicate(
-                        predicate,
-                        context,
-                        predicate_id_generator,
-                        *self,
-                    );
-                } else {
-                    pumpkin_assert_simple!(
-                        matches!(self, AnalysisMode::AllDecision),
-                        "If the heap is empty when extracting the final nogood then we should be performing all decision learning"
-                    )
-                }
-            }
-        }
-
-        num_removed
     }
 
     /// Whether the analysis mode learns CPIP nogoods.

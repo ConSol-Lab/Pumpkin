@@ -72,6 +72,33 @@ impl WorkingNogood {
 
 /// Internal methods for removing from/adding to the working nogood.
 impl WorkingNogood {
+    /// Adds an asserting predicate to the [`WorkingNogood`].
+    ///
+    /// **Note** - This can be called multiple times when using CPIP nogoods (see
+    /// [`AnalysisMode`]).
+    fn add_asserting_predicate(
+        &mut self,
+        predicate: Predicate,
+        context: &mut ConflictAnalysisContext<'_>,
+        predicate_id_generator: &mut PredicateIdGenerator,
+        mode: AnalysisMode,
+    ) {
+        // We push it directly into a vector since we do not need to resolve upon it
+        self.processed_nogood_predicates.push(predicate);
+
+        pumpkin_assert_advanced!(
+            !self.iterative_minimisation
+                || !self.is_redundant(
+                    predicate,
+                    context,
+                    predicate_id_generator.get_id(predicate),
+                    predicate_id_generator,
+                    mode
+                ),
+            "The asserting predicate should not be redundant"
+        );
+    }
+
     /// Adds a predicate to the current working nogood which is from the current checkpoint.
     fn add_predicate_current_checkpoint(
         &mut self,
@@ -210,33 +237,6 @@ impl WorkingNogood {
         self.to_process_heap.keys()
     }
 
-    /// Adds an asserting predicate to the [`WorkingNogood`].
-    ///
-    /// **Note** - This can be called multiple times when using CPIP nogoods (see
-    /// [`AnalysisMode`]).
-    pub(crate) fn add_asserting_predicate(
-        &mut self,
-        predicate: Predicate,
-        context: &mut ConflictAnalysisContext<'_>,
-        predicate_id_generator: &mut PredicateIdGenerator,
-        mode: AnalysisMode,
-    ) {
-        // We push it directly into a vector since we do not need to resolve upon it
-        self.processed_nogood_predicates.push(predicate);
-
-        pumpkin_assert_advanced!(
-            !self.iterative_minimisation
-                || !self.is_redundant(
-                    predicate,
-                    context,
-                    predicate_id_generator.get_id(predicate),
-                    predicate_id_generator,
-                    mode
-                ),
-            "The asserting predicate should not be redundant"
-        );
-    }
-
     /// Returns the learned nogood from the [`WorkingNogood`], clearing its internal data
     /// structures.
     pub(crate) fn drain_learned_nogood(
@@ -246,7 +246,7 @@ impl WorkingNogood {
         statistics: &mut CpipStatistics,
         context: &mut ConflictAnalysisContext,
     ) -> impl Iterator<Item = Predicate> {
-        let num_removed = mode.remove_final_predicates(predicate_id_generator, self, context);
+        let num_removed = self.remove_final_predicates(predicate_id_generator, mode, context);
 
         pumpkin_assert_eq_simple!(self.num_current_checkpoint(), 0);
 
@@ -267,6 +267,43 @@ impl WorkingNogood {
         self.unique_variable_helper.clear();
 
         self.processed_nogood_predicates.drain(..)
+    }
+
+    /// Removes and returns the number of left-over predicates from the current checkpoint in the
+    /// [`WorkingNogood`] after [`AnalysisMode::should_continue_resolving`] returned false.
+    pub(crate) fn remove_final_predicates(
+        &mut self,
+        predicate_id_generator: &mut PredicateIdGenerator,
+        mode: AnalysisMode,
+        context: &mut ConflictAnalysisContext,
+    ) -> usize {
+        let num_removed = self.num_current_checkpoint();
+
+        pumpkin_assert_simple!(
+            matches!(mode, AnalysisMode::AllDecision) || self.num_current_checkpoint() > 0,
+            "If the heap is empty when extracting the final nogood then we should be performing all decision learning"
+        );
+        pumpkin_assert_simple!(
+            !matches!(mode, AnalysisMode::OneUIP | AnalysisMode::AllDecision)
+                || self.num_current_checkpoint() == 1
+        );
+
+        // We need to add all of the remaining predicates to the nogood; due to the way in
+        // which the extended UIP is calculated, this could be multiple elements.
+        let mut previous_predicate: Option<Predicate> = None;
+        while self.num_current_checkpoint() > 0 {
+            let predicate = self.pop_max_predicate(predicate_id_generator, mode);
+
+            pumpkin_assert_eq_simple!(
+                previous_predicate.unwrap_or(predicate).get_domain(),
+                predicate.get_domain()
+            );
+            previous_predicate = Some(predicate);
+
+            self.add_asserting_predicate(predicate, context, predicate_id_generator, mode);
+        }
+
+        num_removed
     }
 
     /// Returns a [`CurrentNogood`] based on the [`WorkingNogood`].
