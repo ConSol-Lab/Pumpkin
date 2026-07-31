@@ -166,11 +166,9 @@ struct Args {
     /// 1-UIP Minimisation is done; according to the idea proposed in "Generalized Conflict-Clause
     /// Strengthening for Satisfiability Solvers - Allen van Gelder (2011)".
     ///
-    /// If this flag is present then the minimisation is turned off.
-    ///
     /// Possible values: bool
-    #[arg(long = "no-learning-minimise", verbatim_doc_comment)]
-    no_learning_clause_minimisation: bool,
+    #[arg(long = "recursive-minimisation", verbatim_doc_comment)]
+    recursive_minimisation: bool,
 
     /// Decides whether to apply semantic minimisation during conflict analysis; according to the
     /// idea proposed in "Semantic Learning for Lazy Clause Generation - Feydy et al. (2013)".
@@ -582,7 +580,7 @@ fn run() -> PumpkinResult<()> {
         nogood_propagator_priority: args.nogood_propagator_priority,
     };
 
-    let should_minimise_nogoods = !args.no_learning_clause_minimisation;
+    let should_minimise_nogoods = !args.recursive_minimisation;
     let solver_options = SolverOptions {
         // 1 MB is 1_000_000 bytes
         memory_preallocated: args.memory_preallocated,
@@ -649,7 +647,7 @@ fn run() -> PumpkinResult<()> {
                 },
                 ResolutionResolver::new(
                     AnalysisMode::OneUIP,
-                    !args.no_learning_clause_minimisation,
+                    !args.recursive_minimisation,
                     !args.no_iterative_minimisation,
                 ),
             )?,
