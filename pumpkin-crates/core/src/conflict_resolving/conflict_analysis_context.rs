@@ -1,7 +1,5 @@
 use std::fmt::Debug;
 
-use pumpkin_checking::SupportingInference;
-
 use crate::Random;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
@@ -204,26 +202,15 @@ impl ConflictAnalysisContext<'_> {
 
     pub fn add_supporting_inference(&mut self, domain_id: DomainId) {
         if cfg!(feature = "check-deductions") {
-            self.proof_log
-                .supporting_inferences
-                .push(SupportingInference {
-                    premises: vec![],
-                    consequent: Some(predicate!(domain_id <= self.initial_lower_bound(domain_id))),
-                });
-            self.proof_log
-                .supporting_inferences
-                .push(SupportingInference {
-                    premises: vec![],
-                    consequent: Some(predicate!(domain_id >= self.initial_upper_bound(domain_id))),
-                });
+            self.explain_root_assignment(predicate!(
+                domain_id >= self.initial_lower_bound(domain_id)
+            ));
+            self.explain_root_assignment(predicate!(
+                domain_id <= self.initial_upper_bound(domain_id)
+            ));
 
             for hole in self.initial_holes(domain_id) {
-                self.proof_log
-                    .supporting_inferences
-                    .push(SupportingInference {
-                        premises: vec![],
-                        consequent: Some(predicate!(domain_id != hole)),
-                    });
+                self.explain_root_assignment(predicate!(domain_id != hole));
             }
         }
     }
