@@ -3,8 +3,6 @@ use std::collections::BTreeSet;
 
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::containers::HashMap;
-use pumpkin_core::containers::KeyedVec;
-use pumpkin_core::containers::StorageKey;
 use pumpkin_core::create_statistics_struct;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
@@ -43,8 +41,6 @@ pub(crate) struct IterativeMinimiser {
     state: IterativeDomain,
     /// Keeps track of the predicates for each [`DomainId`] in the current nogood.
     domains: HashMap<DomainId, Vec<Predicate>>,
-    /// For proof logging; keeps track of the predicates which are true at checkpoint 0.
-    root_predicates: KeyedVec<DomainId, Vec<Predicate>>,
     statistics: IterativeMinimiserStatistics,
 }
 
@@ -193,7 +189,6 @@ impl IterativeMinimiser {
     /// Clears the structures.
     pub(crate) fn clear(&mut self) {
         self.domains.clear();
-        self.root_predicates.clear();
     }
 
     pub(crate) fn log_statistics(&self, statistic_logger: StatisticLogger) {
@@ -217,72 +212,11 @@ impl IterativeMinimiser {
     }
 
     /// Applies the given predicate from the nogood.
-    pub(crate) fn apply_predicate(
-        &mut self,
-        predicate: Predicate,
-        context: &ConflictAnalysisContext,
-    ) {
+    pub(crate) fn apply_predicate(&mut self, predicate: Predicate) {
         let domain = predicate.get_domain();
 
         let entry = self.domains.entry(domain).or_default();
         entry.push(predicate);
-
-        if context.is_proof_logging_inferences()
-            && context.get_checkpoint_for_predicate(predicate) == Some(0)
-        {
-            self.root_predicates.accomodate(domain, Default::default());
-            self.root_predicates[domain].push(predicate)
-        }
-    }
-
-    /// Explains the lower-bound in the proof log.
-    fn explain_lower_bound_in_proof(
-        &self,
-        predicate: Predicate,
-        context: &mut ConflictAnalysisContext,
-    ) {
-        if context.is_proof_logging_inferences() {
-            let domain = predicate.get_domain();
-
-            if domain.index() >= self.root_predicates.len() {
-                return;
-            }
-
-            for root_predicate in self.root_predicates[domain]
-                .iter()
-                .filter(|root_predicate| {
-                    root_predicate.is_lower_bound_predicate()
-                        || root_predicate.is_not_equal_predicate()
-                })
-            {
-                context.explain_root_assignment(*root_predicate);
-            }
-        }
-    }
-
-    /// Explains the upper-bound in the proof log.
-    fn explain_upper_bound_in_proof(
-        &self,
-        predicate: Predicate,
-        context: &mut ConflictAnalysisContext,
-    ) {
-        if context.is_proof_logging_inferences() {
-            let domain = predicate.get_domain();
-
-            if domain.index() >= self.root_predicates.len() {
-                return;
-            }
-
-            for root_predicate in self.root_predicates[domain]
-                .iter()
-                .filter(|root_predicate| {
-                    root_predicate.is_upper_bound_predicate()
-                        || root_predicate.is_not_equal_predicate()
-                })
-            {
-                context.explain_root_assignment(*root_predicate);
-            }
-        }
     }
 
     /// Processes the predicate, indicating via [`ProcessingResult`] what can happen to it.
@@ -319,8 +253,6 @@ impl IterativeMinimiser {
         if lower_bound == upper_bound {
             self.statistics.num_removed_by_fixed_domain += 1;
 
-            self.explain_lower_bound_in_proof(predicate, context);
-            self.explain_upper_bound_in_proof(predicate, context);
             return ProcessingResult::Redundant;
         }
 
@@ -328,7 +260,6 @@ impl IterativeMinimiser {
             PredicateType::LowerBound => {
                 if predicate.get_right_hand_side() == upper_bound {
                     self.statistics.num_removed_by_creating_equality += 1;
-                    self.explain_upper_bound_in_proof(predicate, context);
                     // [x <= v], [x >= v] => [x = v]
                     let to_remove = predicates
                         .iter()
@@ -398,7 +329,6 @@ impl IterativeMinimiser {
                 } else {
                     self.statistics.num_redundant += 1;
                     // [x >= v], [x >= v'] => [x >= v] if v > v'
-                    self.explain_lower_bound_in_proof(predicate, context);
                     ProcessingResult::Redundant
                 }
             }
@@ -406,7 +336,6 @@ impl IterativeMinimiser {
                 // [x >= v], [x <= v] => [x = v]
                 if predicate.get_right_hand_side() == lower_bound {
                     self.statistics.num_removed_by_creating_equality += 1;
-                    self.explain_lower_bound_in_proof(predicate, context);
 
                     let to_remove = predicates
                         .iter()
@@ -475,7 +404,6 @@ impl IterativeMinimiser {
                 } else {
                     self.statistics.num_redundant += 1;
                     // [x <= v], [x <= v'] => [x <= v] if v < v'
-                    self.explain_upper_bound_in_proof(predicate, context);
                     ProcessingResult::Redundant
                 }
             }
@@ -483,7 +411,6 @@ impl IterativeMinimiser {
                 if predicate.get_right_hand_side() == upper_bound {
                     self.statistics.num_removed_by_hole += 1;
                     // [x <= v], [x != v] => [x <= v - 1]
-                    self.explain_upper_bound_in_proof(predicate, context);
                     ProcessingResult::PossiblyReplacedWithNew {
                         potentially_removed: predicate!(domain <= upper_bound),
                         new_predicate: predicate!(domain <= upper_bound - 1),
@@ -492,12 +419,10 @@ impl IterativeMinimiser {
                 } else if predicate.get_right_hand_side() > upper_bound {
                     self.statistics.num_redundant += 1;
                     // [x <= v], [x != v'] => [x <= v] where v' > v
-                    self.explain_upper_bound_in_proof(predicate, context);
                     ProcessingResult::Redundant
                 } else if predicate.get_right_hand_side() == lower_bound {
                     self.statistics.num_removed_by_hole += 1;
                     // [x >= v], [x != v] => [x <= v + 1]
-                    self.explain_lower_bound_in_proof(predicate, context);
                     ProcessingResult::PossiblyReplacedWithNew {
                         potentially_removed: predicate!(domain >= lower_bound),
                         new_predicate: predicate!(domain >= lower_bound + 1),
@@ -506,7 +431,6 @@ impl IterativeMinimiser {
                 } else if predicate.get_right_hand_side() < lower_bound {
                     self.statistics.num_redundant += 1;
                     // [x >= v], [x != v'] => [x >= v] where v' < v
-                    self.explain_lower_bound_in_proof(predicate, context);
                     ProcessingResult::Redundant
                 } else if self.state.holes.contains(&predicate.get_right_hand_side()) {
                     self.statistics.num_redundant += 1;

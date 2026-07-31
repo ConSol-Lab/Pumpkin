@@ -137,7 +137,7 @@ impl WorkingNogood {
         mode.predicate_added_to_nogood(predicate, &mut self.unique_variable_helper);
 
         if self.iterative_minimisation {
-            self.iterative_minimiser.apply_predicate(predicate, context);
+            self.iterative_minimiser.apply_predicate(predicate);
         }
     }
 
@@ -167,7 +167,7 @@ impl WorkingNogood {
         // If we are performing iterative minimisation, then we also add it to the iterative
         // minimiser
         if self.iterative_minimisation {
-            self.iterative_minimiser.apply_predicate(predicate, context);
+            self.iterative_minimiser.apply_predicate(predicate);
         }
     }
 
