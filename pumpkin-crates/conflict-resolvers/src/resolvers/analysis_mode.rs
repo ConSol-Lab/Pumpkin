@@ -143,10 +143,8 @@ impl AnalysisMode {
         }
     }
 
-    /// Removes the left-over predicates in `to_process_heap` after
-    /// [`AnalysisMode::should_continue_resolving`] returned false (e.g., when finding the 1UIP, the
-    /// `to_process_heap` will contain the asserting predicate) and returns the number of
-    /// elements which were left in the `to_process_heap`.
+    /// Removes and returns the number of left-over predicates from the current checkpoint in the
+    /// [`WorkingNogood`] after [`AnalysisMode::should_continue_resolving`] returned false.
     pub(crate) fn remove_final_predicates(
         &self,
         predicate_id_generator: &mut PredicateIdGenerator,
