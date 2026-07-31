@@ -411,7 +411,7 @@ impl WorkingNogood {
     /// Returns true if the provided [`Predicate`] was redundant and false otherwise.
     ///
     /// Note that this method also adjusts internal data structures
-    pub(crate) fn is_redundant(
+    fn is_redundant(
         &mut self,
         predicate: Predicate,
         context: &mut ConflictAnalysisContext<'_>,
