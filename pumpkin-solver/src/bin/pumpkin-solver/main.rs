@@ -166,6 +166,8 @@ struct Args {
     /// 1-UIP Minimisation is done; according to the idea proposed in "Generalized Conflict-Clause
     /// Strengthening for Satisfiability Solvers - Allen van Gelder (2011)".
     ///
+    /// If this flag is present then the minimisation is turned off.
+    ///
     /// Possible values: bool
     #[arg(long = "no-recursive-minimisation", verbatim_doc_comment)]
     no_recursive_minimisation: bool,

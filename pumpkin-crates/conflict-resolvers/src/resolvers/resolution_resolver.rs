@@ -1,10 +1,7 @@
 use pumpkin_core::asserts::pumpkin_assert_advanced;
-use pumpkin_core::asserts::pumpkin_assert_eq_simple;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::conflict_resolving::ConflictResolver;
-use pumpkin_core::containers::HashSet;
 use pumpkin_core::create_statistics_struct;
-use pumpkin_core::predicate;
 use pumpkin_core::predicates::Lbd;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateIdGenerator;
@@ -58,7 +55,7 @@ pub struct ResolutionResolver {
     /// Whether nogood minimisation should be applied.
     ///
     /// Note that semantic minimisation is always applied to remove duplicates.
-    recursive_minimisation: bool,
+    should_minimise: bool,
 }
 
 impl Default for ResolutionResolver {
@@ -142,11 +139,7 @@ impl ConflictResolver for ResolutionResolver {
 }
 
 impl ResolutionResolver {
-    pub fn new(
-        mode: AnalysisMode,
-        recursive_minimisation: bool,
-        iterative_minimisation: bool,
-    ) -> Self {
+    pub fn new(mode: AnalysisMode, should_minimise: bool, iterative_minimisation: bool) -> Self {
         Self {
             mode,
             predicate_id_generator: Default::default(),
@@ -154,7 +147,7 @@ impl ResolutionResolver {
             recursive_minimiser: Default::default(),
             semantic_minimiser: Default::default(),
             statistics: Default::default(),
-            recursive_minimisation,
+            should_minimise,
             working_nogood: WorkingNogood::new(iterative_minimisation),
             lbd_helper: Default::default(),
         }
@@ -246,59 +239,31 @@ impl ResolutionResolver {
             )
             .collect::<Vec<_>>();
 
-        self.minimise_learned_nogood(context, &mut learned_nogood);
-
-        // Next, we indicate that the predicates in the nogood appeared in the conflict.
-        //
-        // TODO: asserting predicate may be bumped twice, probably not a problem.
-        for predicate in learned_nogood.iter() {
-            context.predicate_appeared_in_conflict(*predicate);
-        }
-
-        learned_nogood
-    }
-
-    /// Minimises the learned nogood.
-    ///
-    /// This uses a combination of recursive minimisation and semantic minimisation depending on
-    /// the options passed.
-    fn minimise_learned_nogood(
-        &mut self,
-        context: &mut ConflictAnalysisContext<'_>,
-        learned_nogood: &mut Vec<Predicate>,
-    ) {
-        if self.working_nogood.iterative_minimisation() {
-            // If we have performed iterative minimisation, then we do not need to do semantic
-            // minimisation.
-
-            if self.recursive_minimisation {
-                // If iterative minimisation and recursive minimisation are active, then we split
-                // all of the `[x == v]` predicates into `[x >= v]` and `[x <= v]` so that they can
-                // be independently considered by recursive minimisation.
-                split_equalities(learned_nogood);
-            }
+        // First we minimise the nogood using semantic minimisation to remove duplicates but we
+        // avoid equality merging (since some of these literals could potentailly be removed by
+        // recursive minimisation)
+        self.semantic_minimiser.set_mode(if !self.should_minimise {
+            // If we do not minimise then we do the equality
+            // merging in the first iteration of removing
+            // duplicates
+            SemanticMinimisationMode::EnableEqualityMerging
         } else {
-            // If iterative minimisation is not active, then we will first use semantic
-            // minimisation to remove duplicates and semantically redundant predicates.
-            self.semantic_minimiser
-                .set_mode(if !self.recursive_minimisation {
-                    // If we do not use recursive minimisation then we merge `[x == v]` predicates
-                    // up-front.
-                    SemanticMinimisationMode::EnableEqualityMerging
-                } else {
-                    // Otherwise, we keep them as `[x >= v]` and [x <= v] so that they can be
-                    // independently considered by recursive minimisation.
-                    SemanticMinimisationMode::DisableEqualityMerging
-                });
-            self.semantic_minimiser.minimise(context, learned_nogood);
-        }
+            SemanticMinimisationMode::DisableEqualityMerging
+        });
+        self.semantic_minimiser
+            .minimise(context, &mut learned_nogood);
 
-        if self.recursive_minimisation {
+        if self.should_minimise {
             // Then we perform recursive minimisation to remove the dominated predicates
-            self.recursive_minimiser.minimise(context, learned_nogood);
+            self.recursive_minimiser
+                .minimise(context, &mut learned_nogood);
 
-            // Then we merge `[x >= v]` and `[x <= v]` into `[x == v]`
-            merge_equalities(learned_nogood);
+            // We perform a final semantic minimisation call which allows the merging of the
+            // equality predicates which remain in the nogood
+            self.semantic_minimiser
+                .set_mode(SemanticMinimisationMode::EnableEqualityMerging);
+            self.semantic_minimiser
+                .minimise(context, &mut learned_nogood);
         }
 
         pumpkin_assert_advanced!(
@@ -313,123 +278,17 @@ impl ResolutionResolver {
                 .filter(|p| context.evaluate_predicate(**p) != Some(true))
                 .collect::<Vec<_>>()
         );
+
+        // TODO: asserting predicate may be bumped twice, probably not a problem.
+        for predicate in learned_nogood.iter() {
+            context.predicate_appeared_in_conflict(*predicate);
+        }
+
+        learned_nogood
     }
 
     /// Clears all data structures to prepare for the new conflict analysis.
     fn clean_up(&mut self) {
         self.predicate_id_generator.clear();
     }
-}
-
-/// Traverses the learned nogood and applies the following transformation: `[x == v] -> [x >= v],
-/// [x <= v]`.
-fn split_equalities(learned_nogood: &mut Vec<Predicate>) {
-    // We go over each element in the nogood.
-    let mut i = 0;
-
-    let mut expected_len = learned_nogood.len();
-
-    while i < learned_nogood.len() {
-        let predicate = learned_nogood[i];
-
-        // Check whether it is a predicate of the form [x == v]
-        if predicate.is_equality_predicate() {
-            // If it is, then we remove it from the learned nogood.
-            let _ = learned_nogood.swap_remove(i);
-
-            let domain = predicate.get_domain();
-            let rhs = predicate.get_right_hand_side();
-
-            // And then add [x >= v] and [x <= v]
-            learned_nogood.push(predicate!(domain >= rhs));
-            learned_nogood.push(predicate!(domain <= rhs));
-
-            expected_len += 1;
-        } else {
-            i += 1;
-        }
-    }
-
-    pumpkin_assert_eq_simple!(expected_len, learned_nogood.len());
-}
-
-fn merge_equalities(learned_nogood: &mut Vec<Predicate>) {
-    // We keep track of the lower-bound and upper-bound predicates which have the potential to be
-    // turned into equalities.
-    //
-    // These will be temporarily removed from the nogood and added back at the end, if we cannot
-    // find the predicates to turn them into equalities.
-    let mut lower_bounds: HashSet<Predicate> = HashSet::default();
-    let mut upper_bounds: HashSet<Predicate> = HashSet::default();
-
-    let mut expected_len = learned_nogood.len();
-
-    // We go over each element in the learned nogood.
-    let mut i = 0;
-    while i < learned_nogood.len() {
-        let predicate = learned_nogood[i];
-
-        // If they are either a lower-bound or an upper-bound, then we need to check whether we
-        // have found the opposite upper-bound or lower-bound.
-        if predicate.is_lower_bound_predicate() {
-            // First, we preemptively remove the element from the nogood.
-            let _ = learned_nogood.swap_remove(i);
-
-            let domain = predicate.get_domain();
-            let rhs = predicate.get_right_hand_side();
-
-            // We check whether we have already seen the upper-bound which would make this an
-            // equality.
-            if upper_bounds.contains(&predicate!(domain <= rhs)) {
-                // If we have, then we remove it from the upper-bounds.
-                let _ = upper_bounds.remove(&predicate!(domain <= rhs));
-
-                // And we add the equality to the learned nogood
-                learned_nogood.push(predicate!(domain == rhs));
-
-                expected_len -= 1;
-
-                continue;
-            }
-
-            // If we have not found a corresponding upper-bound, then we add it to our known
-            // lower-bounds.
-            let _ = lower_bounds.insert(predicate);
-        } else if predicate.is_upper_bound_predicate() {
-            // First, we preemptively remove the element from the nogood.
-            let _ = learned_nogood.swap_remove(i);
-
-            let domain = predicate.get_domain();
-            let rhs = predicate.get_right_hand_side();
-
-            // We check whether we have already seen the lower-bound which would make this an
-            // equality.
-            if lower_bounds.contains(&predicate!(domain >= rhs)) {
-                // If we have, then we remove it from the upper-bounds.
-                let _ = lower_bounds.remove(&predicate!(domain >= rhs));
-
-                // And we add the equality to the learned nogood
-                learned_nogood.push(predicate!(domain == rhs));
-
-                expected_len -= 1;
-
-                continue;
-            }
-
-            // If we have not found a corresponding lower-bound, then we add it to our known
-            // upper-bounds.
-            let _ = upper_bounds.insert(predicate);
-        } else {
-            i += 1;
-        }
-    }
-
-    // Now we add all of the bound predicates for which the corresponding equality has not been
-    // found to the learned nogood.
-    lower_bounds
-        .drain()
-        .chain(upper_bounds.drain())
-        .for_each(|predicate| learned_nogood.push(predicate));
-
-    pumpkin_assert_eq_simple!(expected_len, learned_nogood.len());
 }
