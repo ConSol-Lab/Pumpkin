@@ -48,7 +48,7 @@ where
         let registration = EventsToRegister::builder()
             .add(&a, DomainEvents::ANY_INT, ID_A)
             .add(&b, DomainEvents::ANY_INT, ID_B)
-            .add(&c, DomainEvents::BOUNDS, ID_C)
+            .add(&c, DomainEvents::ANY_INT, ID_C)
             .build();
 
         let mut checkers = RuntimeCheckers::builder();
