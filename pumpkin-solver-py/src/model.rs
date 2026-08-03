@@ -199,18 +199,14 @@ impl Model {
 
     /// Add the given constraint to the model.
     #[pyo3(signature = (constraint))]
-    fn add_constraint(&mut self, constraint: Constraint) -> PyResult<()> {
-        constraint
-            .post(&mut self.solver)
-            .map_err(|_| PyRuntimeError::new_err("inconsistency detected"))
+    fn add_constraint(&mut self, constraint: Constraint) {
+        constraint.post(&mut self.solver)
     }
 
     /// Add `premise -> constraint` to the model.
     #[pyo3(signature = (constraint, premise))]
-    fn add_implication(&mut self, constraint: Constraint, premise: BoolExpression) -> PyResult<()> {
-        constraint
-            .implied_by(&mut self.solver, premise.0)
-            .map_err(|_| PyRuntimeError::new_err("inconsistency detected"))
+    fn add_implication(&mut self, constraint: Constraint, premise: BoolExpression) {
+        constraint.implied_by(&mut self.solver, premise.0)
     }
 
     #[pyo3(signature = (timeout=None))]

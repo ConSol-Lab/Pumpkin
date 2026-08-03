@@ -24,10 +24,9 @@ fn proof_with_reified_literals() {
 
     solver
         .add_constraint(pumpkin_constraints::clause(vec![literal], constraint_tag))
-        .post()
-        .expect("no error");
+        .post();
 
-    let _ = solver
+    solver
         .add_constraint(pumpkin_constraints::not_equals(
             [variable],
             5,
@@ -60,10 +59,9 @@ fn proof_with_equality_unit_nogood_step() {
             x2,
             constraint_tag,
         ))
-        .post()
-        .expect("no conflict");
+        .post();
 
-    let _ = solver
+    solver
         .add_constraint(pumpkin_constraints::less_than_or_equals(
             [x1],
             1,

@@ -1,4 +1,3 @@
-use pumpkin_core::ConstraintOperationError;
 use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
@@ -107,7 +106,7 @@ struct Inequality<Var> {
 }
 
 impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) {
         LinearLessOrEqualPropagatorArgs {
             x: self.terms,
             c: self.rhs,
@@ -116,11 +115,7 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
         .post(solver)
     }
 
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
         LinearLessOrEqualPropagatorArgs {
             x: self.terms,
             c: self.rhs,
@@ -145,6 +140,10 @@ impl<Var: IntegerVariable + 'static> NegatableConstraint for Inequality<Var> {
 #[cfg(test)]
 mod tests {
     #![allow(deprecated, reason = "Using deprecated functions for testing")]
+    use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
+    use pumpkin_core::branching::branchers::no_decision::NoDecisionBrancher;
+    use pumpkin_core::termination::Indefinite;
+
     use super::*;
 
     #[test]
@@ -154,10 +153,12 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
         let x = solver.new_named_bounded_integer(0, 0, "x");
 
-        let _ = less_than([x], 0, constraint_tag).post(&mut solver);
+        less_than([x], 0, constraint_tag).post(&mut solver);
 
-        let result = solver.propagate();
-        assert!(result.is_err());
+        let mut brancher = NoDecisionBrancher;
+        let mut resolver = NoLearningResolver;
+        let result = solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver);
+        assert!(result.is_unsatisfiable());
     }
 
     #[test]
@@ -167,9 +168,11 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
         let x = solver.new_named_bounded_integer(0, 0, "x");
 
-        let _ = greater_than([x], 0, constraint_tag).post(&mut solver);
+        greater_than([x], 0, constraint_tag).post(&mut solver);
 
-        let result = solver.propagate();
-        assert!(result.is_err());
+        let mut brancher = NoDecisionBrancher;
+        let mut resolver = NoLearningResolver;
+        let result = solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver);
+        assert!(result.is_unsatisfiable());
     }
 }

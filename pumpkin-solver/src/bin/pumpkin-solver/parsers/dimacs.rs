@@ -492,7 +492,7 @@ impl DimacsSink for SolverDimacsSink {
             .mapped_clause(clause)
             .into_iter()
             .map(|literal| literal.get_true_predicate());
-        let _ = self.solver.add_clause(mapped, self.constraint_tag);
+        self.solver.add_clause(mapped, self.constraint_tag);
     }
 
     fn add_soft_clause(&mut self, weight: NonZeroU32, clause: &[NonZeroI32]) {
@@ -514,7 +514,7 @@ impl DimacsSink for SolverDimacsSink {
             // General case, a soft clause with more than one literal.
             let soft_literal = self.solver.new_literal();
             clause.push(soft_literal);
-            let _ = self.solver.add_clause(
+            self.solver.add_clause(
                 clause
                     .into_iter()
                     .map(|literal| literal.get_true_predicate()),

@@ -1,4 +1,3 @@
-use pumpkin_core::ConstraintOperationError;
 use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
@@ -28,7 +27,7 @@ pub fn conjunction(
 struct Clause(Vec<Literal>, ConstraintTag);
 
 impl Constraint for Clause {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) {
         let Clause(clause, constraint_tag) = self;
 
         solver.add_clause(
@@ -37,11 +36,7 @@ impl Constraint for Clause {
         )
     }
 
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
         let Clause(clause, constraint_tag) = self;
 
         solver.add_clause(
@@ -67,22 +62,18 @@ impl NegatableConstraint for Clause {
 struct Conjunction(Vec<Literal>, ConstraintTag);
 
 impl Constraint for Conjunction {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) {
         let Conjunction(conjunction, constraint_tag) = self;
 
         conjunction
             .into_iter()
-            .try_for_each(|lit| solver.add_clause([lit.get_true_predicate()], constraint_tag))
+            .for_each(|lit| solver.add_clause([lit.get_true_predicate()], constraint_tag))
     }
 
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
         let Conjunction(conjunction, constraint_tag) = self;
 
-        conjunction.into_iter().try_for_each(|lit| {
+        conjunction.into_iter().for_each(|lit| {
             solver.add_clause(
                 [
                     (!(reification_literal)).get_true_predicate(),

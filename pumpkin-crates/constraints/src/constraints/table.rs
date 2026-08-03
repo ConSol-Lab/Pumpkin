@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use pumpkin_core::ConstraintOperationError;
 use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
@@ -62,11 +61,7 @@ struct Table<Var> {
 }
 
 impl<Var: IntegerVariable> Table<Var> {
-    fn encode(
-        self,
-        solver: &mut Solver,
-        reification_literal: Option<Literal>,
-    ) -> Result<(), ConstraintOperationError> {
+    fn encode(self, solver: &mut Solver, reification_literal: Option<Literal>) {
         // 1. Create a variable `y_i` that selects the row from the table which is chosen.
         let ys: Vec<_> = (0..self.table.len())
             .map(|_| solver.new_literal())
@@ -98,7 +93,7 @@ impl<Var: IntegerVariable> Table<Var> {
                     // l -> clause
                     clause.extend(reification_literal.iter().map(|l| l.get_false_predicate()));
 
-                    solver.add_clause(clause, self.constraint_tag)?;
+                    solver.add_clause(clause, self.constraint_tag);
                 }
 
                 // `condition -> (\/ supports)`
@@ -112,25 +107,19 @@ impl<Var: IntegerVariable> Table<Var> {
         // 4. Enforce at least one `y` to be true.
         let poster = solver.add_constraint(crate::constraints::clause(ys, self.constraint_tag));
         if let Some(literal) = reification_literal {
-            poster.implied_by(literal)?;
+            poster.implied_by(literal);
         } else {
-            poster.post()?;
+            poster.post();
         }
-
-        Ok(())
     }
 }
 
 impl<Var: IntegerVariable> Constraint for Table<Var> {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) {
         self.encode(solver, None)
     }
 
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
         self.encode(solver, Some(reification_literal))
     }
 }
@@ -158,7 +147,7 @@ struct NegativeTable<Var> {
 }
 
 impl<Var: IntegerVariable> Constraint for NegativeTable<Var> {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) {
         for row in self.table {
             let clause: Vec<_> = self
                 .xs
@@ -167,17 +156,11 @@ impl<Var: IntegerVariable> Constraint for NegativeTable<Var> {
                 .map(|(x, value)| predicate![x != value])
                 .collect();
 
-            solver.add_clause(clause, self.constraint_tag)?;
+            solver.add_clause(clause, self.constraint_tag);
         }
-
-        Ok(())
     }
 
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
         for row in self.table {
             let clause: Vec<_> = self
                 .xs
@@ -187,10 +170,8 @@ impl<Var: IntegerVariable> Constraint for NegativeTable<Var> {
                 .chain(std::iter::once(reification_literal.get_false_predicate()))
                 .collect();
 
-            solver.add_clause(clause, self.constraint_tag)?;
+            solver.add_clause(clause, self.constraint_tag);
         }
-
-        Ok(())
     }
 }
 

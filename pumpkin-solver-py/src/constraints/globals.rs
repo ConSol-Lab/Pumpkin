@@ -29,7 +29,7 @@ macro_rules! python_constraint {
             pub fn post(
                 self,
                 solver: &mut pumpkin_solver::Solver,
-            ) -> Result<(), pumpkin_solver::core::ConstraintOperationError> {
+            ) {
                 pumpkin_constraints::$constraint_func(
                     $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field)),+ ,
                     self.constraint_tag.0,
@@ -40,7 +40,7 @@ macro_rules! python_constraint {
                 self,
                 solver: &mut pumpkin_solver::Solver,
                 reification_literal: pumpkin_solver::core::variables::Literal,
-            ) -> Result<(), pumpkin_solver::core::ConstraintOperationError> {
+            ) {
                 pumpkin_constraints::$constraint_func(
                     $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field)),+ ,
                     self.constraint_tag.0,

@@ -322,11 +322,7 @@ impl PseudoBooleanConstraintEncoder {
                 {
                     has_assigned = true;
 
-                    let result =
-                        solver.add_clause([(!term.literal).get_true_predicate()], constraint_tag);
-                    if result.is_err() {
-                        return Err(EncodingError::RootPropagationConflict);
-                    }
+                    solver.add_clause([(!term.literal).get_true_predicate()], constraint_tag);
                 } else if solver.get_literal_value(term.literal) == Some(true) {
                     self.constant_term += term.weight;
                 }
@@ -372,8 +368,6 @@ impl PseudoBooleanConstraintEncoder {
 pub(crate) enum EncodingError {
     #[error("Constraint detected conflict at root level by propagation")]
     RootPropagationConflict,
-    #[error("Strengthening caused conflict")]
-    CannotStrengthen,
     #[error("Constraint is trivially unsatisfiable")]
     TriviallyUnsatisfiable,
 }

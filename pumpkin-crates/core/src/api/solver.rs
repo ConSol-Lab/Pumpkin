@@ -4,7 +4,6 @@ use super::results::OptimisationResult;
 use super::results::SatisfactionResult;
 use super::results::SatisfactionResultUnderAssumptions;
 use crate::basic_types::CSPSolverExecutionFlag;
-use crate::basic_types::ConstraintOperationError;
 use crate::branching::Brancher;
 use crate::branching::branchers::autonomous_search::AutonomousSearch;
 use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
@@ -485,6 +484,18 @@ impl Solver {
     {
         optimisation_procedure.optimise(brancher, termination, resolver, self)
     }
+
+    /// Performs fixed-point propagation when the solver is at the root level.
+    ///
+    /// If the solver is not at the root-level, then this is a no-op.
+    pub fn perform_root_level_fixed_point_propagation(&mut self) {
+        if self.satisfaction_solver.get_checkpoint() != 0 {
+            return;
+        }
+
+        self.satisfaction_solver
+            .perform_root_level_fixed_point_propagation()
+    }
 }
 
 /// Functions for adding new constraints to the solver.
@@ -527,33 +538,22 @@ impl Solver {
     }
 
     /// Creates a clause from `literals` and adds it to the current formula.
-    ///
-    /// If the formula becomes trivially unsatisfiable, a [`ConstraintOperationError`] will be
-    /// returned. Subsequent calls to this method will always return an error, and no
-    /// modification of the solver will take place.
     pub fn add_clause(
         &mut self,
         clause: impl IntoIterator<Item = Predicate>,
         constraint_tag: ConstraintTag,
-    ) -> Result<(), ConstraintOperationError> {
+    ) {
         self.satisfaction_solver.add_clause(clause, constraint_tag);
-
-        Ok(())
     }
 
-    /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
-    /// through propagation, this will return a [`ConstraintOperationError`].
+    /// Post a new propagator to the solver.
     ///
     /// A propagator is provided through an implementation of [`PropagatorConstructor`]. The
     /// propagator that will be added is [`PropagatorConstructor::PropagatorImpl`].
-    ///
-    /// If the solver is already in a conflicting state, i.e. a previous call to this method
-    /// already returned `false`, calling this again will not alter the solver in any way, and
-    /// `false` will be returned again.
     pub fn add_propagator<Constructor>(
         &mut self,
         constructor: Constructor,
-    ) -> Result<PropagatorHandle<Constructor::PropagatorImpl>, ConstraintOperationError>
+    ) -> PropagatorHandle<Constructor::PropagatorImpl>
     where
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
@@ -607,12 +607,6 @@ impl Solver {
                 .internal_parameters
                 .random_generator,
         }
-    }
-
-    #[deprecated(note = "Should only be used for testing")]
-    #[allow(clippy::result_unit_err, reason = "Testing method")]
-    pub fn propagate(&mut self) -> Result<(), ()> {
-        self.satisfaction_solver.propagate()
     }
 }
 

@@ -266,6 +266,22 @@ impl ConstraintSatisfactionSolver {
     pub(crate) fn is_logging_proof(&self) -> bool {
         self.internal_parameters.proof_log.is_logging_proof()
     }
+
+    pub(crate) fn perform_root_level_fixed_point_propagation(&mut self) {
+        pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
+        let num_trail_entries = self.state.trail_len();
+
+        let result = self.state.propagate_to_fixed_point();
+        if let Err(conflict) = result {
+            self.solver_state.declare_conflict(conflict.into());
+        }
+
+        self.handle_root_propagation(num_trail_entries);
+
+        if self.solver_state.is_infeasible() {
+            self.complete_proof();
+        }
+    }
 }
 
 // methods that offer basic functionality
@@ -546,7 +562,7 @@ impl ConstraintSatisfactionSolver {
                 return CSPSolverExecutionFlag::Timeout;
             }
 
-            let _ = self.propagate();
+            self.propagate();
 
             if self.solver_state.no_conflict() {
                 // Restarts should only occur after a new decision level has been declared to
@@ -762,7 +778,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     /// Main propagation loop.
-    pub(crate) fn propagate(&mut self) -> Result<(), ()> {
+    pub(crate) fn propagate(&mut self) {
         let num_trail_entries_prev = self.state.trail_len();
 
         let result = self.state.propagate_to_fixed_point();
@@ -773,11 +789,7 @@ impl ConstraintSatisfactionSolver {
 
         if let Err(conflict) = result {
             self.solver_state.declare_conflict(conflict.into());
-
-            return Err(());
         }
-
-        Ok(())
     }
 
     /// Introduces any root-level propagations to the proof by introducing them as
@@ -882,24 +894,12 @@ impl ConstraintSatisfactionSolver {
     pub(crate) fn add_propagator<Constructor>(
         &mut self,
         constructor: Constructor,
-    ) -> Result<PropagatorHandle<Constructor::PropagatorImpl>, ConstraintOperationError>
+    ) -> PropagatorHandle<Constructor::PropagatorImpl>
     where
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
-        if self.solver_state.is_inconsistent() {
-            return Err(ConstraintOperationError::InfeasiblePropagator);
-        }
-
-        let handle = self.state.add_propagator(constructor);
-
-        if self.solver_state.no_conflict() {
-            Ok(handle)
-        } else {
-            self.complete_proof();
-            let _ = self.conclude_proof_unsat();
-            Err(ConstraintOperationError::InfeasiblePropagator)
-        }
+        self.state.add_propagator(constructor)
     }
 
     pub fn post_predicate(&mut self, predicate: Predicate) -> Result<(), ConstraintOperationError> {
