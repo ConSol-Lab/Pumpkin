@@ -7,13 +7,13 @@ use std::ops::Mul;
 use std::ops::Neg;
 use std::ops::Sub;
 
-/// An [`i32`] or positive/negative infinity.
+/// An integer or positive/negative infinity.
 ///
 /// # Notes on arithmetic operations:
 /// - The result of the operation `infty + -infty` is undetermined, and if evaluated will cause a
 ///   panic.
 /// - Multiplying [`IntExt::PositiveInf`] or [`IntExt::NegativeInf`] with `IntExt::I32(0)` will
-///   yield `IntExt::I32(0)`.
+///   yield `IntExt::Int(0)`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IntExt<Int = i32> {
     Int(Int),
@@ -30,46 +30,115 @@ impl<Int: Copy> IntExt<Int> {
     }
 }
 
-impl IntExt<i32> {
-    pub fn div_ceil(&self, other: IntExt<i32>) -> Option<IntExt<i32>> {
-        let result = self.div(other).ceil();
+/// Additional operations on integers.
+pub trait NumExt {
+    /// Division with rounding up.
+    fn div_ceil(self, other: Self) -> Self;
 
-        Self::int_ext_from_int_f64(result)
-    }
+    /// Division with rounding down.
+    ///
+    /// Note this is different from truncating, which is rounding toward zero.
+    fn div_floor(self, other: Self) -> Self;
+}
 
-    pub fn div_floor(&self, other: IntExt<i32>) -> Option<IntExt<i32>> {
-        let result = self.div(other).floor();
+macro_rules! impl_ops {
+    ($type:ty) => {
+        impl NumExt for $type {
+            fn div_ceil(self, other: Self) -> Self {
+                // TODO: The source is taken from the standard library nightly implementation of
+                // this function and div_floor. Once they are stabilized, these definitions
+                // can be removed. Tracking issue: https://github.com/rust-lang/rust/issues/88581
+                let d = self / other;
+                let r = self % other;
+                if (r > 0 && other > 0) || (r < 0 && other < 0) {
+                    d + 1
+                } else {
+                    d
+                }
+            }
 
-        Self::int_ext_from_int_f64(result)
-    }
-
-    fn int_ext_from_int_f64(value: f64) -> Option<IntExt<i32>> {
-        if value.is_nan() {
-            return None;
-        }
-
-        if value.is_infinite() {
-            if value.is_sign_positive() {
-                return Some(IntExt::PositiveInf);
-            } else {
-                return Some(IntExt::NegativeInf);
+            fn div_floor(self, other: Self) -> Self {
+                // TODO: See todo in `div_ceil`.
+                let d = self / other;
+                let r = self % other;
+                if (r > 0 && other < 0) || (r < 0 && other > 0) {
+                    d - 1
+                } else {
+                    d
+                }
             }
         }
 
-        assert!(value.fract().abs() < 1e-10);
+        impl IntExt<$type> {
+            /// Division with rounding _up_, computed exactly with integer arithmetic.
+            ///
+            /// Returns `None` if both operands are infinite.
+            pub fn div_ceil(&self, other: IntExt<$type>) -> Option<IntExt<$type>> {
+                use IntExt::*;
 
-        Some(IntExt::Int(value as i32))
-    }
+                match (*self, other) {
+                    (Int(n), Int(d)) => Some(Int(<$type as NumExt>::div_ceil(n, d))),
+
+                    // A finite value divided by an unboundedly large denominator approaches, but
+                    // for integers never exceeds, zero.
+                    (Int(_), NegativeInf | PositiveInf) => Some(Int(0)),
+
+                    (PositiveInf, Int(d)) => {
+                        if d > 0 {
+                            Some(PositiveInf)
+                        } else {
+                            Some(NegativeInf)
+                        }
+                    }
+
+                    (NegativeInf, Int(d)) => {
+                        if d > 0 {
+                            Some(NegativeInf)
+                        } else {
+                            Some(PositiveInf)
+                        }
+                    }
+
+                    (NegativeInf | PositiveInf, NegativeInf | PositiveInf) => None,
+                }
+            }
+
+            /// Division with rounding _down_, computed exactly with integer arithmetic.
+            ///
+            /// Returns `None` if both operands are infinite.
+            pub fn div_floor(&self, other: IntExt<$type>) -> Option<IntExt<$type>> {
+                use IntExt::*;
+
+                match (*self, other) {
+                    (Int(n), Int(d)) => Some(Int(<$type as NumExt>::div_floor(n, d))),
+
+                    (Int(_), NegativeInf | PositiveInf) => Some(Int(0)),
+
+                    (PositiveInf, Int(d)) => {
+                        if d > 0 {
+                            Some(PositiveInf)
+                        } else {
+                            Some(NegativeInf)
+                        }
+                    }
+
+                    (NegativeInf, Int(d)) => {
+                        if d > 0 {
+                            Some(NegativeInf)
+                        } else {
+                            Some(PositiveInf)
+                        }
+                    }
+
+                    (NegativeInf | PositiveInf, NegativeInf | PositiveInf) => None,
+                }
+            }
+        }
+    };
 }
 
-impl<Int: Into<f64>> IntExt<Int> {
-    fn div(self, rhs: Self) -> f64 {
-        let value: f64 = self.into();
-        let rhs_value: f64 = rhs.into();
-
-        value / rhs_value
-    }
-}
+impl_ops!(i32);
+impl_ops!(i64);
 
 impl<Int: Into<f64>> From<IntExt<Int>> for f64 {
     fn from(value: IntExt<Int>) -> Self {
@@ -302,6 +371,46 @@ impl Mul for IntExt {
     }
 }
 
+impl Mul for IntExt<i64> {
+    type Output = IntExt<i64>;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (IntExt::Int(lhs), IntExt::Int(rhs)) => IntExt::Int(lhs * rhs),
+
+            // Multiplication with 0 will always yield 0.
+            (IntExt::Int(0), Self::NegativeInf)
+            | (IntExt::Int(0), Self::PositiveInf)
+            | (Self::NegativeInf, IntExt::Int(0))
+            | (Self::PositiveInf, IntExt::Int(0)) => IntExt::Int(0),
+
+            (IntExt::Int(value), IntExt::NegativeInf)
+            | (IntExt::NegativeInf, IntExt::Int(value)) => {
+                if value >= 0 {
+                    IntExt::NegativeInf
+                } else {
+                    IntExt::PositiveInf
+                }
+            }
+
+            (IntExt::Int(value), IntExt::PositiveInf)
+            | (IntExt::PositiveInf, IntExt::Int(value)) => {
+                if value >= 0 {
+                    IntExt::PositiveInf
+                } else {
+                    IntExt::NegativeInf
+                }
+            }
+
+            (IntExt::NegativeInf, IntExt::NegativeInf)
+            | (IntExt::PositiveInf, IntExt::PositiveInf) => IntExt::PositiveInf,
+
+            (IntExt::NegativeInf, IntExt::PositiveInf)
+            | (IntExt::PositiveInf, IntExt::NegativeInf) => IntExt::NegativeInf,
+        }
+    }
+}
+
 impl Neg for IntExt {
     type Output = Self;
 
@@ -359,5 +468,69 @@ mod tests {
     #[test]
     fn test_adding_positive_inf() {
         assert_eq!(Int(3) + PositiveInf, PositiveInf);
+    }
+
+    #[test]
+    fn multiplying_i64s() {
+        let a: IntExt<i64> = Int(6);
+        let b: IntExt<i64> = Int(-2);
+        assert_eq!(a * b, Int(-12));
+    }
+
+    #[test]
+    fn multiplying_i64_zero_with_infinity_is_zero() {
+        let zero: IntExt<i64> = Int(0);
+        assert_eq!(zero * IntExt::<i64>::PositiveInf, Int(0));
+        assert_eq!(IntExt::<i64>::NegativeInf * zero, Int(0));
+    }
+
+    #[test]
+    fn multiplying_i64_large_products_do_not_overflow() {
+        let a: IntExt<i64> = Int(i32::MAX as i64);
+        let b: IntExt<i64> = Int(i32::MAX as i64);
+        assert_eq!(a * b, Int(i32::MAX as i64 * i32::MAX as i64));
+    }
+
+    #[test]
+    fn dividing_i64s_exactly() {
+        assert_eq!(Int(7_i64).div_ceil(Int(2)), Some(Int(4)));
+        assert_eq!(Int(7_i64).div_floor(Int(2)), Some(Int(3)));
+        assert_eq!(Int(-7_i64).div_ceil(Int(2)), Some(Int(-3)));
+        assert_eq!(Int(-7_i64).div_floor(Int(2)), Some(Int(-4)));
+    }
+
+    #[test]
+    fn dividing_i64s_exceeding_f64_precision() {
+        // `i32::MAX * i32::MAX` is well past `f64`'s exact-integer range (2^53), so a
+        // float-based division would round this incorrectly.
+        let huge = i32::MAX as i64 * i32::MAX as i64;
+        assert_eq!(
+            Int(huge).div_floor(Int(i32::MAX as i64)),
+            Some(Int(i32::MAX as i64))
+        );
+    }
+
+    #[test]
+    fn dividing_i64_finite_by_infinite_is_zero() {
+        assert_eq!(Int(5_i64).div_ceil(PositiveInf), Some(Int(0)));
+        assert_eq!(Int(-5_i64).div_floor(NegativeInf), Some(Int(0)));
+    }
+
+    #[test]
+    fn dividing_i64_infinite_by_finite_propagates_sign() {
+        assert_eq!(
+            IntExt::<i64>::PositiveInf.div_ceil(Int(2)),
+            Some(PositiveInf)
+        );
+        assert_eq!(
+            IntExt::<i64>::PositiveInf.div_ceil(Int(-2)),
+            Some(NegativeInf)
+        );
+    }
+
+    #[test]
+    fn dividing_i64_infinite_by_infinite_is_indeterminate() {
+        assert_eq!(IntExt::<i64>::PositiveInf.div_ceil(PositiveInf), None);
+        assert_eq!(IntExt::<i64>::NegativeInf.div_floor(PositiveInf), None);
     }
 }
