@@ -201,7 +201,7 @@ impl ConflictAnalysisContext<'_> {
     }
 
     pub fn add_supporting_inference(&mut self, domain_id: DomainId) {
-        if cfg!(feature = "check-deductions") {
+        if self.proof_log.is_logging_proof() || cfg!(feature = "check-deductions") {
             self.explain_root_assignment(predicate!(
                 domain_id >= self.initial_lower_bound(domain_id)
             ));

@@ -169,8 +169,8 @@ struct Args {
     /// If this flag is present then the minimisation is turned off.
     ///
     /// Possible values: bool
-    #[arg(long = "no-recursive-minimisation", verbatim_doc_comment)]
-    no_recursive_minimisation: bool,
+    #[arg(long = "recursive-minimisation", verbatim_doc_comment)]
+    recursive_minimisation: bool,
 
     /// Decides whether to apply semantic minimisation during conflict analysis; according to the
     /// idea proposed in "Semantic Learning for Lazy Clause Generation - Feydy et al. (2013)".
@@ -598,7 +598,7 @@ fn run() -> PumpkinResult<()> {
         .to_str()
         .ok_or(PumpkinError::invalid_instance(args.instance_path.display()))?;
 
-    let recursive_minimisation = !args.no_recursive_minimisation;
+    let recursive_minimisation = args.recursive_minimisation;
     let iterative_minimisation = !args.no_iterative_minimisation;
 
     match file_format {
