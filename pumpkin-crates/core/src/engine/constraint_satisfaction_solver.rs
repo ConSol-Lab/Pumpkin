@@ -55,6 +55,7 @@ use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_ne_moderate;
 use crate::pumpkin_assert_simple;
+use crate::state::Conflict;
 use crate::state::CurrentNogood;
 use crate::statistics::StatisticLogger;
 use crate::statistics::statistic_logging::should_log_statistics;
@@ -267,13 +268,13 @@ impl ConstraintSatisfactionSolver {
         self.internal_parameters.proof_log.is_logging_proof()
     }
 
-    pub(crate) fn perform_root_level_fixed_point_propagation(&mut self) {
+    pub(crate) fn perform_root_level_fixed_point_propagation(&mut self) -> Result<(), Conflict> {
         pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
         let num_trail_entries = self.state.trail_len();
 
         let result = self.state.propagate_to_fixed_point();
-        if let Err(conflict) = result {
-            self.solver_state.declare_conflict(conflict.into());
+        if result.is_err() {
+            self.solver_state.declare_infeasible();
         }
 
         self.handle_root_propagation(num_trail_entries);
@@ -281,6 +282,8 @@ impl ConstraintSatisfactionSolver {
         if self.solver_state.is_infeasible() {
             self.complete_proof();
         }
+
+        result
     }
 }
 

@@ -37,6 +37,7 @@ use crate::propagation::PropagatorConstructor;
 pub use crate::propagation::store::PropagatorHandle;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
+use crate::state::Conflict;
 use crate::statistics::StatisticLogger;
 use crate::statistics::log_statistic;
 use crate::statistics::log_statistic_postfix;
@@ -487,10 +488,10 @@ impl Solver {
 
     /// Performs fixed-point propagation when the solver is at the root level.
     ///
-    /// If the solver is not at the root-level, then this is a no-op.
-    pub fn perform_root_level_fixed_point_propagation(&mut self) {
+    /// If the solver is not at the root-level, then this is a no-op and returns false.
+    pub fn fixed_point_propagate_root_level(&mut self) -> Result<(), Conflict> {
         if self.satisfaction_solver.get_checkpoint() != 0 {
-            return;
+            return Ok(());
         }
 
         self.satisfaction_solver

@@ -140,9 +140,6 @@ impl<Var: IntegerVariable + 'static> NegatableConstraint for Inequality<Var> {
 #[cfg(test)]
 mod tests {
     #![allow(deprecated, reason = "Using deprecated functions for testing")]
-    use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
-    use pumpkin_core::branching::branchers::no_decision::NoDecisionBrancher;
-    use pumpkin_core::termination::Indefinite;
 
     use super::*;
 
@@ -155,10 +152,8 @@ mod tests {
 
         less_than([x], 0, constraint_tag).post(&mut solver);
 
-        let mut brancher = NoDecisionBrancher;
-        let mut resolver = NoLearningResolver;
-        let result = solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver);
-        assert!(result.is_unsatisfiable());
+        let result = solver.fixed_point_propagate_root_level();
+        assert!(result.is_err());
     }
 
     #[test]
@@ -170,9 +165,7 @@ mod tests {
 
         greater_than([x], 0, constraint_tag).post(&mut solver);
 
-        let mut brancher = NoDecisionBrancher;
-        let mut resolver = NoLearningResolver;
-        let result = solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver);
-        assert!(result.is_unsatisfiable());
+        let result = solver.fixed_point_propagate_root_level();
+        assert!(result.is_err());
     }
 }

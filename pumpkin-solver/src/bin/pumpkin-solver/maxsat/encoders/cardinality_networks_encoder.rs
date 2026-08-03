@@ -392,10 +392,6 @@ fn even_literals(lits: &[Literal]) -> Vec<Literal> {
 #[cfg(test)]
 mod tests {
 
-    use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
-    use pumpkin_core::branching::branchers::no_decision::NoDecisionBrancher;
-    use pumpkin_core::termination::Indefinite;
-
     use super::*;
 
     #[test]
@@ -417,25 +413,9 @@ mod tests {
         let _ = CardinalityNetworkEncoder::new(xs.clone(), 1, &mut solver);
 
         solver.add_clause([xs[0].get_true_predicate()], constraint_tag);
-        assert!(
-            solver
-                .satisfy(
-                    &mut NoDecisionBrancher,
-                    &mut Indefinite,
-                    &mut NoLearningResolver
-                )
-                .is_satisfiable()
-        );
+        assert!(solver.fixed_point_propagate_root_level().is_ok());
         solver.add_clause([xs[1].get_true_predicate()], constraint_tag);
-        assert!(
-            solver
-                .satisfy(
-                    &mut NoDecisionBrancher,
-                    &mut Indefinite,
-                    &mut NoLearningResolver
-                )
-                .is_unsatisfiable()
-        );
+        assert!(solver.fixed_point_propagate_root_level().is_err());
     }
 
     #[test]
@@ -447,37 +427,13 @@ mod tests {
         let _ = CardinalityNetworkEncoder::new(xs.clone(), 2, &mut solver).expect("valid encoding");
 
         solver.add_clause([xs[0].get_true_predicate()], constraint_tag);
-        assert!(
-            solver
-                .satisfy(
-                    &mut NoDecisionBrancher,
-                    &mut Indefinite,
-                    &mut NoLearningResolver
-                )
-                .is_satisfiable()
-        );
+        assert!(solver.fixed_point_propagate_root_level().is_ok());
 
         solver.add_clause([xs[1].get_true_predicate()], constraint_tag);
-        assert!(
-            solver
-                .satisfy(
-                    &mut NoDecisionBrancher,
-                    &mut Indefinite,
-                    &mut NoLearningResolver
-                )
-                .is_satisfiable()
-        );
+        assert!(solver.fixed_point_propagate_root_level().is_ok());
 
         solver.add_clause([xs[2].get_true_predicate()], constraint_tag);
-        assert!(
-            solver
-                .satisfy(
-                    &mut NoDecisionBrancher,
-                    &mut Indefinite,
-                    &mut NoLearningResolver
-                )
-                .is_unsatisfiable()
-        );
+        assert!(solver.fixed_point_propagate_root_level().is_err());
     }
 
     fn create_variables(solver: &mut Solver, n: usize) -> Vec<Literal> {

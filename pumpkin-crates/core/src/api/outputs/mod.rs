@@ -25,21 +25,6 @@ pub enum SatisfactionResult<'solver, 'brancher, 'resolver, B: Brancher, R: Confl
     /// [`TerminationCondition`] triggering.
     Unknown(&'solver Solver, &'brancher B, &'resolver R),
 }
-impl<'solver, 'brancher, 'resolver, B: Brancher, R: ConflictResolver>
-    SatisfactionResult<'solver, 'brancher, 'resolver, B, R>
-{
-    pub fn is_satisfiable(&self) -> bool {
-        matches!(self, SatisfactionResult::Satisfiable(_))
-    }
-
-    pub fn is_unsatisfiable(&self) -> bool {
-        matches!(self, SatisfactionResult::Unsatisfiable(_, _, _))
-    }
-
-    pub fn is_unknown(&self) -> bool {
-        matches!(self, SatisfactionResult::Unknown(_, _, _))
-    }
-}
 
 /// The result of a call to [`Solver::satisfy_under_assumptions`].
 #[derive(Debug)]
