@@ -72,7 +72,7 @@ impl IterativeDomain {
         self.ub = context.initial_upper_bound(domain_id);
         self.holes = context.initial_holes(domain_id);
 
-        context.add_supporting_inference(domain_id);
+        context.explain_initial_domain(domain_id);
     }
 
     /// Tightens the lower-bound to `lb`.

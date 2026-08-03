@@ -200,7 +200,8 @@ impl ConflictAnalysisContext<'_> {
         );
     }
 
-    pub fn add_supporting_inference(&mut self, domain_id: DomainId) {
+    /// Explains the initial domain of the provided [`DomainId`] in the proof.
+    pub fn explain_initial_domain(&mut self, domain_id: DomainId) {
         if self.proof_log.is_logging_proof() || cfg!(feature = "check-deductions") {
             self.explain_root_assignment(predicate!(
                 domain_id >= self.initial_lower_bound(domain_id)
