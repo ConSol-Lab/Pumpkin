@@ -221,6 +221,10 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn complete_proof(&mut self) {
+        if !self.internal_parameters.proof_log.is_logging_proof() {
+            return;
+        }
+
         #[derive(Debug)]
         struct DummyBrancher;
 
