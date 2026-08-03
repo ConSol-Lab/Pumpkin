@@ -71,6 +71,8 @@ impl IterativeDomain {
         self.lb = context.initial_lower_bound(domain_id);
         self.ub = context.initial_upper_bound(domain_id);
         self.holes = context.initial_holes(domain_id);
+
+        context.explain_initial_domain(domain_id);
     }
 
     /// Tightens the lower-bound to `lb`.
@@ -210,17 +212,10 @@ impl IterativeMinimiser {
     }
 
     /// Applies the given predicate from the nogood.
-    pub(crate) fn apply_predicate(
-        &mut self,
-        predicate: Predicate,
-        context: &mut ConflictAnalysisContext,
-    ) {
+    pub(crate) fn apply_predicate(&mut self, predicate: Predicate) {
         let domain = predicate.get_domain();
 
-        let entry = self.domains.entry(domain).or_insert_with(|| {
-            context.explain_initial_domain(domain);
-            Default::default()
-        });
+        let entry = self.domains.entry(domain).or_default();
         entry.push(predicate);
     }
 
