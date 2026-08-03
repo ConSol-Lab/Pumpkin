@@ -1,4 +1,3 @@
-use crate::ConstraintOperationError;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::EmptyDomainConflict;
@@ -20,7 +19,6 @@ pub(crate) enum StoredConflictInfo {
     ///
     /// The provided predicate and its negation are both assumptions.
     InconsistentAssumptions(Predicate),
-    RootLevelConflict(ConstraintOperationError),
 }
 
 impl From<Conflict> for StoredConflictInfo {

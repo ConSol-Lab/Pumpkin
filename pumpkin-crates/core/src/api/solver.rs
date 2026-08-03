@@ -5,6 +5,8 @@ use super::results::SatisfactionResult;
 use super::results::SatisfactionResultUnderAssumptions;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::branching::Brancher;
+use crate::branching::BrancherEvent;
+use crate::branching::SelectionContext;
 use crate::branching::branchers::autonomous_search::AutonomousSearch;
 use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use crate::branching::value_selection::RandomSplitter;
@@ -37,10 +39,10 @@ use crate::propagation::PropagatorConstructor;
 pub use crate::propagation::store::PropagatorHandle;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
-use crate::state::Conflict;
 use crate::statistics::StatisticLogger;
 use crate::statistics::log_statistic;
 use crate::statistics::log_statistic_postfix;
+use crate::termination::Indefinite;
 
 /// The main interaction point which allows the creation of variables, the addition of constraints,
 /// and solving problems.
@@ -488,14 +490,37 @@ impl Solver {
 
     /// Performs fixed-point propagation when the solver is at the root level.
     ///
-    /// If the solver is not at the root-level, then this is a no-op and returns false.
-    pub fn fixed_point_propagate_root_level(&mut self) -> Result<(), Conflict> {
+    /// If the solver is not at the root-level, then this is a no-op and returns [`Ok`].
+    pub fn fixed_point_propagate_root_level(&mut self) -> CSPSolverExecutionFlag {
         if self.satisfaction_solver.get_checkpoint() != 0 {
-            return Ok(());
+            return CSPSolverExecutionFlag::Feasible;
         }
 
-        self.satisfaction_solver
-            .perform_root_level_fixed_point_propagation()
+        #[derive(Debug)]
+        struct NoDecisionBrancher;
+        impl Brancher for NoDecisionBrancher {
+            fn next_decision(&mut self, _context: &mut SelectionContext) -> Option<Predicate> {
+                None
+            }
+
+            fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+                vec![]
+            }
+        }
+
+        #[derive(Debug, Clone)]
+        struct NoResolving;
+        impl ConflictResolver for NoResolving {
+            fn resolve_conflict(&mut self, _context: &mut ConflictAnalysisContext) {
+                unreachable!()
+            }
+        }
+
+        match self.satisfy(&mut NoDecisionBrancher, &mut Indefinite, &mut NoResolving) {
+            SatisfactionResult::Satisfiable(_) => CSPSolverExecutionFlag::Feasible,
+            SatisfactionResult::Unsatisfiable(_, _, _) => CSPSolverExecutionFlag::Infeasible,
+            SatisfactionResult::Unknown(_, _, _) => CSPSolverExecutionFlag::Timeout,
+        }
     }
 }
 

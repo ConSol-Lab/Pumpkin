@@ -55,7 +55,6 @@ use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_ne_moderate;
 use crate::pumpkin_assert_simple;
-use crate::state::Conflict;
 use crate::state::CurrentNogood;
 use crate::statistics::StatisticLogger;
 use crate::statistics::statistic_logging::should_log_statistics;
@@ -266,24 +265,6 @@ impl ConstraintSatisfactionSolver {
 
     pub(crate) fn is_logging_proof(&self) -> bool {
         self.internal_parameters.proof_log.is_logging_proof()
-    }
-
-    pub(crate) fn perform_root_level_fixed_point_propagation(&mut self) -> Result<(), Conflict> {
-        pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
-        let num_trail_entries = self.state.trail_len();
-
-        let result = self.state.propagate_to_fixed_point();
-        if result.is_err() {
-            self.solver_state.declare_infeasible();
-        }
-
-        self.handle_root_propagation(num_trail_entries);
-
-        if self.solver_state.is_infeasible() {
-            self.complete_proof();
-        }
-
-        result
     }
 }
 
@@ -976,10 +957,7 @@ impl ConstraintSatisfactionSolver {
         if predicates.is_empty() {
             // This breaks the proof. If it occurs, we should fix up the proof logging.
             // The main issue is that nogoods are not tagged. In the proof that is problematic.
-            self.solver_state
-                .declare_conflict(StoredConflictInfo::RootLevelConflict(
-                    ConstraintOperationError::InfeasibleClause,
-                ));
+            self.solver_state.declare_infeasible();
             return;
         }
 
@@ -1005,10 +983,7 @@ impl ConstraintSatisfactionSolver {
                 unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
                 state: &mut self.state,
             });
-            self.solver_state
-                .declare_conflict(StoredConflictInfo::RootLevelConflict(
-                    ConstraintOperationError::InfeasibleClause,
-                ));
+            self.solver_state.declare_infeasible();
             return;
         }
         self.add_nogood(predicates, constraint_tag)
