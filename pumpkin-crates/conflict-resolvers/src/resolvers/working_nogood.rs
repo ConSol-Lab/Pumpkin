@@ -68,6 +68,10 @@ impl WorkingNogood {
             iterative_minimisation_statistics: Default::default(),
         }
     }
+
+    pub(crate) fn iterative_minimisation(&self) -> bool {
+        self.iterative_minimisation
+    }
 }
 
 /// Internal methods for removing from/adding to the working nogood.
