@@ -426,8 +426,9 @@ fn compile_array_int_maximum(
     let rhs = context.resolve_integer_variable(&exprs[0])?;
     let array = context.resolve_integer_variable_array(&exprs[1])?;
 
-    let _: () = pumpkin_constraints::maximum(array.as_ref().to_owned(), rhs, constraint_tag)
+    pumpkin_constraints::maximum(array.as_ref().to_owned(), rhs, constraint_tag)
         .post(context.solver);
+
     Ok(())
 }
 
@@ -441,8 +442,9 @@ fn compile_array_int_minimum(
     let rhs = context.resolve_integer_variable(&exprs[0])?;
     let array = context.resolve_integer_variable_array(&exprs[1])?;
 
-    let _: () = pumpkin_constraints::minimum(array.as_ref().to_owned(), rhs, constraint_tag)
+    pumpkin_constraints::minimum(array.as_ref().to_owned(), rhs, constraint_tag)
         .post(context.solver);
+
     Ok(())
 }
 
@@ -519,7 +521,7 @@ fn compile_array_var_int_element(
     let array = context.resolve_integer_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
-    let _: () = pumpkin_constraints::element(index, array.as_ref().to_owned(), rhs, constraint_tag)
+    pumpkin_constraints::element(index, array.as_ref().to_owned(), rhs, constraint_tag)
         .post(context.solver);
     Ok(())
 }
@@ -538,7 +540,8 @@ fn compile_bool_not(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_bool_variable(&exprs[1])?;
 
-    let _: () = pumpkin_constraints::binary_not_equals(a, b, constraint_tag).post(context.solver);
+    pumpkin_constraints::binary_not_equals(a, b, constraint_tag).post(context.solver);
+
     Ok(())
 }
 
@@ -553,7 +556,8 @@ fn compile_bool_eq_reif(
     let b = context.resolve_bool_variable(&exprs[1])?;
     let r = context.resolve_bool_variable(&exprs[2])?;
 
-    let _: () = pumpkin_constraints::binary_equals(a, b, constraint_tag).reify(context.solver, r);
+    pumpkin_constraints::binary_equals(a, b, constraint_tag).reify(context.solver, r);
+
     Ok(())
 }
 
@@ -569,7 +573,8 @@ fn compile_bool_eq(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_bool_variable(&exprs[1])?;
 
-    let _: () = pumpkin_constraints::binary_equals(a, b, constraint_tag).post(context.solver);
+    pumpkin_constraints::binary_equals(a, b, constraint_tag).post(context.solver);
+
     Ok(())
 }
 
@@ -591,6 +596,7 @@ fn compile_bool_clause(
         .collect();
 
     context.solver.add_clause(clause, constraint_tag);
+
     Ok(())
 }
 
@@ -605,7 +611,8 @@ fn compile_bool_and(
     let b = context.resolve_bool_variable(&exprs[1])?;
     let r = context.resolve_bool_variable(&exprs[2])?;
 
-    let _: () = pumpkin_constraints::conjunction([a, b], constraint_tag).reify(context.solver, r);
+    pumpkin_constraints::conjunction([a, b], constraint_tag).reify(context.solver, r);
+
     Ok(())
 }
 
@@ -623,9 +630,9 @@ fn compile_bool2int(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_integer_variable(&exprs[1])?;
 
-    let _: () =
-        pumpkin_constraints::binary_equals(a.get_integer_variable(), b.scaled(1), constraint_tag)
-            .post(context.solver);
+    pumpkin_constraints::binary_equals(a.get_integer_variable(), b.scaled(1), constraint_tag)
+        .post(context.solver);
+
     Ok(())
 }
 
@@ -639,8 +646,8 @@ fn compile_bool_or(
     let clause = context.resolve_bool_variable_array(&exprs[0])?;
     let r = context.resolve_bool_variable(&exprs[1])?;
 
-    let _: () =
-        pumpkin_constraints::clause(clause.as_ref(), constraint_tag).reify(context.solver, r);
+    pumpkin_constraints::clause(clause.as_ref(), constraint_tag).reify(context.solver, r);
+
     Ok(())
 }
 
@@ -695,8 +702,9 @@ fn compile_array_var_bool_element(
     let array = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_bool_variable(&exprs[2])?;
 
-    let _: () = pumpkin_constraints::element(index, array.iter().cloned(), rhs, constraint_tag)
+    pumpkin_constraints::element(index, array.iter().cloned(), rhs, constraint_tag)
         .post(context.solver);
+
     Ok(())
 }
 
@@ -710,8 +718,8 @@ fn compile_array_bool_and(
     let conjunction = context.resolve_bool_variable_array(&exprs[0])?;
     let r = context.resolve_bool_variable(&exprs[1])?;
 
-    let _: () = pumpkin_constraints::conjunction(conjunction.as_ref(), constraint_tag)
-        .reify(context.solver, r);
+    pumpkin_constraints::conjunction(conjunction.as_ref(), constraint_tag).reify(context.solver, r);
+
     Ok(())
 }
 
@@ -731,6 +739,7 @@ fn compile_ternary_int_predicate<C: Constraint>(
 
     let constraint = create_constraint(a, b, c, constraint_tag);
     constraint.post(context.solver);
+
     Ok(())
 }
 
@@ -749,6 +758,7 @@ fn compile_binary_int_predicate<C: Constraint>(
 
     let constraint = create_constraint(a, b, constraint_tag);
     constraint.post(context.solver);
+
     Ok(())
 }
 
@@ -767,7 +777,8 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
     let reif = context.resolve_bool_variable(&exprs[2])?;
 
     let constraint = create_constraint(a, b, constraint_tag);
-    let _: () = constraint.reify(context.solver, reif);
+    constraint.reify(context.solver, reif);
+
     Ok(())
 }
 
@@ -797,6 +808,7 @@ fn compile_int_lin_predicate<C: Constraint>(
 
     let constraint = create_constraint(terms, rhs, constraint_tag);
     constraint.post(context.solver);
+
     Ok(())
 }
 
@@ -818,7 +830,8 @@ fn compile_reified_int_lin_predicate<C: NegatableConstraint>(
     let terms = weighted_vars(weights, vars);
 
     let constraint = create_constraint(terms, rhs, constraint_tag);
-    let _: () = constraint.reify(context.solver, reif);
+    constraint.reify(context.solver, reif);
+
     Ok(())
 }
 
@@ -840,7 +853,8 @@ fn compile_int_lin_imp_predicate<C: Constraint>(
     let terms = weighted_vars(weights, vars);
 
     let constraint = create_constraint(terms, rhs, constraint_tag);
-    let _: () = constraint.implied_by(context.solver, reif);
+    constraint.implied_by(context.solver, reif);
+
     Ok(())
 }
 
@@ -859,7 +873,8 @@ fn compile_binary_int_imp<C: Constraint>(
     let reif = context.resolve_bool_variable(&exprs[2])?;
 
     let constraint = create_constraint(a, b, constraint_tag);
-    let _: () = constraint.implied_by(context.solver, reif);
+    constraint.implied_by(context.solver, reif);
+
     Ok(())
 }
 
@@ -874,13 +889,14 @@ fn compile_bool_lin_eq_predicate(
     let bools = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
-    let _: () = pumpkin_constraints::boolean_equals(
+    pumpkin_constraints::boolean_equals(
         weights.as_ref().to_owned(),
         bools.as_ref().to_owned(),
         rhs,
         constraint_tag,
     )
     .post(context.solver);
+
     Ok(())
 }
 
@@ -895,13 +911,14 @@ fn compile_bool_lin_le_predicate(
     let bools = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
 
-    let _: () = pumpkin_constraints::boolean_less_than_or_equals(
+    pumpkin_constraints::boolean_less_than_or_equals(
         weights.as_ref().to_owned(),
         bools.as_ref().to_owned(),
         rhs,
         constraint_tag,
     )
     .post(context.solver);
+
     Ok(())
 }
 
@@ -914,7 +931,8 @@ fn compile_all_different(
     check_parameters!(exprs, 1, "fzn_all_different");
 
     let variables = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
-    let _: () = pumpkin_constraints::all_different(variables, constraint_tag).post(context.solver);
+    pumpkin_constraints::all_different(variables, constraint_tag).post(context.solver);
+
     Ok(())
 }
 
@@ -931,7 +949,8 @@ fn compile_table(
     let flat_table = context.resolve_array_integer_constants(&exprs[1])?;
     let table = create_table(flat_table, variables.len());
 
-    let _: () = pumpkin_constraints::table(variables, table, constraint_tag).post(context.solver);
+    pumpkin_constraints::table(variables, table, constraint_tag).post(context.solver);
+
     Ok(())
 }
 
@@ -950,8 +969,8 @@ fn compile_table_reif(
 
     let reified = context.resolve_bool_variable(&exprs[2])?;
 
-    let _: () =
-        pumpkin_constraints::table(variables, table, constraint_tag).reify(context.solver, reified);
+    pumpkin_constraints::table(variables, table, constraint_tag).reify(context.solver, reified);
+
     Ok(())
 }
 
