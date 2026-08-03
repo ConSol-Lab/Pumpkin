@@ -44,7 +44,7 @@ accept_proof!(market_split_u3_10, no_trimming);
 fn run_processor_on_proof(model: &str, assert_trimming: bool) {
     let model_path = format!("{}/tests/scaffolds/{model}.fzn", env!("CARGO_MANIFEST_DIR"));
     let scaffold_path = format!(
-        "{}/tests/scaffolds/{model}.scaffold.drcp",
+        "{}/tests/scaffolds/{model}.scaffold.drcp.gz",
         env!("CARGO_MANIFEST_DIR")
     );
     let full_proof_path = format!(
