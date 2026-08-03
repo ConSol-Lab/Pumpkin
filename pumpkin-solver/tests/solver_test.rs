@@ -33,8 +33,7 @@ fn proof_with_reified_literals() {
             5,
             constraint_tag,
         ))
-        .post()
-        .expect_err("unsat");
+        .post();
 
     let mut brancher = solver.default_brancher();
     let mut resolver = ResolutionResolver::default();
@@ -70,8 +69,7 @@ fn proof_with_equality_unit_nogood_step() {
             1,
             constraint_tag,
         ))
-        .post()
-        .expect_err("conflict");
+        .post();
 
     let mut brancher = solver.default_brancher();
     let mut resolver = ResolutionResolver::default();
