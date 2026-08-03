@@ -1,4 +1,7 @@
+use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::VariableState;
 use pumpkin_core::declare_inference_label;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
@@ -43,18 +46,44 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
             .map(|&predicate| context.register_predicate(predicate))
             .collect();
 
+        let mut checkers = RuntimeCheckers::builder();
+        let inference_code = checkers.add_inference_checker(
+            constraint_tag,
+            Nogood,
+            NogoodInferenceChecker {
+                nogood: nogood.clone(),
+            },
+        );
+
         let propagator = DeductionPropagator {
             nogood,
             ids,
-            inference_code: InferenceCode::new(constraint_tag, Nogood),
+            inference_code,
             active: true,
         };
 
         PropagatorSpec {
             registration: EventsToRegister::empty(),
-            checkers: RuntimeCheckers::empty(),
+            checkers: checkers.build(),
             propagator,
         }
+    }
+}
+
+/// Verifies that the inferences produced by a [`DeductionPropagator`] are sound.
+#[derive(Clone, Debug)]
+struct NogoodInferenceChecker {
+    nogood: PropositionalConjunction,
+}
+
+impl InferenceChecker<Predicate> for NogoodInferenceChecker {
+    fn check(
+        &self,
+        state: VariableState<Predicate>,
+        _premises: &[Predicate],
+        _consequent: Option<&Predicate>,
+    ) -> bool {
+        self.nogood.iter().all(|literal| state.is_true(literal))
     }
 }
 

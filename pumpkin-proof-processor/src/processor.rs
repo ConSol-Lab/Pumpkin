@@ -697,6 +697,8 @@ mod tests {
     use drcp_format::IntComparison::*;
     use drcp_format::reader::ReadAtomic;
     use drcp_format::reader::ReadStep;
+    use pumpkin_checking::InferenceChecker;
+    use pumpkin_checking::VariableState;
     use pumpkin_core::declare_inference_label;
     use pumpkin_core::propagation::EventsToRegister;
     use pumpkin_core::propagation::PropagationContext;
@@ -942,15 +944,39 @@ mod tests {
             // needs to fire once `watched` becomes true.
             let _ = context.register_predicate(watched);
 
+            let mut checkers = RuntimeCheckers::builder();
+            let inference_code = checkers.add_inference_checker(
+                constraint_tag,
+                AlwaysConflict,
+                AlwaysConflictChecker { watched, other },
+            );
+
             PropagatorSpec {
                 registration: EventsToRegister::empty(),
-                checkers: RuntimeCheckers::empty(),
+                checkers: checkers.build(),
                 propagator: AlwaysConflictPropagator {
                     watched,
                     other,
-                    inference_code: InferenceCode::new(constraint_tag, AlwaysConflict),
+                    inference_code,
                 },
             }
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    struct AlwaysConflictChecker {
+        watched: Predicate,
+        other: Predicate,
+    }
+
+    impl InferenceChecker<Predicate> for AlwaysConflictChecker {
+        fn check(
+            &self,
+            state: VariableState<Predicate>,
+            _premises: &[Predicate],
+            _consequent: Option<&Predicate>,
+        ) -> bool {
+            state.is_true(&self.watched) && state.is_true(&self.other)
         }
     }
 

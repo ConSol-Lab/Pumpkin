@@ -1053,6 +1053,7 @@ dependencies = [
  "fzn-rs",
  "log",
  "pumpkin-checker",
+ "pumpkin-checking",
  "pumpkin-core",
  "pumpkin-propagators",
  "regex",
