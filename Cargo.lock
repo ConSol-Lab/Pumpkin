@@ -995,7 +995,6 @@ dependencies = [
 name = "pumpkin-constraints"
 version = "0.4.0"
 dependencies = [
- "pumpkin-conflict-resolvers",
  "pumpkin-core",
  "pumpkin-propagators",
 ]
