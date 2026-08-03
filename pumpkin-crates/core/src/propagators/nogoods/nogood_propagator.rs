@@ -37,6 +37,7 @@ use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorSpec;
 use crate::propagation::ReadDomains;
 use crate::propagation::RuntimeCheckers;
+use crate::propagators::nogoods::PropagationBuffer;
 use crate::propagators::nogoods::PropagationMode;
 use crate::propagators::nogoods::WatcherProcessingStatus;
 use crate::propagators::nogoods::arena_allocator::ArenaAllocator;
@@ -101,8 +102,7 @@ pub struct NogoodPropagator {
     semantic_minimiser: SemanticMinimiser,
     /// The priority of the nogood propagator.
     priority: Priority,
-
-    to_propagate: Vec<(Reason, Predicate)>,
+    propagation_buffer: PropagationBuffer,
 }
 
 create_statistics_struct!(NogoodPropagatorStatistics {
@@ -191,7 +191,7 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             propagation_mode: self.propagation_mode,
             semantic_minimiser: Default::default(),
             priority: self.priority,
-            to_propagate: Default::default(),
+            propagation_buffer: Default::default(),
         };
 
         PropagatorSpec {
@@ -308,9 +308,8 @@ impl Propagator for NogoodPropagator {
     fn propagate(&mut self, mut context: PropagationContext) -> Result<(), Conflict> {
         pumpkin_assert_moderate!(self.debug_is_properly_watched());
 
-        for (reason, predicate) in self.to_propagate.drain(..) {
-            context.post(predicate, reason)?;
-        }
+        self.propagation_buffer
+            .propagate_buffer(&mut context, &mut self.statistics)?;
 
         // First we perform nogood management to ensure that the database does not grow excessively
         // large with "bad" nogoods
@@ -1054,16 +1053,11 @@ impl NogoodPropagator {
             .propagation_mode
             .can_be_added_as_permanent(context, &nogood)
         {
-            let len_before = self.to_propagate.len();
-
             self.add_permanent_nogood(nogood, inference_code, context);
 
-            while self.to_propagate.len() != len_before {
-                let (reason, predicate) = self.to_propagate.pop().unwrap();
-                context
-                    .post(predicate, reason)
-                    .expect("Adding asserting nogood should not lead to conflict");
-            }
+            self.propagation_buffer
+                .propagate_buffer(context, &mut self.statistics)
+                .expect("Adding asserting nogood should not lead to conflict");
 
             return;
         }
@@ -1228,14 +1222,14 @@ impl NogoodPropagator {
                 !nogood[0]
             );
 
-            self.to_propagate.push((
+            self.propagation_buffer.buffer_unit_propagation(
                 (
                     PropositionalConjunction::from(input_nogood),
                     &inference_code,
                 )
                     .into(),
                 !nogood[0],
-            ));
+            );
         }
         // Standard case, nogood is of size at least two.
         //
@@ -1252,6 +1246,7 @@ impl NogoodPropagator {
                 &mut self.watch_lists,
                 &mut self.permanent_nogood_ids,
                 &mut self.statistics,
+                &mut self.propagation_buffer,
             )
         }
     }
