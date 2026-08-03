@@ -2,6 +2,7 @@
 #![allow(deprecated, reason = "the Command::cargo_bin function is fine for us")]
 
 use std::fs::File;
+use std::io::BufRead;
 use std::io::BufReader;
 use std::path::Path;
 
@@ -91,8 +92,23 @@ fn run_processor_on_proof(model: &str, assert_trimming: bool) {
 }
 
 fn count_nogoods(proof_path: impl AsRef<Path>) -> usize {
-    let proof = File::open(proof_path).expect("failed read scaffold");
-    let mut proof_reader = ProofReader::<_, i32>::new(BufReader::new(proof));
+    let file = File::open(proof_path.as_ref()).expect("proof exists");
+
+    let is_gzipped = proof_path
+        .as_ref()
+        .extension()
+        .is_some_and(|ext| ext == "gz");
+
+    let mut proof_reader: ProofReader<Box<dyn BufRead>, i32> = if is_gzipped {
+        let decoder = flate2::read::GzDecoder::new(file);
+        let buf_reader = BufReader::new(decoder);
+
+        ProofReader::<Box<dyn BufRead>, i32>::new(Box::new(buf_reader))
+    } else {
+        let buf_reader = BufReader::new(file);
+
+        ProofReader::<Box<dyn BufRead>, i32>::new(Box::new(buf_reader))
+    };
 
     let mut counter = 0;
     while let Some(step) = proof_reader.next_step().expect("failed to read proof") {
