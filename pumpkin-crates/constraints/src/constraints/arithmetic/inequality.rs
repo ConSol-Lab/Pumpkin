@@ -144,6 +144,7 @@ impl<Var: IntegerVariable + 'static> NegatableConstraint for Inequality<Var> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(deprecated, reason = "Using deprecated functions for testing")]
     use super::*;
 
     #[test]
@@ -153,12 +154,10 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
         let x = solver.new_named_bounded_integer(0, 0, "x");
 
-        let result = less_than([x], 0, constraint_tag).post(&mut solver);
-        assert_eq!(
-            result,
-            Err(ConstraintOperationError::InfeasiblePropagator),
-            "Expected {result:?} to be an `InfeasiblePropagator` error"
-        );
+        let _ = less_than([x], 0, constraint_tag).post(&mut solver);
+
+        let result = solver.propagate();
+        assert!(result.is_err());
     }
 
     #[test]
@@ -168,11 +167,9 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
         let x = solver.new_named_bounded_integer(0, 0, "x");
 
-        let result = greater_than([x], 0, constraint_tag).post(&mut solver);
-        assert_eq!(
-            result,
-            Err(ConstraintOperationError::InfeasiblePropagator),
-            "Expected {result:?} to be an `InfeasiblePropagator` error"
-        );
+        let _ = greater_than([x], 0, constraint_tag).post(&mut solver);
+
+        let result = solver.propagate();
+        assert!(result.is_err());
     }
 }

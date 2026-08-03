@@ -606,6 +606,12 @@ impl Solver {
                 .random_generator,
         }
     }
+
+    #[deprecated(note = "Should only be used for testing")]
+    #[allow(clippy::result_unit_err, reason = "Testing method")]
+    pub fn propagate(&mut self) -> Result<(), ()> {
+        self.satisfaction_solver.propagate()
+    }
 }
 
 /// A brancher which makes use of VSIDS \[1\] and solution-based phase saving (both adapted for CP).

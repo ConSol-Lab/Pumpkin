@@ -546,7 +546,7 @@ impl ConstraintSatisfactionSolver {
                 return CSPSolverExecutionFlag::Timeout;
             }
 
-            self.propagate();
+            let _ = self.propagate();
 
             if self.solver_state.no_conflict() {
                 // Restarts should only occur after a new decision level has been declared to
@@ -762,7 +762,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     /// Main propagation loop.
-    pub(crate) fn propagate(&mut self) {
+    pub(crate) fn propagate(&mut self) -> Result<(), ()> {
         let num_trail_entries_prev = self.state.trail_len();
 
         let result = self.state.propagate_to_fixed_point();
@@ -773,7 +773,11 @@ impl ConstraintSatisfactionSolver {
 
         if let Err(conflict) = result {
             self.solver_state.declare_conflict(conflict.into());
+
+            return Err(());
         }
+
+        Ok(())
     }
 
     /// Introduces any root-level propagations to the proof by introducing them as
