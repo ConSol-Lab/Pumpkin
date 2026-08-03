@@ -18,7 +18,6 @@ use crate::propagators::nogoods::Watcher;
 use crate::propagators::nogoods::arena_allocator::ArenaAllocator;
 use crate::propagators::nogoods::arena_allocator::NogoodIndex;
 use crate::pumpkin_assert_moderate;
-use crate::state::Conflict;
 use crate::state::PropagationStatusCP;
 use crate::state::PropagatorHandle;
 use crate::variables::DomainId;
@@ -326,7 +325,7 @@ impl PropagationMode {
         watch_lists: &mut KeyedVec<PredicateId, Vec<Watcher>>,
         permanent_nogood_ids: &mut Vec<NogoodId>,
         statistics: &mut NogoodPropagatorStatistics,
-    ) -> Result<(), Conflict> {
+    ) {
         #[cfg(feature = "check-propagations")]
         let mut nogood = input_nogood
             .iter()
@@ -382,8 +381,6 @@ impl PropagationMode {
                     );
 
                     permanent_nogood_ids.push(nogood_id);
-
-                    Ok(())
                 } else {
                     // Otherwise, we treat it as a "unit" nogood and we perform propagation and
                     // then do not add the nogood to the database.
@@ -395,9 +392,9 @@ impl PropagationMode {
                         &inference_code,
                         statistics,
                         None,
-                    )?;
+                    );
 
-                    Ok(())
+                    todo!();
                 }
             }
             PropagationMode::UnitPropagation => {
@@ -427,8 +424,6 @@ impl PropagationMode {
                     watcher,
                     watch_lists,
                 );
-
-                Ok(())
             }
         }
     }

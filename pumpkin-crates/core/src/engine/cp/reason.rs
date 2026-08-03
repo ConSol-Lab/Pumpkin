@@ -91,7 +91,7 @@ impl ReasonStore {
 pub(crate) struct ReasonRef(pub(crate) u32);
 
 /// A reason for CP propagator to make a change
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Reason {
     /// An eager reason contains the propositional conjunction with the reason, without the
     ///   propagated predicate, and the [`InferenceCode`] identifying the explanation algorithm.

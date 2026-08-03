@@ -374,13 +374,13 @@ impl ConstraintSatisfactionSolver {
             .reify_predicate(literal, predicate);
 
         // If literal --> predicate
-        let _ = self.add_clause(
+        self.add_clause(
             vec![!literal.get_true_predicate(), predicate],
             constraint_tag,
         );
 
         // If !literal --> !predicate
-        let _ = self.add_clause(
+        self.add_clause(
             vec![!literal.get_false_predicate(), !predicate],
             constraint_tag,
         );
@@ -918,13 +918,8 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
-    fn add_nogood(
-        &mut self,
-        nogood: Vec<Predicate>,
-        constraint_tag: ConstraintTag,
-    ) -> Result<(), ConstraintOperationError> {
+    fn add_nogood(&mut self, nogood: Vec<Predicate>, constraint_tag: ConstraintTag) {
         pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
-        let num_trail_entries = self.state.trail_len();
 
         let inference_code = self.state.add_inference_checker(
             constraint_tag,
@@ -941,35 +936,10 @@ impl ConstraintSatisfactionSolver {
         let nogood_propagator =
             nogood_propagator.expect("Nogood propagator handle should refer to nogood propagator");
 
-        let addition_status = nogood_propagator.add_nogood(nogood, inference_code, &mut context);
-
-        if addition_status.is_err() || self.solver_state.is_conflicting() {
-            if let Err(conflict) = addition_status {
-                self.solver_state.declare_conflict(conflict.into());
-            }
-
-            self.handle_root_propagation(num_trail_entries);
-            self.complete_proof();
-            return Err(ConstraintOperationError::InfeasibleNogood);
-        }
-
-        self.handle_root_propagation(num_trail_entries);
+        nogood_propagator.add_nogood(nogood, inference_code, &mut context);
 
         #[allow(deprecated, reason = "Will be refactored")]
         self.state.enqueue_propagator(self.nogood_propagator_handle);
-        let result = self.state.propagate_to_fixed_point();
-        if let Err(conflict) = result {
-            self.solver_state.declare_conflict(conflict.into());
-        }
-
-        self.handle_root_propagation(num_trail_entries);
-
-        if self.solver_state.is_infeasible() {
-            self.complete_proof();
-            Err(ConstraintOperationError::InfeasibleState)
-        } else {
-            Ok(())
-        }
     }
 
     /// Creates a clause from `literals` and adds it to the current formula.
@@ -981,15 +951,11 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         predicates: impl IntoIterator<Item = Predicate>,
         constraint_tag: ConstraintTag,
-    ) -> Result<(), ConstraintOperationError> {
+    ) {
         pumpkin_assert_simple!(
             self.get_checkpoint() == 0,
             "Clauses can only be added in the root"
         );
-
-        if self.solver_state.is_inconsistent() {
-            return Err(ConstraintOperationError::InfeasiblePropagator);
-        }
 
         // We can simply negate the clause and retrieve a nogood, e.g. if we have the
         // clause `[x1 >= 5] \/ [x2 != 3] \/ [x3 <= 5]`, then it **cannot** be the case that `[x1 <
@@ -1011,7 +977,7 @@ impl ConstraintSatisfactionSolver {
                 .declare_conflict(StoredConflictInfo::RootLevelConflict(
                     ConstraintOperationError::InfeasibleClause,
                 ));
-            return Err(ConstraintOperationError::InfeasibleClause);
+            return;
         }
 
         if are_all_falsified_at_root {
@@ -1040,19 +1006,9 @@ impl ConstraintSatisfactionSolver {
                 .declare_conflict(StoredConflictInfo::RootLevelConflict(
                     ConstraintOperationError::InfeasibleClause,
                 ));
-            return Err(ConstraintOperationError::InfeasibleClause);
+            return;
         }
-
-        if let Err(constraint_operation_error) = self.add_nogood(predicates, constraint_tag) {
-            let _ = self.conclude_proof_unsat();
-
-            self.solver_state
-                .declare_conflict(StoredConflictInfo::RootLevelConflict(
-                    constraint_operation_error,
-                ));
-            return Err(constraint_operation_error);
-        }
-        Ok(())
+        self.add_nogood(predicates, constraint_tag)
     }
 
     pub(crate) fn get_checkpoint(&self) -> usize {
@@ -1280,9 +1236,9 @@ mod tests {
         let lit1 = solver.create_new_literal(None).get_true_predicate();
         let lit2 = solver.create_new_literal(None).get_true_predicate();
 
-        let _ = solver.add_clause([lit1, lit2], c1);
-        let _ = solver.add_clause([lit1, !lit2], c2);
-        let _ = solver.add_clause([!lit1, lit2], c3);
+        solver.add_clause([lit1, lit2], c1);
+        solver.add_clause([lit1, !lit2], c2);
+        solver.add_clause([!lit1, lit2], c3);
         (solver, vec![lit1, lit2])
     }
 
@@ -1291,7 +1247,7 @@ mod tests {
         let mut solver = ConstraintSatisfactionSolver::default();
         let constraint_tag = solver.new_constraint_tag();
         let lit1 = solver.create_new_literal(None).get_true_predicate();
-        let _ = solver.add_clause(vec![lit1], constraint_tag);
+        solver.add_clause(vec![lit1], constraint_tag);
 
         run_test(
             solver,
@@ -1327,7 +1283,7 @@ mod tests {
     fn simple_core_extraction_1_infeasible() {
         let (mut solver, lits) = create_instance1();
         let constraint_tag = solver.new_constraint_tag();
-        let _ = solver.add_clause([!lits[0], !lits[1]], constraint_tag);
+        solver.add_clause([!lits[0], !lits[1]], constraint_tag);
         run_test(
             solver,
             vec![!lits[1], !lits[0]],
@@ -1354,8 +1310,8 @@ mod tests {
         let lit2 = solver.create_new_literal(None).get_true_predicate();
         let lit3 = solver.create_new_literal(None).get_true_predicate();
 
-        let _ = solver.add_clause([lit1, lit2, lit3], c1);
-        let _ = solver.add_clause([lit1, !lit2, lit3], c2);
+        solver.add_clause([lit1, lit2, lit3], c1);
+        solver.add_clause([lit1, !lit2, lit3], c2);
         (solver, vec![lit1, lit2, lit3])
     }
 
@@ -1399,7 +1355,7 @@ mod tests {
         let lit2 = solver.create_new_literal(None).get_true_predicate();
         let lit3 = solver.create_new_literal(None).get_true_predicate();
 
-        let _ = solver.add_clause([lit1, lit2, lit3], constraint_tag);
+        solver.add_clause([lit1, lit2, lit3], constraint_tag);
         (solver, vec![lit1, lit2, lit3])
     }
 
