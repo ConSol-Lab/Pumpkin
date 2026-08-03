@@ -134,8 +134,12 @@ impl PossiblyRedundantPredicate {
 
 /// Greedily drops bounds from the initial "use everything" reason for `bounds`.
 ///
-/// In order, for each bound it is dropped if, when relaxing it, the `bound_fn` still justifies the
-/// propagation we are explaining. Every bound that is deemed necessary is appended to `buffer`.
+/// It is checked (in order) whether removing the bound from the explanation for the propagation
+/// still leads to a valid explanation (using bound_fn to calculate the possible bounds). The
+/// predicates necessary for a valid explanation are added to buffer.
+///
+/// Note - This leads to a subset minimal explanation (i.e., no element can be removed for it to
+/// still be a valid explanation), and not a cardinality minimum explanation.
 fn minimize_reason(
     buffer: &mut Vec<Predicate>,
     bounds: [PossiblyRedundantPredicate; 4],
