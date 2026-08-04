@@ -1,4 +1,3 @@
-use pumpkin_core::ConstraintOperationError;
 use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
@@ -85,32 +84,26 @@ impl<Var> Constraint for EqualConstraint<Var>
 where
     Var: IntegerVariable + Clone + 'static,
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) {
         if self.terms.len() == 2 && !solver.is_logging_proof() {
             let _ = solver.add_propagator(BinaryEqualsPropagatorArgs {
                 a: self.terms[0].clone(),
                 b: self.terms[1].scaled(-1).offset(self.rhs),
                 constraint_tag: self.constraint_tag,
-            })?;
+            });
         } else {
-            less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag).post(solver)?;
+            less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag).post(solver);
 
             let negated = self
                 .terms
                 .iter()
                 .map(|var| var.scaled(-1))
                 .collect::<Box<[_]>>();
-            less_than_or_equals(negated, -self.rhs, self.constraint_tag).post(solver)?;
+            less_than_or_equals(negated, -self.rhs, self.constraint_tag).post(solver);
         }
-
-        Ok(())
     }
 
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
         if self.terms.len() == 2 && !solver.is_logging_proof() {
             let _ = solver.add_propagator(ReifiedPropagatorArgs {
                 propagator: BinaryEqualsPropagatorArgs {
@@ -119,10 +112,10 @@ where
                     constraint_tag: self.constraint_tag,
                 },
                 reification_literal,
-            })?;
+            });
         } else {
             less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag)
-                .implied_by(solver, reification_literal)?;
+                .implied_by(solver, reification_literal);
 
             let negated = self
                 .terms
@@ -130,10 +123,8 @@ where
                 .map(|var| var.scaled(-1))
                 .collect::<Box<[_]>>();
             less_than_or_equals(negated, -self.rhs, self.constraint_tag)
-                .implied_by(solver, reification_literal)?;
+                .implied_by(solver, reification_literal);
         }
-
-        Ok(())
     }
 }
 
@@ -156,7 +147,7 @@ impl<Var> Constraint for NotEqualConstraint<Var>
 where
     Var: IntegerVariable + Clone + 'static,
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) {
         let NotEqualConstraint {
             terms,
             rhs,
@@ -168,9 +159,7 @@ where
                 a: terms[0].clone(),
                 b: terms[1].scaled(-1).offset(self.rhs),
                 constraint_tag: self.constraint_tag,
-            })?;
-
-            Ok(())
+            });
         } else {
             LinearNotEqualPropagatorArgs {
                 terms: terms.into(),
@@ -181,11 +170,7 @@ where
         }
     }
 
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
         let NotEqualConstraint {
             terms,
             rhs,
@@ -200,8 +185,7 @@ where
                     constraint_tag: self.constraint_tag,
                 },
                 reification_literal,
-            })?;
-            Ok(())
+            });
         } else {
             LinearNotEqualPropagatorArgs {
                 terms: terms.into(),

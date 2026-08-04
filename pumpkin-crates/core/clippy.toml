@@ -9,4 +9,5 @@ disallowed-types = [
 allowed-duplicate-crates = [
     "wit-bindgen",
     "hashbrown",
+    "syn"
 ]

@@ -12,7 +12,10 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::RuntimeCheckers;
+use pumpkin_core::propagators::nogoods::NogoodChecker;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
@@ -36,7 +39,7 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
     fn create(
         self,
         mut context: PropagatorConstructorContext,
-    ) -> (EventsToRegister, Self::PropagatorImpl) {
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         declare_inference_label!(Nogood);
 
         let DeductionPropagatorConstructor {
@@ -50,16 +53,29 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
             .map(|&predicate| context.register_predicate(predicate))
             .collect();
 
+        let mut checkers = RuntimeCheckers::builder();
+        let inference_code = checkers.add_inference_checker(
+            constraint_tag,
+            Nogood,
+            NogoodChecker {
+                nogood: nogood.iter().copied().collect(),
+            },
+        );
+
         let propagator = DeductionPropagator {
             nogood,
             ids,
-            inference_code: InferenceCode::new(constraint_tag, Nogood),
+            inference_code,
             active: true,
             propagation_priority: priority,
             conflict_detection,
         };
 
-        (EventsToRegister::empty(), propagator)
+        PropagatorSpec {
+            registration: EventsToRegister::empty(),
+            checkers: checkers.build(),
+            propagator,
+        }
     }
 }
 

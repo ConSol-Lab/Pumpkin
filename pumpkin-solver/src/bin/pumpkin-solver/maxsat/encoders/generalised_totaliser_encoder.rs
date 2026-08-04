@@ -69,15 +69,10 @@ impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
                 self.num_clauses_added += 1;
                 self.index_last_added_weighted_literal = i;
 
-                if solver
-                    .add_clause(
-                        [(!weighted_literals[i].literal).get_true_predicate()],
-                        self.constraint_tag,
-                    )
-                    .is_err()
-                {
-                    return Err(EncodingError::CannotStrengthen);
-                }
+                solver.add_clause(
+                    [(!weighted_literals[i].literal).get_true_predicate()],
+                    self.constraint_tag,
+                )
             } else {
                 // the first time a literal no longer exceeds k, we can stop
                 //  since other literals down the line have smaller weights
@@ -202,31 +197,27 @@ impl GeneralisedTotaliserEncoder {
                 //  define sums of one literal from node1
                 //  node1[weight] -> next_layer_node[weight]
                 for weighted_literal in &self.layers[index_current_layer].nodes[index_node1] {
-                    solver
-                        .add_clause(
-                            vec![
-                                (!weighted_literal.literal).get_true_predicate(),
-                                (*value_to_literal_map.get(&weighted_literal.weight).unwrap())
-                                    .get_true_predicate(),
-                            ],
-                            self.constraint_tag,
-                        )
-                        .expect("Adding encoding clause should not lead to conflict");
+                    solver.add_clause(
+                        vec![
+                            (!weighted_literal.literal).get_true_predicate(),
+                            (*value_to_literal_map.get(&weighted_literal.weight).unwrap())
+                                .get_true_predicate(),
+                        ],
+                        self.constraint_tag,
+                    );
                     self.num_clauses_added += 1;
                 }
                 //  define sums of one literal from node2
                 //  node2[weight] -> next_layer_node[weight]
                 for weighted_literal in &self.layers[index_current_layer].nodes[index_node2] {
-                    solver
-                        .add_clause(
-                            vec![
-                                (!weighted_literal.literal).get_true_predicate(),
-                                (*value_to_literal_map.get(&weighted_literal.weight).unwrap())
-                                    .get_true_predicate(),
-                            ],
-                            self.constraint_tag,
-                        )
-                        .expect("Adding encoding clause should not lead to conflict");
+                    solver.add_clause(
+                        vec![
+                            (!weighted_literal.literal).get_true_predicate(),
+                            (*value_to_literal_map.get(&weighted_literal.weight).unwrap())
+                                .get_true_predicate(),
+                        ],
+                        self.constraint_tag,
+                    );
                     self.num_clauses_added += 1;
                 }
                 //  define sums could happen as a result of adding a weight from node1 and a weight
@@ -236,17 +227,15 @@ impl GeneralisedTotaliserEncoder {
                     for wl2 in &self.layers[index_current_layer].nodes[index_node2] {
                         let combined_weight = wl1.weight + wl2.weight;
                         if combined_weight <= k {
-                            solver
-                                .add_clause(
-                                    vec![
-                                        (!wl1.literal).get_true_predicate(),
-                                        (!wl2.literal).get_true_predicate(),
-                                        (*value_to_literal_map.get(&combined_weight).unwrap())
-                                            .get_true_predicate(),
-                                    ],
-                                    self.constraint_tag,
-                                )
-                                .expect("Adding encoding clause should not lead to conflict");
+                            solver.add_clause(
+                                vec![
+                                    (!wl1.literal).get_true_predicate(),
+                                    (!wl2.literal).get_true_predicate(),
+                                    (*value_to_literal_map.get(&combined_weight).unwrap())
+                                        .get_true_predicate(),
+                                ],
+                                self.constraint_tag,
+                            );
                             self.num_clauses_added += 1;
                         // explicitly forbid the assignment of both literals
                         //  note: could look into improving this part with implications weight[i] ->
@@ -254,15 +243,13 @@ impl GeneralisedTotaliserEncoder {
                         //  todo check if these clauses are necessary, and see if the trade-off
                         // makes sense      I think it is necessary
                         } else {
-                            solver
-                                .add_clause(
-                                    vec![
-                                        (!wl1.literal).get_true_predicate(),
-                                        (!wl2.literal).get_true_predicate(),
-                                    ],
-                                    self.constraint_tag,
-                                )
-                                .expect("Adding encoding clause should not lead to conflict");
+                            solver.add_clause(
+                                vec![
+                                    (!wl1.literal).get_true_predicate(),
+                                    (!wl2.literal).get_true_predicate(),
+                                ],
+                                self.constraint_tag,
+                            );
                             self.num_clauses_added += 1;
                         }
                     }

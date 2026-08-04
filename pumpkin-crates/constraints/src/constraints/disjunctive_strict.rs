@@ -1,4 +1,3 @@
-use pumpkin_core::ConstraintOperationError;
 use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::proof::ConstraintTag;
@@ -40,9 +39,9 @@ struct DisjunctiveConstraint<Var> {
 }
 
 impl<Var: IntegerVariable + 'static> Constraint for DisjunctiveConstraint<Var> {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) {
         // We post both the propagator on the lower-bound and the propagator on the upper-bound.
-        DisjunctiveConstructor::new(self.tasks.clone(), self.constraint_tag).post(solver)?;
+        DisjunctiveConstructor::new(self.tasks.clone(), self.constraint_tag).post(solver);
         DisjunctiveConstructor::new(
             self.tasks.iter().map(|task| ArgDisjunctiveTask {
                 // The propagations on the upper-bound take place by "reversing" the tasks such
@@ -55,14 +54,10 @@ impl<Var: IntegerVariable + 'static> Constraint for DisjunctiveConstraint<Var> {
         .post(solver)
     }
 
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
         // We post both the propagator on the lower-bound and the propagator on the upper-bound.
         DisjunctiveConstructor::new(self.tasks.clone(), self.constraint_tag)
-            .implied_by(solver, reification_literal)?;
+            .implied_by(solver, reification_literal);
         DisjunctiveConstructor::new(
             self.tasks.iter().map(|task| ArgDisjunctiveTask {
                 // The propagations on the upper-bound take place by "reversing" the tasks such

@@ -19,7 +19,6 @@ use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::ExplanationContext;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
@@ -27,7 +26,9 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Reason;
@@ -50,18 +51,7 @@ where
 {
     type PropagatorImpl = ElementPropagator<VX, VI, VE>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, Element),
-            Box::new(ElementChecker::new(
-                self.array.clone(),
-                self.index.clone(),
-                self.rhs.clone(),
-            )),
-        );
-    }
-
-    fn create(self, _: PropagatorConstructorContext) -> (EventsToRegister, Self::PropagatorImpl) {
+    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let ElementArgs {
             array,
             index,
@@ -81,7 +71,12 @@ where
         registration = registration.add(&index, DomainEvents::ANY_INT, ID_INDEX);
         registration = registration.add(&rhs, DomainEvents::ANY_INT, ID_RHS);
 
-        let inference_code = InferenceCode::new(constraint_tag, Element);
+        let mut checkers = RuntimeCheckers::builder();
+        let inference_code = checkers.add_inference_checker(
+            constraint_tag,
+            Element,
+            ElementChecker::new(array.clone(), index.clone(), rhs.clone()),
+        );
 
         let propagator = ElementPropagator {
             array,
@@ -91,7 +86,11 @@ where
             rhs_reason_buffer: vec![],
         };
 
-        (registration.build(), propagator)
+        PropagatorSpec {
+            registration: registration.build(),
+            checkers: checkers.build(),
+            propagator,
+        }
     }
 }
 

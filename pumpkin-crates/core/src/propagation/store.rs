@@ -84,7 +84,7 @@ impl PropagatorStore {
         self[handle.id].downcast_mut()
     }
     /// Get multiple exclusive references identified by the passed handle
-    /// 
+    ///
     /// For more info, see [`Self::get_propagator`].
     pub(crate) fn get_propagators_mut<P: Propagator, const N: usize>(
         &mut self,

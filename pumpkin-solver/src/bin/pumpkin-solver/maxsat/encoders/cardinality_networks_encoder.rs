@@ -9,7 +9,6 @@ use pumpkin_solver::core::variables::Literal;
 use super::PseudoBooleanConstraintEncoderInterface;
 use super::WeightedLiteral;
 use super::pseudo_boolean_constraint_encoder::EncodingError;
-use crate::maxsat::encoders::EncodingError::CannotStrengthen;
 
 /// An implementation of the cardinality network encoding for unweighted cardinality constraints in
 /// the form `x1 + ... + xn <= k`. The encoding is arc-consistent and supports incremental
@@ -30,9 +29,7 @@ pub(crate) struct CardinalityNetworkEncoder {
 
 macro_rules! try_add_clause {
     ($self:ident, $csp_solver:ident, $e:expr, $tag:expr) => {
-        if $csp_solver.add_clause($e, $tag).is_err() {
-            return None;
-        }
+        $csp_solver.add_clause($e, $tag);
         $self.num_clauses_added += 1;
     };
 }
@@ -80,17 +77,12 @@ impl PseudoBooleanConstraintEncoderInterface for CardinalityNetworkEncoder {
 
         println!("c CNE k = {k}");
 
-        if solver
-            .add_clause(
-                [(!self.output[k as usize]).get_true_predicate()],
-                self.constraint_tag,
-            )
-            .is_err()
-        {
-            Err(CannotStrengthen)
-        } else {
-            Ok(())
-        }
+        solver.add_clause(
+            [(!self.output[k as usize]).get_true_predicate()],
+            self.constraint_tag,
+        );
+
+        Ok(())
     }
 }
 
@@ -136,13 +128,10 @@ impl CardinalityNetworkEncoder {
         if result.is_err() {
             println!("c encoding detected conflict at the root!");
         } else if !self.output.is_empty() {
-            let r = solver.add_clause(
+            solver.add_clause(
                 [(!self.output[p as usize]).get_true_predicate()],
                 self.constraint_tag,
             );
-            if r.is_err() {
-                return Err(EncodingError::RootPropagationConflict);
-            }
         }
 
         result
@@ -163,12 +152,7 @@ impl CardinalityNetworkEncoder {
             .collect::<Vec<_>>();
 
         for &lit in padding_lits.iter() {
-            if solver
-                .add_clause([(!lit).get_true_predicate()], self.constraint_tag)
-                .is_err()
-            {
-                return Err(EncodingError::RootPropagationConflict);
-            }
+            solver.add_clause([(!lit).get_true_predicate()], self.constraint_tag);
         }
 
         self.output = self
@@ -407,6 +391,7 @@ fn even_literals(lits: &[Literal]) -> Vec<Literal> {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
@@ -427,16 +412,10 @@ mod tests {
 
         let _ = CardinalityNetworkEncoder::new(xs.clone(), 1, &mut solver);
 
-        assert!(
-            solver
-                .add_clause([xs[0].get_true_predicate()], constraint_tag)
-                .is_ok()
-        );
-        assert!(
-            solver
-                .add_clause([xs[1].get_true_predicate()], constraint_tag)
-                .is_err()
-        );
+        solver.add_clause([xs[0].get_true_predicate()], constraint_tag);
+        assert!(solver.propagate_to_fixpoint().is_feasible());
+        solver.add_clause([xs[1].get_true_predicate()], constraint_tag);
+        assert!(solver.propagate_to_fixpoint().is_infeasible());
     }
 
     #[test]
@@ -447,21 +426,14 @@ mod tests {
 
         let _ = CardinalityNetworkEncoder::new(xs.clone(), 2, &mut solver).expect("valid encoding");
 
-        assert!(
-            solver
-                .add_clause([xs[0].get_true_predicate()], constraint_tag)
-                .is_ok()
-        );
-        assert!(
-            solver
-                .add_clause([xs[1].get_true_predicate()], constraint_tag)
-                .is_ok()
-        );
-        assert!(
-            solver
-                .add_clause([xs[2].get_true_predicate()], constraint_tag)
-                .is_err()
-        );
+        solver.add_clause([xs[0].get_true_predicate()], constraint_tag);
+        assert!(solver.propagate_to_fixpoint().is_feasible());
+
+        solver.add_clause([xs[1].get_true_predicate()], constraint_tag);
+        assert!(solver.propagate_to_fixpoint().is_feasible());
+
+        solver.add_clause([xs[2].get_true_predicate()], constraint_tag);
+        assert!(solver.propagate_to_fixpoint().is_infeasible());
     }
 
     fn create_variables(solver: &mut Solver, n: usize) -> Vec<Literal> {

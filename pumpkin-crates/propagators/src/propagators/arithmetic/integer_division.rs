@@ -10,14 +10,15 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -44,10 +45,7 @@ where
 {
     type PropagatorImpl = DivisionPropagator<VA, VB, VC>;
 
-    fn create(
-        self,
-        context: PropagatorConstructorContext,
-    ) -> (EventsToRegister, Self::PropagatorImpl) {
+    fn create(self, context: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let DivisionArgs {
             numerator,
             denominator,
@@ -66,7 +64,16 @@ where
             .add(&rhs, DomainEvents::BOUNDS, ID_RHS)
             .build();
 
-        let inference_code = InferenceCode::new(constraint_tag, Division);
+        let mut checkers = RuntimeCheckers::builder();
+        let inference_code = checkers.add_inference_checker(
+            constraint_tag,
+            Division,
+            IntegerDivisionChecker {
+                numerator: numerator.clone(),
+                denominator: denominator.clone(),
+                rhs: rhs.clone(),
+            },
+        );
 
         let propagator = DivisionPropagator {
             numerator,
@@ -75,18 +82,11 @@ where
             inference_code,
         };
 
-        (registration, propagator)
-    }
-
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, Division),
-            Box::new(IntegerDivisionChecker {
-                numerator: self.numerator.clone(),
-                denominator: self.denominator.clone(),
-                rhs: self.rhs.clone(),
-            }),
-        );
+        PropagatorSpec {
+            registration,
+            checkers: checkers.build(),
+            propagator,
+        }
     }
 }
 
@@ -480,7 +480,7 @@ where
         ]
         .iter()
         .flatten()
-        .min()
+        .max()
         .expect("Expected at least one element to be defined");
 
         let c_lower = self.rhs.induced_lower_bound(&state);
@@ -512,5 +512,48 @@ mod tests {
         });
 
         let _ = state.propagate_to_fixed_point().unwrap_err();
+    }
+
+    #[test]
+    fn checker_does_not_report_false_conflict_for_tight_but_valid_quotient() {
+        use pumpkin_checking::Comparison;
+        use pumpkin_checking::TestAtomic;
+        use pumpkin_checking::VariableState;
+
+        let premises = [
+            TestAtomic {
+                name: "numerator",
+                comparison: Comparison::Equal,
+                value: 7,
+            },
+            TestAtomic {
+                name: "denominator",
+                comparison: Comparison::GreaterEqual,
+                value: 2,
+            },
+            TestAtomic {
+                name: "denominator",
+                comparison: Comparison::LessEqual,
+                value: 3,
+            },
+            TestAtomic {
+                name: "rhs",
+                comparison: Comparison::Equal,
+                value: 3,
+            },
+        ];
+
+        let state = VariableState::prepare_for_conflict_check(premises, None)
+            .expect("no conflicting atomics");
+
+        let checker = IntegerDivisionChecker {
+            numerator: "numerator",
+            denominator: "denominator",
+            rhs: "rhs",
+        };
+
+        // div_floor(7, 2) = 3 is the max corner, so the true upper bound is 3 (matching rhs); a
+        // buggy `.min()` over the floor-corners instead yields 2, which would wrongly conflict.
+        assert!(!checker.check(state, &premises, None));
     }
 }

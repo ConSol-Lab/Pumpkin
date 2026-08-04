@@ -60,7 +60,7 @@ fn main() {
         .map(|i| solver.new_named_bounded_integer(0, n as i32 - 1, format!("q{i}")))
         .collect::<Vec<_>>();
 
-    let _ = solver
+    solver
         .add_constraint(pumpkin_constraints::all_different(
             variables.clone(),
             c1_tag,
@@ -80,10 +80,10 @@ fn main() {
         .map(|(i, var)| var.offset(-(i as i32)))
         .collect::<Vec<_>>();
 
-    let _ = solver
+    solver
         .add_constraint(pumpkin_constraints::all_different(diag1, c2_tag))
         .post();
-    let _ = solver
+    solver
         .add_constraint(pumpkin_constraints::all_different(diag2, c3_tag))
         .post();
 

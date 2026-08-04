@@ -15,7 +15,6 @@ use crate::containers::StorageKey;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::Lbd;
-use crate::engine::PropagationStatusCP;
 use crate::engine::PropagatorConflict;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
@@ -35,7 +34,10 @@ use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::PropagatorSpec;
 use crate::propagation::ReadDomains;
+use crate::propagation::RuntimeCheckers;
+use crate::propagators::nogoods::PropagationBuffer;
 use crate::propagators::nogoods::PropagationMode;
 use crate::propagators::nogoods::WatcherProcessingStatus;
 use crate::propagators::nogoods::arena_allocator::ArenaAllocator;
@@ -100,6 +102,7 @@ pub struct NogoodPropagator {
     semantic_minimiser: SemanticMinimiser,
     /// The priority of the nogood propagator.
     priority: Priority,
+    propagation_buffer: PropagationBuffer,
 }
 
 create_statistics_struct!(NogoodPropagatorStatistics {
@@ -170,10 +173,7 @@ impl NogoodPropagatorConstructor {
 impl PropagatorConstructor for NogoodPropagatorConstructor {
     type PropagatorImpl = NogoodPropagator;
 
-    fn create(
-        self,
-        context: PropagatorConstructorContext,
-    ) -> (EventsToRegister, Self::PropagatorImpl) {
+    fn create(self, context: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let propagator = NogoodPropagator {
             statistics: NogoodPropagatorStatistics::default(),
             handle: PropagatorHandle::new(context.propagator_id),
@@ -191,9 +191,14 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             propagation_mode: self.propagation_mode,
             semantic_minimiser: Default::default(),
             priority: self.priority,
+            propagation_buffer: Default::default(),
         };
 
-        (EventsToRegister::empty(), propagator)
+        PropagatorSpec {
+            registration: EventsToRegister::empty(),
+            checkers: RuntimeCheckers::empty(),
+            propagator,
+        }
     }
 }
 
@@ -302,6 +307,9 @@ impl Propagator for NogoodPropagator {
     )]
     fn propagate(&mut self, mut context: PropagationContext) -> Result<(), Conflict> {
         pumpkin_assert_moderate!(self.debug_is_properly_watched());
+
+        self.propagation_buffer
+            .propagate_buffer(&mut context, &mut self.statistics)?;
 
         // First we perform nogood management to ensure that the database does not grow excessively
         // large with "bad" nogoods
@@ -1045,8 +1053,12 @@ impl NogoodPropagator {
             .propagation_mode
             .can_be_added_as_permanent(context, &nogood)
         {
-            self.add_permanent_nogood(nogood, inference_code, context)
-                .expect("Unit learned nogoods cannot fail.");
+            self.add_permanent_nogood(nogood, inference_code, context);
+
+            self.propagation_buffer
+                .propagate_buffer(context, &mut self.statistics)
+                .expect("Adding asserting nogood should not lead to conflict");
+
             return;
         }
 
@@ -1118,7 +1130,7 @@ impl NogoodPropagator {
         nogood: Vec<Predicate>,
         inference_code: InferenceCode,
         context: &mut PropagationContext,
-    ) -> PropagationStatusCP {
+    ) {
         self.add_permanent_nogood(nogood, inference_code, context)
     }
 
@@ -1128,7 +1140,7 @@ impl NogoodPropagator {
         mut nogood: Vec<Predicate>,
         inference_code: InferenceCode,
         context: &mut PropagationContext,
-    ) -> PropagationStatusCP {
+    ) {
         pumpkin_assert_simple!(
             context.get_checkpoint() == 0,
             "Only allowed to add nogoods permanently at the root for now."
@@ -1137,7 +1149,7 @@ impl NogoodPropagator {
         // If the nogood is empty then it is automatically satisfied (though it is unusual!)
         if nogood.is_empty() {
             warn!("Adding empty nogood, unusual!");
-            return Ok(());
+            return;
         }
 
         // After preprocessing the nogood may propagate. If that happens, there is no reason for
@@ -1210,15 +1222,14 @@ impl NogoodPropagator {
                 !nogood[0]
             );
 
-            // Post the negated predicate at the root to respect the nogood.
-            context.post(
-                !nogood[0],
+            self.propagation_buffer.buffer_unit_propagation(
                 (
                     PropositionalConjunction::from(input_nogood),
                     &inference_code,
-                ),
-            )?;
-            Ok(())
+                )
+                    .into(),
+                !nogood[0],
+            );
         }
         // Standard case, nogood is of size at least two.
         //
@@ -1235,6 +1246,7 @@ impl NogoodPropagator {
                 &mut self.watch_lists,
                 &mut self.permanent_nogood_ids,
                 &mut self.statistics,
+                &mut self.propagation_buffer,
             )
         }
     }
@@ -2026,9 +2038,7 @@ mod tests {
                 .get_propagator_mut_with_context(solver.nogood_handle);
             let nogood_propagator: &mut NogoodPropagator = nogood_propagator.unwrap();
 
-            nogood_propagator
-                .add_nogood(nogood.into(), inference_code, &mut context)
-                .unwrap();
+            nogood_propagator.add_nogood(nogood.into(), inference_code, &mut context);
         }
 
         let _ = solver.increase_lower_bound_and_notify(id, a.id(), a, 3);
@@ -2063,9 +2073,7 @@ mod tests {
                 .get_propagator_mut_with_context(solver.nogood_handle);
             let nogood_propagator: &mut NogoodPropagator = nogood_propagator.unwrap();
 
-            nogood_propagator
-                .add_nogood(nogood.into(), inference_code, &mut context)
-                .unwrap();
+            nogood_propagator.add_nogood(nogood.into(), inference_code, &mut context);
         }
 
         let _ = solver.increase_lower_bound_and_notify(id, a.id(), a, 3);

@@ -16,6 +16,7 @@ use pumpkin_solver::core::proof::ConstraintTag;
 use pumpkin_solver::core::proof::ProofLog;
 use pumpkin_solver::core::rand::SeedableRng;
 use pumpkin_solver::core::rand::rngs::SmallRng;
+use pumpkin_solver::core::results::CSPSolverExecutionFlag;
 use pumpkin_solver::core::results::SolutionReference;
 use pumpkin_solver::core::termination::Indefinite;
 use pumpkin_solver::core::termination::TerminationCondition;
@@ -27,6 +28,7 @@ use pyo3::prelude::*;
 use crate::brancher::PythonBrancher;
 use crate::constraints::Constraint;
 use crate::optimisation::Direction;
+use crate::optimisation::FixPointPropagationResult;
 use crate::optimisation::OptimisationResult;
 use crate::optimisation::Optimiser;
 use crate::result::SatisfactionResult;
@@ -199,18 +201,14 @@ impl Model {
 
     /// Add the given constraint to the model.
     #[pyo3(signature = (constraint))]
-    fn add_constraint(&mut self, constraint: Constraint) -> PyResult<()> {
-        constraint
-            .post(&mut self.solver)
-            .map_err(|_| PyRuntimeError::new_err("inconsistency detected"))
+    fn add_constraint(&mut self, constraint: Constraint) {
+        constraint.post(&mut self.solver)
     }
 
     /// Add `premise -> constraint` to the model.
     #[pyo3(signature = (constraint, premise))]
-    fn add_implication(&mut self, constraint: Constraint, premise: BoolExpression) -> PyResult<()> {
-        constraint
-            .implied_by(&mut self.solver, premise.0)
-            .map_err(|_| PyRuntimeError::new_err("inconsistency detected"))
+    fn add_implication(&mut self, constraint: Constraint, premise: BoolExpression) {
+        constraint.implied_by(&mut self.solver, premise.0)
     }
 
     #[pyo3(signature = (timeout=None))]
@@ -280,6 +278,15 @@ impl Model {
             pumpkin_solver::core::results::SatisfactionResultUnderAssumptions::Unknown(_) => {
                 SatisfactionUnderAssumptionsResult::Unknown()
             }
+        }
+    }
+
+    #[pyo3()]
+    fn propagate_to_fixpoint(&mut self) -> FixPointPropagationResult {
+        match self.solver.propagate_to_fixpoint() {
+            CSPSolverExecutionFlag::Feasible => FixPointPropagationResult::Feasible,
+            CSPSolverExecutionFlag::Infeasible => FixPointPropagationResult::Infeasible,
+            CSPSolverExecutionFlag::Timeout => FixPointPropagationResult::Unknown,
         }
     }
 
