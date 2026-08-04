@@ -37,6 +37,7 @@ use crate::predicates;
 use crate::proof::ConstraintTag;
 use crate::propagation::PropagatorConstructor;
 pub use crate::propagation::store::PropagatorHandle;
+use crate::pumpkin_assert_eq_simple;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
 use crate::statistics::StatisticLogger;
@@ -488,13 +489,16 @@ impl Solver {
         optimisation_procedure.optimise(brancher, termination, resolver, self)
     }
 
-    /// Performs fixed-point propagation when the solver is at the root level.
+    /// Propagates the currently enqueued propagators to fixpoint.
     ///
-    /// If the solver is not at the root-level, then this is a no-op and returns [`Ok`].
-    pub fn fixed_point_propagate_root_level(&mut self) -> CSPSolverExecutionFlag {
-        if self.satisfaction_solver.get_checkpoint() != 0 {
-            return CSPSolverExecutionFlag::Feasible;
-        }
+    /// Panics if the current checkpoint in the solver is not equal to 0 (i.e., the solver is not
+    /// at the root state).
+    pub fn propagate_to_fixpoint(&mut self) -> CSPSolverExecutionFlag {
+        pumpkin_assert_eq_simple!(
+            self.satisfaction_solver.get_checkpoint(),
+            0,
+            "Should only be able to call this method at the root level."
+        );
 
         #[derive(Debug)]
         struct NoDecisionBrancher;

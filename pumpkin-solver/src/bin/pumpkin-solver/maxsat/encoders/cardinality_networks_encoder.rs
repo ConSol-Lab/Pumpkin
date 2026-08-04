@@ -413,9 +413,9 @@ mod tests {
         let _ = CardinalityNetworkEncoder::new(xs.clone(), 1, &mut solver);
 
         solver.add_clause([xs[0].get_true_predicate()], constraint_tag);
-        assert!(solver.fixed_point_propagate_root_level().is_feasible());
+        assert!(solver.propagate_to_fixpoint().is_feasible());
         solver.add_clause([xs[1].get_true_predicate()], constraint_tag);
-        assert!(solver.fixed_point_propagate_root_level().is_infeasible());
+        assert!(solver.propagate_to_fixpoint().is_infeasible());
     }
 
     #[test]
@@ -427,13 +427,13 @@ mod tests {
         let _ = CardinalityNetworkEncoder::new(xs.clone(), 2, &mut solver).expect("valid encoding");
 
         solver.add_clause([xs[0].get_true_predicate()], constraint_tag);
-        assert!(solver.fixed_point_propagate_root_level().is_feasible());
+        assert!(solver.propagate_to_fixpoint().is_feasible());
 
         solver.add_clause([xs[1].get_true_predicate()], constraint_tag);
-        assert!(solver.fixed_point_propagate_root_level().is_feasible());
+        assert!(solver.propagate_to_fixpoint().is_feasible());
 
         solver.add_clause([xs[2].get_true_predicate()], constraint_tag);
-        assert!(solver.fixed_point_propagate_root_level().is_infeasible());
+        assert!(solver.propagate_to_fixpoint().is_infeasible());
     }
 
     fn create_variables(solver: &mut Solver, n: usize) -> Vec<Literal> {

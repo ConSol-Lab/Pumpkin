@@ -145,7 +145,7 @@ where
 
             // Next, we perform root-level propagation to ensure that the lower-bound is as tight
             // as it could be.
-            let result = solver.fixed_point_propagate_root_level();
+            let result = solver.propagate_to_fixpoint();
             assert!(result.is_feasible());
 
             proven_lower_bound = objective_lower_bound + 1;

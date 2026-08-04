@@ -152,7 +152,7 @@ mod tests {
 
         less_than([x], 0, constraint_tag).post(&mut solver);
 
-        let result = solver.fixed_point_propagate_root_level();
+        let result = solver.propagate_to_fixpoint();
         assert!(result.is_infeasible());
     }
 
@@ -165,7 +165,7 @@ mod tests {
 
         greater_than([x], 0, constraint_tag).post(&mut solver);
 
-        let result = solver.fixed_point_propagate_root_level();
+        let result = solver.propagate_to_fixpoint();
         assert!(result.is_infeasible());
     }
 }
