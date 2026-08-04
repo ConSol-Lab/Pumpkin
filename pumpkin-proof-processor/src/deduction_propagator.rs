@@ -14,6 +14,7 @@ use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::propagation::RuntimeCheckers;
+use pumpkin_core::propagators::nogoods::NogoodChecker;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
@@ -50,8 +51,8 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
         let inference_code = checkers.add_inference_checker(
             constraint_tag,
             Nogood,
-            NogoodInferenceChecker {
-                nogood: nogood.clone(),
+            NogoodChecker {
+                nogood: nogood.iter().copied().collect(),
             },
         );
 
@@ -67,23 +68,6 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
             checkers: checkers.build(),
             propagator,
         }
-    }
-}
-
-/// Verifies that the inferences produced by a [`DeductionPropagator`] are sound.
-#[derive(Clone, Debug)]
-struct NogoodInferenceChecker {
-    nogood: PropositionalConjunction,
-}
-
-impl InferenceChecker<Predicate> for NogoodInferenceChecker {
-    fn check(
-        &self,
-        state: VariableState<Predicate>,
-        _premises: &[Predicate],
-        _consequent: Option<&Predicate>,
-    ) -> bool {
-        self.nogood.iter().all(|literal| state.is_true(literal))
     }
 }
 
