@@ -103,9 +103,6 @@ impl ConflictAnalysisContext<'_> {
                 conflict.conjunction
             }
             StoredConflictInfo::EmptyDomain(conflict) => self.compute_conflict_nogood(conflict),
-            StoredConflictInfo::RootLevelConflict(_) => {
-                unreachable!("Should never attempt to learn a nogood from a root level conflict")
-            }
             StoredConflictInfo::InconsistentAssumptions(predicate) => {
                 vec![predicate, !predicate].into()
             }

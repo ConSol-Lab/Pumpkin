@@ -19,7 +19,7 @@ fn iterator_finds_all_solutions() {
     let z = solver.new_bounded_integer(0, 2);
 
     // We create the all-different constraint
-    let _ = solver
+    solver
         .add_constraint(pumpkin_constraints::all_different(
             vec![x, y, z],
             constraint_tag,

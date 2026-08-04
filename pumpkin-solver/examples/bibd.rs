@@ -96,7 +96,7 @@ fn main() {
 
     // Enforce the row sum.
     for row in matrix.iter() {
-        let _ = solver
+        solver
             .add_constraint(pumpkin_constraints::equals(
                 row.clone(),
                 bibd.row_sum as i32,
@@ -107,7 +107,7 @@ fn main() {
 
     // Enforce the column sum.
     for row in transpose(&matrix) {
-        let _ = solver
+        solver
             .add_constraint(pumpkin_constraints::equals(
                 row,
                 bibd.column_sum as i32,
@@ -125,7 +125,7 @@ fn main() {
     for r1 in 0..bibd.rows as usize {
         for r2 in r1 + 1..bibd.rows as usize {
             for col in 0..bibd.columns as usize {
-                let _ = solver
+                solver
                     .add_constraint(pumpkin_constraints::times(
                         matrix[r1][col],
                         matrix[r2][col],
@@ -135,7 +135,7 @@ fn main() {
                     .post();
             }
 
-            let _ = solver
+            solver
                 .add_constraint(pumpkin_constraints::less_than_or_equals(
                     pairwise_product[r1][r2].clone(),
                     bibd.max_dot_product as i32,

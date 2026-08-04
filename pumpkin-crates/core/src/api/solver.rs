@@ -4,8 +4,9 @@ use super::results::OptimisationResult;
 use super::results::SatisfactionResult;
 use super::results::SatisfactionResultUnderAssumptions;
 use crate::basic_types::CSPSolverExecutionFlag;
-use crate::basic_types::ConstraintOperationError;
 use crate::branching::Brancher;
+use crate::branching::BrancherEvent;
+use crate::branching::SelectionContext;
 use crate::branching::branchers::autonomous_search::AutonomousSearch;
 use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use crate::branching::value_selection::RandomSplitter;
@@ -36,11 +37,13 @@ use crate::predicates;
 use crate::proof::ConstraintTag;
 use crate::propagation::PropagatorConstructor;
 pub use crate::propagation::store::PropagatorHandle;
+use crate::pumpkin_assert_eq_simple;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
 use crate::statistics::StatisticLogger;
 use crate::statistics::log_statistic;
 use crate::statistics::log_statistic_postfix;
+use crate::termination::Indefinite;
 
 /// The main interaction point which allows the creation of variables, the addition of constraints,
 /// and solving problems.
@@ -485,6 +488,44 @@ impl Solver {
     {
         optimisation_procedure.optimise(brancher, termination, resolver, self)
     }
+
+    /// Propagates the currently enqueued propagators to fixpoint.
+    ///
+    /// Panics if the current checkpoint in the solver is not equal to 0 (i.e., the solver is not
+    /// at the root state).
+    pub fn propagate_to_fixpoint(&mut self) -> CSPSolverExecutionFlag {
+        pumpkin_assert_eq_simple!(
+            self.satisfaction_solver.get_checkpoint(),
+            0,
+            "Should only be able to call this method at the root level."
+        );
+
+        #[derive(Debug)]
+        struct NoDecisionBrancher;
+        impl Brancher for NoDecisionBrancher {
+            fn next_decision(&mut self, _context: &mut SelectionContext) -> Option<Predicate> {
+                None
+            }
+
+            fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+                vec![]
+            }
+        }
+
+        #[derive(Debug, Clone)]
+        struct NoResolving;
+        impl ConflictResolver for NoResolving {
+            fn resolve_conflict(&mut self, _context: &mut ConflictAnalysisContext) {
+                unreachable!()
+            }
+        }
+
+        match self.satisfy(&mut NoDecisionBrancher, &mut Indefinite, &mut NoResolving) {
+            SatisfactionResult::Satisfiable(_) => CSPSolverExecutionFlag::Feasible,
+            SatisfactionResult::Unsatisfiable(_, _, _) => CSPSolverExecutionFlag::Infeasible,
+            SatisfactionResult::Unknown(_, _, _) => CSPSolverExecutionFlag::Timeout,
+        }
+    }
 }
 
 /// Functions for adding new constraints to the solver.
@@ -527,31 +568,22 @@ impl Solver {
     }
 
     /// Creates a clause from `literals` and adds it to the current formula.
-    ///
-    /// If the formula becomes trivially unsatisfiable, a [`ConstraintOperationError`] will be
-    /// returned. Subsequent calls to this method will always return an error, and no
-    /// modification of the solver will take place.
     pub fn add_clause(
         &mut self,
         clause: impl IntoIterator<Item = Predicate>,
         constraint_tag: ConstraintTag,
-    ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver.add_clause(clause, constraint_tag)
+    ) {
+        self.satisfaction_solver.add_clause(clause, constraint_tag);
     }
 
-    /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
-    /// through propagation, this will return a [`ConstraintOperationError`].
+    /// Post a new propagator to the solver.
     ///
     /// A propagator is provided through an implementation of [`PropagatorConstructor`]. The
     /// propagator that will be added is [`PropagatorConstructor::PropagatorImpl`].
-    ///
-    /// If the solver is already in a conflicting state, i.e. a previous call to this method
-    /// already returned `false`, calling this again will not alter the solver in any way, and
-    /// `false` will be returned again.
     pub fn add_propagator<Constructor>(
         &mut self,
         constructor: Constructor,
-    ) -> Result<PropagatorHandle<Constructor::PropagatorImpl>, ConstraintOperationError>
+    ) -> PropagatorHandle<Constructor::PropagatorImpl>
     where
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
