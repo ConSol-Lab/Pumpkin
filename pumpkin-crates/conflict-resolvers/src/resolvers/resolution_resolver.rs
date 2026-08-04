@@ -63,7 +63,7 @@ pub struct ResolutionResolver {
 
 impl Default for ResolutionResolver {
     fn default() -> Self {
-        ResolutionResolver::new(AnalysisMode::OneUIP, true, true)
+        ResolutionResolver::new(AnalysisMode::OneUIP, false, true)
     }
 }
 
