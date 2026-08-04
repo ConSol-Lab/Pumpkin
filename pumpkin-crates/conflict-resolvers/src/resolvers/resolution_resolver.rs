@@ -1,5 +1,6 @@
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
+use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conflict_resolving::AnalysisMode;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::conflict_resolving::ConflictResolver;
@@ -166,9 +167,15 @@ impl ResolutionResolver {
         let conflict_nogood = context.get_conflict_nogood();
 
         // Initialise the data structures with the conflict nogood.
+        let mut added_any_to_nogood = false;
         for predicate in conflict_nogood.iter() {
-            self.add_predicate_to_conflict_nogood(*predicate, self.mode, context);
+            added_any_to_nogood |=
+                self.add_predicate_to_conflict_nogood(*predicate, self.mode, context);
         }
+        pumpkin_assert_simple!(
+            added_any_to_nogood,
+            "Expected that at least one element from the conflict nogood is from the current decision level. This could indicate that a propagator is not propagating as strongly as it could."
+        );
 
         // Record conflict nogood size statistics.
         let num_initial_conflict_predicates =
@@ -202,7 +209,7 @@ impl ResolutionResolver {
             // 2) Get the reason for the predicate and add it to the nogood.
             self.reason_buffer.clear();
 
-            let _ = context.get_propagation_reason(
+            let inference_code = context.get_propagation_reason(
                 next_predicate,
                 CurrentNogood::new(
                     &self.to_process_heap,
@@ -212,9 +219,19 @@ impl ResolutionResolver {
                 &mut self.reason_buffer,
             );
 
+            let mut added_any_to_nogood = false;
             for i in 0..self.reason_buffer.len() {
-                self.add_predicate_to_conflict_nogood(self.reason_buffer[i], self.mode, context);
+                added_any_to_nogood |= self.add_predicate_to_conflict_nogood(
+                    self.reason_buffer[i],
+                    self.mode,
+                    context,
+                );
             }
+            pumpkin_assert_simple!(
+                added_any_to_nogood,
+                "Expected at least one element in the reason of {:?} -> {next_predicate} to be from the current decision level. This could indicate that a propagator is not propagating as strongly as it could.\nInference Code: {inference_code:?}",
+                self.reason_buffer,
+            );
         }
 
         self.extract_final_nogood(context);
@@ -228,16 +245,17 @@ impl ResolutionResolver {
         self.unique_variable_helper.clear();
     }
 
-    /// Add the predicate to the current conflict nogood if we know it needs to be added.
+    /// Add the predicate to the current conflict nogood and returns if it was from the current
+    /// decision level.
     ///
-    /// If a `root_explanation_context` is provided, then root-level assignments are explained as
-    /// well in the proof log.
+    /// This method returns false if, for example, the predicate was from a previous decision
+    /// level, or if it has already been seen.
     fn add_predicate_to_conflict_nogood(
         &mut self,
         predicate: Predicate,
         mode: AnalysisMode,
         context: &mut ConflictAnalysisContext,
-    ) {
+    ) -> bool {
         let dec_level = context
             .get_checkpoint_for_predicate(predicate)
             .unwrap_or_else(|| {
@@ -250,6 +268,7 @@ impl ResolutionResolver {
         // Ignore root level predicates.
         if dec_level == 0 {
             context.explain_root_assignment(predicate);
+            false
         }
         // 1UIP
         // If the variables are from the current decision level then we want to potentially add
@@ -325,12 +344,14 @@ impl ResolutionResolver {
                 pumpkin_assert_moderate!(
                     *self.to_process_heap.get_value(predicate_id) == heap_value.try_into().unwrap(),
                     "The value in the heap should be the same as was added"
-                )
+                );
             }
+            true
         } else {
             // We do not check for duplicate, we simply add the predicate.
             // Semantic minimisation will later remove duplicates and do other processing.
             self.processed_nogood_predicates.push(predicate);
+            false
         }
     }
 
