@@ -406,6 +406,13 @@ impl State {
         self.propagators.get_propagator_mut(handle)
     }
 
+    /// Get mutable references by to the propagators identified by the given handles.
+    pub fn get_propagators_mut<P: Propagator, const N: usize>(
+        &mut self,
+        handles: [PropagatorHandle<P>; N],
+    ) -> Option<[&mut P; N]> {
+        self.propagators.get_propagators_mut(handles)
+    }
     /// Convert the given propagator ID into a typed [`PropagatorHandle`].
     ///
     /// If the propagator ID does not correspond to a propagator of the expected type, then

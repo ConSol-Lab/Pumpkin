@@ -50,6 +50,12 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
         self.elements.get_mut(key.index())
     }
 
+    pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [Key; N]) -> Option<[&mut Value; N]> {
+        self.elements
+            .get_disjoint_mut(keys.map(|key| key.index()))
+            .ok()
+    }
+
     pub fn pop(&mut self) -> Option<(Key, Value)> {
         self.elements.pop().map(|value| {
             let key = Key::create_from_index(self.elements.len());

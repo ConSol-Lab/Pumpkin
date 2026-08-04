@@ -94,10 +94,32 @@ pub(crate) enum ProofProcessError {
 /// A deduction that was posted to the solver.
 #[derive(Clone, Debug)]
 struct PostedDeduction {
-    predicates: PropositionalConjunction,
+    predicates: Rc<[Predicate]>,
     conflict_detection_handle: PropagatorHandle<DeductionPropagator>,
     unit_prop_handle: PropagatorHandle<DeductionPropagator>,
     marked: bool,
+}
+
+impl PostedDeduction {
+    /// Deactivates the propagators associated with this `PostedDeduction`.
+    fn deactivate_propagators(&self, state: &mut State) {
+        let propagator_slice = state
+            .get_propagators_mut([self.conflict_detection_handle, self.unit_prop_handle])
+            .expect("All handles are valid");
+        for propagator in propagator_slice {
+            propagator.deactivate();
+        }
+    }
+
+    /// Updates the priority of both propagators associated with this `PostedDeduction`.
+    fn update_propagators_priority(&self, state: &mut State, new_priority: Priority) {
+        let propagator_slice = state
+            .get_propagators_mut([self.conflict_detection_handle, self.unit_prop_handle])
+            .expect("All handles are valid");
+        for propagator in propagator_slice {
+            propagator.set_priority(new_priority);
+        }
+    }
 }
 
 type DeductionStack = KeyedVec<ConstraintTag, Option<PostedDeduction>>;
@@ -156,14 +178,8 @@ impl ProofProcessor {
 
             let new_checkpoint = self.state.get_checkpoint() - 1;
             let _ = self.state.restore_to(new_checkpoint);
-            self.state
-                .get_propagator_mut(posted_deduction.conflict_detection_handle)
-                .expect("all handles are valid")
-                .deactivate();
-            self.state
-                .get_propagator_mut(posted_deduction.unit_prop_handle)
-                .expect("all handles are valid")
-                .deactivate();
+
+            posted_deduction.deactivate_propagators(&mut self.state);
 
             debug!("Processing deduction {}", NonZero::from(tag));
             trace!("  nogood: {:?}", posted_deduction.predicates);
@@ -324,22 +340,23 @@ impl ProofProcessor {
             trace!("    {nogood:?}");
 
             self.state.new_checkpoint();
+            let nogood_rc = nogood.to_vec().into();
             let conflict_handle = self.state.add_propagator(DeductionPropagatorConstructor {
-                nogood: nogood.iter().copied().collect(),
+                nogood: Rc::clone(&nogood_rc),
                 constraint_tag,
                 priority: Priority::UltraLow,
                 conflict_detection: true,
             });
 
             let prop_handle = self.state.add_propagator(DeductionPropagatorConstructor {
-                nogood: nogood.iter().copied().collect(),
+                nogood: Rc::clone(&nogood_rc),
                 constraint_tag,
                 priority: Priority::Lowest,
                 conflict_detection: false,
             });
             nogood_stack.accomodate(constraint_tag, None);
             nogood_stack[constraint_tag] = Some(PostedDeduction {
-                predicates: nogood,
+                predicates: nogood_rc,
                 conflict_detection_handle: conflict_handle,
                 unit_prop_handle: prop_handle,
                 marked: false,
@@ -417,14 +434,7 @@ impl ProofProcessor {
 
         if let Some(posted_deduction) = stack_entry {
             posted_deduction.marked = true;
-            self.state
-                .get_propagator_mut(posted_deduction.conflict_detection_handle)
-                .expect("All handles are valid")
-                .set_priority(Priority::VeryLow);
-            self.state
-                .get_propagator_mut(posted_deduction.unit_prop_handle)
-                .expect("All handles are valid")
-                .set_priority(Priority::VeryLow);
+            posted_deduction.update_propagators_priority(&mut self.state, Priority::VeryLow);
         } else {
             // In this case we have to explain by 'root propagation' and no deductions
             // were used. The predicate is propagated by a propagator.
@@ -460,14 +470,8 @@ impl ProofProcessor {
             .as_mut()
             .expect("the deduction that triggered the conflict must be on the nogood stack");
         posted_deduction.marked = true;
-        self.state
-            .get_propagator_mut(posted_deduction.conflict_detection_handle)
-            .expect("All handles are valid")
-            .set_priority(Priority::VeryLow);
-        self.state
-            .get_propagator_mut(posted_deduction.unit_prop_handle)
-            .expect("All handles are valid")
-            .set_priority(Priority::VeryLow);
+        posted_deduction.update_propagators_priority(&mut self.state, Priority::VeryLow);
+
         let inferences = self.explain_current_conflict(&mut nogood_stack, conflict);
 
         // Log the empty clause to the proof.
@@ -665,14 +669,7 @@ impl ProofProcessor {
         let stack_entry = &mut stack[used_constraint_tag];
         if let Some(posted_deduction) = stack_entry {
             posted_deduction.marked = true;
-            self.state
-                .get_propagator_mut(posted_deduction.conflict_detection_handle)
-                .expect("All handles are valid")
-                .set_priority(Priority::VeryLow);
-            self.state
-                .get_propagator_mut(posted_deduction.unit_prop_handle)
-                .expect("All handles are valid")
-                .set_priority(Priority::VeryLow);
+            posted_deduction.update_propagators_priority(&mut self.state, Priority::VeryLow);
         }
     }
 }

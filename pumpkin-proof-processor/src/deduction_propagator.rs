@@ -1,4 +1,7 @@
+use std::rc::Rc;
+
 use pumpkin_core::declare_inference_label;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
@@ -18,7 +21,7 @@ use pumpkin_core::state::PropagatorConflict;
 #[derive(Clone, Debug)]
 pub(crate) struct DeductionPropagatorConstructor {
     /// The nogood to propagate.
-    pub(crate) nogood: PropositionalConjunction,
+    pub(crate) nogood: Rc<[Predicate]>,
     /// The constraint tag of the nogood.
     pub(crate) constraint_tag: ConstraintTag,
     /// The priority of the propagator.
@@ -69,7 +72,7 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
 #[derive(Clone, Debug)]
 pub(crate) struct DeductionPropagator {
     /// The nogood to propagate.
-    nogood: PropositionalConjunction,
+    nogood: Rc<[Predicate]>,
     /// The IDs for the predicates in the nogood.
     ///
     /// The order in this vector is unspecified. In particular, it is not true that the ID at index
@@ -125,7 +128,7 @@ impl Propagator for DeductionPropagator {
 
         if self.conflict_detection && num_unassigned_predicates == 0 {
             return Err(Conflict::Propagator(PropagatorConflict {
-                conjunction: self.nogood.clone(),
+                conjunction: self.nogood.iter().copied().collect(),
                 inference_code: self.inference_code.clone(),
             }));
         } else if !self.conflict_detection && num_unassigned_predicates == 1 {

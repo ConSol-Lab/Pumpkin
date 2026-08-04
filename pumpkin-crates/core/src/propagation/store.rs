@@ -83,7 +83,23 @@ impl PropagatorStore {
     ) -> Option<&mut P> {
         self[handle.id].downcast_mut()
     }
-
+    /// Get multiple exclusive references identified by the passed handle
+    /// 
+    /// For more info, see [`Self::get_propagator`].
+    pub(crate) fn get_propagators_mut<P: Propagator, const N: usize>(
+        &mut self,
+        handles: [PropagatorHandle<P>; N],
+    ) -> Option<[&mut P; N]> {
+        self.propagators
+            .get_disjoint_mut(handles.map(|handle| handle.id))
+            .map(|propagators| {
+                propagators.map(|propagator| {
+                    propagator
+                        .downcast_mut()
+                        .expect("Expected downcast to be successful")
+                })
+            })
+    }
     /// Get the given [`PropagatorId`] as a handle if the ID points to a propagator of type `P`.
     pub(crate) fn as_propagator_handle<P: Propagator>(
         &self,
