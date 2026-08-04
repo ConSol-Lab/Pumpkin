@@ -100,9 +100,17 @@ where
     pub fn pop_max(&mut self) -> Option<Key> {
         if !self.has_no_nonremoved_elements() {
             let best_key = self.map_position_to_key[0];
+            pumpkin_assert_moderate!({
+                let best_value = *self.get_value(best_key);
+                if let Some((_, value)) = self.peek_max() {
+                    *value <= best_value
+                } else {
+                    true
+                }
+            });
             pumpkin_assert_moderate!(0 == self.map_key_to_position[best_key]);
-            // pumpkin_assert_extreme!(self.is_max_at_top());
             self.delete_key(best_key);
+
             Some(best_key)
         } else {
             None
@@ -120,6 +128,27 @@ where
         // So we only apply sift up in case the key is present
         if self.is_key_present(key) {
             self.sift_up(position);
+        }
+    }
+
+    /// Sets the value of the element of `key` to `value`.
+    ///
+    /// The worst-case time-complexity of this operation is O(logn); average case is likely to be
+    /// better.
+    pub fn set_value(&mut self, key: Key, value: Value) {
+        if key.index() < self.len() {
+            let position = self.map_key_to_position[key];
+            let value_before = *self.get_value(key);
+            self.values[position] = value;
+            if self.is_key_present(key) {
+                if value_before < *self.get_value(key) {
+                    // We sift up if the new value is larger than the previous value.
+                    self.sift_up(position);
+                } else if value_before > *self.get_value(key) {
+                    // We sift down if the new value is smaller than the previous value.
+                    self.sift_down(position);
+                }
+            }
         }
     }
 
@@ -150,10 +179,18 @@ where
             // Place the key at the end of the heap, decrement the heap, and sift down to ensure a
             // valid heap
             let position = self.map_key_to_position[key];
+
+            let value_key = *self.get_value(key);
+            let value_replacer = *self.get_value(self.map_position_to_key[self.end_position - 1]);
+
             self.swap_positions(position, self.end_position - 1);
             self.end_position -= 1;
             if position < self.end_position {
-                self.sift_down(position);
+                if value_key > value_replacer {
+                    self.sift_down(position);
+                } else if value_key < value_replacer {
+                    self.sift_up(position);
+                }
             }
         }
     }
@@ -405,5 +442,66 @@ mod test {
     #[test]
     fn duplicates() {
         heap_sort_test_helper(vec![2, 2, 1, 1, 3, 3, 3]);
+    }
+
+    #[test]
+    fn test_set_value_to_lower() {
+        let mut heap: KeyValueHeap<usize, usize> = KeyValueHeap::default();
+        heap.grow(0, 1);
+        heap.grow(1, 2);
+        heap.grow(2, 3);
+        heap.grow(3, 4);
+
+        heap.set_value(1, 0);
+
+        let mut result = vec![];
+        while let Some(max_element) = heap.pop_max() {
+            result.push(max_element);
+        }
+
+        assert_eq!(vec![3, 2, 0, 1], result);
+    }
+
+    #[test]
+    fn test_set_value_to_higher() {
+        let mut heap: KeyValueHeap<usize, usize> = KeyValueHeap::default();
+        heap.grow(0, 1);
+        heap.grow(1, 2);
+        heap.grow(2, 3);
+        heap.grow(3, 4);
+
+        heap.set_value(1, 20);
+
+        let mut result = vec![];
+        while let Some(max_element) = heap.pop_max() {
+            result.push(max_element);
+        }
+
+        assert_eq!(vec![1, 3, 2, 0], result);
+    }
+
+    #[test]
+    fn test_set_value_further() {
+        let mut heap: KeyValueHeap<usize, usize> = KeyValueHeap::default();
+        heap.grow(0, 1);
+        heap.grow(1, 2);
+        heap.grow(2, 3);
+        heap.grow(3, 4);
+
+        heap.delete_key(1);
+        heap.set_value(1, 20);
+        heap.set_value(1, 0);
+        heap.set_value(0, 0);
+        heap.restore_key(1);
+        heap.delete_key(0);
+        heap.set_value(0, 20);
+        heap.restore_key(0);
+
+        let mut result = vec![];
+        while let Some(max_element) = heap.pop_max() {
+            result.push(max_element);
+        }
+
+        assert_eq!(vec![0, 3, 2, 1], result);
     }
 }

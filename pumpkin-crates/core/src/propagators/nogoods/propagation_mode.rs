@@ -24,7 +24,7 @@ use crate::state::PropagatorHandle;
 use crate::variables::DomainId;
 
 /// The type of propagation performed by the nogood propagator.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PropagationMode {
     /// Uses the standard unit propagation.
     ///

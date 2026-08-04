@@ -144,7 +144,7 @@ pub(crate) fn explain_root_assignment(
     context: &mut RootExplanationContext<'_>,
     predicate: Predicate,
 ) {
-    if !context.proof_log.is_logging_inferences() {
+    if !context.proof_log.is_logging_inferences() && !cfg!(feature = "check-deductions") {
         return;
     }
 
