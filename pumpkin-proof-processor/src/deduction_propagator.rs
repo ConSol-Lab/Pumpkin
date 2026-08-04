@@ -1,7 +1,4 @@
-use pumpkin_checking::InferenceChecker;
-use pumpkin_checking::VariableState;
 use pumpkin_core::declare_inference_label;
-use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
