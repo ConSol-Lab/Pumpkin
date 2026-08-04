@@ -15,6 +15,7 @@ drcp-format = { version = "0.3.1", path = "../drcp-format" }
 fzn-rs = { version = "0.1.1", path = "../fzn-rs" }
 flate2 = { version = "1.1.2" }
 env_logger = "0.11.10"
+pumpkin-checking = { version = "0.4.0", path = "../pumpkin-crates/checking" }
 pumpkin-core = { version = "0.4.0", path = "../pumpkin-crates/core" }
 pumpkin-propagators = { version = "0.4.0", path = "../pumpkin-crates/propagators" }
 log = "0.4.30"
