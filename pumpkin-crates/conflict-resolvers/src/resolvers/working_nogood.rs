@@ -372,7 +372,10 @@ impl WorkingNogood {
         // Ignore root level predicates.
         if dec_level == 0 {
             context.explain_root_assignment(predicate);
-            self.iterative_minimiser.apply_predicate(predicate);
+
+            if self.iterative_minimisation {
+                self.iterative_minimiser.apply_predicate(predicate);
+            }
         }
         // 1UIP
         // If the variables are from the current decision level then we want to potentially add
