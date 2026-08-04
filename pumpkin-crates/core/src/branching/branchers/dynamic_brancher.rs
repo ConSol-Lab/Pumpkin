@@ -152,6 +152,12 @@ impl Brancher for DynamicBrancher {
     fn is_restart_pointless(&mut self) -> bool {
         // We return whether all of the branchers up and until this one are static; if this is not
         // the case then restarting could be useful!
+        //
+        // If there are no branchers then this is vacuously true, matching the default
+        // implementation in the `Brancher` trait.
+        if self.branchers.is_empty() {
+            return true;
+        }
         let current_brancher_index = min(self.brancher_index, self.branchers.len() - 1);
         self.branchers[..=current_brancher_index]
             .iter_mut()
@@ -160,5 +166,17 @@ impl Brancher for DynamicBrancher {
 
     fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
         self.relevant_events.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DynamicBrancher;
+    use crate::branching::Brancher;
+
+    #[test]
+    fn is_restart_pointless_with_no_branchers_is_true() {
+        let mut brancher = DynamicBrancher::new(vec![]);
+        assert!(brancher.is_restart_pointless());
     }
 }
