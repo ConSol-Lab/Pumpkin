@@ -1220,7 +1220,14 @@ impl NogoodPropagator {
                     // replaced with an upper-bound predicate
                     // - If the propagating predicate is an upper-bound predicate then it is
                     // replaced with a lower-bound predicate
-                    if p != nogood[0]
+                    if p != nogood[0] && nogood[0].implies(p) {
+                        // `p` carries no information beyond what `nogood[0]` already asserts,
+                        // e.g. a `!=` predicate that got absorbed into a tightened bound during
+                        // semantic minimisation (`[x != 1]` becoming `[x >= 2]` when `1` was the
+                        // lower bound). Since `nogood[0]` alone implies `p`, `p` is not needed as
+                        // part of the reason.
+                        None
+                    } else if p != nogood[0]
                         && p.is_equality_predicate()
                         && p.get_domain() == nogood[0].get_domain()
                         && (nogood[0].is_lower_bound_predicate()

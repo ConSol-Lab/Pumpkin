@@ -101,6 +101,8 @@ impl<Var: IntegerVariable> Table<Var> {
                 clause.extend(supports.iter().map(|l| l.get_true_predicate()));
                 // Account for possible reification.
                 clause.extend(reification_literal.iter().map(|l| l.get_false_predicate()));
+
+                solver.add_clause(clause, self.constraint_tag);
             }
         }
 
@@ -188,5 +190,37 @@ impl<Var: IntegerVariable + 'static> NegatableConstraint for NegativeTable<Var> 
             table,
             constraint_tag,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_core::results::CSPSolverExecutionFlag;
+
+    use super::*;
+
+    #[test]
+    fn eliminating_all_supporting_rows_prunes_the_value() {
+        let mut solver = Solver::default();
+
+        let constraint_tag = solver.new_constraint_tag();
+        let x1 = solver.new_named_bounded_integer(1, 2, "x1");
+        let x2 = solver.new_named_sparse_integer([10, 20, 30], "x2");
+
+        // Rows 2 and 3 are the only support for `x2 == 30`, and are exactly the rows that support
+        // `x1 == 2`. Fixing `x1 == 1` should eliminate both of them, which should in turn prune
+        // `30` from the domain of `x2`.
+        let rows = vec![vec![1, 10], vec![1, 20], vec![2, 30], vec![2, 30]];
+        table(vec![x1, x2], rows, constraint_tag).post(&mut solver);
+
+        let result = solver.propagate_to_fixpoint();
+        assert_eq!(result, CSPSolverExecutionFlag::Feasible);
+
+        solver.add_clause([predicate![x1 == 1]], constraint_tag);
+
+        let result = solver.propagate_to_fixpoint();
+        assert_eq!(result, CSPSolverExecutionFlag::Feasible);
+
+        assert_eq!(solver.upper_bound(&x2), 20);
     }
 }
