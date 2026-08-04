@@ -102,7 +102,7 @@ impl<Var: IntegerVariable> Table<Var> {
                 // Account for possible reification.
                 clause.extend(reification_literal.iter().map(|l| l.get_false_predicate()));
 
-                solver.add_clause(clause, self.constraint_tag)?;
+                solver.add_clause(clause, self.constraint_tag);
             }
         }
 
@@ -195,6 +195,8 @@ impl<Var: IntegerVariable + 'static> NegatableConstraint for NegativeTable<Var> 
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_core::results::CSPSolverExecutionFlag;
+
     use super::*;
 
     #[test]
@@ -209,11 +211,15 @@ mod tests {
         // `x1 == 2`. Fixing `x1 == 1` should eliminate both of them, which should in turn prune
         // `30` from the domain of `x2`.
         let rows = vec![vec![1, 10], vec![1, 20], vec![2, 30], vec![2, 30]];
-        let result = table(vec![x1, x2], rows, constraint_tag).post(&mut solver);
-        assert_eq!(result, Ok(()));
+        table(vec![x1, x2], rows, constraint_tag).post(&mut solver);
 
-        let result = solver.add_clause([predicate![x1 == 1]], constraint_tag);
-        assert_eq!(result, Ok(()));
+        let result = solver.propagate_to_fixpoint();
+        assert_eq!(result, CSPSolverExecutionFlag::Feasible);
+
+        solver.add_clause([predicate![x1 == 1]], constraint_tag);
+
+        let result = solver.propagate_to_fixpoint();
+        assert_eq!(result, CSPSolverExecutionFlag::Feasible);
 
         assert_eq!(solver.upper_bound(&x2), 20);
     }
