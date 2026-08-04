@@ -5,4 +5,5 @@ allowed-duplicate-crates = [
     "anstyle-parse",
     "regex-syntax",
     "hashbrown",
+    "syn"
 ]
