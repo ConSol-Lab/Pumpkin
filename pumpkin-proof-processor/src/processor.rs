@@ -103,22 +103,26 @@ struct PostedDeduction {
 impl PostedDeduction {
     /// Deactivates the propagators associated with this `PostedDeduction`.
     fn deactivate_propagators(&self, state: &mut State) {
-        let propagator_slice = state
-            .get_propagators_mut([self.conflict_detection_handle, self.unit_prop_handle])
-            .expect("All handles are valid");
-        for propagator in propagator_slice {
-            propagator.deactivate();
-        }
+        state
+            .get_propagator_mut(self.conflict_detection_handle)
+            .expect("All handles are valid")
+            .deactivate();
+        state
+            .get_propagator_mut(self.unit_prop_handle)
+            .expect("All handles are valid")
+            .deactivate();
     }
 
     /// Updates the priority of both propagators associated with this `PostedDeduction`.
     fn update_propagators_priority(&self, state: &mut State, new_priority: Priority) {
-        let propagator_slice = state
-            .get_propagators_mut([self.conflict_detection_handle, self.unit_prop_handle])
-            .expect("All handles are valid");
-        for propagator in propagator_slice {
-            propagator.set_priority(new_priority);
-        }
+        state
+            .get_propagator_mut(self.conflict_detection_handle)
+            .expect("All handles are valid")
+            .set_priority(new_priority);
+        state
+            .get_propagator_mut(self.unit_prop_handle)
+            .expect("All handles are valid")
+            .set_priority(new_priority);
     }
 }
 
