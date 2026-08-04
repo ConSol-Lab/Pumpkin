@@ -16,6 +16,7 @@ use pumpkin_solver::core::proof::ConstraintTag;
 use pumpkin_solver::core::proof::ProofLog;
 use pumpkin_solver::core::rand::SeedableRng;
 use pumpkin_solver::core::rand::rngs::SmallRng;
+use pumpkin_solver::core::results::CSPSolverExecutionFlag;
 use pumpkin_solver::core::results::SolutionReference;
 use pumpkin_solver::core::termination::Indefinite;
 use pumpkin_solver::core::termination::TerminationCondition;
@@ -27,6 +28,7 @@ use pyo3::prelude::*;
 use crate::brancher::PythonBrancher;
 use crate::constraints::Constraint;
 use crate::optimisation::Direction;
+use crate::optimisation::FixPointPropagationResult;
 use crate::optimisation::OptimisationResult;
 use crate::optimisation::Optimiser;
 use crate::result::SatisfactionResult;
@@ -276,6 +278,15 @@ impl Model {
             pumpkin_solver::core::results::SatisfactionResultUnderAssumptions::Unknown(_) => {
                 SatisfactionUnderAssumptionsResult::Unknown()
             }
+        }
+    }
+
+    #[pyo3()]
+    fn propagate_to_fixpoint(&mut self) -> FixPointPropagationResult {
+        match self.solver.propagate_to_fixpoint() {
+            CSPSolverExecutionFlag::Feasible => FixPointPropagationResult::Feasible,
+            CSPSolverExecutionFlag::Infeasible => FixPointPropagationResult::Infeasible,
+            CSPSolverExecutionFlag::Timeout => FixPointPropagationResult::Unknown,
         }
     }
 
