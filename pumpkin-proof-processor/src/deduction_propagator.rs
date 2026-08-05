@@ -30,8 +30,26 @@ pub(crate) struct DeductionPropagatorConstructor {
     /// The priority of the propagator.
     pub(crate) priority: Priority,
     /// Whether this propagator will perform conflict detection XOR unit propagation
-    pub(crate) conflict_detection: bool,
+    pub(crate) propagation_mode: DeductionPropagationMode,
 }
+
+/// Used to indicate the propagation mode that is used
+/// by the `DeductionPropagator`.
+#[derive(Clone, Debug)]
+pub(crate) enum DeductionPropagationMode {
+    OnlyConflictDetection,
+    OnlyUnitPropagation,
+}
+
+/// Conflict detection of unmarked deductions is given a higher priority
+/// than unit propagation to greedily minimise the number unmarked deductions
+/// that get marked.
+pub(crate) const UNMARKED_CONFLICT_PRIORITY: Priority = Priority::UltraLow;
+
+/// Unit propagation of unmarked deductions is given a lower priority
+/// than conflict detection to greedily minimise the number of unmarked
+/// deductions that get marked.
+pub(crate) const UNMARKED_UNIT_PROPAGATION_PRIORITY: Priority = Priority::Lowest;
 
 impl PropagatorConstructor for DeductionPropagatorConstructor {
     type PropagatorImpl = DeductionPropagator;
@@ -46,7 +64,7 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
             nogood,
             constraint_tag,
             priority,
-            conflict_detection,
+            propagation_mode,
         } = self;
         let ids = nogood
             .iter()
@@ -68,7 +86,7 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
             inference_code,
             active: true,
             propagation_priority: priority,
-            conflict_detection,
+            propagation_mode,
         };
 
         PropagatorSpec {
@@ -104,7 +122,7 @@ pub(crate) struct DeductionPropagator {
     propagation_priority: Priority,
     /// Whether this propagator is part of the 'conflict detection' stage or the 'unit propagation'
     /// stage.
-    conflict_detection: bool,
+    propagation_mode: DeductionPropagationMode,
 }
 
 impl DeductionPropagator {
@@ -142,12 +160,33 @@ impl Propagator for DeductionPropagator {
 
         let num_unassigned_predicates = self.nogood.len() - num_assigned_predicates;
 
-        if self.conflict_detection && num_unassigned_predicates == 0 {
+        // It should not be possible for an unmarked deduction to unit propagate
+        // and cause a conflict, as a failure should have been declared by
+        // the `DeductionPropagator` that does conflict detection,
+        // which has a higher priority than its unit propagating counterpart.
+        assert!(
+            !(self.propagation_priority > Priority::VeryLow
+                && matches!(
+                    self.propagation_mode,
+                    DeductionPropagationMode::OnlyUnitPropagation
+                )
+                && num_unassigned_predicates == 0)
+        );
+
+        if matches!(
+            self.propagation_mode,
+            DeductionPropagationMode::OnlyConflictDetection
+        ) && num_unassigned_predicates == 0
+        {
             return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction: self.nogood.iter().copied().collect(),
                 inference_code: self.inference_code.clone(),
             }));
-        } else if !self.conflict_detection && num_unassigned_predicates == 1 {
+        } else if matches!(
+            self.propagation_mode,
+            DeductionPropagationMode::OnlyUnitPropagation
+        ) && num_unassigned_predicates == 1
+        {
             let unassigned_predicate = self
                 .nogood
                 .iter()

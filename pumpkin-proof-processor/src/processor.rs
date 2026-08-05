@@ -34,8 +34,11 @@ use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::state::PropagatorHandle;
 use pumpkin_core::state::State;
 
+use crate::deduction_propagator::DeductionPropagationMode;
 use crate::deduction_propagator::DeductionPropagator;
 use crate::deduction_propagator::DeductionPropagatorConstructor;
+use crate::deduction_propagator::UNMARKED_CONFLICT_PRIORITY;
+use crate::deduction_propagator::UNMARKED_UNIT_PROPAGATION_PRIORITY;
 use crate::predicate_heap::PredicateHeap;
 use crate::variables::Variables;
 
@@ -348,15 +351,15 @@ impl ProofProcessor {
             let conflict_handle = self.state.add_propagator(DeductionPropagatorConstructor {
                 nogood: Rc::clone(&nogood_rc),
                 constraint_tag,
-                priority: Priority::UltraLow,
-                conflict_detection: true,
+                priority: UNMARKED_CONFLICT_PRIORITY,
+                propagation_mode: DeductionPropagationMode::OnlyConflictDetection,
             });
 
             let prop_handle = self.state.add_propagator(DeductionPropagatorConstructor {
                 nogood: Rc::clone(&nogood_rc),
                 constraint_tag,
-                priority: Priority::Lowest,
-                conflict_detection: false,
+                priority: UNMARKED_UNIT_PROPAGATION_PRIORITY,
+                propagation_mode: DeductionPropagationMode::OnlyUnitPropagation,
             });
             nogood_stack.accomodate(constraint_tag, None);
             nogood_stack[constraint_tag] = Some(PostedDeduction {
