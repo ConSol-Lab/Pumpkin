@@ -39,14 +39,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Log in to the Container registry
-        if: contains(steps.release_plz.outputs.packages_released, 'pumpkin-solver')
+        if: contains(fromJSON(steps.release_plz.outputs.releases).*.package_name, 'pumpkin-solver')
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Extract metadata (tags, labels) for Docker
-        if: contains(steps.release_plz.outputs.packages_released, 'pumpkin-solver')
+        if: contains(fromJSON(steps.release_plz.outputs.releases).*.package_name, 'pumpkin-solver')
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
         with:
@@ -55,7 +55,7 @@ jobs:
             type=match,pattern=pumpkin-solver-(v.*),group=1
             type=raw,value=latest
       - name: Build and push Docker image
-        if: contains(steps.release_plz.outputs.packages_released, 'pumpkin-solver')
+        if: contains(fromJSON(steps.release_plz.outputs.releases).*.package_name, 'pumpkin-solver')
         id: push
         uses: docker/build-push-action@cb941d0b895b09c17fa011d41c411b33c752cf28
         with:
@@ -65,7 +65,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
       - name: Generate artifact attestation
-        if: contains(steps.release_plz.outputs.packages_released, 'pumpkin-solver')
+        if: contains(fromJSON(steps.release_plz.outputs.releases).*.package_name, 'pumpkin-solver')
         uses: actions/attest@v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
