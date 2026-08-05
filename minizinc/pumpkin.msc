@@ -27,9 +27,9 @@
         ],
         [
             "--no-learning-minimise",
-            "\tDecides whether learned clauses are minimised as a post-processing step after computing the 1-UIP Minimisation is done.\n\n\tThis is done according to the idea proposed in 'Generalized Conflict-Clause Strengthening for Satisfiability Solvers - Allen van Gelder (2011)'."
+            "\tDecides whether learned clauses are minimised as a post-processing step after computing the 1-UIP Minimisation is done.\n\n\tThis is done according to the idea proposed in 'Generalized Conflict-Clause Strengthening for Satisfiability Solvers - Allen van Gelder (2011)'.",
             "bool",
-            "false",
+            "false"
         ],
         [
             "--restart-sequence",
@@ -41,8 +41,8 @@
             "--restart-base-interval",
             "\tThe base interval length is used as a multiplier to the restart sequence.\n\t- In the case of the 'constant' restart sequence this argument indicates the constant which is used to determine when a restart occurs\n\t- For the 'geometric' approach this argument indicates the starting value of the sequence\n\t- For the 'luby' approach, the sequence is multiplied by this value\n\n\tFor example, constant restarts with base interval 50 means a restart is triggered every 50 conflicts.",
             "int:0:18446744073709551615",
-            "50",
-        ]
+            "50"
+        ],
         [
             "--restart-min-initial-conflicts",
             "\tIndicates the minimum number of initial conflicts before the first restart can occur.\n\tThis allows the solver to learn some things about the problem before a restart is allowed to occur.",
@@ -54,12 +54,12 @@
             "\tUsed to determine if a restart should be forced (see 'Refining Restarts Strategies for SAT and UNSAT - Audemard and Simon (2012)').\n\n\tThe state is 'bad' if the current LBD value is much greater than the global LBD average.\n\tA greater (lower) value for lbd-coef means a less (more) frequent restart policy.\n\n\tIf the long-term average LBD multiplied by this coefficient is lower than the short-term average LBD then a restart is performed.",
             "float",
             "1.25"
-        ]
+        ],
         [
             "--restart-num-assigned-coef",
             "\tUsed to determine if a restart should be blocked (see 'Refining Restarts Strategies for SAT and UNSAT - Audemard and Simon (2012)').\n\n\tTo be used in combination with '--restarts-num-assigned-window'.\n\n\tA restart is blocked if the number of assigned propositional variables is much greater than the average number of assigned variables in the recent past.\n\tA greater (lower) value for '--restart-num-assigned-coef' means fewer (more) blocked restarts.",
             "float",
-            "1.4",
+            "1.4"
         ],
         [
             "--restart-num-assigned-window",
@@ -83,7 +83,7 @@
             "--proof-path",
             "The path to the proof file.",
             "string",
-            "",
+            ""
         ]
     ],
 
