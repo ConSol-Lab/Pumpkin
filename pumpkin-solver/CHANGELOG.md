@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.4.0...pumpkin-solver-v0.5.0) - 2026-08-05
+
+### Added
+
+- Semantic Minimisation during Conflict Analysis ([#406](https://github.com/ConSol-Lab/Pumpkin/pull/406))
+- *(pumpkin-solver,pumpkin-core)* Implement extended nogood propagation and CPIP nogood learning ([#454](https://github.com/ConSol-Lab/Pumpkin/pull/454))
+- *(pumpkin-solver-py)* Expose domain queries in the model ([#537](https://github.com/ConSol-Lab/Pumpkin/pull/537))
+- *(pumpkin-solver)* Start looking for new watcher from the previous watcher location ([#496](https://github.com/ConSol-Lab/Pumpkin/pull/496))
+
+### Fixed
+
+- *(pumpkin-core)* Empty dynamic brancher underflows on testing restarts ([#534](https://github.com/ConSol-Lab/Pumpkin/pull/534))
+- *(pumpkin-constraints)* Post the missing table clause direction ([#535](https://github.com/ConSol-Lab/Pumpkin/pull/535))
+- *(pumpkin-core)* Handle predicates over constants in inference consequent ([#516](https://github.com/ConSol-Lab/Pumpkin/pull/516))
+- *(pumpkin-propagators)* Make integer multiplication bounds(R) consistent ([#517](https://github.com/ConSol-Lab/Pumpkin/pull/517))
+- *(pumpkin-propagators)* Use max for computed upper bound of `c` in division checker ([#533](https://github.com/ConSol-Lab/Pumpkin/pull/533))
+- *(pumpkin-checker)* Incorrect rejection of unsatisfiable optimisation problem ([#515](https://github.com/ConSol-Lab/Pumpkin/pull/515))
+
+### Other
+
+- Merge CHANGELOG contents ([#539](https://github.com/ConSol-Lab/Pumpkin/pull/539))
+- Do not propagate when adding propagator ([#519](https://github.com/ConSol-Lab/Pumpkin/pull/519))
+- *(pumpkin-solver)* Exit test process when not finished ([#530](https://github.com/ConSol-Lab/Pumpkin/pull/530))
+- New readme file ([#521](https://github.com/ConSol-Lab/Pumpkin/pull/521))
+- Update README to include MiniZinc challenge 2026 results ([#518](https://github.com/ConSol-Lab/Pumpkin/pull/518))
+- Add citation file ([#473](https://github.com/ConSol-Lab/Pumpkin/pull/473))
+- adding CP papers ([#499](https://github.com/ConSol-Lab/Pumpkin/pull/499))
+- Remove unused file ([#532](https://github.com/ConSol-Lab/Pumpkin/pull/532))
+- *(deps)* Update dependencies ([#509](https://github.com/ConSol-Lab/Pumpkin/pull/509), [#508](https://github.com/ConSol-Lab/Pumpkin/pull/508), [#480](https://github.com/ConSol-Lab/Pumpkin/pull/480), [#508](https://github.com/ConSol-Lab/Pumpkin/pull/508), [#509](https://github.com/ConSol-Lab/Pumpkin/pull/509))
+- *(pumpkin-core)* Additional checks whether proofs are logged ([#522](https://github.com/ConSol-Lab/Pumpkin/pull/522))
+- *(pumpkin-solver)* Force checkers to be registered in propagator constructor ([#457](https://github.com/ConSol-Lab/Pumpkin/pull/457))
+- *(pumpkin-solver)* `PropagatorConstructor::create` now returns event registrations ([#456](https://github.com/ConSol-Lab/Pumpkin/pull/456))
+- *(pumpkin-core)* Additional checks whether proofs are logged ([#522](https://github.com/ConSol-Lab/Pumpkin/pull/522))
+- *(pumpkin-solver)* Force checkers to be registered in propagator constructor ([#457](https://github.com/ConSol-Lab/Pumpkin/pull/457))
+- *(pumpkin-solver)* `PropagatorConstructor::create` now returns event registrations ([#456](https://github.com/ConSol-Lab/Pumpkin/pull/456))
+
 ## [0.4.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.3.0...pumpkin-solver-v0.4.0) - 2026-06-23
 
 ### Added
