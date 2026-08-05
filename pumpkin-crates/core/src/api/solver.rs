@@ -177,6 +177,12 @@ impl Solver {
         self.satisfaction_solver.get_upper_bound(variable)
     }
 
+    /// Test whether the given [`IntegerVariable`] contains `value`.
+    pub fn contains(&self, variable: &impl IntegerVariable, value: i32) -> bool {
+        self.satisfaction_solver
+            .integer_variable_contains(variable, value)
+    }
+
     /// Returns whether the solver is in an inconsistent state.
     pub fn is_inconsistent(&self) -> bool {
         self.satisfaction_solver.get_state().is_inconsistent()
