@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.4.0...pumpkin-solver-v0.5.0) - 2026-08-05
+
+### Added
+
+- Semantic Minimisation during Conflict Analysis ([#406](https://github.com/ConSol-Lab/Pumpkin/pull/406))
+- *(pumpkin-solver,pumpkin-core)* Implement extended nogood propagation and CPIP nogood learning ([#454](https://github.com/ConSol-Lab/Pumpkin/pull/454))
+- *(pumpkin-solver)* Start looking for new watcher from the previous watcher location ([#496](https://github.com/ConSol-Lab/Pumpkin/pull/496))
+
+### Fixed
+
+- *(pumpkin-core)* Empty dynamic brancher underflows on testing restarts ([#534](https://github.com/ConSol-Lab/Pumpkin/pull/534))
+- *(pumpkin-constraints)* Post the missing table clause direction ([#535](https://github.com/ConSol-Lab/Pumpkin/pull/535))
+- *(pumpkin-core)* Handle predicates over constants in inference consequent ([#516](https://github.com/ConSol-Lab/Pumpkin/pull/516))
+- *(pumpkin-propagators)* Make integer multiplication bounds(R) consistent ([#517](https://github.com/ConSol-Lab/Pumpkin/pull/517))
+- *(pumpkin-propagators)* Use max for computed upper bound of `c` in division checker ([#533](https://github.com/ConSol-Lab/Pumpkin/pull/533))
+- *(pumpkin-checker)* Incorrect rejection of unsatisfiable optimisation problem ([#515](https://github.com/ConSol-Lab/Pumpkin/pull/515))
+- Time-table checker not detecting conflicts properly ([#405](https://github.com/ConSol-Lab/Pumpkin/pull/405))
+- Off-by-one error in is_true of VariableState ([#389](https://github.com/ConSol-Lab/Pumpkin/pull/389))
+
+### Other
+
+- Do not propagate when adding propagator ([#519](https://github.com/ConSol-Lab/Pumpkin/pull/519))
+- *(pumpkin-solver)* Exit test process when not finished ([#530](https://github.com/ConSol-Lab/Pumpkin/pull/530))
+- New readme file ([#521](https://github.com/ConSol-Lab/Pumpkin/pull/521))
+- Update README to include MiniZinc challenge 2026 results ([#518](https://github.com/ConSol-Lab/Pumpkin/pull/518))
+- Add citation file ([#473](https://github.com/ConSol-Lab/Pumpkin/pull/473))
+- adding CP papers ([#499](https://github.com/ConSol-Lab/Pumpkin/pull/499))
+- Remove unused file ([#532](https://github.com/ConSol-Lab/Pumpkin/pull/532))
+- *(deps)* bump enum-map from 2.7.3 to 3.1.0 ([#508](https://github.com/ConSol-Lab/Pumpkin/pull/508))
+- *(deps)* bump thiserror from 2.0.18 to 2.0.19 ([#509](https://github.com/ConSol-Lab/Pumpkin/pull/509))
+- *(pumpkin-core)* Additional checks whether proofs are logged ([#522](https://github.com/ConSol-Lab/Pumpkin/pull/522))
+- *(pumpkin-solver)* Force checkers to be registered in propagator constructor ([#457](https://github.com/ConSol-Lab/Pumpkin/pull/457))
+- *(pumpkin-solver)* `PropagatorConstructor::create` now returns event registrations ([#456](https://github.com/ConSol-Lab/Pumpkin/pull/456))
+- *(deps)* bump itertools from 0.14.0 to 0.15.0 ([#480](https://github.com/ConSol-Lab/Pumpkin/pull/480))
+
 ## [0.4.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.3.0...pumpkin-solver-v0.4.0) - 2026-06-23
 
 ### Added
@@ -12,12 +47,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - *(pumpkin-solver)* Check derived nogoods during search ([#373](https://github.com/ConSol-Lab/Pumpkin/pull/373))
 - *(pumpkin-solver)* Expose version and git commit in crate ([#404](https://github.com/ConSol-Lab/Pumpkin/pull/404))
 - *(pumpkin-proof-processor)* Introduce the proof processor in the main branch ([#371](https://github.com/ConSol-Lab/Pumpkin/pull/371))
+- *(pumpkin-core)* Define predicate order and add Predicate::implies ([#426](https://github.com/ConSol-Lab/Pumpkin/pull/426))
+- *(pumpkin-core)* Brancher implements Debug ([#409](https://github.com/ConSol-Lab/Pumpkin/pull/409))
+- Adding IntegerVariable for i32 ([#388](https://github.com/ConSol-Lab/Pumpkin/pull/388))
 
 ### Fixed
 
 - README links + updating component overview ([#453](https://github.com/ConSol-Lab/Pumpkin/pull/453))
 - *(pumpkin-solver)* Update packages and fix duplicate dependencies ([#412](https://github.com/ConSol-Lab/Pumpkin/pull/412))
 - *(pumpkin-solver)* New clippy suggestion ([#410](https://github.com/ConSol-Lab/Pumpkin/pull/410))
+- *(pumpkin-core)* Creation and Insertion in Sparse Set ([#395](https://github.com/ConSol-Lab/Pumpkin/pull/395))
+- *(pumpkin-core)* Upgrade to rand 0.10 ([#411](https://github.com/ConSol-Lab/Pumpkin/pull/411))
+- *(pumpkin-solver)* Correctly detect when to write zipped proofs ([#372](https://github.com/ConSol-Lab/Pumpkin/pull/372))
 
 ### Other
 
@@ -33,17 +74,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - *(deps)* bump env_logger from 0.10.2 to 0.11.10 ([#419](https://github.com/ConSol-Lab/Pumpkin/pull/419))
 - update README papers ([#391](https://github.com/ConSol-Lab/Pumpkin/pull/391))
 - *(pumpkin-solver)* Don't pin a checker version for tests
+- *(deps)* bump enumset from 1.1.12 to 1.1.13 ([#452](https://github.com/ConSol-Lab/Pumpkin/pull/452))
+- *(deps)* bump enumset from 1.1.11 to 1.1.12 ([#446](https://github.com/ConSol-Lab/Pumpkin/pull/446))
+- *(deps)* bump enumset from 1.1.10 to 1.1.11 ([#441](https://github.com/ConSol-Lab/Pumpkin/pull/441))
+- *(pumpkin-core)* Attach `InferenceCode` instead of `Predicate` ([#433](https://github.com/ConSol-Lab/Pumpkin/pull/433))
+- *(deps)* bump convert_case from 0.8.0 to 0.11.0 ([#428](https://github.com/ConSol-Lab/Pumpkin/pull/428))
+- *(deps)* bump downcast-rs from 1.2.1 to 2.0.2 ([#429](https://github.com/ConSol-Lab/Pumpkin/pull/429))
+- *(deps)* bump bitfield from 0.14.0 to 0.19.4 ([#430](https://github.com/ConSol-Lab/Pumpkin/pull/430))
+- *(deps)* bump itertools from 0.13.0 to 0.14.0 ([#427](https://github.com/ConSol-Lab/Pumpkin/pull/427))
+- *(deps)* bump bitfield-struct from 0.9.5 to 0.13.0 ([#421](https://github.com/ConSol-Lab/Pumpkin/pull/421))
+- *(pumpkin-core)* Clarify get_propagation_reason does not clear buffer ([#402](https://github.com/ConSol-Lab/Pumpkin/pull/402))
+- *(pumpkin-core)* Describe unnamed variables in state ([#403](https://github.com/ConSol-Lab/Pumpkin/pull/403))
+- *(pumpkin-core)* Cleanup creation of propagator conflict ([#399](https://github.com/ConSol-Lab/Pumpkin/pull/399))
+- add utility method fixed value and replace is_fixed wherever possible ([#393](https://github.com/ConSol-Lab/Pumpkin/pull/393))
+- clippy warning ([#376](https://github.com/ConSol-Lab/Pumpkin/pull/376))
 
 ## [0.3.0](https://github.com/consol-lab/pumpkin/compare/pumpkin-solver-v0.2.2...pumpkin-solver-v0.3.0) - 2026-02-10
+
+### Added
+- Introduced the `pumpkin-checking` crate.
+- Extract conflict resolvers and nogood minimisation into a separate crate ([#341](https://github.com/consol-lab/pumpkin/pull/341))
+- Extract propagators into separate crate ([#337](https://github.com/consol-lab/pumpkin/pull/337))
+- Propagator for the hypercube linear constraint ([#347](https://github.com/consol-lab/pumpkin/pull/347))
+- If the `check-propagations` flag is enabled, the state will run inference checkers on all propagations immediately ([#340](https://github.com/consol-lab/pumpkin/pull/340))
+- Crash if a propagator constructor does not register anything ([#338](https://github.com/consol-lab/pumpkin/pull/338))
+- Make propagator API public ([#333](https://github.com/consol-lab/pumpkin/pull/333))
+- Add interface for nogood minimiser ([#326](https://github.com/consol-lab/pumpkin/pull/326))
+- Implement State API ([#319](https://github.com/consol-lab/pumpkin/pull/319))
+- WebAssembly support for pumpkin-core ([#327](https://github.com/consol-lab/pumpkin/pull/327))
+- Calculate minimal profile for explaining time-table conflict ([#353](https://github.com/consol-lab/pumpkin/pull/353))
+- Calculate minimal explanation time-table propagation ([#356](https://github.com/consol-lab/pumpkin/pull/356))
 
 ### Fixed
 
 - Don't use binary equality when logging proof ([#320](https://github.com/consol-lab/pumpkin/pull/320))
+- Fix off-by-one error in initial bounds calculation ([#361](https://github.com/consol-lab/pumpkin/pull/361))
+- Do not check for event registration when already panicking ([#346](https://github.com/consol-lab/pumpkin/pull/346))
+- Sign error in greater_than constraint ([#334](https://github.com/consol-lab/pumpkin/pull/334))
+- Generate constraint tags via State ([#335](https://github.com/consol-lab/pumpkin/pull/335))
+- Allow propagators to register for predicates becoming true ([#331](https://github.com/consol-lab/pumpkin/pull/331))
+- Off-by-one error when explaining empty domain conflict ([#322](https://github.com/consol-lab/pumpkin/pull/322))
+- Declare solving after conflict resolution ([#317](https://github.com/consol-lab/pumpkin/pull/317))
+- Use saturating multiplication in integer multiplication propagator ([#350](https://github.com/consol-lab/pumpkin/pull/350))
+- Explanation check for Cumulative after full explanation is created ([#349](https://github.com/consol-lab/pumpkin/pull/349))
+- Calculate minimal explanation time-table propagation ([#356](https://github.com/consol-lab/pumpkin/pull/356))
 
 ### Other
 
 - Update rust edition to 2024 ([#311](https://github.com/consol-lab/pumpkin/pull/311))
 - Run proof checker on integration tests ([#329](https://github.com/consol-lab/pumpkin/pull/329))
+- Stop watching predicates without any watchers in nogood propagator ([#351](https://github.com/consol-lab/pumpkin/pull/351))
+- Simplify predicate notification system ([#348](https://github.com/consol-lab/pumpkin/pull/348))
+- `InferenceCode` wraps constraint tag and inference label directory ([#339](https://github.com/consol-lab/pumpkin/pull/339))
+- Explicitly register predicates in NogoodPropagator ([#332](https://github.com/consol-lab/pumpkin/pull/332))
+- Empty domain conflict is a predicate and reason ([#314](https://github.com/consol-lab/pumpkin/pull/314))
+- Separate conflict resolvers further from solver ([#310](https://github.com/consol-lab/pumpkin/pull/310))
 
 ## [0.2.2](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.2.1...pumpkin-solver-v0.2.2) (2025-11-10)
 
@@ -56,6 +141,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **pumpkin-solver:** Write proofs with gzip encoding ([#264](https://github.com/ConSol-Lab/Pumpkin/issues/264)) ([83f76da](https://github.com/ConSol-Lab/Pumpkin/commit/83f76da17efc4a5ba1904dd144b89f0ff41cf326))
 * Remove unnecessary variables introduced by bool2int ([#232](https://github.com/ConSol-Lab/Pumpkin/issues/232)) ([cf0b2fe](https://github.com/ConSol-Lab/Pumpkin/commit/cf0b2fe3831db904345e96266ae41b6836b8057f))
 * Update to `pumpkin-core` 0.2.2
+* Post equality as single predicate instead of splitting in two ([#305](https://github.com/ConSol-Lab/Pumpkin/issues/305)) ([8f43208](https://github.com/ConSol-Lab/Pumpkin/commit/8f43208e447add20808a8472ccb57cdf051acab6))
+* Lazy explanation for linear less than or equals ([#290](https://github.com/ConSol-Lab/Pumpkin/issues/290)) ([3515c7a](https://github.com/ConSol-Lab/Pumpkin/commit/3515c7af018a2d57230f5a9f333a90cd1d6775d3))
+* Use lazy explanations for BinaryEq ([#231](https://github.com/ConSol-Lab/Pumpkin/issues/231)) ([4a89a5e](https://github.com/ConSol-Lab/Pumpkin/commit/4a89a5e2090f63726e6bacfd5c86ca656a318413))
+* Support warm_start and ignore constraint_name search annotations ([#235](https://github.com/ConSol-Lab/Pumpkin/issues/235)) ([d7e8bb0](https://github.com/ConSol-Lab/Pumpkin/commit/d7e8bb028c04fc7cbf21400ef422c4c82673806e))
 
 
 ### Bug Fixes
@@ -68,6 +157,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Reduce cost of predicate notification ([#259](https://github.com/ConSol-Lab/Pumpkin/issues/259)) ([d38e990](https://github.com/ConSol-Lab/Pumpkin/commit/d38e990dd42dd81f5d22200e8d6bff7ff688ad64))
 * Removing leading number from statistics ([#261](https://github.com/ConSol-Lab/Pumpkin/issues/261)) ([f9b996b](https://github.com/ConSol-Lab/Pumpkin/commit/f9b996b7725d200228f31f5eb1c0a54f569cdea9))
 * Support warm_start and ignore constraint_name search annotations ([#235](https://github.com/ConSol-Lab/Pumpkin/issues/235)) ([d7e8bb0](https://github.com/ConSol-Lab/Pumpkin/commit/d7e8bb028c04fc7cbf21400ef422c4c82673806e))
+* Add pumpkin-crates to default-members ([#286](https://github.com/ConSol-Lab/Pumpkin/issues/286)) ([bf7ff80](https://github.com/ConSol-Lab/Pumpkin/commit/bf7ff80ca231c7bc4e25dcc6028b0c6c9a4798d3))
+* Create correct reason for preprocessing permanent nogood + Removing unassigned status for PredicateId ([#250](https://github.com/ConSol-Lab/Pumpkin/issues/250)) ([98ba136](https://github.com/ConSol-Lab/Pumpkin/commit/98ba1360844ceb23d3b3bea4d22a615cd30ac8ea))
+* Provide `SelectionContext` instead of `Assignments` to `Brancher::synchronise` ([#312](https://github.com/ConSol-Lab/Pumpkin/issues/312)) ([9548114](https://github.com/ConSol-Lab/Pumpkin/commit/9548114df84ed3ddd2214270de9e2ab459c1621e))
+* Remove debug printing ([#254](https://github.com/ConSol-Lab/Pumpkin/issues/254)) ([0ca93a2](https://github.com/ConSol-Lab/Pumpkin/commit/0ca93a2f89637600002a63a06d29a46aa454c2db))
+* Take root-propagation into account in the LUS optimiser ([#253](https://github.com/ConSol-Lab/Pumpkin/issues/253)) ([d30ed06](https://github.com/ConSol-Lab/Pumpkin/commit/d30ed060d7efd6abc8bca980919ddaa676704f84))
+
+### Refactors
+* Avoid unnecessary traversals of profiles in time-tabling + Improving Explanations ([#282](https://github.com/ConSol-Lab/Pumpkin/issues/282)) ([f7a4fdb](https://github.com/ConSol-Lab/Pumpkin/commit/f7a4fdb2dae8003b0021de70f514c9df6b30acea))
+* Don't use binary equals when logging the full proof ([#252](https://github.com/ConSol-Lab/Pumpkin/issues/252)) ([4454d93](https://github.com/ConSol-Lab/Pumpkin/commit/4454d93a9e70f5c6d5b442a8402775957a0184f4))
 
 
 ## [0.2.1](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.2.0...pumpkin-solver-v0.2.1) (2025-07-10)
