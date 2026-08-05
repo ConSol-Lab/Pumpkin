@@ -140,6 +140,26 @@ impl Model {
         Ok(literal.into())
     }
 
+    /// Get the lower bound of the given expression.
+    fn lower_bound(&self, expression: IntExpression) -> i32 {
+        self.solver.lower_bound(&expression.0)
+    }
+
+    /// Get the upper bound of the given expression.
+    fn upper_bound(&self, expression: IntExpression) -> i32 {
+        self.solver.upper_bound(&expression.0)
+    }
+
+    /// Test whether `value` is part of the domain of `expression`.
+    fn contains(&self, expression: IntExpression, value: i32) -> bool {
+        self.solver.contains(&expression.0, value)
+    }
+
+    /// Get the value of the given Boolean expression
+    fn evaluate(&self, expression: BoolExpression) -> Option<bool> {
+        self.solver.get_literal_value(expression.0)
+    }
+
     /// Create a new constraint tag.
     fn new_constraint_tag(&mut self) -> PyResult<Tag> {
         if self.solver.is_inconsistent() {

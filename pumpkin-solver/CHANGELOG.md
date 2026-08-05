@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Semantic Minimisation during Conflict Analysis ([#406](https://github.com/ConSol-Lab/Pumpkin/pull/406))
 - *(pumpkin-solver,pumpkin-core)* Implement extended nogood propagation and CPIP nogood learning ([#454](https://github.com/ConSol-Lab/Pumpkin/pull/454))
+- *(pumpkin-solver-py)* Expose domain queries in the model ([#537](https://github.com/ConSol-Lab/Pumpkin/pull/537))
 - *(pumpkin-solver)* Start looking for new watcher from the previous watcher location ([#496](https://github.com/ConSol-Lab/Pumpkin/pull/496))
 
 ### Fixed
@@ -32,7 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add citation file ([#473](https://github.com/ConSol-Lab/Pumpkin/pull/473))
 - adding CP papers ([#499](https://github.com/ConSol-Lab/Pumpkin/pull/499))
 - Remove unused file ([#532](https://github.com/ConSol-Lab/Pumpkin/pull/532))
-- *(deps)* Update dependencies ([#509](https://github.com/ConSol-Lab/Pumpkin/pull/509), [#508](https://github.com/ConSol-Lab/Pumpkin/pull/508), [#480](https://github.com/ConSol-Lab/Pumpkin/pull/480))
+- *(deps)* Update dependencies ([#509](https://github.com/ConSol-Lab/Pumpkin/pull/509), [#508](https://github.com/ConSol-Lab/Pumpkin/pull/508), [#480](https://github.com/ConSol-Lab/Pumpkin/pull/480), [#508](https://github.com/ConSol-Lab/Pumpkin/pull/508), [#509](https://github.com/ConSol-Lab/Pumpkin/pull/509))
+- *(pumpkin-core)* Additional checks whether proofs are logged ([#522](https://github.com/ConSol-Lab/Pumpkin/pull/522))
+- *(pumpkin-solver)* Force checkers to be registered in propagator constructor ([#457](https://github.com/ConSol-Lab/Pumpkin/pull/457))
+- *(pumpkin-solver)* `PropagatorConstructor::create` now returns event registrations ([#456](https://github.com/ConSol-Lab/Pumpkin/pull/456))
 - *(pumpkin-core)* Additional checks whether proofs are logged ([#522](https://github.com/ConSol-Lab/Pumpkin/pull/522))
 - *(pumpkin-solver)* Force checkers to be registered in propagator constructor ([#457](https://github.com/ConSol-Lab/Pumpkin/pull/457))
 - *(pumpkin-solver)* `PropagatorConstructor::create` now returns event registrations ([#456](https://github.com/ConSol-Lab/Pumpkin/pull/456))
