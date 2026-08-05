@@ -37,32 +37,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 """
 
+
+[[package]]
+name = "fzn-rs"
+changelog_include = ["fzn-rs-derive"]
+
 [[package]]
 name = "fzn-rs-derive"
 git_release_enable = false
 git_tag_enable = false
+changelog_update = false
+
+[[package]]
+name = "pumpkin-solver"
+changelog_include = [
+    "pumpkin-core",    
+    "pumpkin-checking", 
+    "pumpkin-conflict-resolvers", 
+    "pumpkin-propagators", 
+    "pumpkin-constraints"
+]
 
 [[package]]
 name = "pumpkin-core"
 git_release_enable = false
 git_tag_enable = false
+changelog_update = false
 
 [[package]]
 name = "pumpkin-checking"
 git_release_enable = false
 git_tag_enable = false
+changelog_update = false
 
 [[package]]
 name = "pumpkin-conflict-resolvers"
 git_release_enable = false
 git_tag_enable = false
+changelog_update = false
 
 [[package]]
 name = "pumpkin-propagators"
 git_release_enable = false
 git_tag_enable = false
+changelog_update = false
 
 [[package]]
 name = "pumpkin-constraints"
 git_release_enable = false
 git_tag_enable = false
+changelog_update = false
