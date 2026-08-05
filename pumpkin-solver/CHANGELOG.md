@@ -32,12 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add citation file ([#473](https://github.com/ConSol-Lab/Pumpkin/pull/473))
 - adding CP papers ([#499](https://github.com/ConSol-Lab/Pumpkin/pull/499))
 - Remove unused file ([#532](https://github.com/ConSol-Lab/Pumpkin/pull/532))
-- *(deps)* bump enum-map from 2.7.3 to 3.1.0 ([#508](https://github.com/ConSol-Lab/Pumpkin/pull/508))
-- *(deps)* bump thiserror from 2.0.18 to 2.0.19 ([#509](https://github.com/ConSol-Lab/Pumpkin/pull/509))
+- *(deps)* Update dependencies ([#509](https://github.com/ConSol-Lab/Pumpkin/pull/509), [#508](https://github.com/ConSol-Lab/Pumpkin/pull/508), [#480](https://github.com/ConSol-Lab/Pumpkin/pull/480))
 - *(pumpkin-core)* Additional checks whether proofs are logged ([#522](https://github.com/ConSol-Lab/Pumpkin/pull/522))
 - *(pumpkin-solver)* Force checkers to be registered in propagator constructor ([#457](https://github.com/ConSol-Lab/Pumpkin/pull/457))
 - *(pumpkin-solver)* `PropagatorConstructor::create` now returns event registrations ([#456](https://github.com/ConSol-Lab/Pumpkin/pull/456))
-- *(deps)* bump itertools from 0.14.0 to 0.15.0 ([#480](https://github.com/ConSol-Lab/Pumpkin/pull/480))
 
 ## [0.4.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.3.0...pumpkin-solver-v0.4.0) - 2026-06-23
 
