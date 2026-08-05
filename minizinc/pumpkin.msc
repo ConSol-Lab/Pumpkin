@@ -11,7 +11,7 @@
             "--learning-max-num-clauses",
             "\tThe number of high lbd learned clauses that are kept in the database. \n\n\tLearned clauses are kept based on the tiered system introduced in 'Improving SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)'",
             "int:0:18446744073709551615",
-            "4000",
+            "4000"
         ],
         [
             "--learning-lbd-threshold",
