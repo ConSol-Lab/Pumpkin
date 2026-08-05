@@ -10,9 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
-- *(deps)* bump chumsky from 0.12.0 to 0.13.0 ([#442](https://github.com/ConSol-Lab/Pumpkin/pull/442))
-- *(fzn-rs-derive)* bump convert_case from 0.8.0 to 0.11.0 ([#428](https://github.com/ConSol-Lab/Pumpkin/pull/428))
-- *(deps)* bump chumsky from 0.10.1 to 0.12.0 ([#420](https://github.com/ConSol-Lab/Pumpkin/pull/420))
+- *(deps)* Update dependencies ([#442](https://github.com/ConSol-Lab/Pumpkin/pull/442), [#428](https://github.com/ConSol-Lab/Pumpkin/pull/428), [#420](https://github.com/ConSol-Lab/Pumpkin/pull/420))
 
 ## [0.1.0](https://github.com/consol-lab/pumpkin/releases/tag/fzn-rs-v0.1.0) - 2026-02-10
 
