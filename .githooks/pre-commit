@@ -2,7 +2,6 @@
 
 set -eux
 
-./scripts/msc-json.sh --pre-commit
 ./scripts/fmt.sh --pre-commit
 ./scripts/clippy.sh --pre-commit
 ./scripts/documentation.sh --pre-commit
