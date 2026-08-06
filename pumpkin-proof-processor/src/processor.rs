@@ -670,7 +670,8 @@ impl ProofProcessor {
         let stack_entry = &mut stack[used_constraint_tag];
         if let Some(posted_deduction) = stack_entry {
             posted_deduction.marked = true;
-            posted_deduction.update_propagators_priority(&mut self.state, MARKED_PROPAGATION_PRIORITY);
+            posted_deduction
+                .update_propagators_priority(&mut self.state, MARKED_PROPAGATION_PRIORITY);
         }
     }
 }

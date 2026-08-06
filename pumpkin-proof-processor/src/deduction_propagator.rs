@@ -51,7 +51,7 @@ pub(crate) const UNMARKED_CONFLICT_PRIORITY: Priority = Priority::UltraLow;
 /// deductions that get marked.
 pub(crate) const UNMARKED_UNIT_PROPAGATION_PRIORITY: Priority = Priority::Lowest;
 
-/// Both conflict detection and unit propagation of marked deductions have a 
+/// Both conflict detection and unit propagation of marked deductions have a
 /// higher propagation priority than the propagators of unmarked deductions.
 pub(crate) const MARKED_PROPAGATION_PRIORITY: Priority = Priority::VeryLow;
 
@@ -173,7 +173,7 @@ impl Propagator for DeductionPropagator {
                 && num_unassigned_predicates == 0),
             "It should not be possible for an unmarked deduction to unit propagate
             and cause a conflict, as a failure should have been declared by
-            the `DeductionPropagator` that does conflict detection, 
+            the `DeductionPropagator` that does conflict detection,
             which has a higher priority than its unit propagating counterpart."
         );
         match self.propagation_mode {
