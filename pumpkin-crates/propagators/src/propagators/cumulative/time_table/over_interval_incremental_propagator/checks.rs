@@ -107,13 +107,15 @@ pub(crate) fn split_profile_added_part_starts_after_profile_start<
 
 /// Determines whether a new profile which contains the overlap between `profile` and the added
 /// mandatory part should be added.
+///
+/// Returns `true` if the addition caused an overflow of the capacity.
 pub(crate) fn overlap_updated_profile<Var: IntegerVariable + 'static>(
     update_range: &Range<i32>,
     profile: &ResourceProfile<Var>,
     to_add: &mut Vec<ResourceProfile<Var>>,
     task: &Rc<Task<Var>>,
     capacity: i32,
-) -> Result<(), ResourceProfile<Var>> {
+) -> bool {
     // Now we create a new profile which consists of the part of the
     // profile covered by the update range
     // This means that we are adding the contribution of the updated
@@ -152,15 +154,10 @@ pub(crate) fn overlap_updated_profile<Var: IntegerVariable + 'static>(
         if profile.height + task.resource_usage > capacity {
             // The addition of the new mandatory part to the profile
             // caused an overflow of the resource
-            return Err(ResourceProfile {
-                start: new_profile_lower_bound,
-                end: new_profile_upper_bound,
-                profile_tasks: new_profile_tasks,
-                height: profile.height + task.resource_usage,
-            });
+            return true;
         }
     }
-    Ok(())
+    false
 }
 
 /// Determines whether the current profile is split by the added mandatory part due to the end

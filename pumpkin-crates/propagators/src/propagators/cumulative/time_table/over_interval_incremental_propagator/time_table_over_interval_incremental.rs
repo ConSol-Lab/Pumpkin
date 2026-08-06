@@ -184,13 +184,14 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
 
     /// Adds the added parts in the provided [`MandatoryPartAdjustments`] to the time-table; note
     /// that all of the adjustments are applied even if a conflict is found.
-    fn add_to_time_table(
+    ///
+    /// Returns true if the addition to the time-table caused an overflow of the capacity.
+    fn conflicting_after_addition_to_time_table(
         &mut self,
-        mut context: Domains,
         mandatory_part_adjustments: &MandatoryPartAdjustments,
         task: &Rc<Task<Var>>,
-    ) -> PropagationStatusCP {
-        let mut conflict = None;
+    ) -> bool {
+        let mut conflict = false;
         // We consider both of the possible update ranges
         // Note that the upper update range is first considered to avoid any issues with the
         // indices when processing the other update range
@@ -198,7 +199,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
             // First we attempt to find overlapping profiles
             match determine_profiles_to_update(&self.time_table, &update_range) {
                 Ok((start_index, end_index)) => {
-                    let result = insertion::insert_profiles_overlapping_with_added_mandatory_part(
+                    let result = insertion::conflicting_after_insertion_of_overlapping_mandatory(
                         &mut self.time_table,
                         start_index,
                         end_index,
@@ -206,18 +207,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                         task,
                         self.parameters.capacity,
                     );
-                    if let Err(conflict_tasks) = result
-                        && conflict.is_none()
-                    {
-                        conflict = Some(Err(create_conflict_explanation(
-                            context.reborrow(),
-                            self.inference_code.as_ref().unwrap(),
-                            &conflict_tasks,
-                            self.parameters.options.explanation_type,
-                            self.parameters.capacity,
-                        )
-                        .into()));
-                    }
+                    conflict |= result;
                 }
                 Err(index_to_insert) => insertion::insert_profile_new_mandatory_part(
                     &mut self.time_table,
@@ -227,11 +217,8 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                 ),
             }
         }
-        if let Some(conflict) = conflict {
-            conflict
-        } else {
-            Ok(())
-        }
+
+        conflict
     }
 
     /// Removes the removed parts in the provided [`MandatoryPartAdjustments`] from the time-table
@@ -306,14 +293,13 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
             //
             // Note that the inconsistency returned here does not necessarily hold since other
             // updates could remove from the profile
-            let result = self.add_to_time_table(
-                context.domains(),
+            let result = self.conflicting_after_addition_to_time_table(
                 &mandatory_part_adjustments,
                 &updated_task,
             );
 
             // If we have found an overflow then we mark that we need to check the profile
-            found_conflict |= result.is_err();
+            found_conflict |= result;
 
             // Then we reset the update for the task since it has been processed
             self.updatable_structures
