@@ -51,6 +51,10 @@ pub(crate) const UNMARKED_CONFLICT_PRIORITY: Priority = Priority::UltraLow;
 /// deductions that get marked.
 pub(crate) const UNMARKED_UNIT_PROPAGATION_PRIORITY: Priority = Priority::Lowest;
 
+/// Both conflict detection and unit propagation of marked deductions have a 
+/// higher propagation priority than the propagators of unmarked deductions.
+pub(crate) const MARKED_PROPAGATION_PRIORITY: Priority = Priority::VeryLow;
+
 impl PropagatorConstructor for DeductionPropagatorConstructor {
     type PropagatorImpl = DeductionPropagator;
 
@@ -160,55 +164,49 @@ impl Propagator for DeductionPropagator {
 
         let num_unassigned_predicates = self.nogood.len() - num_assigned_predicates;
 
-        // It should not be possible for an unmarked deduction to unit propagate
-        // and cause a conflict, as a failure should have been declared by
-        // the `DeductionPropagator` that does conflict detection,
-        // which has a higher priority than its unit propagating counterpart.
         assert!(
             !(self.propagation_priority > Priority::VeryLow
                 && matches!(
                     self.propagation_mode,
                     DeductionPropagationMode::OnlyUnitPropagation
                 )
-                && num_unassigned_predicates == 0)
+                && num_unassigned_predicates == 0),
+            "It should not be possible for an unmarked deduction to unit propagate
+            and cause a conflict, as a failure should have been declared by
+            the `DeductionPropagator` that does conflict detection, 
+            which has a higher priority than its unit propagating counterpart."
         );
-
-        if matches!(
-            self.propagation_mode,
-            DeductionPropagationMode::OnlyConflictDetection
-        ) && num_unassigned_predicates == 0
-        {
-            return Err(Conflict::Propagator(PropagatorConflict {
-                conjunction: self.nogood.iter().copied().collect(),
-                inference_code: self.inference_code.clone(),
-            }));
-        } else if matches!(
-            self.propagation_mode,
-            DeductionPropagationMode::OnlyUnitPropagation
-        ) && num_unassigned_predicates == 1
-        {
-            let unassigned_predicate = self
-                .nogood
-                .iter()
-                .copied()
-                .find(|&predicate| context.evaluate_predicate(predicate) != Some(true))
-                .expect("exactly one predicate is not true");
-
-            if context.evaluate_predicate(unassigned_predicate).is_none() {
-                let explanation = self
+        match self.propagation_mode {
+            DeductionPropagationMode::OnlyConflictDetection if num_unassigned_predicates == 0 => {
+                return Err(Conflict::Propagator(PropagatorConflict {
+                    conjunction: self.nogood.iter().copied().collect(),
+                    inference_code: self.inference_code.clone(),
+                }));
+            }
+            DeductionPropagationMode::OnlyUnitPropagation if num_unassigned_predicates == 1 => {
+                let unassigned_predicate = self
                     .nogood
                     .iter()
                     .copied()
-                    .filter(|&predicate| predicate != unassigned_predicate)
-                    .collect::<PropositionalConjunction>();
+                    .find(|&predicate| context.evaluate_predicate(predicate) != Some(true))
+                    .expect("exactly one predicate is not true");
 
-                // This will never fail, as the predicate is known to be unassigned. So
-                // this propagator only returns explicit conflicts and never empty
-                // domain conflicts.
-                context.post(!unassigned_predicate, (explanation, &self.inference_code))?;
+                if context.evaluate_predicate(unassigned_predicate).is_none() {
+                    let explanation = self
+                        .nogood
+                        .iter()
+                        .copied()
+                        .filter(|&predicate| predicate != unassigned_predicate)
+                        .collect::<PropositionalConjunction>();
+
+                    // This will never fail, as the predicate is known to be unassigned. So
+                    // this propagator only returns explicit conflicts and never empty
+                    // domain conflicts.
+                    context.post(!unassigned_predicate, (explanation, &self.inference_code))?;
+                }
             }
-        }
-
+            _ => {}
+        };
         Ok(())
     }
 

@@ -37,6 +37,7 @@ use pumpkin_core::state::State;
 use crate::deduction_propagator::DeductionPropagationMode;
 use crate::deduction_propagator::DeductionPropagator;
 use crate::deduction_propagator::DeductionPropagatorConstructor;
+use crate::deduction_propagator::MARKED_PROPAGATION_PRIORITY;
 use crate::deduction_propagator::UNMARKED_CONFLICT_PRIORITY;
 use crate::deduction_propagator::UNMARKED_UNIT_PROPAGATION_PRIORITY;
 use crate::predicate_heap::PredicateHeap;
@@ -470,7 +471,7 @@ impl ProofProcessor {
             .as_mut()
             .expect("the deduction that triggered the conflict must be on the nogood stack");
         posted_deduction.marked = true;
-        posted_deduction.update_propagators_priority(&mut self.state, Priority::VeryLow);
+        posted_deduction.update_propagators_priority(&mut self.state, MARKED_PROPAGATION_PRIORITY);
 
         let inferences = self.explain_current_conflict(&mut nogood_stack, conflict);
 
@@ -669,7 +670,7 @@ impl ProofProcessor {
         let stack_entry = &mut stack[used_constraint_tag];
         if let Some(posted_deduction) = stack_entry {
             posted_deduction.marked = true;
-            posted_deduction.update_propagators_priority(&mut self.state, Priority::VeryLow);
+            posted_deduction.update_propagators_priority(&mut self.state, MARKED_PROPAGATION_PRIORITY);
         }
     }
 }
