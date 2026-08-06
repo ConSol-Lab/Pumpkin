@@ -30,7 +30,7 @@ pub(crate) fn conflicting_after_insertion_of_overlapping_mandatory<
     let mut to_add = Vec::new();
 
     // We keep track of whether a conflict has been found
-    let mut conflict = false;
+    let mut found_conflict = false;
 
     // Go over all indices of the profiles which overlap with the updated
     // one and determine which one need to be updated
@@ -74,14 +74,14 @@ pub(crate) fn conflicting_after_insertion_of_overlapping_mandatory<
         // between the current profile and the added mandatory part
         //
         // The addition of the mandatory part can lead to an overflow
-        let result = checks::overlap_updated_profile(
+        let conflicting = checks::overlap_updated_profile(
             update_range,
             profile,
             &mut to_add,
             updated_task,
             capacity,
         );
-        conflict |= result;
+        found_conflict |= conflicting;
 
         // Check whether the current profile is split by the added mandatory
         // part (end of profile remains unchanged)
@@ -106,7 +106,7 @@ pub(crate) fn conflicting_after_insertion_of_overlapping_mandatory<
     // the right place to ensure the ordering invariant
     let _ = time_table.splice(start_index..end_index + 1, to_add);
 
-    conflict
+    found_conflict
 }
 
 /// The new mandatory part added by `updated_task` (spanning `update_range`) does not overlap
