@@ -15,7 +15,9 @@ use crate::propagators::cumulative::time_table::over_interval_incremental_propag
 /// The new mandatory part added by `updated_task` (spanning `update_range`) overlaps with the
 /// profiles in `[start_index, end_index]`. This function calculates the added, and updated
 /// profiles and adds them to the `time-table` at the correct position.
-pub(crate) fn insert_profiles_overlapping_with_added_mandatory_part<
+///
+/// Return `true`, if a conflict was found.
+pub(crate) fn conflicting_after_insertion_of_overlapping_mandatory<
     Var: IntegerVariable + 'static,
 >(
     time_table: &mut OverIntervalTimeTableType<Var>,
@@ -24,11 +26,11 @@ pub(crate) fn insert_profiles_overlapping_with_added_mandatory_part<
     update_range: &Range<i32>,
     updated_task: &Rc<Task<Var>>,
     capacity: i32,
-) -> Result<(), ResourceProfile<Var>> {
+) -> bool {
     let mut to_add = Vec::new();
 
     // We keep track of whether a conflict has been found
-    let mut conflict = None;
+    let mut found_conflict = false;
 
     // Go over all indices of the profiles which overlap with the updated
     // one and determine which one need to be updated
@@ -72,16 +74,14 @@ pub(crate) fn insert_profiles_overlapping_with_added_mandatory_part<
         // between the current profile and the added mandatory part
         //
         // The addition of the mandatory part can lead to an overflow
-        let result = checks::overlap_updated_profile(
+        let conflicting = checks::overlap_updated_profile(
             update_range,
             profile,
             &mut to_add,
             updated_task,
             capacity,
         );
-        if result.is_err() && conflict.is_none() {
-            conflict = Some(result)
-        }
+        found_conflict |= conflicting;
 
         // Check whether the current profile is split by the added mandatory
         // part (end of profile remains unchanged)
@@ -106,11 +106,7 @@ pub(crate) fn insert_profiles_overlapping_with_added_mandatory_part<
     // the right place to ensure the ordering invariant
     let _ = time_table.splice(start_index..end_index + 1, to_add);
 
-    if let Some(conflict) = conflict {
-        conflict
-    } else {
-        Ok(())
-    }
+    found_conflict
 }
 
 /// The new mandatory part added by `updated_task` (spanning `update_range`) does not overlap
