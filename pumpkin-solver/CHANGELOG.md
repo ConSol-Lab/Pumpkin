@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.5.0...pumpkin-solver-v0.6.0) - 2026-08-07
+
+### Added
+
+- *(pumpkin-proof-processor)* Minimising number of deductions in trimmed proof by giving marked deductions higher propagation priority ([#523](https://github.com/ConSol-Lab/Pumpkin/pull/523))
+
+### Other
+
+- *(pumpkin-conflict-resolvers)* Remove incorrect check ([#544](https://github.com/ConSol-Lab/Pumpkin/pull/544))
+- *(pumpkin-propagators)* Simplify conflict detection incremental updates ([#543](https://github.com/ConSol-Lab/Pumpkin/pull/543))
+
 ## [0.5.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.4.0...pumpkin-solver-v0.5.0) - 2026-08-05
 
 ### Added
