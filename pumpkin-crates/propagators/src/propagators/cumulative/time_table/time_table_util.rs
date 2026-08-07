@@ -179,7 +179,7 @@ fn debug_check_whether_profiles_are_maximal_and_sorted<'a, Var: IntegerVariable 
 pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContext,
     inference_code: &InferenceCode,
-    time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
+    time_table: impl ExactSizeIterator<Item = &'a ResourceProfile<Var>> + Clone,
     parameters: &CumulativeParameters<Var>,
     updatable_structures: &mut UpdatableStructures<Var>,
 ) -> PropagationStatusCP {
@@ -200,6 +200,11 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
             .all(|fixed_task| context.is_fixed(&fixed_task.start_variable)),
         "All of the fixed tasks should be fixed at this point"
     );
+
+    if time_table.len() == 0 {
+        // No propagation can take place since the time-table is empty
+        return Ok(());
+    }
 
     if parameters.options.generate_sequence {
         propagate_sequence_of_profiles(
