@@ -1,9 +1,13 @@
+use std::rc::Rc;
+
 use pumpkin_core::declare_inference_label;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::PredicateId;
+use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
@@ -20,10 +24,36 @@ use pumpkin_core::state::PropagatorConflict;
 #[derive(Clone, Debug)]
 pub(crate) struct DeductionPropagatorConstructor {
     /// The nogood to propagate.
-    pub(crate) nogood: PropositionalConjunction,
+    pub(crate) nogood: Rc<[Predicate]>,
     /// The constraint tag of the nogood.
     pub(crate) constraint_tag: ConstraintTag,
+    /// The priority of the propagator.
+    pub(crate) priority: Priority,
+    /// Whether this propagator will perform conflict detection XOR unit propagation
+    pub(crate) propagation_mode: DeductionPropagationMode,
 }
+
+/// Used to indicate the propagation mode that is used
+/// by the `DeductionPropagator`.
+#[derive(Clone, Debug)]
+pub(crate) enum DeductionPropagationMode {
+    OnlyConflictDetection,
+    OnlyUnitPropagation,
+}
+
+/// Conflict detection of unmarked deductions is given a higher priority
+/// than unit propagation to greedily minimise the number unmarked deductions
+/// that get marked.
+pub(crate) const UNMARKED_CONFLICT_PRIORITY: Priority = Priority::UltraLow;
+
+/// Unit propagation of unmarked deductions is given a lower priority
+/// than conflict detection to greedily minimise the number of unmarked
+/// deductions that get marked.
+pub(crate) const UNMARKED_UNIT_PROPAGATION_PRIORITY: Priority = Priority::Lowest;
+
+/// Both conflict detection and unit propagation of marked deductions have a
+/// higher propagation priority than the propagators of unmarked deductions.
+pub(crate) const MARKED_PROPAGATION_PRIORITY: Priority = Priority::VeryLow;
 
 impl PropagatorConstructor for DeductionPropagatorConstructor {
     type PropagatorImpl = DeductionPropagator;
@@ -37,8 +67,9 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
         let DeductionPropagatorConstructor {
             nogood,
             constraint_tag,
+            priority,
+            propagation_mode,
         } = self;
-
         let ids = nogood
             .iter()
             .map(|&predicate| context.register_predicate(predicate))
@@ -58,6 +89,8 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
             ids,
             inference_code,
             active: true,
+            propagation_priority: priority,
+            propagation_mode,
         };
 
         PropagatorSpec {
@@ -77,7 +110,7 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
 #[derive(Clone, Debug)]
 pub(crate) struct DeductionPropagator {
     /// The nogood to propagate.
-    nogood: PropositionalConjunction,
+    nogood: Rc<[Predicate]>,
     /// The IDs for the predicates in the nogood.
     ///
     /// The order in this vector is unspecified. In particular, it is not true that the ID at index
@@ -89,6 +122,11 @@ pub(crate) struct DeductionPropagator {
     active: bool,
     /// The inference code for this propagator.
     inference_code: InferenceCode,
+    /// The priority of this propagator.
+    propagation_priority: Priority,
+    /// Whether this propagator is part of the 'conflict detection' stage or the 'unit propagation'
+    /// stage.
+    propagation_mode: DeductionPropagationMode,
 }
 
 impl DeductionPropagator {
@@ -98,6 +136,10 @@ impl DeductionPropagator {
     /// supported at the moment.
     pub(crate) fn deactivate(&mut self) {
         self.active = false;
+    }
+
+    pub(crate) fn set_priority(&mut self, new_priority: Priority) {
+        self.propagation_priority = new_priority;
     }
 }
 
@@ -122,34 +164,53 @@ impl Propagator for DeductionPropagator {
 
         let num_unassigned_predicates = self.nogood.len() - num_assigned_predicates;
 
-        if num_unassigned_predicates == 0 {
-            return Err(Conflict::Propagator(PropagatorConflict {
-                conjunction: self.nogood.clone(),
-                inference_code: self.inference_code.clone(),
-            }));
-        } else if num_unassigned_predicates == 1 {
-            let unassigned_predicate = self
-                .nogood
-                .iter()
-                .copied()
-                .find(|&predicate| context.evaluate_predicate(predicate) != Some(true))
-                .expect("exactly one predicate is not true");
-
-            if context.evaluate_predicate(unassigned_predicate).is_none() {
-                let explanation = self
+        assert!(
+            !(self.propagation_priority > Priority::VeryLow
+                && matches!(
+                    self.propagation_mode,
+                    DeductionPropagationMode::OnlyUnitPropagation
+                )
+                && num_unassigned_predicates == 0),
+            "It should not be possible for an unmarked deduction to unit propagate
+            and cause a conflict, as a failure should have been declared by
+            the `DeductionPropagator` that does conflict detection,
+            which has a higher priority than its unit propagating counterpart."
+        );
+        match self.propagation_mode {
+            DeductionPropagationMode::OnlyConflictDetection if num_unassigned_predicates == 0 => {
+                return Err(Conflict::Propagator(PropagatorConflict {
+                    conjunction: self.nogood.iter().copied().collect(),
+                    inference_code: self.inference_code.clone(),
+                }));
+            }
+            DeductionPropagationMode::OnlyUnitPropagation if num_unassigned_predicates == 1 => {
+                let unassigned_predicate = self
                     .nogood
                     .iter()
                     .copied()
-                    .filter(|&predicate| predicate != unassigned_predicate)
-                    .collect::<PropositionalConjunction>();
+                    .find(|&predicate| context.evaluate_predicate(predicate) != Some(true))
+                    .expect("exactly one predicate is not true");
 
-                // This will never fail, as the predicate is known to be unassigned. So
-                // this propagator only returns explicit conflicts and never empty
-                // domain conflicts.
-                context.post(!unassigned_predicate, (explanation, &self.inference_code))?;
+                if context.evaluate_predicate(unassigned_predicate).is_none() {
+                    let explanation = self
+                        .nogood
+                        .iter()
+                        .copied()
+                        .filter(|&predicate| predicate != unassigned_predicate)
+                        .collect::<PropositionalConjunction>();
+
+                    // This will never fail, as the predicate is known to be unassigned. So
+                    // this propagator only returns explicit conflicts and never empty
+                    // domain conflicts.
+                    context.post(!unassigned_predicate, (explanation, &self.inference_code))?;
+                }
             }
-        }
-
+            _ => {}
+        };
         Ok(())
+    }
+
+    fn priority(&self) -> Priority {
+        self.propagation_priority
     }
 }

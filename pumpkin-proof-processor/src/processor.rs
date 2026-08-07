@@ -19,6 +19,7 @@ use drcp_format::writer::ProofWriter;
 use log::debug;
 use log::info;
 use log::trace;
+use pumpkin_core::containers::HashSet;
 use pumpkin_core::containers::KeyedVec;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
@@ -26,14 +27,19 @@ use pumpkin_core::predicates::PredicateType;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::Priority;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::CurrentNogood;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::state::PropagatorHandle;
 use pumpkin_core::state::State;
 
+use crate::deduction_propagator::DeductionPropagationMode;
 use crate::deduction_propagator::DeductionPropagator;
 use crate::deduction_propagator::DeductionPropagatorConstructor;
+use crate::deduction_propagator::MARKED_PROPAGATION_PRIORITY;
+use crate::deduction_propagator::UNMARKED_CONFLICT_PRIORITY;
+use crate::deduction_propagator::UNMARKED_UNIT_PROPAGATION_PRIORITY;
 use crate::predicate_heap::PredicateHeap;
 use crate::variables::Variables;
 
@@ -92,9 +98,36 @@ pub(crate) enum ProofProcessError {
 /// A deduction that was posted to the solver.
 #[derive(Clone, Debug)]
 struct PostedDeduction {
-    predicates: PropositionalConjunction,
-    handle: PropagatorHandle<DeductionPropagator>,
+    predicates: Rc<[Predicate]>,
+    conflict_detection_handle: PropagatorHandle<DeductionPropagator>,
+    unit_prop_handle: PropagatorHandle<DeductionPropagator>,
     marked: bool,
+}
+
+impl PostedDeduction {
+    /// Deactivates the propagators associated with this `PostedDeduction`.
+    fn deactivate_propagators(&self, state: &mut State) {
+        state
+            .get_propagator_mut(self.conflict_detection_handle)
+            .expect("All handles are valid")
+            .deactivate();
+        state
+            .get_propagator_mut(self.unit_prop_handle)
+            .expect("All handles are valid")
+            .deactivate();
+    }
+
+    /// Updates the priority of both propagators associated with this `PostedDeduction`.
+    fn update_propagators_priority(&self, state: &mut State, new_priority: Priority) {
+        state
+            .get_propagator_mut(self.conflict_detection_handle)
+            .expect("All handles are valid")
+            .set_priority(new_priority);
+        state
+            .get_propagator_mut(self.unit_prop_handle)
+            .expect("All handles are valid")
+            .set_priority(new_priority);
+    }
 }
 
 type DeductionStack = KeyedVec<ConstraintTag, Option<PostedDeduction>>;
@@ -153,10 +186,8 @@ impl ProofProcessor {
 
             let new_checkpoint = self.state.get_checkpoint() - 1;
             let _ = self.state.restore_to(new_checkpoint);
-            self.state
-                .get_propagator_mut(posted_deduction.handle)
-                .expect("all handles are valid")
-                .deactivate();
+
+            posted_deduction.deactivate_propagators(&mut self.state);
 
             debug!("Processing deduction {}", NonZero::from(tag));
             trace!("  nogood: {:?}", posted_deduction.predicates);
@@ -317,15 +348,25 @@ impl ProofProcessor {
             trace!("    {nogood:?}");
 
             self.state.new_checkpoint();
-            let handle = self.state.add_propagator(DeductionPropagatorConstructor {
-                nogood: nogood.iter().copied().collect(),
+            let nogood_rc = nogood.to_vec().into();
+            let conflict_handle = self.state.add_propagator(DeductionPropagatorConstructor {
+                nogood: Rc::clone(&nogood_rc),
                 constraint_tag,
+                priority: UNMARKED_CONFLICT_PRIORITY,
+                propagation_mode: DeductionPropagationMode::OnlyConflictDetection,
             });
 
+            let prop_handle = self.state.add_propagator(DeductionPropagatorConstructor {
+                nogood: Rc::clone(&nogood_rc),
+                constraint_tag,
+                priority: UNMARKED_UNIT_PROPAGATION_PRIORITY,
+                propagation_mode: DeductionPropagationMode::OnlyUnitPropagation,
+            });
             nogood_stack.accomodate(constraint_tag, None);
             nogood_stack[constraint_tag] = Some(PostedDeduction {
-                predicates: nogood,
-                handle,
+                predicates: nogood_rc,
+                conflict_detection_handle: conflict_handle,
+                unit_prop_handle: prop_handle,
                 marked: false,
             });
 
@@ -430,6 +471,7 @@ impl ProofProcessor {
             .as_mut()
             .expect("the deduction that triggered the conflict must be on the nogood stack");
         posted_deduction.marked = true;
+        posted_deduction.update_propagators_priority(&mut self.state, MARKED_PROPAGATION_PRIORITY);
 
         let inferences = self.explain_current_conflict(&mut nogood_stack, conflict);
 
@@ -475,7 +517,7 @@ impl ProofProcessor {
                     label: Some(label),
                 }));
 
-                mark_stack_entry(nogood_stack, inference_code);
+                self.mark_stack_entry(nogood_stack, inference_code);
 
                 conjunction
             }
@@ -505,7 +547,7 @@ impl ProofProcessor {
                         label: Some(label),
                     }));
 
-                    mark_stack_entry(nogood_stack, inference_code);
+                    self.mark_stack_entry(nogood_stack, inference_code);
                 }
 
                 predicates_to_explain.push(!empty_domain_confict.trigger_predicate);
@@ -531,9 +573,13 @@ impl ProofProcessor {
         let mut initial_bound_indices = HashMap::new();
         let mut reason_buffer = vec![];
 
+        let mut visited_predicates = HashSet::new();
         // For every predicate in the queue, we will introduce appropriate inferences into
         // the proof.
         while let Some(predicate) = self.to_process_heap.pop() {
+            if !visited_predicates.insert(predicate) {
+                continue;
+            }
             // The predicate is either propagated or an initial bound. If it is an
             // initial bound, we dispatch that here.
             if self.state.is_implied_by_initial_domain(predicate) {
@@ -582,7 +628,7 @@ impl ProofProcessor {
             // predicate. Those inferences do not need to be in the proof, so we only create an
             // inference for propagations by constraints.
             if let Some(inference_code) = inference_code {
-                mark_stack_entry(nogood_stack, inference_code.clone());
+                self.mark_stack_entry(nogood_stack, inference_code.clone());
 
                 let label = inference_code.label();
                 inferences.push(Some(Inference {
@@ -615,17 +661,18 @@ impl ProofProcessor {
 
         Ok(())
     }
-}
+    /// Given a [`DeductionStack`], mark the constraint indicated by the inference code as used.
+    fn mark_stack_entry(&mut self, stack: &mut DeductionStack, inference_code: InferenceCode) {
+        let used_constraint_tag = inference_code.tag();
 
-/// Given a [`DeductionStack`], mark the constraint indicated by the inference code as used.
-fn mark_stack_entry(stack: &mut DeductionStack, inference_code: InferenceCode) {
-    let used_constraint_tag = inference_code.tag();
+        trace!("Marking constraint {}", NonZero::from(used_constraint_tag));
 
-    trace!("Marking constraint {}", NonZero::from(used_constraint_tag));
-
-    let stack_entry = &mut stack[used_constraint_tag];
-    if let Some(posted_deduction) = stack_entry {
-        posted_deduction.marked = true;
+        let stack_entry = &mut stack[used_constraint_tag];
+        if let Some(posted_deduction) = stack_entry {
+            posted_deduction.marked = true;
+            posted_deduction
+                .update_propagators_priority(&mut self.state, MARKED_PROPAGATION_PRIORITY);
+        }
     }
 }
 

@@ -252,6 +252,8 @@ pub enum Priority {
     Low = 2,
     #[default]
     VeryLow = 3,
+    UltraLow = 4,
+    Lowest = 5,
 }
 
 impl PartialOrd for Priority {

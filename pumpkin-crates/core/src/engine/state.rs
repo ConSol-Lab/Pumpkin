@@ -366,9 +366,9 @@ impl State {
         }
 
         pumpkin_assert_simple!(
-            propagator.priority() as u8 <= 3,
-            "The propagator priority exceeds 3.
-             Currently we only support values up to 3,
+            propagator.priority() as u8 <= 5,
+            "The propagator priority exceeds 5.
+             Currently we only support values up to 5,
              but this can easily be changed if there is a good reason."
         );
 
