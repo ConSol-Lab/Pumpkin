@@ -1,0 +1,16 @@
+# Summary
+
+- [Introduction](01-introduction.md)
+- [Setting Up Your Environment](02-setting-up.md)
+- [Your First Propagator](03-your-first-propagator.md)
+  - [Illustrative Example](04-illustrative-example.md)
+  - [Propagator Structure](05-propagator-structure.md)
+  - [Constructor](06-constructor.md)
+  - [Propagator Logic](07-propagator-logic.md)
+  - [Consistency Checkers](08-consistency_checkers.md)
+    - [Propagation Checkers](09-propagation_checkers.md)
+    - [Retention Checkers](10-retention_checkers.md)
+  - [Testing](11-testing.md)
+- [Pitfalls](12-pitfalls.md)
+- [Running Models](13-running-models.md)
+- [Conclusion](14-conclusion.md)

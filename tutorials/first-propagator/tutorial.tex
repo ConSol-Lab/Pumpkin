@@ -1,0 +1,842 @@
+\documentclass{article}
+
+\usepackage{style}
+
+\title{Tutorial: Meeting Pumpkin}
+\author{Emir Demirović \and Maarten Flippo \and Imko Marijnissen}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+    The goal of this tutorial is to help you feel comfortable with the basic development workflow in Pumpkin, our CP solver. We will demonstrate the main concepts through a hands-on implementation of a simple propagator.
+    
+    Pumpkin is implemented in \href{https://rust-lang.org/}{Rust}, a modern programming language designed for safety and performance. If you are new to \href{https://rust-lang.org/}{Rust}, you may find it helpful to skim the \href{https://doc.rust-lang.org/book/}{Rust book}, especially the sections on ownership and lifetimes. You are not expected to master these concepts, but understanding them makes things easier. Throughout this document, we will refer to this book whenever we encounter a Rust language feature. If you are confused by any of the code snippets or explanations about Rust in this tutorial, use the provided links to the book to read more.
+
+    This tutorial assumes basic familiarity with constraint programming, namely Chapters 1 and 2 of the lecture notes. By the end, you will know how to implement and test a propagator and incorporate it into Pumpkin.
+
+\section{Before Getting Started}
+
+    Before you begin working with Pumpkin, please make sure your environment is properly set up. We assume you have basic familiarity with \texttt{git}. Follow the steps below:
+
+\begin{itemize}
+    \item \textbf{Install Rust.}  
+    Follow the official instructions at  
+    \href{https://rust-lang.org/tools/install/}{https://rust-lang.org/tools/install/}.  
+    This installs both the Rust compiler and \texttt{cargo}, Rust’s build tool.
+
+    \item \textbf{Clone the course repository.}  
+    \mintinline{bash}{git clone https://github.com/ConSol-Lab/CS4535.git}
+
+    \item \textbf{Verify that Rust is correctly installed.}  
+    Run in the terminal:  
+    \mintinline{bash}{cargo build}.  
+    This compiles the solver and checks that your toolchain is configured correctly.
+    \item \textbf{Build the documentation (optional but recommended).}  
+    Pumpkin is extensively documented. You can generate and view the documentation by running:  
+    \begin{minted}{bash}
+    cargo doc --no-deps --open --document-private-items
+    \end{minted}
+    This opens a local documentation page in your browser, providing valuable support when navigating the code base.
+    \item \textbf{Install UV.}  
+    Python is used for running grading scripts and benchmarking tools—not for Pumpkin itself.  
+    The grading and experimentation setup expect you to use \href{https://docs.astral.sh/uv/}{uv}.
+\end{itemize}
+
+\section{Your First Propagator: \texorpdfstring{$a = b$}{a = b}}
+
+We will go through the complete implementation of a simple propagator for the equality constraint
+\[a = b\]
+where $a$ and $b$ are integer variables.
+
+The goal of this propagator is to ensure that the domains of $a$ and $b$ become equal to the intersection of their current domains—the propagator is therefore \emph{domain-consistent}. 
+The propagation has two parts:
+
+\begin{enumerate}
+    \item 
+        \textbf{Bounds filtering:}  
+          Ensure that the lower and upper bounds of $a$ and $b$ become identical.
+    \item 
+        \textbf{Value filtering:}  
+          Remove all values from each variable that do not appear in the other variable’s domain.
+\end{enumerate}
+
+Before writing any Rust code, we begin with a small example to illustrate how propagation for the constraint $a = b$ should behave.
+
+\subsection{Illustrative Example}
+
+Before diving into the implementation, let us first develop an intuition for how propagation works for the constraint $a = b$. 
+The propagator must ensure that $a$ and $b$ take the \emph{same} value, which means that their domains must eventually collapse to the intersection of the two original domains.
+
+Consider the following situation:
+\[
+    a \in [5, 8]
+    \qquad\text{and}\qquad
+    b \in \{4, 5, 9\}
+\]
+
+Given these domains, we apply our domain-consistent strategy in two phases:
+
+\begin{itemize}
+    \item \textbf{Propagating from $b$ to $a$.}
+    \begin{enumerate}
+        \item 
+            The bounds of $b$ do not immediately restrict $a$, because $b$'s lower bound (4) is smaller than $a$'s lower bound (5), and its upper bound (9) is larger than $a$'s upper bound (8).
+        \item 
+            However, examining the \emph{values} in $a$'s domain, we see that $6$, $7$, and $8$ are not present in $b$'s domain.  
+            These values can therefore be removed from $a$, leaving $a = 5$.
+    \end{enumerate}
+
+    \item \textbf{Propagating from $b$ to $a$.}
+    \begin{enumerate}
+        \item 
+            Now that $a$ is assigned to $5$, we can tighten the bounds of $b$ to $[5,5]$ as well.
+        \item 
+            Since $b$ originally contained the value $5$, this reduction is valid (i.e., it does not lead to an empty domain), and $b$ also becomes assigned to $5$.
+    \end{enumerate}
+\end{itemize}
+
+After these steps, both variables are assigned:
+\[
+    a = 5 \qquad\text{and}\qquad b = 5
+\]
+and the constraint is satisfied.  
+Propagation has successfully reduced both domains to their intersection.
+
+\subsection{Our Structs}
+
+Now that we have seen how propagation for the constraint $a = b$ should work, we take a step back and examine how to represent this propagator in Pumpkin.
+Every propagator implementation consists of two main components:
+
+\begin{itemize}
+    \item a \emph{constructor}, which initialises the propagator, registers the propagator with the solver, and specifies which domain-changing events it should listen to, and
+    \item the \emph{propagator} itself, which contains the propagation logic.
+\end{itemize}
+
+We begin by defining the constructor.
+It is a \href{https://doc.rust-lang.org/book/ch05-00-structs.html}{\texttt{struct}} that stores the variables involved in the constraint and any additional metadata (such as a \texttt{ConstraintTag} for proof logging, which we can ignore for now).
+Pumpkin will use this constructor to create the actual propagator instance.
+
+\autoref{lst:prop_constructor} shows the definition of the constructor for the propagator for the $a = b$ constraint:
+
+\begin{listing}[H]
+\begin{minted}[xleftmargin=\parindent,linenos,breaklines,frame=lines]{rust}
+#[derive(Clone, Debug)] | \mintedline{line:clone_derive} |
+pub struct BinaryEqualsPropagatorConstructor<AVar, BVar> {
+    pub a: AVar,
+    pub b: BVar,
+    pub constraint_tag: ConstraintTag,
+}
+\end{minted}
+\caption{The \texttt{BinaryEqualsPropagatorConstructor} struct}
+\label{lst:prop_constructor}
+\end{listing}
+
+The type parameters \texttt{AVar} and \texttt{BVar} are \href{https://doc.rust-lang.org/book/ch10-01-syntax.html}{generic}.
+In practice, this means that the same constructor works for any choice of integer variables, without committing to a specific internal representation. 
+At this point, we do not need to delve into the details of generics; it is enough to recognise the syntax and understand that it keeps the code flexible.
+
+Notice that the constructor and all its fields are marked as \href{https://doc.rust-lang.org/book/ch07-03-paths-for-referring-to-an-item-in-the-module-tree.html#exposing-paths-with-the-pub-keyword}{public}—this is important so that users of the propagator can create constructor instances from different \href{https://doc.rust-lang.org/book/ch07-01-packages-and-crates.html}{crates}.
+
+The \href{https://doc.rust-lang.org/book/appendix-03-derivable-traits.html#appendix-c-derivable-traits}{\texttt{derive}} statements (\Lineref{line:clone_derive}) instruct the compiler to generate code to clone the type and print a debug representation of it automatically.
+It is useful to know why it exists, but you do not need to worry about it for now.
+
+Next, we define the \emph{propagator struct} itself, shown in \autoref{lst:prop_struct}.
+It represents the propagator itself, which stores the variables and the \texttt{inference\_code}, the use of which will become clearer later on.
+
+\begin{listing}[H]
+\begin{minted}[xleftmargin=\parindent,linenos,breaklines,frame=lines]{rust}
+#[derive(Clone, Debug)]
+pub struct BinaryEqualsPropagator<AVar, BVar> {
+    a: AVar,
+    b: BVar,
+    inference_code: InferenceCode,
+}
+\end{minted}
+\caption{The \texttt{BinaryEqualsPropagator} struct}
+\label{lst:prop_struct}
+\end{listing}
+
+Before we dive into the propagation logic itself, we need to connect our structs to the solver by implementing the \texttt{PropagatorConstructor} \href{https://doc.rust-lang.org/book/ch10-02-traits.html}{trait}.
+For our purposes, you can think of a \emph{trait} as an interface that defines a set of required functions.  
+By implementing this trait, we specify how the solver should create our propagator and which events it should subscribe to.
+
+\subsection{Constructing Our Propagator}
+
+\autoref{lst:constructor_impl} shows the implementation of the constructor for our \texttt{BinaryEqualsPropagator}. Let us walk through it step-by-step.
+
+\begin{listing}[H]
+    \begin{minted}[xleftmargin=\parindent,linenos,breaklines,frame=lines,escapeinside=||,stepnumber=1]{rust}
+impl<AVar, BVar> PropagatorConstructor 
+    for BinaryEqualsPropagatorConstructor<AVar, BVar>
+where
+    AVar: IntegerVariable + 'static, | \mintedline{line:avar} |
+    BVar: IntegerVariable + 'static, | \mintedline{line:bvar} |
+{
+    type PropagatorImpl = BinaryEqualsPropagator<AVar, BVar>; | \mintedline{line:propagator_impl} |
+
+    fn create(
+        self, 
+        mut context: PropagatorConstructorContext
+    ) -> Self::PropagatorImpl {
+        context.register(
+            self.a.clone(),
+            DomainEvents::ANY_INT, 
+            LocalId::from(0)
+        ); | \mintedline{line:register_avar} |
+        
+        context.register(
+            self.b.clone(), 
+            DomainEvents::ANY_INT, 
+            LocalId::from(1)
+        ); | \mintedline{line:register_bvar} |
+
+        BinaryEqualsPropagator { | \mintedline{line:start_construction} |
+            a: self.a,
+            b: self.b,
+            inference_code: InferenceCode::new(self.constraint_tag, BinaryEquals),
+        } | \mintedline{line:end_construction} |
+    }
+}
+    \end{minted}
+    \caption{Implementation of the \texttt{PropagatorConstructor} trait.}
+    \label{lst:constructor_impl}
+\end{listing}
+
+The key elements are:
+
+\begin{itemize}
+    \item 
+        \textbf{Generic variable types (\Linerefs{line:avar}{line:bvar}).}  
+          We kept the types of the variables $a$ and $b$ \href{https://doc.rust-lang.org/book/ch10-01-syntax.html}{generic}, but we also specify that both \texttt{AVar} and \texttt{BVar} must implement the \texttt{IntegerVariable} trait (using \href{https://doc.rust-lang.org/book/ch10-02-traits.html#clearer-trait-bounds-with-where-clauses}{\texttt{where}} clauses).
+          The \texttt{IntegerVariable} trait defines the basic interface that any integer variable must provide.
+          By imposing this requirement while still using generic types, the same propagator can operate with any implementation of integer variables.
+          We will rely on this flexibility without exploring the underlying type system in more detail for now.
+
+    \item 
+        \textbf{Associated type (\Lineref{line:propagator_impl}).}  
+          An \href{https://doc.rust-lang.org/book/ch20-02-advanced-traits.html#associated-types}{\emph{associated type}} specifies that this constructor produces a \texttt{Binary\-Equals\-Propagator} when the solver instantiates it.
+
+    \item 
+        \textbf{Registering for domain events (\Linerefs{line:register_avar}{line:register_bvar}).}  
+          We tell the solver when our propagator should be enqueued.
+          The flag \texttt{DomainEvents::ANY\_INT} subscribes the propagator to \emph{all} integer-domain events, including bound updates and value removals.
+          Whenever any of these events occur on \texttt{a} or \texttt{b}, the propagator will be notified and enqueued.
+
+          We provide a \mintinline{rust}{LocalId}, which is used to internally indicate to what variable changes occur.
+          You can mostly ignore this for now, but you \textbf{must} provide a unique \mintinline{rust}{LocalId} for each variable.
+          
+          When implementing your own propagator, make sure to explore the documentation for \\ \texttt{DomainEvents} so you registered the variables appropriately!
+
+    \item 
+        \textbf{Constructing the propagator (\Linerefs{line:start_construction}{line:end_construction}).}  
+          Finally, we create the actual \\ \texttt{BinaryEqualsPropagator}.  
+          We also generate a new \texttt{InferenceCode} using \\
+          \texttt{context.create\_inference\_code}, which we will later use to tell the solver which inference is being used to make the propagations.
+\end{itemize}
+
+Once this constructor is implemented, Pumpkin knows when to invoke our propagator and how to initialise it.  
+The next step is to implement the propagation logic itself.
+
+
+\subsection{Implementing Our Propagator}
+With the constructor in place, we can now implement the propagation logic by providing an implementation of the \texttt{Propagator} trait.
+There are many functions in the trait to support different functionality. The core function we must implement is:
+\begin{minted}[breaklines]{rust}
+fn propagate_from_scratch(&self, mut context: PropagationContext) -> Result<(), Conflict>
+\end{minted}
+The \texttt{PropagationContext}, which is given as input, provides access to the current domains of all variables and offers methods for performing domain updates.
+
+\autoref{lst:propagator_impl} shows the full implementation of the propagator for the constraint $a = b$.  
+We explain its structure step-by-step.
+
+\paragraph{Reading domains (\Linerefs{line:begin_read_domains}{line:end_read_domains}).}  
+    We start by retrieving the current lower and upper bounds of both variables using the accessor methods provided by \texttt{PropagationContext} (\autoref{lst:propagator_read_domains}).  
+    This gives us the information needed for both conflict detection and propagation.
+    \begin{listing}[H]
+        \begin{minted}[xleftmargin=\parindent,breaklines,frame=lines,escapeinside=||,stepnumber=1]{rust}
+    let a_lb = context.lower_bound(&self.a);
+    let a_ub = context.upper_bound(&self.a);
+    let b_lb = context.lower_bound(&self.b);
+    let b_ub = context.upper_bound(&self.b);
+        \end{minted}
+        \caption{Reading domains}
+        \label{lst:propagator_read_domains}
+    \end{listing}
+
+\paragraph{Optional conflict check (\Linerefs{line:begin_conflict_check}{line:end_conflict_check}).}  
+    This is included only for illustration.  
+    When both variables are already assigned but to different values, the constraint $a = b$ is violated.  
+    In this case, we construct a \texttt{Conflict} object with an \emph{explanation} (created via the \texttt{conjunction!} \href{https://doc.rust-lang.org/book/ch20-05-macros.html#macros}{macro}), which describes the conditions that led to the conflict (\autoref{lst:propagator_conflict_check}).
+    Note that both variables are assigned, so their lower bounds also correspond to the assigned values.
+    We will later implement a checker that will independently verify that the explanation is correct.
+    \begin{listing}[H]
+        \begin{minted}[xleftmargin=\parindent,breaklines,frame=lines,escapeinside=||,stepnumber=1]{rust}
+    if a_lb == a_ub && b_lb == b_ub && a_lb != b_lb {
+        return Err(Conflict::Propagator(PropagatorConflict {
+            conjunction: conjunction!([self.a == a_lb] & [self.b == b_lb]),
+            inference_code: self.inference_code.clone(),
+        }));
+    }
+            \end{minted}
+        \caption{Optional Conflict Check}
+        \label{lst:propagator_conflict_check}
+    \end{listing}
+
+\paragraph{Bounds filtering (\Linerefs{line:begin_propagate_bounds}{line:end_propagate_bounds}).}  
+    We enforce that:
+    \[
+    \mathrm{LB}(a) \ge \mathrm{LB}(b)\qquad\qquad
+    \mathrm{UB}(a) \le \mathrm{UB}(b)\qquad\qquad
+    \mathrm{LB}(b) \ge \mathrm{LB}(a)\qquad\qquad
+    \mathrm{UB}(b) \le \mathrm{UB}(a)
+    \]
+    so that both variables end up with identical bounds (\autoref{lst:propagator_bounds_filtering}).  
+    Each call to \texttt{context.post} performs a domain update and attaches an explanation.
+
+    \begin{listing}[H]
+        \begin{minted}[xleftmargin=\parindent,breaklines,frame=lines,escapeinside=||,stepnumber=1]{rust}
+    context.post(
+        predicate!(self.a >= b_lb),
+        conjunction!([self.b >= b_lb]),
+        &self.inference_code,
+    )?;
+    context.post(
+        predicate!(self.a <= b_ub),
+        conjunction!([self.b <= b_ub]),
+        &self.inference_code,
+    )?;
+    context.post(
+        predicate!(self.b >= a_lb),
+        conjunction!([self.a >= b_lb]),
+        &self.inference_code,
+    )?;
+    context.post(
+        predicate!(self.b <= a_ub),
+        conjunction!([self.a <= a_ub]),
+        &self.inference_code,
+    )?;
+        \end{minted}
+        \caption{Bounds Filtering}
+        \label{lst:propagator_bounds_filtering}
+    \end{listing}
+
+\paragraph{Removing values (\Linerefs{line:begin_removal}{line:end_removal}).}
+    We ensure that any values absent from the domain of $a$ are also removed from
+    the domain of $b$, and vice versa (\autoref{lst:propagator_removing_values}).
+    To do this, we retrieve the values that lie
+    between the lower and upper bounds of a variable but are \emph{not} contained
+    in its domain using \\ \mintinline{rust}{PropagationContext::get_holes}.
+    The collected sequence of holes can then be converted into a vector via \href{https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.collect}{\mintinline{rust}{.collect::<Vec<_>>()}} which simply gathers all returned items into a \href{https://doc.rust-lang.org/std/vec/struct.Vec.html}{\mintinline{rust}{Vec}} for iteration.
+
+    \begin{listing}[H]
+        \begin{minted}[xleftmargin=\parindent,breaklines,frame=lines,escapeinside=||,stepnumber=1]{rust}
+    for removed_value_a in context.get_holes(&self.a).collect::<Vec<_>>() {
+        context.post(
+            predicate!(self.b != removed_value_a), 
+            conjunction!([self.a != removed_value_a]), 
+            &self.inference_code,
+        )?;
+    }
+    for removed_value_b in context.get_holes(&self.b).collect::<Vec<_>>() {
+        context.post(
+            predicate!(self.a != removed_value_b),
+            conjunction!([self.b != removed_value_b]),
+            &self.inference_code,
+        )?;
+    }
+        \end{minted}
+        \caption{Removing values}
+        \label{lst:propagator_removing_values}
+    \end{listing}
+    
+\subsection*{Things to Note}
+    \paragraph{Posting predicates.} 
+        The result of \mintinline{bash}{PropagationContext::post} is a \\ \href{https://doc.rust-lang.org/std/result/}{\mintinline{bash}{Result<(), EmptyDomainConflict>}}. 
+    
+        If the propagation resulted in an empty domain, then it should be returned directly in the function. Rust defines the \href{https://doc.rust-lang.org/book/ch09-02-recoverable-errors-with-result.html#the--operator-shortcut}{? operator} for this purpose; if the \mintinline{bash}{Result::Err(...)} variant is returned, then the \mintinline{bash}{?} operator immediately returns that error.
+        
+        It is important that you \textbf{always} put this behind \textbf{every} call to the \mintinline{bash}{PropagationContext::post} function.
+        You should \textbf{never} explicitly construct an \mintinline{bash}{Err(EmptyDomainConflict { ... })}, but \textbf{only} as a result of \mintinline{bash}{PropagationContext::post}.
+    
+    \paragraph{Predicate macro.}
+        A propagation is always represented by a \mintinline{rust}{Predicate}, created with the \mintinline{bash}{predicate!} \href{https://doc.rust-lang.org/book/ch20-05-macros.html#macros}{macro}.
+        This \mintinline{rust}{Predicate} represents the domain operation to be applied.
+    
+    \paragraph{Conjunction macro.}
+        The \emph{reason} for the propagation is a \mintinline{bash}{PropositionalConjunction} (\Lineref{line:conjunction}, created with the \mintinline{bash}{conjunction!} \href{https://doc.rust-lang.org/book/ch20-05-macros.html#macros}{macro}).
+
+    \paragraph{Inference code.}
+        An \emph{inference code} is a combination of a constraint tag (or constraint ID) and an inference label.
+        The former identifies the constraint a propagation is for, and the latter identifies the reasoning that led to the propagation.
+        Pumpkin requires all propagations and conflicts to be tagged with an inference code for proof logging purposes.
+        For this propagator, all propagations and conflicts use the same inference code, but more complex propagators may use different inference codes.
+\begin{listing}[H]
+    \begin{minted}[xleftmargin=\parindent,linenos,breaklines,breakanywhere,frame=lines,escapeinside=||,stepnumber=1]{rust}
+impl<AVar: IntegerVariable + 'static, BVar: IntegerVariable + 'static> Propagator for BinaryEqualsPropagator<AVar, BVar>
+{
+    [...]
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> Result<(), Conflict> { | \mintedline{line:begin_propagation} |
+        let a_lb = context.lower_bound(&self.a); | \mintedline{line:begin_read_domains} |
+        let a_ub = context.upper_bound(&self.a);
+        let b_lb = context.lower_bound(&self.b);
+        let b_ub = context.upper_bound(&self.b); | \mintedline{line:end_read_domains} |
+
+        if a_lb == a_ub && b_lb == b_ub && a_lb != b_lb { | \mintedline{line:begin_conflict_check} |
+            return Err(Conflict::Propagator(PropagatorConflict {
+                conjunction: conjunction!([self.a == a_lb] & [self.b == b_lb]), | \mintedline{line:conflict_explanation} |
+                inference_code: self.inference_code.clone(),
+            }));
+        } | \mintedline{line:end_conflict_check} |
+
+        context.post( | \mintedline{line:begin_propagate_bounds} |
+            predicate!(self.a >= b_lb), | \mintedline{line:predicate} |
+            conjunction!([self.b >= b_lb]), | \mintedline{line:conjunction} |
+            &self.inference_code,
+        )?; | \mintedline{line:end_propagate_first_bound} |
+        context.post(
+            predicate!(self.a <= b_ub),
+            conjunction!([self.b <= b_ub]),
+            &self.inference_code,
+        )?;
+        context.post(
+            predicate!(self.b >= a_lb),
+            conjunction!([self.a >= b_lb]),
+            &self.inference_code,
+        )?;
+        context.post(
+            predicate!(self.b <= a_ub),
+            conjunction!([self.a <= a_ub]),
+            &self.inference_code,
+        )?; | \mintedline{line:end_propagate_bounds} |
+
+        for removed_value_a in context.get_holes(&self.a).collect::<Vec<_>>() { | \mintedline{line:begin_removal} |
+            context.post(
+                predicate!(self.b != removed_value_a), 
+                conjunction!([self.a != removed_value_a]), 
+                &self.inference_code,
+            )?;
+        }
+        for removed_value_b in context.get_holes(&self.b).collect::<Vec<_>>() {
+            context.post(
+                predicate!(self.a != removed_value_b),
+                conjunction!([self.b != removed_value_b]),
+                &self.inference_code,
+            )?;
+        } | \mintedline{line:end_removal} |
+
+        Ok(())
+    } | \mintedline{line:end_propagation} |
+}
+    \end{minted}
+    \caption{Our \mintinline{bash}{Propagator} implementation}
+    \label{lst:propagator_impl}
+\end{listing}
+
+\subsection{Checking Our Propagator}
+
+Our propagator can now make inferences and report conflicts. 
+To gain confidence that these inferences are \emph{correct}, we add a \emph{checker}. 
+A checker essentially replays the logic of a single inference on a simplified state and confirms that the inference is justified by its premises.
+Even for a simple propagator like ours, checkers are useful in catching bugs.
+
+\paragraph{Checker struct.}
+We define a \texttt{struct} that identifies which variables are involved in the inference (\autoref{lst:checker_struct}).
+
+\begin{listing}[H]
+\begin{minted}[xleftmargin=\parindent,linenos,breaklines,frame=lines,escapeinside=||,stepnumber=1]{rust}
+#[derive(Clone, Debug)]
+pub struct BinaryEqualsChecker<AVar, BVar> {
+    pub a: AVar,
+    pub b: BVar,
+}
+\end{minted}
+\caption{The \texttt{BinaryEqualsChecker} struct}
+\label{lst:checker_struct}
+\end{listing}
+
+\paragraph{Checker trait.} As with other structs, the checker has its own trait, the \texttt{InferenceChecker} trait, which defines a single method \texttt{check}:
+
+\begin{minted}{rust}
+pub trait InferenceChecker<Atomic: AtomicConstraint>: Debug + DynClone {
+    fn check(
+        &self,
+        state: VariableState<Atomic>,
+        premises: &[Atomic],
+        consequent: Option<&Atomic>,
+    ) -> bool;
+}
+\end{minted}
+
+Given an explanation for a propagation or conflict ($\bigwedge_{p \in \mathtt{premises}} p \rightarrow \mathtt{consequent}$), the \mintinline{rust}{VariableState} represents variable domains such that all premises hold and (if present) the \emph{negation} of the consequent holds.
+It serves a role similar to the \texttt{Propagation\-Context} used during propagation, acting as the main object that provides information about the variables.
+Note that the consequent can be \mintinline{rust}{None}, if the explanation was for a conflict rather than a propagation.
+
+The checker returns \texttt{true} if the \texttt{state} leads to a conflict, indicating that the checker successfully verified the correctness of the explanation.
+
+Since verifying the explanation corresponds to detecting a conflict, our checker logic can be much simpler than the propagator.
+
+We know that for a conflict to exist, the intersection of the domains must be empty, since otherwise the variables could be assigned to the same value. We implement this by applying the domain of $b$ to the domain of $a$ and checking whether the result is an empty domain.
+
+\autoref{lst:checker_impl} shows the implementation of the checker for our $a = b$ propagator. The implementation follows the above idea:
+\begin{enumerate}
+    \item enforce $a \leq \mathrm{UB}(b)$ and $a \geq \mathrm{LB}(b)$,
+    \item remove from $a$ all values not present in $b$.
+\end{enumerate}
+If these steps lead to inconsistency under the premises and the negated consequent, the inference is correct.
+
+        \begin{listing}[H]
+            \begin{minted}[xleftmargin=\parindent,linenos,breaklines,frame=lines,escapeinside=||,stepnumber=1]{rust}
+impl<AVar, BVar, Atomic> InferenceChecker<Atomic> for BinaryEqualsChecker<Lhs, Rhs>
+where
+    Atomic: AtomicConstraint,
+    AVar: CheckerVariable<Atomic>,
+    BVar: CheckerVariable<Atomic>,
+{
+    fn check(
+        &self,
+        mut state: pumpkin_checking::VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> bool {
+        let mut consistent = true;
+
+        if let IntExt::Int(value) = self.b.induced_upper_bound(&state) { | \mintedline{line:start_check_upper_bound} |
+            let atomic = self.a.atomic_less_than(value); | \mintedline{line:atomic_a_less_than} |
+            consistent &= state.apply(&atomic); | \mintedline{line:apply_less_than} |
+        } | \mintedline{line:end_check_upper_bound} |
+
+        if let IntExt::Int(value) = self.b.induced_lower_bound(&state) { | \mintedline{line:start_check_lower_bound} |
+            let atomic = self.a.atomic_greater_than(value);
+            consistent &= state.apply(&atomic);
+        } | \mintedline{line:end_check_lower_bound} |
+
+        for value in self.b.induced_holes(&state).collect::<Vec<_>>() { | \mintedline{line:start_check_holes} |
+            let atomic = self.a.atomic_not_equal(value);
+            consistent &= state.apply(&atomic);
+        } | \mintedline{line:end_check_holes} |
+
+        !consistent
+    }
+}
+            \end{minted}
+            \caption{Our \mintinline{bash}{InferenceChecker} implementation}
+            \label{lst:checker_impl}
+        \end{listing}
+
+We take a step-by-step look at our checker implementation \autoref{lst:checker_impl}.
+
+\paragraph{Process the upper bound.
+(\Linerefs{line:start_check_upper_bound}{line:end_check_upper_bound})}
+We begin by retrieving the upper bound of $b$ using
+\mintinline{rust}{self.b.induced_upper_bound}. The following pattern‑matching
+statement
+
+\begin{center}
+\begin{minipage}{0.55\linewidth}
+\begin{minted}{rust}
+let IntExt::Int(b_ub) = self.b.induced_upper_bound(&state)
+\end{minted}
+\end{minipage}
+\end{center}
+
+checks whether the returned upper bound value (right-hand side) is an \texttt{IntExt::Int}, which in our setting indicates that the upper bound is a finite integer. Note that the value could be unbounded if the explanation did not specify bounds, in which case the value would be \mintinline{rust}{IntExt::NegativeInf} or \mintinline{rust}{PositiveInt}.
+
+If the match succeeds, the variable \texttt{b\_ub} holds the finite upper bound of \mintinline{rust}{self.b} and the subsequent code block is executed; otherwise, the pattern does not match, and the block is skipped.
+
+Once we know that the upper-bound of $b$ is constrained in the state, we create a constraint stating that \predicate{a \leq b\_ub} (\Lineref{line:atomic_a_less_than}) and apply it to the state (\autoref{line:apply_less_than}), keeping track in the variable \mintinline{rust}{consistent} whether or not the state remains consistent.
+
+\paragraph{Process the lower bound (\Linerefs{line:start_check_lower_bound}{line:end_check_lower_bound}).}
+We apply the same reasoning as for the upper bound, but now for the lower bound of~$b$.
+
+\paragraph{Process holes (\Linerefs{line:start_check_holes}{line:end_check_holes}).}
+To ensure that $a$ does not contain values absent from the domain of~$b$, we
+retrieve the “holes’’ of $b$—the values between its bounds that are \emph{not}
+in its domain—using \mintinline{rust}{self.b.induced_holes}. We then iterate
+over these values and apply the corresponding removal constraints, in the same
+manner as for the bound-based checks.
+
+\paragraph{Return statement.}
+The checker considers the inference correct if these derived
+constraints lead to an inconsistency in the checking state; otherwise, under
+this local reasoning, the explanation does not justify the inference.
+
+\paragraph{A simple test for the checker.}
+Finally, we recommend validating the checker with a unit test (\href{https://doc.rust-lang.org/book/ch11-00-testing.html}{Rust Book, Ch.~11}). Rust makes unit tests an integral part of the workflow, so this is convenient.
+\autoref{lst:checker_test} constructs a state in which the premises imply $b \leq 10$ and tests whether the inference $a \leq 10$ is accepted by the checker.
+
+\begin{listing}[H]
+\begin{minted}[xleftmargin=\parindent,linenos,breaklines,frame=lines,escapeinside=||,stepnumber=1]{rust}
+#[cfg(test)] | \mintedline{line:cfg_test} |
+mod tests { | \mintedline{line:mod_test} |
+    use super::*;
+    // ... imports elided
+
+    #[test] | \mintedline{line:test_annotation} |
+    fn checker_accepts_a_leq_b_ub() {
+        let premises = [TestAtomic {
+            name: "b",
+            comparison: pumpkin_checking::Comparison::LessEqual,
+            value: 10,
+        }];
+        let consequent = Some(TestAtomic {
+            name: "a",
+            comparison: pumpkin_checking::Comparison::LessEqual,
+            value: 10,
+        });
+
+        let state = VariableState::prepare_for_conflict_check(&premises, consequent.as_ref())
+            .expect("premises are consistent");
+
+        let checker = BinaryEqualsChecker { a: "a", b: "b" };
+
+        assert!(checker.check(state, &premises, consequent.as_ref()));
+    }
+}
+\end{minted}
+\caption{A unit test for \texttt{BinaryEqualsChecker}}
+\label{lst:checker_test}
+\end{listing}
+Let's take a look at \autoref{lst:checker_test}.
+\begin{itemize}
+    \item
+        \Lineref{line:cfg_test} and \Lineref{line:mod_test} define the \href{https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest}{test module}.
+        The \mintinline{rust}{#[cfg(test)]} attribute tells Rust to compile this module \textit{only} when you run \mintinline{bash}{cargo test} (and not when running \mintinline{bash}{cargo build}).
+    \item
+        A test is annotated with \mintinline{rust}{#[test]} (as used in \Lineref{line:test_annotation}) to indicate that this function is a test case.
+
+    \item
+        A \mintinline{rust}{VariableState} is created for the propagation $[b \le 10] \rightarrow [a \le 10]$.
+        Creating a \mintinline{rust}{VariableState} may return an error if it is passed inconsistent atomic constraints (e.g. $[a = 1] \land [a \neq 1] \rightarrow \bot$).
+\end{itemize}
+
+If the test case passes, the checker can identify when the intersection of the domains of \texttt{a} and \texttt{b} is empty.
+In the next subsection, we will test the full propagator with \texttt{TestSolver} to increase the confidence in its correctness.
+
+\subsection{Testing Our Propagator}
+        We have made a checker for our propagator, which increases our confidence in the correctness of our inferences, but it does not \textit{guarantee} the absence of bugs.
+        Hence, we will write \href{https://doc.rust-lang.org/book/ch11-00-testing.html}{unit tests} to further increase our confidence in the correctness of the implementation.
+        Bugs can be hard to track down, especially when the problems become large with many variables and constraints.
+
+        In Pumpkin, we provide a simplified solver (the \mintinline{bash}{TestSolver}) to help you with writing tests for a propagator.
+        We recommend reading the documentation of the \mintinline{bash}{TestSolver} now to understand its use further.
+
+        \begin{Note}
+            All functions on \mintinline{rust}{TestSolver} are marked as deprecated.
+            For the purposes of this course, we suppress any deprecation warnings on the \texttt{implementation} crate.
+        \end{Note}
+
+        We will write one test case based on our $a = b$ propagator, and we provide some more scenarios for which we ask \textit{you} to write the test cases.
+
+        \begin{listing}[H]
+            \begin{minted}[xleftmargin=\parindent,linenos,breaklines,frame=lines,escapeinside=||,stepnumber=1]{rust}
+#[cfg(test)] 
+mod tests {
+    [...] // Some imports
+
+    #[test]
+    fn test_propagation_example() {
+        let mut solver = TestSolver::default(); | \mintedline{line:create_test_solver} |
+        let a = solver.new_variable(5, 8); | \mintedline{line:create_a} |
+        let b = solver.new_sparse_variable(vec![4, 5, 9]); | \mintedline{line:create_b} |
+        let constraint_tag = solver.new_constraint_tag();
+
+        let result = solver.new_propagator(BinaryEqualsPropagatorConstructor { | \mintedline{line:start_add_propagator} |
+            a,
+            b,
+            constraint_tag,
+        }); | \mintedline{line:end_add_propagator} |
+
+        assert!(result.is_ok());
+
+        solver.assert_bounds(a, 5, 5); | \mintedline{line:check_bounds_a} |
+        solver.assert_bounds(b, 5, 5); | \mintedline{line:check_bounds_b} |
+    }
+}
+            \end{minted}
+            \caption{Testing Our \mintinline{bash}{Propagator} implementation}
+            \label{lst:test_impl}
+        \end{listing}
+
+        Let's take a look at \autoref{lst:test_impl} together!
+        \begin{itemize}
+            \item 
+                We start by creating an instance of the \mintinline{bash}{TestSolver} that we mentioned earlier in \Lineref{line:create_test_solver}.
+                This will be the structure responsible for creating variables and performing propagation.
+            \item 
+                Next, we create two variables: $a$ with domain $[5, 8]$ (\Lineref{line:create_a}) and $b$ with domain $\{4, 5, 9\}$.
+            \item 
+                Now we need to actually add the propagator to the \mintinline{bash}{TestSolver}.
+                We do this in \Linerefs{line:start_add_propagator}{line:end_add_propagator} by providing our \mintinline{bash}{BinaryEqualsPropagatorConstructor} (created using \href{https://doc.rust-lang.org/book/ch05-01-defining-structs.html#using-the-field-init-shorthand}{shorthand}).
+                The \mintinline{bash}{TestSolver} will then initialise and manage the propagator; \textbf{importantly}, it will also perform fixed-point propagation (hence \mintinline{bash}{TestSolver::new_propagator} returns a \mintinline{bash}{Result<PropagatorId, Conflict>}).
+            \item
+                Next, we use the \href{https://doc.rust-lang.org/book/ch11-01-writing-tests.html#checking-results-with-assert}{\mintinline{bash}{assert!} macro} to check that no error was detected by our propagator.
+            \item 
+                Finally, we check are both assigned to $5$ in \Linerefs{line:check_bounds_a}{line:check_bounds_b}.
+        \end{itemize}
+        
+        \begin{Exercise}
+            You can find the implemented propagator in \\ \texttt{pumpkin-crates/propagators/src/propagators/arithmetic/binary/binary\_equals.rs}.
+
+            Now that we have shown you how to create a test case, we ask you to add your own test cases for the following scenarios:
+            \begin{enumerate}
+                \item
+                    Given two variables $a$ and $b$, both with domains with more than 1 value, the propagator does not alter the domains.
+                \item 
+                    Given two variables $a$ and $b$, where the domain of $a$ does not contain $v$ but the domain of $b$ does, ensure that $v$ is removed from the domain of $a$.
+                \item 
+                    Given two variables $a$ and $b$, create a test case where a conflict should be raised (i.e. where it would be impossible for $a = b$ to hold).
+            \end{enumerate}
+            \bigskip
+            Run your test cases using the command:
+            \begin{minted}{bash}
+cargo test \
+    -p pumpkin-propagators \
+    binary_equals
+            \end{minted}
+            
+            If you want to run the inference checker on every propagation done inside the \mintinline{rust}{TestSolver}, you can enable the cargo feature \texttt{pumpkin-core/check-propagations}:
+            \begin{minted}{bash}
+cargo test \
+    -p pumpkin-propagators \
+    --features pumpkin-core/check-propagations \
+    binary_equals
+            \end{minted}
+        \end{Exercise}
+
+\section{Common Pitfalls}
+    Based on our experience and previous year(s), we will now explain some common pitfalls when implementing propagators.
+
+    \paragraph*{Function Signatures}
+        When implementing your propagators, you will likely get a function signature of the following form:
+        \begin{minted}[xleftmargin=\parindent,breaklines,frame=lines]{rust}
+    fn propagate_from_scratch(&self, _context: PropagationContext) -> Result<(), Conflict>
+        \end{minted}
+        What you will notice is that there is an underscore before context, you can safely remove this \_ since it is only used to indicate to the linter (\href{https://doc.rust-lang.org/clippy/}{Clippy}) that \href{https://rust-lang.github.io/rust-clippy/master/index.html#used_underscore_binding}{the variable is unused} (i.e., you can simply rename \mintinline{bash}{_context} to \mintinline{bash}{context}).
+
+        Similarly, if you then write \mintinline{rust}{context.post(...)} then it will throw an error with the following text:
+        \begin{minted}[xleftmargin=\parindent,breaklines,frame=lines]{bash}
+    [...] cannot borrow `context` as mutable, as it is not declared as mutable
+        \end{minted}
+        This has to do with \href{https://doc.rust-lang.org/book/ch03-01-variables-and-mutability.html}{mutability} and \href{https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html}{ownership}.
+        In short, the function \mintinline{rust}{propagate_from_scratch} owns the instance of \mintinline{rust}{context}.
+        \textit{However}, it has not been marked as mutable, meaning that Rust prevents you from using any methods on \mintinline{rust}{context} which would mutate it.
+        This can be easily fixed by adding the \href{https://doc.rust-lang.org/book/appendix-01-keywords.html?highlight=mut#keywords-currently-in-use}{\mintinline{bash}{mut}} keyword before \mintinline{bash}{context}, which marks it as mutable.
+
+        In the end, after implementing propagation, you will likely end up with the following function signature:
+        \begin{minted}[xleftmargin=\parindent,breaklines,frame=lines]{rust}
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> Result<(), Conflict>
+        \end{minted}
+
+    \paragraph*{Incorrect Solutions}
+        Implementing propagators is an intricate and difficult process, and there are many places in which a small mistake can lead to incorrect solutions.
+        There are many causes, but we list some of the common errors here:
+        \begin{itemize}
+            \item
+                If you notice that your implementation returns a superoptimal solution (i.e., the objective value is better than what you know to be the optimal), then there are two main causes:
+                \begin{enumerate}
+                    \item 
+                        Your propagator is not propagating as strongly as it should, leading to values which cannot be part of a solution to not be pruned, meaning that it allows more solutions than it should.
+                        Please check your propagation logic and write test cases to find the error in your code.
+                    \item 
+                        As mentioned previously, it is important that you \textbf{never} explicitly create an\\ \mintinline{bash}{EmptyDomainConflict} and return it during propagation.
+                        If you do this, then the solver will not be able to correctly restore its state, leading to issues.
+                \end{enumerate}
+            \item 
+                If you notice that your implementation returns a suboptimal solution (i.e., the objective value is worse than what you know to be the optimal), then the main cause is that your propagator is propagating stronger than it should. These types of errors are expected to be caught by your checker, so that is a good place to start the investigation.
+        \end{itemize}
+
+\section{Running a model}
+    Now that you have implemented a propagator, you might want to use it solve some actual problems!
+    In the course CS4530 Modelling and Problem Solving, you have encountered \href{https://www.minizinc.org/}{MiniZinc}, a constraint modelling language.
+    You have seen other solvers, such as \href{https://github.com/chuffed/chuffed}{Chuffed}, which serve as a backend solver that can be used via MiniZinc.
+    The good news is that Pumpkin also has an interface for MiniZinc!
+    The goal of this section is to introduce you to how this interfacing works from the perspective of the solver (if you are interested in this, then we would recommend reading \href{https://docs.minizinc.dev/en/stable/fzn-spec.html}{this section} of the manual).
+    \begin{Note}
+        We do \textbf{not} expect you to create your own models for this course. We will provide you with the necessary problem files for running!
+    \end{Note}
+
+    \subsection{FlatZinc}
+        MiniZinc is a flexible language for modelling due to its substantial amount of \href{https://docs.minizinc.dev/en/stable/lib-globals.html}{available constraints}.
+        However, from the perspective of a solver developer, it can be cumbersome to support the MiniZinc syntax and all constraints.
+        Instead, solvers support \href{https://docs.minizinc.dev/en/stable/fzn-spec.html#specification-of-flatzinc}{FlatZinc}, which is a subset of the MiniZinc language.
+        Aside from removing complex language constructs, the MiniZinc toolchain can rewrite all constraints to the subset that is supported by the solver through \textit{decompositions}.
+        
+        All of this means that different solvers natively support different constraints and that a translation from MiniZinc to solver-specific FlatZinc is necessary.
+        The great thing about this is that nothing changes from a modelling perspective; you still write the same abstract model that you would normally, and MiniZinc translates it for the solver that you are using!
+
+        Let's take a look at a comprehensive example.
+        We will create a model using the \href{https://docs.minizinc.dev/en/stable/lib-globals-alldifferent.html#all-different}{\constraint{all\_different}} constraint, and the \href{https://docs.minizinc.dev/en/stable/lib-flatzinc-int.html#int-eq}{\constraint{int\_eq}} constraint that we have defined previously (in \autoref{lst:mzn_model})!
+         \begin{listing}[H]
+            \begin{minted}[xleftmargin=\parindent,linenos,breaklines,frame=lines,escapeinside=||,stepnumber=1]{rust}
+include "globals.mzn";
+
+var 0..3: a;
+var 0..3: b;
+var 0..3: c;
+
+constraint all_different([a, c]);
+constraint int_eq(a, b);
+
+solve satisfy;
+            \end{minted}
+            \caption{A simple MiniZinc model}
+            \label{lst:mzn_model}
+        \end{listing}
+        \noindent If we then \href{https://docs.minizinc.dev/en/stable/minizinc_ide.html#compiling-a-model}{compile} it for Pumpkin, we get the following output:
+        \begin{listing}[H]
+            \begin{minted}[xleftmargin=\parindent,linenos,breaklines,frame=lines,escapeinside=||,stepnumber=1]{rust}
+predicate pumpkin_all_different(array [int] of var int: x);
+var 0..3: a:: output_var;
+var 0..3: b:: output_var;
+var 0..3: c:: output_var;
+array [1..2] of var int: X_INTRODUCED_16_ ::var_is_introduced  = [a,c];
+constraint pumpkin_all_different(X_INTRODUCED_16_);
+constraint int_eq(a,b);
+solve  satisfy;
+            \end{minted}
+            \caption{A simple MiniZinc model}
+            \label{lst:fzn_model}
+        \end{listing}
+        \noindent In \autoref{lst:fzn_model}, we can already see that we are using the \constraint{pumpkin\_all\_different} constraint specific to Pumpkin.
+        We will provide you with these FlatZinc files in the course so that you do not have to generate them all yourself!
+
+    \subsection{Running the Model}
+        Now that you have a (FlatZinc) file \texttt{flattened.fzn} which can be understood by Pumpkin, the next step is to run the model.
+        This process has been made straightforward, but there are some Rust subtleties to be aware of.
+        Rust uses \href{https://doc.rust-lang.org/cargo/}{Cargo} for managing dependencies and compiling crates.
+        Luckily, when you installed Rust, you also installed Cargo!
+
+        There are several \href{https://doc.rust-lang.org/book/ch14-01-release-profiles.html}{release profiles} with different levels of optimisation.
+        If we want to solve our FlatZinc model as fast as possible, then we can use the \texttt{release} profile as follows:
+        \begin{minted}{bash}
+    cargo run -p pumpkin-solver --release flattened.fzn
+        \end{minted}
+        However, if you are debugging your code, then you likely want some more information when the program crashes, and you might want to do some additional checks (e.g. for integer overflows).
+        To facilitate this, Rust also provides the \texttt{dev} profile, which can be used as follows:
+        \begin{minted}{bash}
+    cargo run -p pumpkin-solver flattened.fzn
+        \end{minted}
+        \begin{Note}
+            Be aware that there is a significant difference in runtime between these two compilation options, both during compilation and during the subsequent solve process!
+        \end{Note}
+
+        \paragraph*{Passing Flags}
+            It would be nice if we could influence the behaviour of the solver simply by providing different \href{https://doc.rust-lang.org/book/ch12-01-accepting-command-line-arguments.html}{command line arguments}.
+            The reading of these arguments is implemented in Pumpkin (using \href{https://docs.rs/clap/latest/clap/}{clap}), and it supports several of the \href{https://minizinc-doc-test.readthedocs.io/en/stable/fzn-spec.html#command-line-interface-and-standard-options}{standard MiniZinc options}.
+            For example, if you want to print statistics (using the \texttt{-s} flag), and all intermediate solutions (using the \texttt{-a} flag), then you can use the following command:
+            \begin{minted}{bash}
+            cargo run --release flattened.fzn -s -a
+            \end{minted}
+            Besides the standard MiniZinc flags, we also define other custom flags to influence the behaviour of the solver.
+            In each assignment, we will have a section specifying how exactly to run each configuration!
+
+\section{Conclusion}
+    In this tutorial, you have seen how to create and implement a simple propagator and checker.
+    Additionally, we have provided some common pitfalls and an overview of how to run problems via MiniZinc.
+    
+    You are now ready to tackle the assignments!
+    If you have any further questions or would like to provide feedback on the tutorial, then please do not hesitate to reach out to us during one of the lab sessions or via \href{https://answers.ewi.tudelft.nl/}{Answers EWI}.
+
+\end{document}

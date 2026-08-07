@@ -1,0 +1,8 @@
+[book]
+title = 'Tutorial: Implementing Propagators in Pumpkin'
+authors = ['Emir Demirović', 'Maarten Flippo', 'Imko Marijnissen']
+language = 'en'
+
+[output.html]
+mathjax-support = true
+additional-css = ["theme/css/custom.css"]
