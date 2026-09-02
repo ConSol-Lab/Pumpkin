@@ -35,6 +35,7 @@ workspace = true
 [features]
 debug-checks = ["pumpkin-core/debug-checks"]
 check-propagations = ["pumpkin-core/check-propagations"]
+per-propagator-time-statistics = ["pumpkin-core/per-propagator-time-statistics"]
 
 [build-dependencies]
 cc = "1.2.62"

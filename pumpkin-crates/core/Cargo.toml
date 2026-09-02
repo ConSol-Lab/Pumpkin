@@ -42,4 +42,8 @@ wasm-bindgen-test = "0.3"
 check-propagations = []
 check-deductions = []
 debug-checks = []
+# Tracks the number of calls to each propagator and the time spent in it, which is reported
+# aggregated per propagator type. This is not enabled by default since it requires additional
+# bookkeeping in the propagation loop.
+per-propagator-time-statistics = []
 clap = ["dep:clap"]

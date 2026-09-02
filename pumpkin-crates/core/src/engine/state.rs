@@ -1,3 +1,5 @@
+#[cfg(feature = "per-propagator-time-statistics")]
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use pumpkin_checking::BoxedChecker;
@@ -5,9 +7,13 @@ use pumpkin_checking::InferenceChecker;
 #[cfg(feature = "check-propagations")]
 use pumpkin_checking::VariableState;
 
+#[cfg(feature = "per-propagator-time-statistics")]
+use crate::basic_types::time::Duration;
 use crate::basic_types::time::Instant;
 use crate::checkers::CheckerStore;
 use crate::containers::KeyGenerator;
+#[cfg(feature = "per-propagator-time-statistics")]
+use crate::containers::KeyedVec;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::ConstraintProgrammingTrailEntry;
@@ -82,8 +88,26 @@ pub struct State {
 
     statistics: StateStatistics,
 
+    /// The statistics of each individual propagator, indexed by its [`PropagatorId`].
+    ///
+    /// These are aggregated per propagator type when the statistics are logged.
+    #[cfg(feature = "per-propagator-time-statistics")]
+    propagator_statistics: KeyedVec<PropagatorId, PropagatorStatistics>,
+
     /// Runtime checkers to run in the propagation loop.
     checkers: CheckerStore,
+}
+
+/// The statistics of a single propagator.
+#[cfg(feature = "per-propagator-time-statistics")]
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct PropagatorStatistics {
+    /// The number of times [`Propagator::propagate`] has been called for this propagator.
+    num_calls: u64,
+    /// The amount of time which is spent in [`Propagator::propagate`] for this propagator.
+    time_spent: Duration,
+    /// The number of atomic constraints which this propagator has propagated.
+    num_propagations: u64,
 }
 
 create_statistics_struct!(StateStatistics {
@@ -115,6 +139,8 @@ impl Default for State {
             reason_store: ReasonStore::default(),
             notification_engine: NotificationEngine::default(),
             statistics: StateStatistics::default(),
+            #[cfg(feature = "per-propagator-time-statistics")]
+            propagator_statistics: KeyedVec::default(),
             constraint_tags: KeyGenerator::default(),
             checkers: CheckerStore::default(),
         };
@@ -154,6 +180,43 @@ impl State {
                     "number",
                     index.to_string().as_str(),
                 ]));
+            }
+        }
+
+        #[cfg(feature = "per-propagator-time-statistics")]
+        {
+            // The statistics of the individual propagators are aggregated per propagator type; a
+            // `BTreeMap` is used to ensure that they are logged in a deterministic order.
+            let mut statistics_per_type: BTreeMap<&str, PropagatorStatistics> = BTreeMap::new();
+            for (propagator, propagator_statistics) in self
+                .propagators
+                .iter_propagators()
+                .zip(self.propagator_statistics.iter())
+            {
+                let entry = statistics_per_type.entry(propagator.name()).or_default();
+                entry.num_calls += propagator_statistics.num_calls;
+                entry.time_spent += propagator_statistics.time_spent;
+                entry.num_propagations += propagator_statistics.num_propagations;
+            }
+
+            for (name, propagator_statistics) in statistics_per_type {
+                StatisticLogger::new([name, "numberOfCalls"])
+                    .log_statistic(propagator_statistics.num_calls);
+                StatisticLogger::new([name, "numSecondsSpent"])
+                    .log_statistic(propagator_statistics.time_spent.as_secs_f64());
+                StatisticLogger::new([name, "numPropagations"])
+                    .log_statistic(propagator_statistics.num_propagations);
+
+                // Note that a propagator type can have zero calls, e.g. when it is only created
+                // for a subset of the instances, in which case we report an average of zero.
+                let num_propagations_per_call = if propagator_statistics.num_calls == 0 {
+                    0.0
+                } else {
+                    propagator_statistics.num_propagations as f64
+                        / propagator_statistics.num_calls as f64
+                };
+                StatisticLogger::new([name, "numPropagationsPerCall"])
+                    .log_statistic(num_propagations_per_call);
             }
         }
     }
@@ -636,6 +699,9 @@ impl State {
 
         let num_trail_entries_before = self.assignments.num_trail_entries();
 
+        #[cfg(feature = "per-propagator-time-statistics")]
+        let start_time = Instant::now();
+
         let propagation_status = {
             let propagator = &mut self.propagators[propagator_id];
             let context = PropagationContext::new(
@@ -647,6 +713,20 @@ impl State {
             );
             propagator.propagate(context)
         };
+
+        let num_propagations = self.assignments.num_trail_entries() - num_trail_entries_before;
+        self.statistics.num_propagations += num_propagations;
+
+        #[cfg(feature = "per-propagator-time-statistics")]
+        {
+            self.propagator_statistics
+                .accomodate(propagator_id, PropagatorStatistics::default());
+
+            let propagator_statistics = &mut self.propagator_statistics[propagator_id];
+            propagator_statistics.num_calls += 1;
+            propagator_statistics.time_spent += start_time.elapsed();
+            propagator_statistics.num_propagations += num_propagations as u64;
+        }
 
         #[cfg(feature = "check-propagations")]
         self.check_propagations(num_trail_entries_before);
