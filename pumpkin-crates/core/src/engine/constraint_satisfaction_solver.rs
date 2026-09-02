@@ -691,7 +691,13 @@ impl ConstraintSatisfactionSolver {
             rng: &mut self.internal_parameters.random_generator,
         };
 
+        let start_time = Instant::now();
+
         resolver.resolve_conflict(&mut conflict_analysis_context);
+
+        self.solver_statistics
+            .engine_statistics
+            .time_spent_in_conflict_analysis += start_time.elapsed();
 
         self.solver_state.declare_solving();
     }
