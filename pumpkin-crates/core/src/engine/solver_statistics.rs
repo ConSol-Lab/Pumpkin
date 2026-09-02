@@ -19,10 +19,14 @@ impl SolverStatistics {
             self.engine_statistics.time_spent_in_solver.as_secs_f64(),
         );
         log_statistic(
-            "conflictAnalysisTime",
+            "numSecondsInConflictAnalysis",
             self.engine_statistics
                 .time_spent_in_conflict_analysis
                 .as_secs_f64(),
+        );
+        log_statistic(
+            "numSecondsInBranching",
+            self.engine_statistics.time_spent_in_branching.as_secs_f64(),
         );
     }
 }
@@ -38,6 +42,8 @@ pub(crate) struct EngineStatistics {
     pub(crate) time_spent_in_solver: Duration,
     /// The amount of time which is spent performing conflict analysis.
     pub(crate) time_spent_in_conflict_analysis: Duration,
+    /// The amount of time which is spent by the brancher selecting decisions.
+    pub(crate) time_spent_in_branching: Duration,
     /// The peak depth of the seach tree
     pub(crate) peak_depth: u64,
 }
