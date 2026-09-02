@@ -43,6 +43,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
     updatable_structures: &UpdatableStructures<Var>,
     updated_task: &Rc<Task<Var>>,
     mut context: Domains,
+    parameters: &CumulativeParameters<Var>,
 ) -> ShouldEnqueueResult<Var> {
     pumpkin_assert_extreme!(
         context.lower_bound(&updated_task.start_variable)
@@ -77,7 +78,14 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
         });
     }
 
-    result.decision = EnqueueDecision::Enqueue;
+    if parameters.options.allow_holes_in_domain && result.update.is_none() {
+        // If we allow holes in the domains, then we only need to enqueue when there has been a
+        // change in the time-table since all other values have already been removed, meaning that
+        // a change in the bounds of a task would not lead to a propagation.
+        result.decision = EnqueueDecision::Skip
+    } else {
+        result.decision = EnqueueDecision::Enqueue;
+    }
 
     result
 }

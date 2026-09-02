@@ -180,7 +180,12 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
     ) -> EnqueueDecision {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
 
-        let result = should_enqueue(&self.updatable_structures, &updated_task, context.domains());
+        let result = should_enqueue(
+            &self.updatable_structures,
+            &updated_task,
+            context.domains(),
+            &self.parameters,
+        );
 
         update_bounds_task(
             context.domains(),

@@ -170,7 +170,12 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
     ) -> EnqueueDecision {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
 
-        let result = should_enqueue(&self.updatable_structures, &updated_task, context.domains());
+        let result = should_enqueue(
+            &self.updatable_structures,
+            &updated_task,
+            context.domains(),
+            &self.parameters,
+        );
 
         // Note that the non-incremental proapgator does not make use of `result.updated` since it
         // propagates from scratch anyways
