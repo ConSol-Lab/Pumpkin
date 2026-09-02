@@ -72,7 +72,8 @@ create_statistics_struct!(
     LearnedNogoodStatistics {
         nogood_statistics: NogoodStatistics,
         cpip_statistics: CpipStatistics,
-});
+    }
+);
 
 create_statistics_struct!(NogoodStatistics {
         /// The average number of elements in the conflict explanation

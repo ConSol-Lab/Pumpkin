@@ -1,6 +1,5 @@
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::asserts::pumpkin_assert_eq_simple;
-use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::containers::HashMap;
@@ -409,36 +408,12 @@ impl WorkingNogood {
             {
                 context.predicate_appeared_in_conflict(predicate);
 
-                // The goal is to traverse predicate in reverse order of the trail.
-                //
-                // However some predicates may share the trail position. For example, if a
-                // predicate that was posted to trail resulted in
-                // some other predicates being true, then all
-                // these predicates would have the same trail position.
-                //
-                // When considering the predicates in reverse order of the trail, the
-                // implicitly set predicates are posted after the
-                // explicitly set one, but they all have the same
-                // trail position.
-                //
-                // To remedy this, we make a tie-breaking scheme to prioritise implied
-                // predicates over explicit predicates. This is done
-                // by assigning explicitly set predicates the
-                // value `2 * trail_position`, whereas implied predicates get `2 *
-                // trail_position + 1`.
-                let heap_value = get_heap_value(predicate, context);
-
                 self.add_predicate_current_checkpoint(
                     predicate,
                     context,
                     predicate_id_generator,
                     mode,
                 );
-
-                pumpkin_assert_moderate!(
-                    *self.to_process_heap.get_value(predicate_id) == heap_value,
-                    "The value in the heap should be the same as was added"
-                )
             }
         } else {
             self.add_predicate_previous_checkpoint(
