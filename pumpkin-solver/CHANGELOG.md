@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.5.0...pumpkin-solver-v0.5.1) - 2026-09-03
+
+### Added
+
+- *(pumpkin-proof-processor)* Minimising number of deductions in trimmed proof by giving marked deductions higher propagation priority ([#523](https://github.com/ConSol-Lab/Pumpkin/pull/523))
+
+### Other
+
+- *(deps)* bump stringcase from 0.4.0 to 1.0.0 ([#556](https://github.com/ConSol-Lab/Pumpkin/pull/556))
+- *(deps)* bump convert_case from 0.11.0 to 0.12.0 ([#560](https://github.com/ConSol-Lab/Pumpkin/pull/560))
+- *(deps)* bump pyo3 from 0.29.1 to 0.29.2 ([#551](https://github.com/ConSol-Lab/Pumpkin/pull/551))
+- *(pumpkin-conflict-resolvers)* Remove incorrect check ([#544](https://github.com/ConSol-Lab/Pumpkin/pull/544))
+- *(pumpkin-propagators)* Simplify conflict detection incremental updates ([#543](https://github.com/ConSol-Lab/Pumpkin/pull/543))
+
 ## [0.5.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.4.0...pumpkin-solver-v0.5.0) - 2026-08-05
 
 ### Added
