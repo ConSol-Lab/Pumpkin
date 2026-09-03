@@ -1336,9 +1336,9 @@ dependencies = [
 
 [[package]]
 name = "stringcase"
-version = "0.4.0"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72abeda133c49d7bddece6c154728f83eec8172380c80ab7096da9487e20d27c"
+checksum = "55568efde976541e1b56b084e8ae95fa15c23594934e37c397d5cf867f480ec2"
 
 [[package]]
 name = "strsim"
