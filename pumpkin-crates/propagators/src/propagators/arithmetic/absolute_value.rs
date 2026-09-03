@@ -98,8 +98,8 @@ where
     }
 
     fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
-        // The bound of absolute may be tightened further during propagation, but it is at least
-        // zero at the root.
+        // The bound of absolute may be tightened further during propagation,
+        // but it is at least zero at the root.
         context.post(
             predicate![self.absolute >= 0],
             (conjunction!(), &self.inference_code),
@@ -115,15 +115,24 @@ where
         let signed_lb = context.lower_bound(&self.signed);
         let signed_ub = context.upper_bound(&self.signed);
 
-        let signed_absolute_ub = i32::max(signed_lb.abs(), signed_ub.abs());
+        // The only absolute value which does not fit in an `i32` is `|i32::MIN|`,
+        // in which case the corresponding propagation is skipped.
+        let signed_absolute_ub = u32::max(signed_lb.unsigned_abs(), signed_ub.unsigned_abs());
 
-        context.post(
-            predicate![self.absolute <= signed_absolute_ub],
-            (
-                conjunction!([self.signed >= signed_lb] & [self.signed <= signed_ub]),
-                &self.inference_code,
-            ),
-        )?;
+        // We do lifting on the reason: The reason only states `signed` to be within the symmetric
+        // interval `[-signed_absolute_ub, signed_absolute_ub]`,
+        // which is weaker than its actual bounds.
+        if let Ok(signed_absolute_ub) = i32::try_from(signed_absolute_ub) {
+            context.post(
+                predicate![self.absolute <= signed_absolute_ub],
+                (
+                    conjunction!(
+                        [self.signed >= -signed_absolute_ub] & [self.signed <= signed_absolute_ub]
+                    ),
+                    &self.inference_code,
+                ),
+            )?;
+        }
 
         if signed_lb > 0 {
             context.post(
@@ -133,9 +142,11 @@ where
                     &self.inference_code,
                 ),
             )?;
-        } else if signed_ub < 0 {
+        } else if signed_ub < 0
+            && let Ok(signed_ub_abs) = i32::try_from(signed_ub.unsigned_abs())
+        {
             context.post(
-                predicate![self.absolute >= signed_ub.abs()],
+                predicate![self.absolute >= signed_ub_abs],
                 (
                     conjunction!([self.signed <= signed_ub]),
                     &self.inference_code,
@@ -160,22 +171,45 @@ where
             ),
         )?;
 
-        if signed_ub <= 0 {
-            context.post(
-                predicate![self.signed <= -absolute_lb],
-                (
-                    conjunction!([self.signed <= 0] & [self.absolute >= absolute_lb]),
-                    &self.inference_code,
-                ),
-            )?;
-        } else if signed_lb >= 0 {
-            context.post(
-                predicate![self.signed >= absolute_lb],
-                (
-                    conjunction!([self.signed >= 0] & [self.absolute >= absolute_lb]),
-                    &self.inference_code,
-                ),
-            )?;
+        // The bounds of `signed` are re-read since they may have been tightened above.
+        let signed_lb = context.lower_bound(&self.signed);
+        let signed_ub = context.upper_bound(&self.signed);
+
+        // Let al = lower_bound(absolute).
+        // We have that |signed| >= al, meaning that values in the interval (-al, al) are infeasible
+        // for `signed`. This can potentially punch holes in the domain of `signed`,
+        // but since we chose not to punch holes in this version of the propagator,
+        // we only perform bound reasoning:
+        // 1. If `signed_ub < al` then all non-negative values of `signed` are infeasible
+        // and thus `signed <= -al`.
+        // 2. Symmetrically, if `signed_lb > -al` then `signed >= al`.
+        // 3. If both hold, the first point will propagate an empty domain.
+        // Note that the reasons use the weakest bound on `signed` which implies the propagation,
+        // e.g., `[signed <= al - 1]` rather than `[signed <= signed_ub]`.
+        if absolute_lb > 0 {
+            if signed_ub < absolute_lb {
+                context.post(
+                    predicate![self.signed <= -absolute_lb],
+                    (
+                        conjunction!(
+                            [self.signed <= absolute_lb - 1] & [self.absolute >= absolute_lb]
+                        ),
+                        &self.inference_code,
+                    ),
+                )?;
+            }
+
+            if signed_lb > -absolute_lb {
+                context.post(
+                    predicate![self.signed >= absolute_lb],
+                    (
+                        conjunction!(
+                            [self.signed >= -(absolute_lb - 1)] & [self.absolute >= absolute_lb]
+                        ),
+                        &self.inference_code,
+                    ),
+                )?;
+            }
         }
 
         Ok(())
@@ -588,6 +622,26 @@ mod tests {
 
         state.assert_bounds(signed, -5, 5);
         state.assert_bounds(absolute, 3, 5);
+    }
+
+    #[test]
+    fn mixed_sign_signed_is_tightened_when_only_one_sign_is_feasible() {
+        // With `signed` in [-5, 2] and `absolute` in [3, 4], no non-negative value of `signed` can
+        // reach `[absolute >= 3]`, so the bounds consistent domain of `signed` is [-4, -3].
+        let mut state = State::default();
+
+        let signed = state.new_interval_variable(-5, 2, None);
+        let absolute = state.new_interval_variable(3, 4, None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(AbsoluteValueArgs {
+            signed,
+            absolute,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
+
+        state.assert_bounds(signed, -4, -3);
     }
 
     #[test]
