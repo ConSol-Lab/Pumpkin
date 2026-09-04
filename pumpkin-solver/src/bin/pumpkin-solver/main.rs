@@ -28,6 +28,7 @@ use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
 use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_core::propagation::Priority;
+use pumpkin_propagators::cumulative::options::CumulativeMergeStrategy;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_propagators::cumulative::options::CumulativePropagationMethod;
 use pumpkin_propagators::cumulative::time_table::CumulativeExplanationType;
@@ -402,6 +403,18 @@ struct Args {
     #[arg(long = "cumulative-incremental-backtracking")]
     cumulative_incremental_backtracking: bool,
 
+    /// Determines when to merge adjacent profiles when using incremental time-tabling with
+    /// incremental backtracking.
+    #[arg(long = "cumulative-merge-strategy")]
+    cumulative_merge_strategy: CumulativeMergeStrategy,
+
+    /// The number of propagation calls after which adjacent profiles are merged when using
+    /// incremental time-tabling with incremental backtracking.
+    ///
+    /// This option will only take effect when the "Constant" merge strategy is selected.
+    #[arg(long = "cumulative-merge-constant", default_value=None)]
+    cumulative_merge_constant: Option<u32>,
+
     /// Determine what type of optimisation strategy is used by the solver
     #[arg(long = "optimisation-strategy", value_enum, default_value_t)]
     optimisation_strategy: OptimisationStrategy,
@@ -621,6 +634,8 @@ fn run() -> PumpkinResult<()> {
                         !args.cumulative_single_profiles,
                         args.cumulative_propagation_method,
                         args.cumulative_incremental_backtracking,
+                        args.cumulative_merge_strategy,
+                        args.cumulative_merge_constant,
                     ),
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
@@ -641,6 +656,8 @@ fn run() -> PumpkinResult<()> {
                         !args.cumulative_single_profiles,
                         args.cumulative_propagation_method,
                         args.cumulative_incremental_backtracking,
+                        args.cumulative_merge_strategy,
+                        args.cumulative_merge_constant,
                     ),
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
@@ -665,6 +682,8 @@ fn run() -> PumpkinResult<()> {
                         !args.cumulative_single_profiles,
                         args.cumulative_propagation_method,
                         args.cumulative_incremental_backtracking,
+                        args.cumulative_merge_strategy,
+                        args.cumulative_merge_constant,
                     ),
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
@@ -689,6 +708,8 @@ fn run() -> PumpkinResult<()> {
                         !args.cumulative_single_profiles,
                         args.cumulative_propagation_method,
                         args.cumulative_incremental_backtracking,
+                        args.cumulative_merge_strategy,
+                        args.cumulative_merge_constant,
                     ),
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
@@ -713,6 +734,8 @@ fn run() -> PumpkinResult<()> {
                         !args.cumulative_single_profiles,
                         args.cumulative_propagation_method,
                         args.cumulative_incremental_backtracking,
+                        args.cumulative_merge_strategy,
+                        args.cumulative_merge_constant,
                     ),
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),

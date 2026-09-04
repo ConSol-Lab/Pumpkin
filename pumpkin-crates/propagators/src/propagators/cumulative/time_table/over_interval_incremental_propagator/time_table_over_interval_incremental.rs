@@ -6,6 +6,7 @@ use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::asserts::pumpkin_assert_extreme;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conjunction;
+use pumpkin_core::create_statistics_struct;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvent;
@@ -23,11 +24,16 @@ use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::propagator_conflict;
+use pumpkin_core::statistics::Statistic;
+use pumpkin_core::statistics::StatisticLogger;
+use pumpkin_core::statistics::moving_averages::CumulativeMovingAverage;
+use pumpkin_core::statistics::moving_averages::MovingAverage;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::insertion;
 use super::removal;
 use crate::cumulative::options::CumulativePropagatorOptions;
+use crate::cumulative::time_table::TimeTableMerger;
 use crate::cumulative::time_table::create_time_table_over_interval_from_scratch;
 use crate::cumulative::time_table::propagate_from_scratch_time_table_interval;
 use crate::cumulative::time_table::CheckerTask;
@@ -100,11 +106,22 @@ pub struct TimeTableOverIntervalIncrementalPropagator<Var, const SYNCHRONISE: bo
     /// scratch or not; note that this variable is only used if
     /// [`CumulativePropagatorOptions::incremental_backtracking`] is set to false.
     is_time_table_outdated: bool,
+    /// Merges adjacent profiles in the time-table, when specified.
+    merger: TimeTableMerger,
 
     // TODO: This should be refactored to use a propagator constructor.
     constraint_tag: ConstraintTag,
     inference_code: Option<InferenceCode>,
+
+    statistics: OverIntervalStatistics,
 }
+
+create_statistics_struct!(
+    OverIntervalStatistics {
+        average_time_table_length: CumulativeMovingAverage<usize>,
+        num_merges: usize,
+    }
+);
 
 impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstructor
     for TimeTableOverIntervalIncrementalPropagator<Var, SYNCHRONISE>
@@ -179,6 +196,11 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
             is_time_table_outdated: false,
             constraint_tag,
             inference_code: None,
+            merger: TimeTableMerger::new(
+                cumulative_options.merge_strategy,
+                cumulative_options.merge_strategy_constant,
+            ),
+            statistics: Default::default(),
         }
     }
 
@@ -256,6 +278,8 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
     ///
     /// An error is returned if an overflow of the resource occurs while updating the time-table.
     fn update_time_table(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
+        self.merger.was_called();
+
         if self.is_time_table_outdated {
             // We create the time-table from scratch (and return an error if it overflows)
             self.time_table = create_time_table_over_interval_from_scratch(
@@ -381,6 +405,10 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
             synchronise_time_table(&mut self.time_table, context.domains())
         }
 
+        if self.merger.merge_if_necessary(&mut self.time_table) {
+            self.statistics.num_merges += 1;
+        }
+
         // We check whether there are no non-conflicting profiles in the time-table if we do not
         // report any conflicts
         pumpkin_assert_extreme!(
@@ -388,6 +416,11 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                 .iter()
                 .all(|profile| profile.height <= self.parameters.capacity)
         );
+
+        self.statistics
+            .average_time_table_length
+            .add_term(self.time_table.len());
+
         Ok(())
     }
 }
@@ -395,6 +428,12 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
 impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
     for TimeTableOverIntervalIncrementalPropagator<Var, SYNCHRONISE>
 {
+    fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        if self.parameters.options.incremental_backtracking && !SYNCHRONISE {
+            self.statistics.log(statistic_logger);
+        }
+    }
+
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
             check_bounds_equal_at_propagation(

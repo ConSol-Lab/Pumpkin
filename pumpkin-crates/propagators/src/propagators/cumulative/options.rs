@@ -13,6 +13,11 @@ pub struct CumulativePropagatorOptions {
     pub generate_sequence: bool,
     /// Determines whether to incrementally backtrack or to calculate from scratch
     pub incremental_backtracking: bool,
+    /// Determines when to merge when using time-table reasoning.
+    pub merge_strategy: CumulativeMergeStrategy,
+    /// If [`CumulativeMergeStrategy::Constant`] is used, then this parameter indicates the number
+    /// of propagation calls after which a new merge will take place.
+    pub merge_strategy_constant: Option<u32>,
 }
 
 /// The options provided to the Cumulative constraint.
@@ -33,6 +38,8 @@ impl CumulativeOptions {
         generate_sequence: bool,
         propagation_method: CumulativePropagationMethod,
         incremental_backtracking: bool,
+        merge_strategy: CumulativeMergeStrategy,
+        merge_strategy_constant: Option<u32>,
     ) -> Self {
         Self {
             propagation_method,
@@ -41,6 +48,8 @@ impl CumulativeOptions {
                 explanation_type,
                 generate_sequence,
                 incremental_backtracking,
+                merge_strategy,
+                merge_strategy_constant,
             },
         }
     }
@@ -57,4 +66,15 @@ pub enum CumulativePropagationMethod {
     #[default]
     TimeTableOverIntervalIncremental,
     TimeTableOverIntervalIncrementalSynchronised,
+}
+
+/// The strategy to use when merging
+#[derive(Debug, Default, Clone, Copy)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
+pub enum CumulativeMergeStrategy {
+    Constant,
+    Average,
+    #[default]
+    Never,
+    Always,
 }

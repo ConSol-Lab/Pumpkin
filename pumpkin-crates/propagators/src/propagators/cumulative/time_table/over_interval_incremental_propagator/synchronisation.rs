@@ -5,11 +5,10 @@ use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
-use super::debug::are_mergeable;
-use super::debug::merge_profiles;
 use crate::cumulative::CumulativeParameters;
 use crate::cumulative::ResourceProfile;
 use crate::cumulative::time_table::OverIntervalTimeTableType;
+use crate::cumulative::time_table::TimeTableMerger;
 use crate::cumulative::time_table::create_time_table_over_interval_from_scratch;
 use crate::cumulative::time_table::propagation_handler::create_conflict_explanation;
 
@@ -32,7 +31,7 @@ pub(crate) fn find_synchronised_conflict<Var: IntegerVariable + 'static>(
         let mut new_profile = time_table[first_conflict_profile_index].clone();
 
         while first_conflict_profile_index < time_table.len() - 1 {
-            if are_mergeable(
+            if TimeTableMerger::are_mergeable(
                 &time_table[first_conflict_profile_index],
                 &time_table[first_conflict_profile_index + 1],
             ) {
@@ -113,7 +112,7 @@ pub(crate) fn synchronise_time_table<Var: IntegerVariable + 'static>(
     if !time_table.is_empty() {
         // If the time-table is not empty then we merge all the profiles in the range
         let time_table_len = time_table.len();
-        merge_profiles(time_table, 0, time_table_len - 1);
+        TimeTableMerger::merge_range(time_table, 0, time_table_len - 1);
     }
 
     // And then we sort each profile according to upper-bound and then ID
