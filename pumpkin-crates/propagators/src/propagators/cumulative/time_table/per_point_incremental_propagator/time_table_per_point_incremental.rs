@@ -474,11 +474,10 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         // However, this could mean that we potentially enqueue even though the time-table is empty
         // after backtracking but has not been recalculated yet.
         let result = should_enqueue(
-            &self.parameters,
             &self.updatable_structures,
             &updated_task,
             context.domains(),
-            self.time_table.is_empty(),
+            &self.parameters,
         );
 
         // If there is a task which now has a mandatory part then we store it and process it when
