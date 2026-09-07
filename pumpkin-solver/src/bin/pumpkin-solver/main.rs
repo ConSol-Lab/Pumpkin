@@ -405,7 +405,7 @@ struct Args {
 
     /// Determines when to merge adjacent profiles when using incremental time-tabling with
     /// incremental backtracking.
-    #[arg(long = "cumulative-merge-strategy")]
+    #[arg(long = "cumulative-merge-strategy", default_value_t)]
     cumulative_merge_strategy: CumulativeMergeStrategy,
 
     /// The number of propagation calls after which adjacent profiles are merged when using

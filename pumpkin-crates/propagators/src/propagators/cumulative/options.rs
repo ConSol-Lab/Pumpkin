@@ -69,7 +69,7 @@ pub enum CumulativePropagationMethod {
 }
 
 /// The strategy to use when merging
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum CumulativeMergeStrategy {
     Constant,
@@ -77,4 +77,15 @@ pub enum CumulativeMergeStrategy {
     #[default]
     Never,
     Always,
+}
+
+impl std::fmt::Display for CumulativeMergeStrategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CumulativeMergeStrategy::Constant => write!(f, "constant"),
+            CumulativeMergeStrategy::Average => write!(f, "average"),
+            CumulativeMergeStrategy::Never => write!(f, "never"),
+            CumulativeMergeStrategy::Always => write!(f, "always"),
+        }
+    }
 }

@@ -403,7 +403,9 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
             // ensuring that the profiles are maximal and the profile tasks are sorted in the same
             // order
             synchronise_time_table(&mut self.time_table, context.domains())
-        } else if self.merger.merge_if_necessary(&mut self.time_table) {
+        } else if self.parameters.options.incremental_backtracking
+            && self.merger.merge_if_necessary(&mut self.time_table)
+        {
             self.statistics.num_merges += 1;
         }
 
