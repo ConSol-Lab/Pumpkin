@@ -57,16 +57,14 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal() {
-        let mut fixture = SelectionContext::create_for_testing(vec![(0, 10)]);
         let mut test_rng = TestRandom::default();
-        let domain_ids = fixture.get_domains().collect::<Vec<_>>();
+        let mut context = SelectionContext::create_for_testing(vec![(0, 10)], &mut test_rng);
+        let domain_ids = context.get_domains().collect::<Vec<_>>();
         let mut selector = InDomainInterval;
 
         for to_remove in [2, 3, 7, 8] {
-            let _ = fixture.post_predicate(predicate!(domain_ids[0] != to_remove));
+            let _ = context.post_predicate(predicate!(domain_ids[0] != to_remove));
         }
-
-        let mut context = fixture.context(&mut test_rng);
 
         let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
         assert_eq!(selected_predicate, predicate!(domain_ids[0] <= 1))
@@ -74,9 +72,8 @@ mod tests {
 
     #[test]
     fn test_no_holes_in_domain_bisects_domain() {
-        let fixture = SelectionContext::create_for_testing(vec![(0, 10)]);
         let mut test_rng = TestRandom::default();
-        let mut context = fixture.context(&mut test_rng);
+        let mut context = SelectionContext::create_for_testing(vec![(0, 10)], &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainInterval;
@@ -88,9 +85,8 @@ mod tests {
 
     #[test]
     fn test_domain_of_size_two() {
-        let fixture = SelectionContext::create_for_testing(vec![(1, 2)]);
         let mut test_rng = TestRandom::default();
-        let mut context = fixture.context(&mut test_rng);
+        let mut context = SelectionContext::create_for_testing(vec![(1, 2)], &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainInterval;

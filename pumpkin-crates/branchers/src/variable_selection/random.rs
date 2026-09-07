@@ -77,15 +77,14 @@ mod tests {
 
     #[test]
     fn test_selects_randomly() {
-        let fixture = SelectionContext::create_for_testing(vec![(0, 10), (5, 20), (1, 3)]);
         let mut test_rng = TestRandom {
             usizes: vec![1],
             ..Default::default()
         };
-        let integer_variables = fixture.get_domains().collect::<Vec<_>>();
-        let mut strategy = RandomSelector::new(fixture.get_domains());
-
-        let mut context = fixture.context(&mut test_rng);
+        let mut context =
+            SelectionContext::create_for_testing(vec![(0, 10), (5, 20), (1, 3)], &mut test_rng);
+        let integer_variables = context.get_domains().collect::<Vec<_>>();
+        let mut strategy = RandomSelector::new(context.get_domains());
 
         let selected = strategy.select_variable(&mut context);
         assert!(selected.is_some());
@@ -94,15 +93,14 @@ mod tests {
 
     #[test]
     fn test_selects_randomly_not_unfixed() {
-        let fixture = SelectionContext::create_for_testing(vec![(0, 10), (5, 5), (1, 3)]);
         let mut test_rng = TestRandom {
             usizes: vec![1, 0],
             ..Default::default()
         };
-        let integer_variables = fixture.get_domains().collect::<Vec<_>>();
-        let mut strategy = RandomSelector::new(fixture.get_domains());
-
-        let mut context = fixture.context(&mut test_rng);
+        let mut context =
+            SelectionContext::create_for_testing(vec![(0, 10), (5, 5), (1, 3)], &mut test_rng);
+        let integer_variables = context.get_domains().collect::<Vec<_>>();
+        let mut strategy = RandomSelector::new(context.get_domains());
 
         let selected = strategy.select_variable(&mut context);
         assert!(selected.is_some());
@@ -111,14 +109,13 @@ mod tests {
 
     #[test]
     fn test_select_nothing_if_all_fixed() {
-        let fixture = SelectionContext::create_for_testing(vec![(0, 0), (5, 5), (1, 1)]);
         let mut test_rng = TestRandom {
             usizes: vec![1, 0, 0],
             ..Default::default()
         };
-        let mut strategy = RandomSelector::new(fixture.get_domains());
-
-        let mut context = fixture.context(&mut test_rng);
+        let mut context =
+            SelectionContext::create_for_testing(vec![(0, 0), (5, 5), (1, 1)], &mut test_rng);
+        let mut strategy = RandomSelector::new(context.get_domains());
 
         let selected = strategy.select_variable(&mut context);
         assert!(selected.is_none());
@@ -126,35 +123,31 @@ mod tests {
 
     #[test]
     fn test_select_unfixed_variable_after_fixing() {
-        let mut fixture = SelectionContext::create_for_testing(vec![(0, 0), (5, 7), (1, 1)]);
         let mut test_rng = TestRandom {
             usizes: vec![2, 0, 0, 0, 0],
             ..Default::default()
         };
-        let integer_variables = fixture.get_domains().collect::<Vec<_>>();
-        let mut strategy = RandomSelector::new(fixture.get_domains());
+        let mut context =
+            SelectionContext::create_for_testing(vec![(0, 0), (5, 7), (1, 1)], &mut test_rng);
+        let integer_variables = context.get_domains().collect::<Vec<_>>();
+        let mut strategy = RandomSelector::new(context.get_domains());
 
         {
-            let mut context = fixture.context(&mut test_rng);
-
             let selected = strategy.select_variable(&mut context);
             assert!(selected.is_some());
             assert_eq!(selected.unwrap(), integer_variables[1]);
         }
 
-        fixture.new_checkpoint();
-        let _ = fixture.post_predicate(predicate!(integer_variables[1] >= 7));
+        context.new_checkpoint();
+        let _ = context.post_predicate(predicate!(integer_variables[1] >= 7));
 
         {
-            let mut context = fixture.context(&mut test_rng);
-
             let selected = strategy.select_variable(&mut context);
             assert!(selected.is_none());
         }
 
-        fixture.synchronise(0);
+        context.synchronise(0);
         strategy.on_unassign_integer(integer_variables[1], 7);
-        let mut context = fixture.context(&mut test_rng);
         let selected = strategy.select_variable(&mut context);
         assert!(selected.is_some());
         assert_eq!(selected.unwrap(), integer_variables[1]);

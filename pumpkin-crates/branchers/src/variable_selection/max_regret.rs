@@ -106,25 +106,22 @@ mod tests {
 
     #[test]
     fn test_correctly_selected() {
-        let mut fixture = SelectionContext::create_for_testing(vec![(0, 10), (5, 20)]);
         let mut test_rng = TestRandom::default();
-        let integer_variables = fixture.get_domains().collect::<Vec<_>>();
+        let mut context =
+            SelectionContext::create_for_testing(vec![(0, 10), (5, 20)], &mut test_rng);
+        let integer_variables = context.get_domains().collect::<Vec<_>>();
         let mut strategy = MaxRegret::new(&integer_variables);
 
-        let _ = fixture.post_predicate(predicate!(integer_variables[1] != 6));
+        let _ = context.post_predicate(predicate!(integer_variables[1] != 6));
 
         {
-            let mut context = fixture.context(&mut test_rng);
-
             let selected = strategy.select_variable(&mut context);
             assert!(selected.is_some());
             assert_eq!(selected.unwrap(), integer_variables[1]);
         }
 
-        let _ = fixture.post_predicate(predicate!(integer_variables[0] != 1));
-        let _ = fixture.post_predicate(predicate!(integer_variables[0] != 2));
-
-        let mut context = fixture.context(&mut test_rng);
+        let _ = context.post_predicate(predicate!(integer_variables[0] != 1));
+        let _ = context.post_predicate(predicate!(integer_variables[0] != 2));
 
         let selected = strategy.select_variable(&mut context);
         assert!(selected.is_some());
@@ -133,9 +130,9 @@ mod tests {
 
     #[test]
     fn fixed_variables_are_not_selected() {
-        let fixture = SelectionContext::create_for_testing(vec![(10, 10), (20, 20)]);
         let mut test_rng = TestRandom::default();
-        let mut context = fixture.context(&mut test_rng);
+        let mut context =
+            SelectionContext::create_for_testing(vec![(10, 10), (20, 20)], &mut test_rng);
         let integer_variables = context.get_domains().collect::<Vec<_>>();
 
         let mut strategy = MaxRegret::new(&integer_variables);

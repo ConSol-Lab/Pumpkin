@@ -64,9 +64,8 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal() {
-        let fixture = SelectionContext::create_for_testing(vec![(0, 10)]);
         let mut test_rng = TestRandom::default();
-        let mut context = fixture.context(&mut test_rng);
+        let mut context = SelectionContext::create_for_testing(vec![(0, 10)], &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainMiddle;
@@ -77,14 +76,12 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal_no_middle() {
-        let mut fixture = SelectionContext::create_for_testing(vec![(1, 10)]);
         let mut test_rng = TestRandom::default();
-        let domain_ids = fixture.get_domains().collect::<Vec<_>>();
+        let mut context = SelectionContext::create_for_testing(vec![(1, 10)], &mut test_rng);
+        let domain_ids = context.get_domains().collect::<Vec<_>>();
         let mut selector = InDomainMiddle;
 
-        let _ = fixture.post_predicate(predicate!(domain_ids[0] != 5));
-
-        let mut context = fixture.context(&mut test_rng);
+        let _ = context.post_predicate(predicate!(domain_ids[0] != 5));
 
         let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
         assert_eq!(selected_predicate, predicate!(domain_ids[0] == 4))
@@ -92,9 +89,8 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal_size_two_domain() {
-        let fixture = SelectionContext::create_for_testing(vec![(1, 2)]);
         let mut test_rng = TestRandom::default();
-        let mut context = fixture.context(&mut test_rng);
+        let mut context = SelectionContext::create_for_testing(vec![(1, 2)], &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainMiddle;
@@ -105,9 +101,8 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal_size_three_domain() {
-        let fixture = SelectionContext::create_for_testing(vec![(1, 3)]);
         let mut test_rng = TestRandom::default();
-        let mut context = fixture.context(&mut test_rng);
+        let mut context = SelectionContext::create_for_testing(vec![(1, 3)], &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainMiddle;
@@ -118,9 +113,8 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal_negative_lower_bound() {
-        let fixture = SelectionContext::create_for_testing(vec![(-5, 5)]);
         let mut test_rng = TestRandom::default();
-        let mut context = fixture.context(&mut test_rng);
+        let mut context = SelectionContext::create_for_testing(vec![(-5, 5)], &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainMiddle;
@@ -131,9 +125,8 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal_negative_upper_bound() {
-        let fixture = SelectionContext::create_for_testing(vec![(-10, -5)]);
         let mut test_rng = TestRandom::default();
-        let mut context = fixture.context(&mut test_rng);
+        let mut context = SelectionContext::create_for_testing(vec![(-10, -5)], &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainMiddle;

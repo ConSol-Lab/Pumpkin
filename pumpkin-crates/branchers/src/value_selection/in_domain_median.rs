@@ -40,9 +40,8 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal() {
-        let fixture = SelectionContext::create_for_testing(vec![(0, 10)]);
         let mut test_rng = TestRandom::default();
-        let mut context = fixture.context(&mut test_rng);
+        let mut context = SelectionContext::create_for_testing(vec![(0, 10)], &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainMedian;
@@ -53,15 +52,13 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal_no_median() {
-        let mut fixture = SelectionContext::create_for_testing(vec![(1, 10)]);
         let mut test_rng = TestRandom::default();
+        let mut context = SelectionContext::create_for_testing(vec![(1, 10)], &mut test_rng);
 
-        let domain_ids = fixture.get_domains().collect::<Vec<_>>();
+        let domain_ids = context.get_domains().collect::<Vec<_>>();
         let mut selector = InDomainMedian;
 
-        let _ = fixture.post_predicate(predicate!(domain_ids[0] != 9));
-
-        let mut context = fixture.context(&mut test_rng);
+        let _ = context.post_predicate(predicate!(domain_ids[0] != 9));
 
         let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
         assert_eq!(selected_predicate, predicate!(domain_ids[0] == 5))
@@ -69,15 +66,13 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal_removed_median() {
-        let mut fixture = SelectionContext::create_for_testing(vec![(1, 10)]);
         let mut test_rng = TestRandom::default();
+        let mut context = SelectionContext::create_for_testing(vec![(1, 10)], &mut test_rng);
 
-        let domain_ids = fixture.get_domains().collect::<Vec<_>>();
+        let domain_ids = context.get_domains().collect::<Vec<_>>();
         let mut selector = InDomainMedian;
 
-        let _ = fixture.post_predicate(predicate!(domain_ids[0] != 5));
-
-        let mut context = fixture.context(&mut test_rng);
+        let _ = context.post_predicate(predicate!(domain_ids[0] != 5));
 
         let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
         assert_eq!(selected_predicate, predicate!(domain_ids[0] == 6))

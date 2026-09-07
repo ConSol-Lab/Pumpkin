@@ -370,12 +370,13 @@ mod tests {
 
     #[test]
     fn brancher_picks_bumped_values() {
-        let fixture = SelectionContext::create_for_testing(vec![(0, 10), (-10, 0)]);
-        let mut domains = fixture.get_domains();
+        let mut test_rng = TestRandom::default();
+        let context = SelectionContext::create_for_testing(vec![(0, 10), (-10, 0)], &mut test_rng);
+        let mut domains = context.get_domains();
         let x = domains.next().unwrap();
         let y = domains.next().unwrap();
 
-        let mut brancher = AutonomousSearch::default_over_all_variables(fixture.get_domains());
+        let mut brancher = AutonomousSearch::default_over_all_variables(context.get_domains());
         brancher.on_appearance_in_conflict_predicate(predicate!(x >= 5));
         brancher.on_appearance_in_conflict_predicate(predicate!(x >= 5));
         brancher.on_appearance_in_conflict_predicate(predicate!(y >= -5));
@@ -385,80 +386,83 @@ mod tests {
 
     #[test]
     fn dormant_values() {
-        let mut fixture = SelectionContext::create_for_testing(vec![(0, 10)]);
-        let x = fixture.get_domains().next().unwrap();
+        let mut test_rng = TestRandom::default();
+        let mut context = SelectionContext::create_for_testing(vec![(0, 10)], &mut test_rng);
+        let x = context.get_domains().next().unwrap();
 
-        let mut brancher = AutonomousSearch::default_over_all_variables(fixture.get_domains());
+        let mut brancher = AutonomousSearch::default_over_all_variables(context.get_domains());
 
         let predicate = predicate!(x >= 5);
         brancher.on_appearance_in_conflict_predicate(predicate);
-        let decision = brancher.next_decision(&mut fixture.context(&mut TestRandom::default()));
+        let decision = brancher.next_decision(&mut context);
         assert_eq!(decision, Some(predicate));
 
-        fixture.new_checkpoint();
+        context.new_checkpoint();
         // Decision Level 1
-        let _ = fixture.post_predicate(predicate!(x >= 5));
+        let _ = context.post_predicate(predicate!(x >= 5));
 
-        fixture.new_checkpoint();
+        context.new_checkpoint();
         // Decision Level 2
-        let _ = fixture.post_predicate(predicate!(x >= 7));
+        let _ = context.post_predicate(predicate!(x >= 7));
 
-        fixture.new_checkpoint();
+        context.new_checkpoint();
         // Decision Level 3
-        let _ = fixture.post_predicate(predicate!(x >= 10));
+        let _ = context.post_predicate(predicate!(x >= 10));
 
-        fixture.new_checkpoint();
+        context.new_checkpoint();
         // We end at decision level 4
 
-        let decision = brancher.next_decision(&mut fixture.context(&mut TestRandom::default()));
+        let decision = brancher.next_decision(&mut context);
         assert!(decision.is_none());
         assert!(brancher.dormant_predicates.contains(&predicate));
 
-        fixture.synchronise(3);
+        context.synchronise(3);
 
-        let decision = brancher.next_decision(&mut fixture.context(&mut TestRandom::default()));
+        let decision = brancher.next_decision(&mut context);
         assert!(decision.is_none());
         assert!(brancher.dormant_predicates.contains(&predicate));
 
-        fixture.synchronise(0);
-        brancher.synchronise(&mut fixture.context(&mut TestRandom::default()));
+        context.synchronise(0);
+        brancher.synchronise(&mut context);
 
-        let decision = brancher.next_decision(&mut fixture.context(&mut TestRandom::default()));
+        let decision = brancher.next_decision(&mut context);
         assert_eq!(decision, Some(predicate));
         assert!(!brancher.dormant_predicates.contains(&predicate));
     }
 
     #[test]
     fn uses_fallback() {
-        let fixture = SelectionContext::create_for_testing(vec![(0, 10)]);
-        let x = fixture.get_domains().next().unwrap();
-
-        let mut brancher = AutonomousSearch::default_over_all_variables(fixture.get_domains());
-
-        let result = brancher.next_decision(&mut fixture.context(&mut TestRandom {
+        let mut test_rng = TestRandom {
             integers: vec![2],
             usizes: vec![0],
             bools: vec![false],
             weighted_choice: |_| unreachable!(),
-        }));
+        };
+        let mut context = SelectionContext::create_for_testing(vec![(0, 10)], &mut test_rng);
+        let x = context.get_domains().next().unwrap();
+
+        let mut brancher = AutonomousSearch::default_over_all_variables(context.get_domains());
+
+        let result = brancher.next_decision(&mut context);
 
         assert_eq!(result, Some(predicate!(x <= 2)));
     }
 
     #[test]
     fn uses_stored_solution() {
-        let mut fixture = SelectionContext::create_for_testing(vec![(0, 10)]);
-        let x = fixture.get_domains().next().unwrap();
+        let mut test_rng = TestRandom::default();
+        let mut context = SelectionContext::create_for_testing(vec![(0, 10)], &mut test_rng);
+        let x = context.get_domains().next().unwrap();
 
-        fixture.new_checkpoint();
-        let _ = fixture.post_predicate(predicate!(x == 7));
+        context.new_checkpoint();
+        let _ = context.post_predicate(predicate!(x == 7));
 
-        let mut brancher = AutonomousSearch::default_over_all_variables(fixture.get_domains());
+        let mut brancher = AutonomousSearch::default_over_all_variables(context.get_domains());
 
-        let solution = fixture.solution();
+        let solution = context.solution();
         brancher.on_solution(solution.as_reference());
 
-        fixture.synchronise(0);
+        context.synchronise(0);
 
         assert_eq!(
             predicate!(x >= 5),
@@ -479,7 +483,7 @@ mod tests {
 
         brancher.on_appearance_in_conflict_predicate(predicate!(x >= 5));
 
-        let result = brancher.next_decision(&mut fixture.context(&mut TestRandom::default()));
+        let result = brancher.next_decision(&mut context);
         assert_eq!(result, Some(predicate!(x >= 5)));
     }
 }

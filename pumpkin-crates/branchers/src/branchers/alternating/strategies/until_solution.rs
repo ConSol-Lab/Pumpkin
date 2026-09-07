@@ -118,7 +118,8 @@ mod tests {
 
     #[test]
     fn test_switch_after_first_solution() {
-        let fixture = SelectionContext::create_for_testing(vec![]);
+        let mut test_rng = TestRandom::default();
+        let mut context = SelectionContext::create_for_testing(vec![], &mut test_rng);
         let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
@@ -129,33 +130,34 @@ mod tests {
         assert!(!brancher.is_using_default_brancher());
         brancher.on_restart();
         // next_decision is called to ensure that the brancher has actually switched
-        let _ = brancher.next_decision(&mut fixture.context(&mut TestRandom::default()));
+        let _ = brancher.next_decision(&mut context);
         assert!(!brancher.is_using_default_brancher());
 
         brancher.on_restart();
-        let _ = brancher.next_decision(&mut fixture.context(&mut TestRandom::default()));
+        let _ = brancher.next_decision(&mut context);
         assert!(!brancher.is_using_default_brancher());
 
-        brancher.on_solution(fixture.solution().as_reference());
-        let _ = brancher.next_decision(&mut fixture.context(&mut TestRandom::default()));
+        brancher.on_solution(context.solution().as_reference());
+        let _ = brancher.next_decision(&mut context);
         assert!(brancher.is_using_default_brancher());
 
         brancher.on_restart();
-        let _ = brancher.next_decision(&mut fixture.context(&mut TestRandom::default()));
+        let _ = brancher.next_decision(&mut context);
         assert!(brancher.is_using_default_brancher());
 
         brancher.on_restart();
-        let _ = brancher.next_decision(&mut fixture.context(&mut TestRandom::default()));
+        let _ = brancher.next_decision(&mut context);
         assert!(brancher.is_using_default_brancher());
 
-        brancher.on_solution(fixture.solution().as_reference());
-        let _ = brancher.next_decision(&mut fixture.context(&mut TestRandom::default()));
+        brancher.on_solution(context.solution().as_reference());
+        let _ = brancher.next_decision(&mut context);
         assert!(brancher.is_using_default_brancher());
     }
 
     #[test]
     fn test_every_restart_until_first_solution() {
-        let fixture = SelectionContext::create_for_testing(vec![]);
+        let mut test_rng = TestRandom::default();
+        let mut context = SelectionContext::create_for_testing(vec![], &mut test_rng);
         let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
@@ -166,27 +168,27 @@ mod tests {
         assert!(!brancher.is_using_default_brancher());
         brancher.on_restart();
         // next_decision is called to ensure that the brancher has actually switched
-        let _ = brancher.next_decision(&mut fixture.context(&mut TestRandom::default()));
+        let _ = brancher.next_decision(&mut context);
         assert!(brancher.is_using_default_brancher());
 
         brancher.on_restart();
-        let _ = brancher.next_decision(&mut fixture.context(&mut TestRandom::default()));
+        let _ = brancher.next_decision(&mut context);
         assert!(!brancher.is_using_default_brancher());
 
-        brancher.on_solution(fixture.solution().as_reference());
-        let _ = brancher.next_decision(&mut fixture.context(&mut TestRandom::default()));
+        brancher.on_solution(context.solution().as_reference());
+        let _ = brancher.next_decision(&mut context);
         assert!(brancher.is_using_default_brancher());
 
         brancher.on_restart();
-        let _ = brancher.next_decision(&mut fixture.context(&mut TestRandom::default()));
+        let _ = brancher.next_decision(&mut context);
         assert!(brancher.is_using_default_brancher());
 
         brancher.on_restart();
-        let _ = brancher.next_decision(&mut fixture.context(&mut TestRandom::default()));
+        let _ = brancher.next_decision(&mut context);
         assert!(brancher.is_using_default_brancher());
 
-        brancher.on_solution(fixture.solution().as_reference());
-        let _ = brancher.next_decision(&mut fixture.context(&mut TestRandom::default()));
+        brancher.on_solution(context.solution().as_reference());
+        let _ = brancher.next_decision(&mut context);
         assert!(brancher.is_using_default_brancher());
     }
 }

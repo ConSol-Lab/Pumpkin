@@ -15,7 +15,6 @@
 
 mod brancher;
 mod selection_context;
-pub mod testing;
 
 pub use brancher::*;
 pub use selection_context::SelectionContext;

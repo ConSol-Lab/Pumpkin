@@ -624,10 +624,8 @@ impl ConstraintSatisfactionSolver {
         }
 
         // Otherwise proceed with standard branching.
-        let context = &mut SelectionContext::new(
-            &self.state.assignments,
-            &mut self.internal_parameters.random_generator,
-        );
+        let context =
+            &mut SelectionContext::new(&self.state, &mut self.internal_parameters.random_generator);
 
         // If there is a next decision, make the decision.
         let Some(decision_predicate) = brancher.next_decision(context) else {
@@ -755,7 +753,7 @@ impl ConstraintSatisfactionSolver {
                 brancher.on_unassign_integer(domain_id, previous_value)
             });
 
-        brancher.synchronise(&mut SelectionContext::new(&state.assignments, rng));
+        brancher.synchronise(&mut SelectionContext::new(state, rng));
     }
 
     /// Main propagation loop.

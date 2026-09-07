@@ -35,9 +35,8 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal() {
-        let fixture = SelectionContext::create_for_testing(vec![(0, 10)]);
         let mut test_rng = TestRandom::default();
-        let mut context = fixture.context(&mut test_rng);
+        let mut context = SelectionContext::create_for_testing(vec![(0, 10)], &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainMax;
