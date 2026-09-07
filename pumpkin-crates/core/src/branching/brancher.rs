@@ -11,12 +11,6 @@ use crate::basic_types::SolutionReference;
 use crate::branching;
 use crate::branching::SelectionContext;
 #[cfg(doc)]
-use crate::branching::branchers::dynamic_brancher::DynamicBrancher;
-#[cfg(doc)]
-use crate::branching::value_selection::ValueSelector;
-#[cfg(doc)]
-use crate::branching::variable_selection::VariableSelector;
-#[cfg(doc)]
 use crate::create_statistics_struct;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
@@ -24,8 +18,8 @@ use crate::engine::variables::DomainId;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::statistics::StatisticLogger;
 
-/// A trait for definining a branching strategy (oftentimes utilising a [`VariableSelector`] and a
-/// [`ValueSelector`]).
+/// A trait for definining a branching strategy (oftentimes utilising a variable selector and a
+/// value selector, see the `pumpkin-branchers` crate for concrete implementations).
 ///
 /// In general, implementations of this trait define how the search of the solver proceeds (i.e. it
 /// controls how the solver determines which part of the search space to explore). It is required
@@ -118,13 +112,13 @@ pub trait Brancher: Debug {
     /// Indicates which [`BrancherEvent`] are relevant for this particular [`Brancher`].
     ///
     /// This can be used by [`Brancher::subscribe_to_events`] to determine upon which
-    /// events which [`VariableSelector`] should be called.
+    /// events which component of the [`Brancher`] should be called.
     fn subscribe_to_events(&self) -> Vec<BrancherEvent>;
 }
 
 /// The events which can occur for a [`Brancher`]. Used for returning which events are relevant in
-/// [`Brancher::subscribe_to_events`], [`VariableSelector::subscribe_to_events`],
-/// and [`ValueSelector::subscribe_to_events`].
+/// [`Brancher::subscribe_to_events`] (and, in the `pumpkin-branchers` crate, the analogous methods
+/// on variable and value selectors).
 #[derive(Debug, Clone, Copy, Enum, Hash, PartialEq, Eq)]
 pub enum BrancherEvent {
     /// Event for when a conflict is detected

@@ -1148,8 +1148,10 @@ mod tests {
     }
     use super::ConstraintSatisfactionSolver;
     use super::CoreExtractionResult;
-    use crate::DefaultBrancher;
     use crate::basic_types::CSPSolverExecutionFlag;
+    use crate::branching::Brancher;
+    use crate::branching::BrancherEvent;
+    use crate::branching::SelectionContext;
     use crate::conflict_resolving::ConflictAnalysisContext;
     use crate::conflict_resolving::ConflictResolver;
     use crate::predicate;
@@ -1157,6 +1159,24 @@ mod tests {
     use crate::propagation::ReadDomains;
     use crate::pumpkin_assert_simple;
     use crate::termination::Indefinite;
+
+    /// A minimal [`Brancher`] which selects the first unfixed variable and assigns it its
+    /// lower-bound; used to drive search in tests which do not care about the branching heuristic.
+    #[derive(Debug)]
+    struct SimpleBrancher;
+
+    impl Brancher for SimpleBrancher {
+        fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
+            context
+                .get_domains()
+                .find(|&variable| !context.is_integer_fixed(variable))
+                .map(|variable| predicate!(variable == context.lower_bound(variable)))
+        }
+
+        fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+            vec![]
+        }
+    }
 
     fn is_same_core(core1: &[Predicate], core2: &[Predicate]) -> bool {
         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))
@@ -1181,7 +1201,7 @@ mod tests {
         expected_flag: CSPSolverExecutionFlag,
         expected_result: CoreExtractionResult,
     ) {
-        let mut brancher = DefaultBrancher::default_over_all_variables(&solver.state.assignments);
+        let mut brancher = SimpleBrancher;
         let mut resolver = NoLearningResolver;
 
         let flag = solver.solve_under_assumptions(

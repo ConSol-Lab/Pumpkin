@@ -7,14 +7,6 @@ use crate::basic_types::CSPSolverExecutionFlag;
 use crate::branching::Brancher;
 use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
-use crate::branching::branchers::autonomous_search::AutonomousSearch;
-use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-use crate::branching::value_selection::RandomSplitter;
-#[cfg(doc)]
-use crate::branching::value_selection::ValueSelector;
-use crate::branching::variable_selection::RandomSelector;
-#[cfg(doc)]
-use crate::branching::variable_selection::VariableSelector;
 use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::conflict_resolving::ConflictResolver;
 use crate::constraints::ConstraintPoster;
@@ -22,6 +14,7 @@ use crate::containers::HashSet;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::termination::TerminationCondition;
+use crate::engine::variables::DomainGeneratorIterator;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
@@ -598,11 +591,13 @@ impl Solver {
     }
 }
 
-/// Default brancher implementation
 impl Solver {
-    /// Creates an instance of the [`DefaultBrancher`].
-    pub fn default_brancher(&self) -> DefaultBrancher {
-        DefaultBrancher::default_over_all_variables(self.satisfaction_solver.assignments())
+    /// Returns an iterator over the [`DomainId`]s which are currently defined on the [`Solver`].
+    ///
+    /// This can be used to implement a [`Brancher`] which considers (a subset of) the variables of
+    /// the [`Solver`].
+    pub fn get_domains(&self) -> DomainGeneratorIterator {
+        self.satisfaction_solver.assignments().get_domains()
     }
 }
 
@@ -645,18 +640,3 @@ impl Solver {
         }
     }
 }
-
-/// A brancher which makes use of VSIDS \[1\] and solution-based phase saving (both adapted for CP).
-///
-/// If VSIDS does not contain any (unfixed) predicates then it will default to the
-/// [`IndependentVariableValueBrancher`].
-///
-/// # Bibliography
-/// \[1\] M. W. Moskewicz, C. F. Madigan, Y. Zhao, L. Zhang, and S. Malik, ‘Chaff: Engineering an
-/// efficient SAT solver’, in Proceedings of the 38th annual Design Automation Conference, 2001.
-///
-/// \[2\] E. Demirović, G. Chu, and P. J. Stuckey, ‘Solution-based phase saving for CP: A
-/// value-selection heuristic to simulate local search behavior in complete solvers’, in the
-/// proceedings of the Principles and Practice of Constraint Programming (CP 2018).
-pub type DefaultBrancher =
-    AutonomousSearch<IndependentVariableValueBrancher<DomainId, RandomSelector, RandomSplitter>>;

@@ -24,6 +24,7 @@ use maxsat::PseudoBooleanEncoding;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
 use parsers::dimacs::parse_cnf;
+use pumpkin_branchers::DefaultBrancher;
 use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
 use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
@@ -741,7 +742,7 @@ fn cnf_problem(
 
     let mut termination =
         TimeBudget::starting_now(time_limit.unwrap_or(Duration::from_secs(u64::MAX)));
-    let mut brancher = solver.default_brancher();
+    let mut brancher = DefaultBrancher::default_over_all_variables(solver.get_domains());
     let mut resolver = ResolutionResolver::default();
 
     match solver.satisfy(&mut brancher, &mut termination, &mut resolver) {

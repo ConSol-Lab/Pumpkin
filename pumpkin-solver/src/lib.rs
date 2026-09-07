@@ -67,12 +67,13 @@
 //! ```rust
 //! # use pumpkin_solver::Solver;
 //! # use pumpkin_solver::core::termination::Indefinite;
+//! # use pumpkin_branchers::DefaultBrancher;
 //! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! # let mut solver = Solver::default();
 //! // We create a termination condition which allows the solver to run indefinitely
 //! let mut termination = Indefinite;
 //! // And we create a search strategy (in this case, simply the default)
-//! let mut brancher = solver.default_brancher();
+//! let mut brancher = DefaultBrancher::default_over_all_variables(solver.get_domains());
 //! // Finally, we create a default conflict resolver
 //! let mut resolver = ResolutionResolver::default();
 //! ```
@@ -85,6 +86,7 @@
 //! # use pumpkin_solver::core::results::ProblemSolution;
 //! # use pumpkin_solver::core::constraints;
 //! # use pumpkin_solver::core::constraints::Constraint;
+//! # use pumpkin_branchers::DefaultBrancher;
 //! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! # use std::cmp::max;
 //! # let mut solver = Solver::default();
@@ -94,7 +96,7 @@
 //! # let c1 = solver.new_constraint_tag();
 //! # solver.add_constraint(pumpkin_constraints::equals(vec![x, y, z], 17, c1)).post();
 //! # let mut termination = Indefinite;
-//! # let mut brancher = solver.default_brancher();
+//! # let mut brancher = DefaultBrancher::default_over_all_variables(solver.get_domains());
 //! # let mut resolver = ResolutionResolver::default();
 //! // Then we find a solution to the problem
 //! let result = solver.satisfy(&mut brancher, &mut termination, &mut resolver);
@@ -146,7 +148,7 @@
 //! # use std::cmp::max;
 //! # use crate::pumpkin_solver::core::optimisation::OptimisationProcedure;
 //! # use pumpkin_solver::core::results::SolutionReference;
-//! # use pumpkin_solver::core::DefaultBrancher;
+//! # use pumpkin_branchers::DefaultBrancher;
 //! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! # let mut solver = Solver::default();
 //! # let x = solver.new_bounded_integer(5, 10);
@@ -157,7 +159,7 @@
 //! # solver.add_constraint(pumpkin_constraints::equals(vec![x, y, z], 17, c1)).post();
 //! # solver.add_constraint(pumpkin_constraints::maximum(vec![x, y, z], objective, c1)).post();
 //! # let mut termination = Indefinite;
-//! # let mut brancher = solver.default_brancher();
+//! # let mut brancher = DefaultBrancher::default_over_all_variables(solver.get_domains());
 //! # let mut resolver = ResolutionResolver::default();
 //!
 //! let callback = |_: &Solver, _: SolutionReference, _: &DefaultBrancher, _: &ResolutionResolver| -> ControlFlow<()> {
@@ -205,6 +207,7 @@
 //! # use pumpkin_solver::core::results::solution_iterator::IteratedSolution;
 //! # use pumpkin_solver::core::constraints;
 //! # use pumpkin_solver::core::constraints::Constraint;
+//! # use pumpkin_branchers::DefaultBrancher;
 //! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
@@ -221,7 +224,7 @@
 //! // We create a termination condition which allows the solver to run indefinitely
 //! let mut termination = Indefinite;
 //! // And we create a search strategy (in this case, simply the default)
-//! let mut brancher = solver.default_brancher();
+//! let mut brancher = DefaultBrancher::default_over_all_variables(solver.get_domains());
 //! // Finally, we create a default conflict resolver
 //! let mut resolver = ResolutionResolver::default();
 //!
@@ -280,6 +283,7 @@
 //! # use pumpkin_solver::core::predicate;
 //! # use pumpkin_solver::core::constraints;
 //! # use pumpkin_solver::core::constraints::Constraint;
+//! # use pumpkin_branchers::DefaultBrancher;
 //! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
@@ -298,7 +302,7 @@
 //! // We create a termination condition which allows the solver to run indefinitely
 //! let mut termination = Indefinite;
 //! // And we create a search strategy (in this case, simply the default)
-//! let mut brancher = solver.default_brancher();
+//! let mut brancher = DefaultBrancher::default_over_all_variables(solver.get_domains());
 //! // Finally, we create a default conflict resolver
 //! let mut resolver = ResolutionResolver::default();
 //!
@@ -345,6 +349,18 @@ pub mod propagators {
     #[cfg(doc)]
     use pumpkin_core::propagation::Propagator;
     pub use pumpkin_propagators::*;
+}
+
+pub mod branchers {
+    //! Contains the implementations of [`Brancher`]s, [`VariableSelector`]s and
+    //! [`ValueSelector`]s.
+    #[cfg(doc)]
+    use pumpkin_branchers::value_selection::ValueSelector;
+    #[cfg(doc)]
+    use pumpkin_branchers::variable_selection::VariableSelector;
+    pub use pumpkin_branchers::*;
+    #[cfg(doc)]
+    use pumpkin_core::branching::Brancher;
 }
 
 pub mod core {

@@ -1,0 +1,99 @@
+use log::warn;
+use pumpkin_core::branching::BrancherEvent;
+use pumpkin_core::branching::SelectionContext;
+use pumpkin_core::variables::DomainId;
+use pumpkin_core::variables::Literal;
+
+use crate::variable_selection::VariableSelector;
+
+/// A [`VariableSelector`] which selects the first variable which is not fixed given the order in
+/// the provided list.
+#[derive(Debug)]
+pub struct InputOrder<Var> {
+    variables: Vec<Var>,
+}
+
+impl<Var: Copy> InputOrder<Var> {
+    pub fn new(variables: &[Var]) -> Self {
+        if variables.is_empty() {
+            warn!("The InputOrder variable selector was not provided with any variables");
+        }
+        InputOrder {
+            variables: variables.to_vec(),
+        }
+    }
+
+    pub fn add_domain(&mut self, var: Var) {
+        self.variables.push(var)
+    }
+}
+
+impl VariableSelector<DomainId> for InputOrder<DomainId> {
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<DomainId> {
+        self.variables
+            .iter()
+            .find(|variable| !context.is_integer_fixed(**variable))
+            .copied()
+    }
+
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+        vec![]
+    }
+}
+
+impl VariableSelector<Literal> for InputOrder<Literal> {
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<Literal> {
+        self.variables
+            .iter()
+            .find(|&variable| !context.is_predicate_assigned(variable.get_true_predicate()))
+            .copied()
+    }
+
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+        vec![]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_core::predicate;
+    use pumpkin_core::testing::TestRandom;
+
+    use super::*;
+
+    #[test]
+    fn test_correctly_selected() {
+        let mut fixture = SelectionContext::create_for_testing(vec![(0, 10), (5, 20)]);
+        let mut test_rng = TestRandom::default();
+        let integer_variables = fixture.get_domains().collect::<Vec<_>>();
+        let mut strategy = InputOrder::new(&integer_variables);
+
+        {
+            let mut context = fixture.context(&mut test_rng);
+
+            let selected = strategy.select_variable(&mut context);
+            assert!(selected.is_some());
+            assert_eq!(selected.unwrap(), integer_variables[0]);
+        }
+
+        let _ = fixture.post_predicate(predicate!(integer_variables[0] == 0));
+
+        let mut context = fixture.context(&mut test_rng);
+
+        let selected = strategy.select_variable(&mut context);
+        assert!(selected.is_some());
+        assert_eq!(selected.unwrap(), integer_variables[1]);
+    }
+
+    #[test]
+    fn fixed_variables_are_not_selected() {
+        let fixture = SelectionContext::create_for_testing(vec![(10, 10), (20, 20)]);
+        let mut test_rng = TestRandom::default();
+        let mut context = fixture.context(&mut test_rng);
+        let integer_variables = context.get_domains().collect::<Vec<_>>();
+
+        let mut strategy = InputOrder::new(&integer_variables);
+        let selected = strategy.select_variable(&mut context);
+        assert!(selected.is_none());
+    }
+}

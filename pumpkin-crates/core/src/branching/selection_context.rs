@@ -3,9 +3,8 @@ use std::fmt::Debug;
 use crate::basic_types::Random;
 #[cfg(doc)]
 use crate::branching::Brancher;
+use crate::branching::testing::SelectionTestContext;
 use crate::engine::Assignments;
-#[cfg(test)]
-use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainGeneratorIterator;
 #[cfg(doc)]
@@ -80,19 +79,12 @@ impl<'a> SelectionContext<'a> {
         self.assignments.get_domains()
     }
 
-    #[cfg(test)]
-    /// Create an ['Assignments'] with the variables having the input bounds.
-    pub(crate) fn create_for_testing(
-        domains: Vec<(i32, i32)>,
-    ) -> (Assignments, NotificationEngine) {
-        let mut assignments = Assignments::default();
-        let mut notification_engine = NotificationEngine::default();
-
-        for (lower_bound, upper_bound) in domains {
-            _ = assignments.grow(lower_bound, upper_bound);
-            notification_engine.grow();
-        }
-
-        (assignments, notification_engine)
+    /// Creates a [`SelectionTestContext`] with the variables having the input bounds; intended for
+    /// testing [`Brancher`] implementations (and their components) without requiring direct access
+    /// to the internal state of the solver.
+    pub fn create_for_testing(
+        domains: impl IntoIterator<Item = (i32, i32)>,
+    ) -> SelectionTestContext {
+        SelectionTestContext::new(domains)
     }
 }

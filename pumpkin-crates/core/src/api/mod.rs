@@ -51,6 +51,7 @@ pub mod variables {
     use crate::Solver;
     pub use crate::engine::Reason;
     pub use crate::engine::variables::AffineView;
+    pub use crate::engine::variables::DomainGeneratorIterator;
     pub use crate::engine::variables::DomainId;
     pub use crate::engine::variables::IntegerVariable;
     pub use crate::engine::variables::Literal;
@@ -104,6 +105,7 @@ pub mod predicates {
     //!
     //! In general, these [`Predicate`]s are used to represent propagations, explanations or
     //! decisions.
+    pub use crate::basic_types::DeletablePredicateIdGenerator;
     pub use crate::basic_types::PredicateIdGenerator;
     pub use crate::basic_types::PropositionalConjunction;
     pub use crate::engine::Lbd;
@@ -147,4 +149,11 @@ pub mod asserts {
     pub use crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION;
     pub use crate::pumpkin_asserts::PUMPKIN_ASSERT_MODERATE;
     pub use crate::pumpkin_asserts::PUMPKIN_ASSERT_SIMPLE;
+}
+
+pub mod testing {
+    //! Testing utilities exposed for use by crates which build upon the [`Solver`].
+    #[cfg(doc)]
+    use crate::Solver;
+    pub use crate::basic_types::testing::TestRandom;
 }

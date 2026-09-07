@@ -137,8 +137,8 @@ where
     }
 }
 
-#[cfg(test)]
-pub(crate) mod tests {
+/// Testing utilities for the [`Random`] trait.
+pub(crate) mod testing {
     use std::cmp::Ordering;
     use std::fmt::Debug;
     use std::ops::Range;
@@ -150,11 +150,11 @@ pub(crate) mod tests {
     /// and returns them in order. If more values are attempted to be generated than are provided
     /// then this will result in panicking.
     #[derive(Debug)]
-    pub(crate) struct TestRandom {
-        pub(crate) usizes: Vec<usize>,
-        pub(crate) integers: Vec<i32>,
-        pub(crate) bools: Vec<bool>,
-        pub(crate) weighted_choice: fn(&[f64]) -> Option<usize>,
+    pub struct TestRandom {
+        pub usizes: Vec<usize>,
+        pub integers: Vec<i32>,
+        pub bools: Vec<bool>,
+        pub weighted_choice: fn(&[f64]) -> Option<usize>,
     }
 
     impl Default for TestRandom {
