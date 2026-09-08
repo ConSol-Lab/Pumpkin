@@ -16,11 +16,6 @@ use crate::propagation::Domains;
 /// The context provided to the [`Brancher`],
 /// it allows the retrieval of domain values of variables and access to methods from a [`Random`]
 /// generator.
-///
-/// For testing [`Brancher`] implementations (and their components) without requiring direct
-/// access to the internal state of the solver, construct a [`State`] directly (e.g. using
-/// [`State::default`] and [`State::new_interval_variable`]) and wrap a reference to it using
-/// [`SelectionContext::new`].
 #[derive(Debug)]
 pub struct SelectionContext<'a> {
     state: &'a State,
