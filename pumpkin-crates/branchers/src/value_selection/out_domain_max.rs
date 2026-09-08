@@ -37,19 +37,14 @@ mod tests {
     #[test]
     fn test_returns_correct_literal() {
         let mut state = State::default();
-        let domain_ids = [(0, 10)]
-            .into_iter()
-            .map(|(lower_bound, upper_bound)| {
-                state.new_interval_variable(lower_bound, upper_bound, None)
-            })
-            .collect::<Vec<_>>();
+        let domain_id = state.new_interval_variable(0, 10, None);
 
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&state, &mut test_rng);
 
         let mut selector = OutDomainMax;
 
-        let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
-        assert_eq!(selected_predicate, predicate!(domain_ids[0] <= 9))
+        let selected_predicate = selector.select_value(&mut context, domain_id);
+        assert_eq!(selected_predicate, predicate!(domain_id <= 9))
     }
 }

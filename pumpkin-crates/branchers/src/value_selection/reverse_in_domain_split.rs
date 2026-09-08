@@ -50,40 +50,30 @@ mod tests {
     #[test]
     fn test_returns_correct_literal() {
         let mut state = State::default();
-        let domain_ids = [(0, 10)]
-            .into_iter()
-            .map(|(lower_bound, upper_bound)| {
-                state.new_interval_variable(lower_bound, upper_bound, None)
-            })
-            .collect::<Vec<_>>();
+        let domain_id = state.new_interval_variable(0, 10, None);
 
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&state, &mut test_rng);
 
         let mut selector = ReverseInDomainSplit;
 
-        let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
+        let selected_predicate = selector.select_value(&mut context, domain_id);
 
-        assert_eq!(selected_predicate, predicate!(domain_ids[0] >= 5))
+        assert_eq!(selected_predicate, predicate!(domain_id >= 5))
     }
 
     #[test]
     fn test_domain_of_size_two() {
         let mut state = State::default();
-        let domain_ids = [(1, 2)]
-            .into_iter()
-            .map(|(lower_bound, upper_bound)| {
-                state.new_interval_variable(lower_bound, upper_bound, None)
-            })
-            .collect::<Vec<_>>();
+        let domain_id = state.new_interval_variable(1, 2, None);
 
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&state, &mut test_rng);
 
         let mut selector = ReverseInDomainSplit;
 
-        let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
+        let selected_predicate = selector.select_value(&mut context, domain_id);
 
-        assert_eq!(selected_predicate, predicate!(domain_ids[0] >= 2))
+        assert_eq!(selected_predicate, predicate!(domain_id >= 2))
     }
 }

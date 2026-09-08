@@ -66,116 +66,86 @@ mod tests {
     #[test]
     fn test_returns_correct_literal() {
         let mut state = State::default();
-        let domain_ids = [(0, 10)]
-            .into_iter()
-            .map(|(lower_bound, upper_bound)| {
-                state.new_interval_variable(lower_bound, upper_bound, None)
-            })
-            .collect::<Vec<_>>();
+        let domain_id = state.new_interval_variable(0, 10, None);
 
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&state, &mut test_rng);
 
         let mut selector = InDomainMiddle;
 
-        let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
-        assert_eq!(selected_predicate, predicate!(domain_ids[0] == 5))
+        let selected_predicate = selector.select_value(&mut context, domain_id);
+        assert_eq!(selected_predicate, predicate!(domain_id == 5))
     }
 
     #[test]
     fn test_returns_correct_literal_no_middle() {
         let mut state = State::default();
-        let domain_ids = [(1, 10)]
-            .into_iter()
-            .map(|(lower_bound, upper_bound)| {
-                state.new_interval_variable(lower_bound, upper_bound, None)
-            })
-            .collect::<Vec<_>>();
+        let domain_id = state.new_interval_variable(1, 10, None);
         let mut selector = InDomainMiddle;
 
         let _ = state
-            .post(predicate!(domain_ids[0] != 5))
+            .post(predicate!(domain_id != 5))
             .expect("Expected posting the predicate to not result in an empty domain");
 
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&state, &mut test_rng);
-        let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
-        assert_eq!(selected_predicate, predicate!(domain_ids[0] == 4))
+        let selected_predicate = selector.select_value(&mut context, domain_id);
+        assert_eq!(selected_predicate, predicate!(domain_id == 4))
     }
 
     #[test]
     fn test_returns_correct_literal_size_two_domain() {
         let mut state = State::default();
-        let domain_ids = [(1, 2)]
-            .into_iter()
-            .map(|(lower_bound, upper_bound)| {
-                state.new_interval_variable(lower_bound, upper_bound, None)
-            })
-            .collect::<Vec<_>>();
+        let domain_id = state.new_interval_variable(1, 2, None);
 
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&state, &mut test_rng);
 
         let mut selector = InDomainMiddle;
 
-        let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
-        assert_eq!(selected_predicate, predicate!(domain_ids[0] == 1))
+        let selected_predicate = selector.select_value(&mut context, domain_id);
+        assert_eq!(selected_predicate, predicate!(domain_id == 1))
     }
 
     #[test]
     fn test_returns_correct_literal_size_three_domain() {
         let mut state = State::default();
-        let domain_ids = [(1, 3)]
-            .into_iter()
-            .map(|(lower_bound, upper_bound)| {
-                state.new_interval_variable(lower_bound, upper_bound, None)
-            })
-            .collect::<Vec<_>>();
+        let domain_id = state.new_interval_variable(1, 3, None);
 
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&state, &mut test_rng);
 
         let mut selector = InDomainMiddle;
 
-        let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
-        assert_eq!(selected_predicate, predicate!(domain_ids[0] == 2))
+        let selected_predicate = selector.select_value(&mut context, domain_id);
+        assert_eq!(selected_predicate, predicate!(domain_id == 2))
     }
 
     #[test]
     fn test_returns_correct_literal_negative_lower_bound() {
         let mut state = State::default();
-        let domain_ids = [(-5, 5)]
-            .into_iter()
-            .map(|(lower_bound, upper_bound)| {
-                state.new_interval_variable(lower_bound, upper_bound, None)
-            })
-            .collect::<Vec<_>>();
+        let domain_id = state.new_interval_variable(-5, 5, None);
 
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&state, &mut test_rng);
 
         let mut selector = InDomainMiddle;
 
-        let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
-        assert_eq!(selected_predicate, predicate!(domain_ids[0] == 0))
+        let selected_predicate = selector.select_value(&mut context, domain_id);
+        assert_eq!(selected_predicate, predicate!(domain_id == 0))
     }
 
     #[test]
     fn test_returns_correct_literal_negative_upper_bound() {
         let mut state = State::default();
-        let domain_ids = [(-10, -5)]
-            .into_iter()
-            .map(|(lower_bound, upper_bound)| {
-                state.new_interval_variable(lower_bound, upper_bound, None)
-            })
-            .collect::<Vec<_>>();
+        let domain_id = state.new_interval_variable(-10, -5, None);
 
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&state, &mut test_rng);
 
         let mut selector = InDomainMiddle;
 
-        let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
-        assert_eq!(selected_predicate, predicate!(domain_ids[0] == -8))
+        let selected_predicate = selector.select_value(&mut context, domain_id);
+        assert_eq!(selected_predicate, predicate!(domain_id == -8))
     }
 }
