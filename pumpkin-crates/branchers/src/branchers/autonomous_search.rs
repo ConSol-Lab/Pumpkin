@@ -364,19 +364,18 @@ mod tests {
     use pumpkin_core::branching::Brancher;
     use pumpkin_core::branching::SelectionContext;
     use pumpkin_core::predicate;
+    use pumpkin_core::state::State;
     use pumpkin_core::testing::TestRandom;
 
     use super::AutonomousSearch;
 
     #[test]
     fn brancher_picks_bumped_values() {
-        let mut test_rng = TestRandom::default();
-        let context = SelectionContext::create_for_testing(vec![(0, 10), (-10, 0)], &mut test_rng);
-        let mut domains = context.get_domains();
-        let x = domains.next().unwrap();
-        let y = domains.next().unwrap();
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, None);
+        let y = state.new_interval_variable(-10, 0, None);
 
-        let mut brancher = AutonomousSearch::default_over_all_variables(context.get_domains());
+        let mut brancher = AutonomousSearch::default_over_all_variables([x, y]);
         brancher.on_appearance_in_conflict_predicate(predicate!(x >= 5));
         brancher.on_appearance_in_conflict_predicate(predicate!(x >= 5));
         brancher.on_appearance_in_conflict_predicate(predicate!(y >= -5));
@@ -386,83 +385,91 @@ mod tests {
 
     #[test]
     fn dormant_values() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, None);
+
+        let mut brancher = AutonomousSearch::default_over_all_variables([x]);
+
         let mut test_rng = TestRandom::default();
-        let mut context = SelectionContext::create_for_testing(vec![(0, 10)], &mut test_rng);
-        let x = context.get_domains().next().unwrap();
-
-        let mut brancher = AutonomousSearch::default_over_all_variables(context.get_domains());
-
         let predicate = predicate!(x >= 5);
         brancher.on_appearance_in_conflict_predicate(predicate);
-        let decision = brancher.next_decision(&mut context);
+        let decision = brancher.next_decision(&mut SelectionContext::new(&state, &mut test_rng));
         assert_eq!(decision, Some(predicate));
 
-        context.new_checkpoint();
+        state.new_checkpoint();
         // Decision Level 1
-        let _ = context.post_predicate(predicate!(x >= 5));
+        let _ = state
+            .post(predicate!(x >= 5))
+            .expect("Expected posting the predicate to not result in an empty domain");
 
-        context.new_checkpoint();
+        state.new_checkpoint();
         // Decision Level 2
-        let _ = context.post_predicate(predicate!(x >= 7));
+        let _ = state
+            .post(predicate!(x >= 7))
+            .expect("Expected posting the predicate to not result in an empty domain");
 
-        context.new_checkpoint();
+        state.new_checkpoint();
         // Decision Level 3
-        let _ = context.post_predicate(predicate!(x >= 10));
+        let _ = state
+            .post(predicate!(x >= 10))
+            .expect("Expected posting the predicate to not result in an empty domain");
 
-        context.new_checkpoint();
+        state.new_checkpoint();
         // We end at decision level 4
 
-        let decision = brancher.next_decision(&mut context);
+        let decision = brancher.next_decision(&mut SelectionContext::new(&state, &mut test_rng));
         assert!(decision.is_none());
         assert!(brancher.dormant_predicates.contains(&predicate));
 
-        context.synchronise(3);
+        let _ = state.restore_to(3);
 
-        let decision = brancher.next_decision(&mut context);
+        let decision = brancher.next_decision(&mut SelectionContext::new(&state, &mut test_rng));
         assert!(decision.is_none());
         assert!(brancher.dormant_predicates.contains(&predicate));
 
-        context.synchronise(0);
-        brancher.synchronise(&mut context);
+        let _ = state.restore_to(0);
+        brancher.synchronise(&mut SelectionContext::new(&state, &mut test_rng));
 
-        let decision = brancher.next_decision(&mut context);
+        let decision = brancher.next_decision(&mut SelectionContext::new(&state, &mut test_rng));
         assert_eq!(decision, Some(predicate));
         assert!(!brancher.dormant_predicates.contains(&predicate));
     }
 
     #[test]
     fn uses_fallback() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, None);
+
+        let mut brancher = AutonomousSearch::default_over_all_variables([x]);
+
         let mut test_rng = TestRandom {
             integers: vec![2],
             usizes: vec![0],
             bools: vec![false],
             weighted_choice: |_| unreachable!(),
         };
-        let mut context = SelectionContext::create_for_testing(vec![(0, 10)], &mut test_rng);
-        let x = context.get_domains().next().unwrap();
-
-        let mut brancher = AutonomousSearch::default_over_all_variables(context.get_domains());
-
-        let result = brancher.next_decision(&mut context);
+        let result = brancher.next_decision(&mut SelectionContext::new(&state, &mut test_rng));
 
         assert_eq!(result, Some(predicate!(x <= 2)));
     }
 
     #[test]
     fn uses_stored_solution() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, None);
+
+        state.new_checkpoint();
+        let _ = state
+            .post(predicate!(x == 7))
+            .expect("Expected posting the predicate to not result in an empty domain");
+
+        let mut brancher = AutonomousSearch::default_over_all_variables([x]);
+
         let mut test_rng = TestRandom::default();
-        let mut context = SelectionContext::create_for_testing(vec![(0, 10)], &mut test_rng);
-        let x = context.get_domains().next().unwrap();
-
-        context.new_checkpoint();
-        let _ = context.post_predicate(predicate!(x == 7));
-
-        let mut brancher = AutonomousSearch::default_over_all_variables(context.get_domains());
-
-        let solution = context.solution();
+        let solution = SelectionContext::new(&state, &mut test_rng).solution();
         brancher.on_solution(solution.as_reference());
 
-        context.synchronise(0);
+        let _ = state.restore_to(0);
 
         assert_eq!(
             predicate!(x >= 5),
@@ -483,7 +490,7 @@ mod tests {
 
         brancher.on_appearance_in_conflict_predicate(predicate!(x >= 5));
 
-        let result = brancher.next_decision(&mut context);
+        let result = brancher.next_decision(&mut SelectionContext::new(&state, &mut test_rng));
         assert_eq!(result, Some(predicate!(x >= 5)));
     }
 }

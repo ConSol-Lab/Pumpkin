@@ -70,6 +70,7 @@ impl VariableSelector<DomainId> for RandomSelector {
 mod tests {
     use pumpkin_core::branching::SelectionContext;
     use pumpkin_core::predicate;
+    use pumpkin_core::state::State;
     use pumpkin_core::testing::TestRandom;
 
     use crate::variable_selection::RandomSelector;
@@ -77,15 +78,20 @@ mod tests {
 
     #[test]
     fn test_selects_randomly() {
+        let mut state = State::default();
+        let integer_variables = [(0, 10), (5, 20), (1, 3)]
+            .into_iter()
+            .map(|(lower_bound, upper_bound)| {
+                state.new_interval_variable(lower_bound, upper_bound, None)
+            })
+            .collect::<Vec<_>>();
         let mut test_rng = TestRandom {
             usizes: vec![1],
             ..Default::default()
         };
-        let mut context =
-            SelectionContext::create_for_testing(vec![(0, 10), (5, 20), (1, 3)], &mut test_rng);
-        let integer_variables = context.get_domains().collect::<Vec<_>>();
-        let mut strategy = RandomSelector::new(context.get_domains());
+        let mut strategy = RandomSelector::new(integer_variables.iter().copied());
 
+        let mut context = SelectionContext::new(&state, &mut test_rng);
         let selected = strategy.select_variable(&mut context);
         assert!(selected.is_some());
         assert_eq!(selected.unwrap(), integer_variables[1]);
@@ -93,15 +99,20 @@ mod tests {
 
     #[test]
     fn test_selects_randomly_not_unfixed() {
+        let mut state = State::default();
+        let integer_variables = [(0, 10), (5, 5), (1, 3)]
+            .into_iter()
+            .map(|(lower_bound, upper_bound)| {
+                state.new_interval_variable(lower_bound, upper_bound, None)
+            })
+            .collect::<Vec<_>>();
         let mut test_rng = TestRandom {
             usizes: vec![1, 0],
             ..Default::default()
         };
-        let mut context =
-            SelectionContext::create_for_testing(vec![(0, 10), (5, 5), (1, 3)], &mut test_rng);
-        let integer_variables = context.get_domains().collect::<Vec<_>>();
-        let mut strategy = RandomSelector::new(context.get_domains());
+        let mut strategy = RandomSelector::new(integer_variables.iter().copied());
 
+        let mut context = SelectionContext::new(&state, &mut test_rng);
         let selected = strategy.select_variable(&mut context);
         assert!(selected.is_some());
         assert_eq!(selected.unwrap(), integer_variables[0]);
@@ -109,45 +120,60 @@ mod tests {
 
     #[test]
     fn test_select_nothing_if_all_fixed() {
+        let mut state = State::default();
+        let integer_variables = [(0, 0), (5, 5), (1, 1)]
+            .into_iter()
+            .map(|(lower_bound, upper_bound)| {
+                state.new_interval_variable(lower_bound, upper_bound, None)
+            })
+            .collect::<Vec<_>>();
         let mut test_rng = TestRandom {
             usizes: vec![1, 0, 0],
             ..Default::default()
         };
-        let mut context =
-            SelectionContext::create_for_testing(vec![(0, 0), (5, 5), (1, 1)], &mut test_rng);
-        let mut strategy = RandomSelector::new(context.get_domains());
+        let mut strategy = RandomSelector::new(integer_variables);
 
+        let mut context = SelectionContext::new(&state, &mut test_rng);
         let selected = strategy.select_variable(&mut context);
         assert!(selected.is_none());
     }
 
     #[test]
     fn test_select_unfixed_variable_after_fixing() {
+        let mut state = State::default();
+        let integer_variables = [(0, 0), (5, 7), (1, 1)]
+            .into_iter()
+            .map(|(lower_bound, upper_bound)| {
+                state.new_interval_variable(lower_bound, upper_bound, None)
+            })
+            .collect::<Vec<_>>();
         let mut test_rng = TestRandom {
             usizes: vec![2, 0, 0, 0, 0],
             ..Default::default()
         };
-        let mut context =
-            SelectionContext::create_for_testing(vec![(0, 0), (5, 7), (1, 1)], &mut test_rng);
-        let integer_variables = context.get_domains().collect::<Vec<_>>();
-        let mut strategy = RandomSelector::new(context.get_domains());
+        let mut strategy = RandomSelector::new(integer_variables.iter().copied());
 
         {
+            let mut context = SelectionContext::new(&state, &mut test_rng);
             let selected = strategy.select_variable(&mut context);
             assert!(selected.is_some());
             assert_eq!(selected.unwrap(), integer_variables[1]);
         }
 
-        context.new_checkpoint();
-        let _ = context.post_predicate(predicate!(integer_variables[1] >= 7));
+        state.new_checkpoint();
+        let _ = state
+            .post(predicate!(integer_variables[1] >= 7))
+            .expect("Expected posting the predicate to not result in an empty domain");
 
         {
+            let mut context = SelectionContext::new(&state, &mut test_rng);
             let selected = strategy.select_variable(&mut context);
             assert!(selected.is_none());
         }
 
-        context.synchronise(0);
+        let _ = state.restore_to(0);
         strategy.on_unassign_integer(integer_variables[1], 7);
+        let mut context = SelectionContext::new(&state, &mut test_rng);
         let selected = strategy.select_variable(&mut context);
         assert!(selected.is_some());
         assert_eq!(selected.unwrap(), integer_variables[1]);

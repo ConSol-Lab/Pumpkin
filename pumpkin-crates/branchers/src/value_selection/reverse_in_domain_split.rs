@@ -42,15 +42,23 @@ impl<Var: IntegerVariable + Copy> ValueSelector<Var> for ReverseInDomainSplit {
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_core::state::State;
     use pumpkin_core::testing::TestRandom;
 
     use super::*;
 
     #[test]
     fn test_returns_correct_literal() {
+        let mut state = State::default();
+        let domain_ids = [(0, 10)]
+            .into_iter()
+            .map(|(lower_bound, upper_bound)| {
+                state.new_interval_variable(lower_bound, upper_bound, None)
+            })
+            .collect::<Vec<_>>();
+
         let mut test_rng = TestRandom::default();
-        let mut context = SelectionContext::create_for_testing(vec![(0, 10)], &mut test_rng);
-        let domain_ids = context.get_domains().collect::<Vec<_>>();
+        let mut context = SelectionContext::new(&state, &mut test_rng);
 
         let mut selector = ReverseInDomainSplit;
 
@@ -61,9 +69,16 @@ mod tests {
 
     #[test]
     fn test_domain_of_size_two() {
+        let mut state = State::default();
+        let domain_ids = [(1, 2)]
+            .into_iter()
+            .map(|(lower_bound, upper_bound)| {
+                state.new_interval_variable(lower_bound, upper_bound, None)
+            })
+            .collect::<Vec<_>>();
+
         let mut test_rng = TestRandom::default();
-        let mut context = SelectionContext::create_for_testing(vec![(1, 2)], &mut test_rng);
-        let domain_ids = context.get_domains().collect::<Vec<_>>();
+        let mut context = SelectionContext::new(&state, &mut test_rng);
 
         let mut selector = ReverseInDomainSplit;
 

@@ -32,6 +32,7 @@ impl ValueSelector<DomainId> for OutDomainMedian {
 mod tests {
     use pumpkin_core::branching::SelectionContext;
     use pumpkin_core::predicate;
+    use pumpkin_core::state::State;
     use pumpkin_core::testing::TestRandom;
 
     use crate::value_selection::OutDomainMedian;
@@ -39,9 +40,16 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal() {
+        let mut state = State::default();
+        let domain_ids = [(0, 10)]
+            .into_iter()
+            .map(|(lower_bound, upper_bound)| {
+                state.new_interval_variable(lower_bound, upper_bound, None)
+            })
+            .collect::<Vec<_>>();
+
         let mut test_rng = TestRandom::default();
-        let mut context = SelectionContext::create_for_testing(vec![(0, 10)], &mut test_rng);
-        let domain_ids = context.get_domains().collect::<Vec<_>>();
+        let mut context = SelectionContext::new(&state, &mut test_rng);
 
         let mut selector = OutDomainMedian;
 
@@ -51,14 +59,21 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal_no_median() {
-        let mut test_rng = TestRandom::default();
-        let mut context = SelectionContext::create_for_testing(vec![(1, 10)], &mut test_rng);
-        let domain_ids = context.get_domains().collect::<Vec<_>>();
-
+        let mut state = State::default();
+        let domain_ids = [(1, 10)]
+            .into_iter()
+            .map(|(lower_bound, upper_bound)| {
+                state.new_interval_variable(lower_bound, upper_bound, None)
+            })
+            .collect::<Vec<_>>();
         let mut selector = OutDomainMedian;
 
-        let _ = context.post_predicate(predicate!(domain_ids[0] != 9));
+        let _ = state
+            .post(predicate!(domain_ids[0] != 9))
+            .expect("Expected posting the predicate to not result in an empty domain");
 
+        let mut test_rng = TestRandom::default();
+        let mut context = SelectionContext::new(&state, &mut test_rng);
         let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
         assert_eq!(selected_predicate, predicate!(domain_ids[0] != 5))
     }

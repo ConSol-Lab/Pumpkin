@@ -88,6 +88,7 @@ mod tests {
     use pumpkin_core::Solver;
     use pumpkin_core::branching::Brancher;
     use pumpkin_core::branching::SelectionContext;
+    use pumpkin_core::state::State;
     use pumpkin_core::testing::TestRandom;
 
     use crate::DefaultBrancher;
@@ -118,8 +119,9 @@ mod tests {
 
     #[test]
     fn test_switch_after_first_solution() {
+        let state = State::default();
         let mut test_rng = TestRandom::default();
-        let mut context = SelectionContext::create_for_testing(vec![], &mut test_rng);
+        let mut context = SelectionContext::new(&state, &mut test_rng);
         let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
@@ -156,8 +158,9 @@ mod tests {
 
     #[test]
     fn test_every_restart_until_first_solution() {
+        let state = State::default();
         let mut test_rng = TestRandom::default();
-        let mut context = SelectionContext::create_for_testing(vec![], &mut test_rng);
+        let mut context = SelectionContext::new(&state, &mut test_rng);
         let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,

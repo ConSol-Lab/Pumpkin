@@ -57,6 +57,7 @@ mod tests {
 
     use pumpkin_core::branching::SelectionContext;
     use pumpkin_core::predicate;
+    use pumpkin_core::state::State;
     use pumpkin_core::testing::TestRandom;
 
     use crate::value_selection::RandomSplitter;
@@ -64,13 +65,20 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal() {
+        let mut state = State::default();
+        let domain_ids = [(0, 10)]
+            .into_iter()
+            .map(|(lower_bound, upper_bound)| {
+                state.new_interval_variable(lower_bound, upper_bound, None)
+            })
+            .collect::<Vec<_>>();
+
         let mut test_random = TestRandom {
             integers: vec![2],
             bools: vec![true],
             ..Default::default()
         };
-        let mut context = SelectionContext::create_for_testing(vec![(0, 10)], &mut test_random);
-        let domain_ids = context.get_domains().collect::<Vec<_>>();
+        let mut context = SelectionContext::new(&state, &mut test_random);
 
         let mut selector = RandomSplitter;
 

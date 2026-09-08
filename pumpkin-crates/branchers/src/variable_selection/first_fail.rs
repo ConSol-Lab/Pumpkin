@@ -83,26 +83,35 @@ where
 #[cfg(test)]
 mod tests {
     use pumpkin_core::predicate;
+    use pumpkin_core::state::State;
     use pumpkin_core::testing::TestRandom;
 
     use super::*;
 
     #[test]
     fn test_correctly_selected() {
+        let mut state = State::default();
+        let integer_variables = [(0, 10), (5, 20)]
+            .into_iter()
+            .map(|(lower_bound, upper_bound)| {
+                state.new_interval_variable(lower_bound, upper_bound, None)
+            })
+            .collect::<Vec<_>>();
         let mut test_rng = TestRandom::default();
-        let mut context =
-            SelectionContext::create_for_testing(vec![(0, 10), (5, 20)], &mut test_rng);
-        let integer_variables = context.get_domains().collect::<Vec<_>>();
         let mut strategy = FirstFail::new(&integer_variables);
 
         {
+            let mut context = SelectionContext::new(&state, &mut test_rng);
             let selected = strategy.select_variable(&mut context);
             assert!(selected.is_some());
             assert_eq!(selected.unwrap(), integer_variables[0]);
         }
 
-        let _ = context.post_predicate(predicate!(integer_variables[1] >= 15));
+        let _ = state
+            .post(predicate!(integer_variables[1] >= 15))
+            .expect("Expected posting the predicate to not result in an empty domain");
 
+        let mut context = SelectionContext::new(&state, &mut test_rng);
         let selected = strategy.select_variable(&mut context);
         assert!(selected.is_some());
         assert_eq!(selected.unwrap(), integer_variables[1]);
@@ -110,10 +119,16 @@ mod tests {
 
     #[test]
     fn fixed_variables_are_not_selected() {
+        let mut state = State::default();
+        let integer_variables = [(10, 10), (20, 20)]
+            .into_iter()
+            .map(|(lower_bound, upper_bound)| {
+                state.new_interval_variable(lower_bound, upper_bound, None)
+            })
+            .collect::<Vec<_>>();
+
         let mut test_rng = TestRandom::default();
-        let mut context =
-            SelectionContext::create_for_testing(vec![(10, 10), (20, 20)], &mut test_rng);
-        let integer_variables = context.get_domains().collect::<Vec<_>>();
+        let mut context = SelectionContext::new(&state, &mut test_rng);
 
         let mut strategy = FirstFail::new(&integer_variables);
         let selected = strategy.select_variable(&mut context);
