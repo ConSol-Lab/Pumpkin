@@ -55,6 +55,7 @@ impl AlternatingStrategy for EveryXSolutions {
 mod tests {
     use pumpkin_core::Solver;
     use pumpkin_core::branching::Brancher;
+    use pumpkin_core::results::Solution;
 
     use crate::DefaultBrancher;
     use crate::branchers::alternating::alternating_brancher::AlternatingBrancher;
@@ -69,16 +70,16 @@ mod tests {
             EveryXSolutions::new(2),
         );
 
-        let empty_solution_reference = solver.get_solution_reference();
+        let empty_solution = Solution::default();
 
         assert!(!brancher.is_using_default_brancher());
-        brancher.on_solution(empty_solution_reference);
+        brancher.on_solution(empty_solution.as_reference());
         assert!(!brancher.is_using_default_brancher());
-        brancher.on_solution(empty_solution_reference);
+        brancher.on_solution(empty_solution.as_reference());
         assert!(brancher.is_using_default_brancher());
-        brancher.on_solution(empty_solution_reference);
+        brancher.on_solution(empty_solution.as_reference());
         assert!(brancher.is_using_default_brancher());
-        brancher.on_solution(empty_solution_reference);
+        brancher.on_solution(empty_solution.as_reference());
         assert!(!brancher.is_using_default_brancher());
     }
 }

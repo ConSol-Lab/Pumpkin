@@ -88,6 +88,7 @@ mod tests {
     use pumpkin_core::Solver;
     use pumpkin_core::branching::Brancher;
     use pumpkin_core::branching::SelectionContext;
+    use pumpkin_core::results::Solution;
     use pumpkin_core::state::State;
     use pumpkin_core::testing::TestRandom;
 
@@ -106,14 +107,14 @@ mod tests {
             UntilSolution::new(OtherOnly),
         );
 
-        let empty_solution_reference = solver.get_solution_reference();
+        let empty_solution = Solution::default();
 
         assert!(!brancher.is_using_default_brancher());
-        brancher.on_solution(empty_solution_reference);
+        brancher.on_solution(empty_solution.as_reference());
         assert!(brancher.is_using_default_brancher());
-        brancher.on_solution(empty_solution_reference);
+        brancher.on_solution(empty_solution.as_reference());
         assert!(brancher.is_using_default_brancher());
-        brancher.on_solution(empty_solution_reference);
+        brancher.on_solution(empty_solution.as_reference());
         assert!(brancher.is_using_default_brancher());
     }
 

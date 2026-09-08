@@ -143,7 +143,10 @@ impl Solver {
         log_statistic_postfix();
     }
 
-    pub fn get_solution_reference(&self) -> SolutionReference<'_> {
+    /// Internal accessor used by [`Satisfiable::solution`](crate::results::Satisfiable::solution);
+    /// a [`SolutionReference`] should only be obtained through the results of
+    /// [`Solver::satisfy`]/[`Solver::satisfy_under_assumptions`]/[`Solver::optimise`].
+    pub(crate) fn get_solution_reference(&self) -> SolutionReference<'_> {
         self.satisfaction_solver.get_solution_reference()
     }
 

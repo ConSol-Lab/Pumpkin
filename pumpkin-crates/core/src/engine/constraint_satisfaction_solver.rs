@@ -198,7 +198,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     /// This is a temporary accessor to help refactoring.
-    pub fn get_solution_reference(&self) -> SolutionReference<'_> {
+    pub(crate) fn get_solution_reference(&self) -> SolutionReference<'_> {
         self.state.get_solution_reference()
     }
 
