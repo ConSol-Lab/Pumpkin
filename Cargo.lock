@@ -1070,6 +1070,7 @@ dependencies = [
  "flatzinc",
  "log",
  "pumpkin-checker",
+ "pumpkin-checking",
  "pumpkin-conflict-resolvers",
  "pumpkin-constraints",
  "pumpkin-core",
