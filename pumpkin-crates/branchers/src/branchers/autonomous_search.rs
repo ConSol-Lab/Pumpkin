@@ -1,4 +1,3 @@
-#[cfg(doc)]
 use pumpkin_core::Solver;
 use pumpkin_core::branching::Brancher;
 use pumpkin_core::branching::BrancherEvent;
@@ -124,9 +123,11 @@ impl DefaultBrancher {
     ///
     /// The `domains` are the variables which are considered by the backup
     /// [`RandomSelector`]; typically this is [`Solver::get_domains`].
-    pub fn default_over_all_variables(
-        domains: impl IntoIterator<Item = DomainId>,
-    ) -> DefaultBrancher {
+    pub fn default_over_all_variables(solver: &Solver) -> DefaultBrancher {
+        Self::new_from_domains(solver.get_domains())
+    }
+
+    pub(crate) fn new_from_domains(domains: impl IntoIterator<Item = DomainId>) -> DefaultBrancher {
         AutonomousSearch {
             predicate_id_info: DeletablePredicateIdGenerator::default(),
             heap: KeyValueHeap::default(),
@@ -375,7 +376,7 @@ mod tests {
         let x = state.new_interval_variable(0, 10, None);
         let y = state.new_interval_variable(-10, 0, None);
 
-        let mut brancher = AutonomousSearch::default_over_all_variables([x, y]);
+        let mut brancher = AutonomousSearch::new_from_domains([x, y]);
         brancher.on_appearance_in_conflict_predicate(predicate!(x >= 5));
         brancher.on_appearance_in_conflict_predicate(predicate!(x >= 5));
         brancher.on_appearance_in_conflict_predicate(predicate!(y >= -5));
@@ -388,7 +389,7 @@ mod tests {
         let mut state = State::default();
         let x = state.new_interval_variable(0, 10, None);
 
-        let mut brancher = AutonomousSearch::default_over_all_variables([x]);
+        let mut brancher = AutonomousSearch::new_from_domains([x]);
 
         let mut test_rng = TestRandom::default();
         let predicate = predicate!(x >= 5);
@@ -440,7 +441,7 @@ mod tests {
         let mut state = State::default();
         let x = state.new_interval_variable(0, 10, None);
 
-        let mut brancher = AutonomousSearch::default_over_all_variables([x]);
+        let mut brancher = AutonomousSearch::new_from_domains([x]);
 
         let mut test_rng = TestRandom {
             integers: vec![2],
@@ -463,7 +464,7 @@ mod tests {
             .post(predicate!(x == 7))
             .expect("Expected posting the predicate to not result in an empty domain");
 
-        let mut brancher = AutonomousSearch::default_over_all_variables([x]);
+        let mut brancher = AutonomousSearch::new_from_domains([x]);
 
         let mut test_rng = TestRandom::default();
         let solution = SelectionContext::new(&state, &mut test_rng).solution();

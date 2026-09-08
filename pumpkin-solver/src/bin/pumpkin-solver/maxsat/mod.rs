@@ -33,7 +33,7 @@ pub(crate) fn wcnf_problem(
         ..
     } = parse_wcnf::<SolverDimacsSink>(instance_file, SolverArgs::new(solver_options))?;
 
-    let brancher = DefaultBrancher::default_over_all_variables(solver.get_domains());
+    let brancher = DefaultBrancher::default_over_all_variables(&solver);
     let mut termination = time_limit.map(TimeBudget::starting_now);
     let resolver = ResolutionResolver::default();
 

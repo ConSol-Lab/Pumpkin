@@ -97,9 +97,9 @@ mod tests {
         let state = State::default();
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&state, &mut test_rng);
-        let mut brancher = AlternatingBrancher::new(
+        let mut brancher = AlternatingBrancher::new_from_domains(
             state.get_domain_ids(),
-            DefaultBrancher::default_over_all_variables(state.get_domain_ids()),
+            DefaultBrancher::new_from_domains(state.get_domain_ids()),
             EveryXRestarts::new(1),
         );
 
@@ -124,9 +124,9 @@ mod tests {
         let state = State::default();
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&state, &mut test_rng);
-        let mut brancher = AlternatingBrancher::new(
+        let mut brancher = AlternatingBrancher::new_from_domains(
             state.get_domain_ids(),
-            DefaultBrancher::default_over_all_variables(state.get_domain_ids()),
+            DefaultBrancher::new_from_domains(state.get_domain_ids()),
             EveryXRestarts::new(2),
         );
 

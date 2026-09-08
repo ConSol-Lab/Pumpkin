@@ -149,7 +149,7 @@ pub(crate) fn solve<R: ConflictResolver>(
             // If there is an objective, then we use the provided search until the first solution,
             // and then we switch to default search
             DynamicBrancher::new(vec![Box::new(AlternatingBrancher::new(
-                solver.get_domains(),
+                &solver,
                 instance.search.expect("Expected a search to be defined"),
                 UntilSolution::new(EveryXRestarts::new(1)),
             ))])
@@ -157,7 +157,7 @@ pub(crate) fn solve<R: ConflictResolver>(
             // If there is no objective, then we alternate between the provided strategy and the
             // default search every restart
             DynamicBrancher::new(vec![Box::new(AlternatingBrancher::new(
-                solver.get_domains(),
+                &solver,
                 instance.search.expect("Expected a search to be defined"),
                 EveryXRestarts::new(1),
             ))])

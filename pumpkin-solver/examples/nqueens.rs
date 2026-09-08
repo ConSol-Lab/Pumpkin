@@ -88,7 +88,7 @@ fn main() {
         .add_constraint(pumpkin_constraints::all_different(diag2, c3_tag))
         .post();
 
-    let mut brancher = DefaultBrancher::default_over_all_variables(solver.get_domains());
+    let mut brancher = DefaultBrancher::default_over_all_variables(&solver);
     let mut resolver = ResolutionResolver::default();
 
     match solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver) {

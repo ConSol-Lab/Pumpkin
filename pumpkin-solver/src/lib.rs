@@ -73,7 +73,7 @@
 //! // We create a termination condition which allows the solver to run indefinitely
 //! let mut termination = Indefinite;
 //! // And we create a search strategy (in this case, simply the default)
-//! let mut brancher = DefaultBrancher::default_over_all_variables(solver.get_domains());
+//! let mut brancher = DefaultBrancher::default_over_all_variables(&solver);
 //! // Finally, we create a default conflict resolver
 //! let mut resolver = ResolutionResolver::default();
 //! ```
@@ -96,7 +96,7 @@
 //! # let c1 = solver.new_constraint_tag();
 //! # solver.add_constraint(pumpkin_constraints::equals(vec![x, y, z], 17, c1)).post();
 //! # let mut termination = Indefinite;
-//! # let mut brancher = DefaultBrancher::default_over_all_variables(solver.get_domains());
+//! # let mut brancher = DefaultBrancher::default_over_all_variables(&solver);
 //! # let mut resolver = ResolutionResolver::default();
 //! // Then we find a solution to the problem
 //! let result = solver.satisfy(&mut brancher, &mut termination, &mut resolver);
@@ -159,7 +159,7 @@
 //! # solver.add_constraint(pumpkin_constraints::equals(vec![x, y, z], 17, c1)).post();
 //! # solver.add_constraint(pumpkin_constraints::maximum(vec![x, y, z], objective, c1)).post();
 //! # let mut termination = Indefinite;
-//! # let mut brancher = DefaultBrancher::default_over_all_variables(solver.get_domains());
+//! # let mut brancher = DefaultBrancher::default_over_all_variables(&solver);
 //! # let mut resolver = ResolutionResolver::default();
 //!
 //! let callback = |_: &Solver, _: SolutionReference, _: &DefaultBrancher, _: &ResolutionResolver| -> ControlFlow<()> {
@@ -224,7 +224,7 @@
 //! // We create a termination condition which allows the solver to run indefinitely
 //! let mut termination = Indefinite;
 //! // And we create a search strategy (in this case, simply the default)
-//! let mut brancher = DefaultBrancher::default_over_all_variables(solver.get_domains());
+//! let mut brancher = DefaultBrancher::default_over_all_variables(&solver);
 //! // Finally, we create a default conflict resolver
 //! let mut resolver = ResolutionResolver::default();
 //!
@@ -302,7 +302,7 @@
 //! // We create a termination condition which allows the solver to run indefinitely
 //! let mut termination = Indefinite;
 //! // And we create a search strategy (in this case, simply the default)
-//! let mut brancher = DefaultBrancher::default_over_all_variables(solver.get_domains());
+//! let mut brancher = DefaultBrancher::default_over_all_variables(&solver);
 //! // Finally, we create a default conflict resolver
 //! let mut resolver = ResolutionResolver::default();
 //!

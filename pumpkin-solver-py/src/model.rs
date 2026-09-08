@@ -89,9 +89,7 @@ impl Model {
         };
 
         let solver = Solver::with_options(options);
-        let brancher = PythonBrancher::new(DefaultBrancher::default_over_all_variables(
-            solver.get_domains(),
-        ));
+        let brancher = PythonBrancher::new(DefaultBrancher::default_over_all_variables(&solver));
 
         Ok(Model { solver, brancher })
     }

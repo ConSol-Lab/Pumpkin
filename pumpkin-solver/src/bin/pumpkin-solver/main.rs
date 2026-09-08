@@ -742,7 +742,7 @@ fn cnf_problem(
 
     let mut termination =
         TimeBudget::starting_now(time_limit.unwrap_or(Duration::from_secs(u64::MAX)));
-    let mut brancher = DefaultBrancher::default_over_all_variables(solver.get_domains());
+    let mut brancher = DefaultBrancher::default_over_all_variables(&solver);
     let mut resolver = ResolutionResolver::default();
 
     match solver.satisfy(&mut brancher, &mut termination, &mut resolver) {

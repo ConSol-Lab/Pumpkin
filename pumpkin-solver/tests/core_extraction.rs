@@ -31,7 +31,7 @@ fn basic_core_extraction() {
     // We create a termination condition which allows the solver to run indefinitely
     let mut termination = Indefinite;
     // And we create a search strategy (in this case, simply the default)
-    let mut brancher = DefaultBrancher::default_over_all_variables(solver.get_domains());
+    let mut brancher = DefaultBrancher::default_over_all_variables(&solver);
 
     let mut resolver = ResolutionResolver::default();
 

@@ -1,11 +1,14 @@
 //! A [`Brancher`] which alternates between the [`DefaultBrancher`] and another [`Brancher`] based
 //! on the strategy specified in [`AlternatingStrategy`].
 
+use pumpkin_core::Solver;
 use pumpkin_core::branching::Brancher;
 use pumpkin_core::branching::BrancherEvent;
 use pumpkin_core::branching::SelectionContext;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::results::SolutionReference;
+#[cfg(doc)]
+use pumpkin_core::state::State;
 use pumpkin_core::statistics::StatisticLogger;
 use pumpkin_core::variables::DomainId;
 
@@ -34,14 +37,19 @@ pub struct AlternatingBrancher<OtherBrancher, Strategy> {
 impl<Strategy: AlternatingStrategy, OtherBrancher: Brancher>
     AlternatingBrancher<OtherBrancher, Strategy>
 {
-    pub fn new(
+    pub fn new(solver: &Solver, other_brancher: OtherBrancher, strategy: Strategy) -> Self {
+        Self::new_from_domains(solver.get_domains(), other_brancher, strategy)
+    }
+
+    /// Creates a new instance considering all of the provided `domains`.
+    pub(crate) fn new_from_domains(
         domains: impl IntoIterator<Item = DomainId>,
         other_brancher: OtherBrancher,
         strategy: Strategy,
     ) -> Self {
         Self {
             other_brancher,
-            default_brancher: DefaultBrancher::default_over_all_variables(domains),
+            default_brancher: DefaultBrancher::new_from_domains(domains),
             strategy,
         }
     }

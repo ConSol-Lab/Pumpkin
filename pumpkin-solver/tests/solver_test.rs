@@ -35,7 +35,7 @@ fn proof_with_reified_literals() {
         ))
         .post();
 
-    let mut brancher = DefaultBrancher::default_over_all_variables(solver.get_domains());
+    let mut brancher = DefaultBrancher::default_over_all_variables(&solver);
     let mut resolver = ResolutionResolver::default();
 
     let result = solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver);
@@ -70,7 +70,7 @@ fn proof_with_equality_unit_nogood_step() {
         ))
         .post();
 
-    let mut brancher = DefaultBrancher::default_over_all_variables(solver.get_domains());
+    let mut brancher = DefaultBrancher::default_over_all_variables(&solver);
     let mut resolver = ResolutionResolver::default();
 
     let result = solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver);

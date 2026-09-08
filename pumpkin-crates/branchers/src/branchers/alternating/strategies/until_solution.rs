@@ -101,8 +101,8 @@ mod tests {
     fn test_switch_to_default_after_first_solution() {
         let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
-            solver.get_domains(),
-            DefaultBrancher::default_over_all_variables(solver.get_domains()),
+            &solver,
+            DefaultBrancher::default_over_all_variables(&solver),
             UntilSolution::new(OtherOnly),
         );
 
@@ -122,9 +122,9 @@ mod tests {
         let state = State::default();
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&state, &mut test_rng);
-        let mut brancher = AlternatingBrancher::new(
+        let mut brancher = AlternatingBrancher::new_from_domains(
             state.get_domain_ids(),
-            DefaultBrancher::default_over_all_variables(state.get_domain_ids()),
+            DefaultBrancher::new_from_domains(state.get_domain_ids()),
             UntilSolution::new(OtherOnly),
         );
 
@@ -160,9 +160,9 @@ mod tests {
         let state = State::default();
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&state, &mut test_rng);
-        let mut brancher = AlternatingBrancher::new(
+        let mut brancher = AlternatingBrancher::new_from_domains(
             state.get_domain_ids(),
-            DefaultBrancher::default_over_all_variables(state.get_domain_ids()),
+            DefaultBrancher::new_from_domains(state.get_domain_ids()),
             UntilSolution::new(EveryXRestarts::new(1)),
         );
 

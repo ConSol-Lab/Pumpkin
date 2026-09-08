@@ -212,7 +212,7 @@ fn create_from_search_strategy(
             None => {}
         }
         brancher.add_brancher(Box::new(DefaultBrancher::default_over_all_variables(
-            context.solver.get_domains(),
+            context.solver,
         )));
     }
 
