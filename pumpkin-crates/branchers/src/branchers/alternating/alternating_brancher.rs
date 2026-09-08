@@ -1,7 +1,6 @@
 //! A [`Brancher`] which alternates between the [`DefaultBrancher`] and another [`Brancher`] based
 //! on the strategy specified in [`AlternatingStrategy`].
 
-use pumpkin_core::Solver;
 use pumpkin_core::branching::Brancher;
 use pumpkin_core::branching::BrancherEvent;
 use pumpkin_core::branching::SelectionContext;
@@ -35,10 +34,14 @@ pub struct AlternatingBrancher<OtherBrancher, Strategy> {
 impl<Strategy: AlternatingStrategy, OtherBrancher: Brancher>
     AlternatingBrancher<OtherBrancher, Strategy>
 {
-    pub fn new(solver: &Solver, other_brancher: OtherBrancher, strategy: Strategy) -> Self {
+    pub fn new(
+        domains: impl IntoIterator<Item = DomainId>,
+        other_brancher: OtherBrancher,
+        strategy: Strategy,
+    ) -> Self {
         Self {
             other_brancher,
-            default_brancher: DefaultBrancher::default_over_all_variables(solver.get_domains()),
+            default_brancher: DefaultBrancher::default_over_all_variables(domains),
             strategy,
         }
     }

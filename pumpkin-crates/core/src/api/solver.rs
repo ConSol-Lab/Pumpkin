@@ -597,7 +597,7 @@ impl Solver {
     /// This can be used to implement a [`Brancher`] which considers (a subset of) the variables of
     /// the [`Solver`].
     pub fn get_domains(&self) -> DomainGeneratorIterator {
-        self.satisfaction_solver.assignments().get_domains()
+        self.satisfaction_solver.get_domain_ids()
     }
 }
 

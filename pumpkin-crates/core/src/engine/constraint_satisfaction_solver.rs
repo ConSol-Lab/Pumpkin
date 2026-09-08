@@ -32,7 +32,6 @@ use crate::conflict_resolving::ConflictResolver;
 use crate::containers::HashMap;
 use crate::containers::HashSet;
 use crate::declare_inference_label;
-use crate::engine::Assignments;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::engine::State;
@@ -58,6 +57,7 @@ use crate::pumpkin_assert_simple;
 use crate::state::CurrentNogood;
 use crate::statistics::StatisticLogger;
 use crate::statistics::statistic_logging::should_log_statistics;
+use crate::variables::DomainGeneratorIterator;
 use crate::variables::DomainId;
 
 /// A solver which attempts to find a solution to a Constraint Satisfaction Problem (CSP) using
@@ -192,8 +192,9 @@ impl Default for SatisfactionSolverOptions {
 }
 
 impl ConstraintSatisfactionSolver {
-    pub(crate) fn assignments(&self) -> &Assignments {
-        &self.state.assignments
+    /// Returns an iterator over the [`DomainId`]s which are currently defined.
+    pub(crate) fn get_domain_ids(&self) -> DomainGeneratorIterator {
+        self.state.get_domain_ids()
     }
 
     /// This is a temporary accessor to help refactoring.

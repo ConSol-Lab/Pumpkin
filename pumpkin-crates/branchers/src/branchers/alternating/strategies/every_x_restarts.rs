@@ -83,7 +83,6 @@ impl AlternatingStrategy for EveryXRestarts {
 
 #[cfg(test)]
 mod tests {
-    use pumpkin_core::Solver;
     use pumpkin_core::branching::Brancher;
     use pumpkin_core::branching::SelectionContext;
     use pumpkin_core::state::State;
@@ -98,10 +97,9 @@ mod tests {
         let state = State::default();
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&state, &mut test_rng);
-        let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
-            &solver,
-            DefaultBrancher::default_over_all_variables(solver.get_domains()),
+            state.get_domain_ids(),
+            DefaultBrancher::default_over_all_variables(state.get_domain_ids()),
             EveryXRestarts::new(1),
         );
 
@@ -126,10 +124,9 @@ mod tests {
         let state = State::default();
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&state, &mut test_rng);
-        let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
-            &solver,
-            DefaultBrancher::default_over_all_variables(solver.get_domains()),
+            state.get_domain_ids(),
+            DefaultBrancher::default_over_all_variables(state.get_domain_ids()),
             EveryXRestarts::new(2),
         );
 

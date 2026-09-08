@@ -64,7 +64,7 @@ mod tests {
     fn test_every_other_solution() {
         let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
-            &solver,
+            solver.get_domains(),
             DefaultBrancher::default_over_all_variables(solver.get_domains()),
             EveryXSolutions::new(2),
         );
