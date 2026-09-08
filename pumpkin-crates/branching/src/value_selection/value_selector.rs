@@ -9,7 +9,7 @@ use pumpkin_core::results::SolutionReference;
 use pumpkin_core::variables::DomainId;
 
 #[cfg(doc)]
-use crate::branchers::dynamic_brancher::DynamicBrancher;
+use crate::branching::dynamic_brancher::DynamicBrancher;
 #[cfg(doc)]
 use crate::value_selection::InDomainMin;
 #[cfg(doc)]

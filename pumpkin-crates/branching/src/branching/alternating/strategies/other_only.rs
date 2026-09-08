@@ -3,9 +3,9 @@ use pumpkin_core::branching::BrancherEvent;
 use pumpkin_core::branching::SelectionContext;
 
 #[cfg(doc)]
-use crate::branchers::alternating::AlternatingBrancher;
-use crate::branchers::alternating::AlternatingStrategy;
-use crate::branchers::alternating::BrancherToUse;
+use crate::branching::alternating::AlternatingBrancher;
+use crate::branching::alternating::AlternatingStrategy;
+use crate::branching::alternating::BrancherToUse;
 
 /// Specifies that the [`AlternatingBrancher`] should always use the other strategy.
 #[derive(Default, Debug, Clone, Copy)]

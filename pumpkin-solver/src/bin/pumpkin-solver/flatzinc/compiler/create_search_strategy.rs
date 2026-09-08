@@ -1,13 +1,13 @@
 use std::rc::Rc;
 
 use flatzinc::AnnExpr;
-use pumpkin_branchers::DefaultBrancher;
-use pumpkin_branchers::branchers::dynamic_brancher::DynamicBrancher;
-use pumpkin_branchers::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-use pumpkin_branchers::branchers::warm_start::WarmStart;
-use pumpkin_branchers::value_selection::InDomainMax;
-use pumpkin_branchers::value_selection::InDomainMin;
-use pumpkin_branchers::variable_selection::InputOrder;
+use pumpkin_branching::DefaultBrancher;
+use pumpkin_branching::branching::dynamic_brancher::DynamicBrancher;
+use pumpkin_branching::branching::independent_variable_value_brancher::IndependentVariableValueBrancher;
+use pumpkin_branching::branching::warm_start::WarmStart;
+use pumpkin_branching::value_selection::InDomainMax;
+use pumpkin_branching::value_selection::InDomainMin;
+use pumpkin_branching::variable_selection::InputOrder;
 use pumpkin_solver::core::branching::Brancher;
 use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::core::variables::Literal;

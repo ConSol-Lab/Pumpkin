@@ -3,41 +3,42 @@ use std::fmt::Debug;
 use pumpkin_core::branching::BrancherEvent;
 use pumpkin_core::branching::SelectionContext;
 use pumpkin_core::predicates::Predicate;
+use pumpkin_core::results::SolutionReference;
 use pumpkin_core::variables::DomainId;
 
-use super::VariableSelector;
+use super::ValueSelector;
 #[cfg(doc)]
-use crate::branchers::dynamic_brancher::DynamicBrancher;
+use crate::branching::dynamic_brancher::DynamicBrancher;
 
 /// Similar to [`DynamicBrancher`], this is a pass-along structure which should be used when a
 /// [`Sized`] object is required.
-pub struct DynamicVariableSelector<Var> {
-    selector: Box<dyn VariableSelector<Var>>,
+pub struct DynamicValueSelector<Var> {
+    selector: Box<dyn ValueSelector<Var>>,
 }
 
-impl<Var> Debug for DynamicVariableSelector<Var> {
+impl<Var> Debug for DynamicValueSelector<Var> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DynamicVariableSelector").finish()
+        f.debug_struct("DynamicValueSelector").finish()
     }
 }
 
-impl<Var> DynamicVariableSelector<Var> {
-    pub fn new(selector: Box<dyn VariableSelector<Var>>) -> Self {
+impl<Var> DynamicValueSelector<Var> {
+    pub fn new(selector: Box<dyn ValueSelector<Var>>) -> Self {
         Self { selector }
     }
 }
 
-impl<Var> VariableSelector<Var> for DynamicVariableSelector<Var> {
-    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<Var> {
-        self.selector.select_variable(context)
+impl<Var> ValueSelector<Var> for DynamicValueSelector<Var> {
+    fn select_value(
+        &mut self,
+        context: &mut SelectionContext,
+        decision_variable: Var,
+    ) -> Predicate {
+        self.selector.select_value(context, decision_variable)
     }
 
-    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
-        self.selector.on_appearance_in_conflict_predicate(predicate)
-    }
-
-    fn on_conflict(&mut self) {
-        self.selector.on_conflict()
+    fn on_solution(&mut self, solution: SolutionReference) {
+        self.selector.on_solution(solution)
     }
 
     fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {

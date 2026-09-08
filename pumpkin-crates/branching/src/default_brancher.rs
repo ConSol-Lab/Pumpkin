@@ -1,7 +1,7 @@
 use pumpkin_core::variables::DomainId;
 
-use crate::branchers::autonomous_search::AutonomousSearch;
-use crate::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
+use crate::branching::autonomous_search::AutonomousSearch;
+use crate::branching::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use crate::value_selection::RandomSplitter;
 use crate::variable_selection::RandomSelector;
 

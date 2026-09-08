@@ -13,7 +13,7 @@
 //!
 //! Hence, the problem is defined in terms of v, k, and l.
 
-use pumpkin_branchers::DefaultBrancher;
+use pumpkin_branching::DefaultBrancher;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::results::ProblemSolution;

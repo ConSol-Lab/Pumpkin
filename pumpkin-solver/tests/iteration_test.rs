@@ -1,6 +1,6 @@
 #![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
 
-use pumpkin_branchers::DefaultBrancher;
+use pumpkin_branching::DefaultBrancher;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::results::ProblemSolution;

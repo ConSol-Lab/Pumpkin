@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
-use pumpkin_branchers::DefaultBrancher;
+use pumpkin_branching::DefaultBrancher;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::containers::HashMap;

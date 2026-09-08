@@ -67,7 +67,7 @@
 //! ```rust
 //! # use pumpkin_solver::Solver;
 //! # use pumpkin_solver::core::termination::Indefinite;
-//! # use pumpkin_branchers::DefaultBrancher;
+//! # use pumpkin_branching::DefaultBrancher;
 //! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! # let mut solver = Solver::default();
 //! // We create a termination condition which allows the solver to run indefinitely
@@ -86,7 +86,7 @@
 //! # use pumpkin_solver::core::results::ProblemSolution;
 //! # use pumpkin_solver::core::constraints;
 //! # use pumpkin_solver::core::constraints::Constraint;
-//! # use pumpkin_branchers::DefaultBrancher;
+//! # use pumpkin_branching::DefaultBrancher;
 //! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! # use std::cmp::max;
 //! # let mut solver = Solver::default();
@@ -148,7 +148,7 @@
 //! # use std::cmp::max;
 //! # use crate::pumpkin_solver::core::optimisation::OptimisationProcedure;
 //! # use pumpkin_solver::core::results::SolutionReference;
-//! # use pumpkin_branchers::DefaultBrancher;
+//! # use pumpkin_branching::DefaultBrancher;
 //! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! # let mut solver = Solver::default();
 //! # let x = solver.new_bounded_integer(5, 10);
@@ -207,7 +207,7 @@
 //! # use pumpkin_solver::core::results::solution_iterator::IteratedSolution;
 //! # use pumpkin_solver::core::constraints;
 //! # use pumpkin_solver::core::constraints::Constraint;
-//! # use pumpkin_branchers::DefaultBrancher;
+//! # use pumpkin_branching::DefaultBrancher;
 //! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
@@ -283,7 +283,7 @@
 //! # use pumpkin_solver::core::predicate;
 //! # use pumpkin_solver::core::constraints;
 //! # use pumpkin_solver::core::constraints::Constraint;
-//! # use pumpkin_branchers::DefaultBrancher;
+//! # use pumpkin_branching::DefaultBrancher;
 //! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
@@ -351,14 +351,14 @@ pub mod propagators {
     pub use pumpkin_propagators::*;
 }
 
-pub mod branchers {
+pub mod branching {
     //! Contains the implementations of [`Brancher`]s, [`VariableSelector`]s and
     //! [`ValueSelector`]s.
     #[cfg(doc)]
-    use pumpkin_branchers::value_selection::ValueSelector;
+    use pumpkin_branching::value_selection::ValueSelector;
     #[cfg(doc)]
-    use pumpkin_branchers::variable_selection::VariableSelector;
-    pub use pumpkin_branchers::*;
+    use pumpkin_branching::variable_selection::VariableSelector;
+    pub use pumpkin_branching::*;
     #[cfg(doc)]
     use pumpkin_core::branching::Brancher;
 }

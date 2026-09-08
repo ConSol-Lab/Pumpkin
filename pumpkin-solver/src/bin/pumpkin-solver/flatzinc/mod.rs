@@ -11,10 +11,10 @@ use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
 
-use pumpkin_branchers::branchers::alternating::AlternatingBrancher;
-use pumpkin_branchers::branchers::alternating::every_x_restarts::EveryXRestarts;
-use pumpkin_branchers::branchers::alternating::until_solution::UntilSolution;
-use pumpkin_branchers::branchers::dynamic_brancher::DynamicBrancher;
+use pumpkin_branching::branching::alternating::AlternatingBrancher;
+use pumpkin_branching::branching::alternating::every_x_restarts::EveryXRestarts;
+use pumpkin_branching::branching::alternating::until_solution::UntilSolution;
+use pumpkin_branching::branching::dynamic_brancher::DynamicBrancher;
 use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_core::statistics::log_statistic;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;

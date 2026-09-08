@@ -8,7 +8,7 @@ use pumpkin_core::predicates::Predicate;
 use pumpkin_core::variables::DomainId;
 
 #[cfg(doc)]
-use crate::branchers::dynamic_brancher::DynamicBrancher;
+use crate::branching::dynamic_brancher::DynamicBrancher;
 #[cfg(doc)]
 use crate::variable_selection::Smallest;
 

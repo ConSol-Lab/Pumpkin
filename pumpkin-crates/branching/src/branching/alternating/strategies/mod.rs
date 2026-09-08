@@ -6,7 +6,7 @@ use pumpkin_core::branching::SelectionContext;
 use pumpkin_core::results::SolutionReference;
 
 #[cfg(doc)]
-use crate::branchers::alternating::AlternatingBrancher;
+use crate::branching::alternating::AlternatingBrancher;
 
 /// Defines methods for selecting which of two branching strategies to use; the default or the
 /// other brancher.

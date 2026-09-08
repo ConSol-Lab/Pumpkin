@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use pumpkin_branchers::DefaultBrancher;
+use pumpkin_branching::DefaultBrancher;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::options::SolverOptions;

@@ -14,7 +14,7 @@ use pumpkin_core::variables::DomainId;
 
 use super::BrancherToUse;
 use crate::DefaultBrancher;
-use crate::branchers::alternating::strategies::AlternatingStrategy;
+use crate::branching::alternating::strategies::AlternatingStrategy;
 
 /// A [`Brancher`] which switches between its provided brancher and [`DefaultBrancher`] based on the
 /// provided [`AlternatingStrategy`].

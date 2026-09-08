@@ -8,7 +8,7 @@ pub(crate) use encoders::PseudoBooleanEncoding;
 use optimisation::linear_search::LinearSearch;
 use optimisation::optimisation_result::MaxSatOptimisationResult;
 use optimisation::optimisation_solver::OptimisationSolver;
-use pumpkin_branchers::DefaultBrancher;
+use pumpkin_branching::DefaultBrancher;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::core::options::SolverOptions;
 use pumpkin_solver::core::termination::TimeBudget;

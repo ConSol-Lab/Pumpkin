@@ -19,7 +19,7 @@ use crate::results::solution_iterator::SolutionIterator;
 use crate::statistics::StatisticLogger;
 
 /// A trait for definining a branching strategy (oftentimes utilising a variable selector and a
-/// value selector, see the `pumpkin-branchers` crate for concrete implementations).
+/// value selector, see the `pumpkin-branching` crate for concrete implementations).
 ///
 /// In general, implementations of this trait define how the search of the solver proceeds (i.e. it
 /// controls how the solver determines which part of the search space to explore). It is required
@@ -117,7 +117,7 @@ pub trait Brancher: Debug {
 }
 
 /// The events which can occur for a [`Brancher`]. Used for returning which events are relevant in
-/// [`Brancher::subscribe_to_events`] (and, in the `pumpkin-branchers` crate, the analogous methods
+/// [`Brancher::subscribe_to_events`] (and, in the `pumpkin-branching` crate, the analogous methods
 /// on variable and value selectors).
 #[derive(Debug, Clone, Copy, Enum, Hash, PartialEq, Eq)]
 pub enum BrancherEvent {

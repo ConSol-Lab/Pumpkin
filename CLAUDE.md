@@ -51,7 +51,7 @@ The project is a Cargo workspace (edition 2024, resolver 2). Crates are grouped 
 - **`propagators`** — Implementations of CP propagators (arithmetic, cumulative, disjunctive, element, etc.).
 - **`conflict-resolvers`** — Pluggable conflict analysis strategies for nogood derivation.
 - **`constraints`** — High-level constraint API built on top of `core`.
-- **`branchers`** — Branching heuristics (variable/value selection, tie-breaking) and `Brancher` implementations built on top of `core`.
+- **`branching`** — Branching heuristics (variable/value selection, tie-breaking) and `Brancher` implementations built on top of `core`.
 
 ### Interfaces
 - **`pumpkin-solver`** — CLI binary. Accepts CNF, WCNF (MaxSAT), and FlatZinc input formats.

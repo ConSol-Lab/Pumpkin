@@ -4,9 +4,9 @@ use pumpkin_core::branching::SelectionContext;
 use pumpkin_core::results::SolutionReference;
 
 #[cfg(doc)]
-use crate::branchers::alternating::AlternatingBrancher;
-use crate::branchers::alternating::AlternatingStrategy;
-use crate::branchers::alternating::BrancherToUse;
+use crate::branching::alternating::AlternatingBrancher;
+use crate::branching::alternating::AlternatingStrategy;
+use crate::branching::alternating::BrancherToUse;
 
 /// Specifies that the [`AlternatingBrancher`] should use the provided [`AlternatingStrategy`] until
 /// a solution is found, after which it will use [`BrancherToUse::Default`].
@@ -92,10 +92,10 @@ mod tests {
     use pumpkin_core::state::State;
 
     use crate::DefaultBrancher;
-    use crate::branchers::alternating::AlternatingBrancher;
-    use crate::branchers::alternating::every_x_restarts::EveryXRestarts;
-    use crate::branchers::alternating::other_only::OtherOnly;
-    use crate::branchers::alternating::until_solution::UntilSolution;
+    use crate::branching::alternating::AlternatingBrancher;
+    use crate::branching::alternating::every_x_restarts::EveryXRestarts;
+    use crate::branching::alternating::other_only::OtherOnly;
+    use crate::branching::alternating::until_solution::UntilSolution;
     use crate::testing::TestRandom;
 
     #[test]

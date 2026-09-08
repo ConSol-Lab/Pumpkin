@@ -3,9 +3,9 @@ use pumpkin_core::branching::SelectionContext;
 use pumpkin_core::results::SolutionReference;
 
 #[cfg(doc)]
-use crate::branchers::alternating::AlternatingBrancher;
-use crate::branchers::alternating::BrancherToUse;
-use crate::branchers::alternating::strategies::AlternatingStrategy;
+use crate::branching::alternating::AlternatingBrancher;
+use crate::branching::alternating::BrancherToUse;
+use crate::branching::alternating::strategies::AlternatingStrategy;
 
 /// Specifies that the [`AlternatingBrancher`] should switch between
 /// [`BrancherToUse::Default`] and the provided brancher every `x`th solution.
@@ -58,8 +58,8 @@ mod tests {
     use pumpkin_core::results::Solution;
 
     use crate::DefaultBrancher;
-    use crate::branchers::alternating::alternating_brancher::AlternatingBrancher;
-    use crate::branchers::alternating::strategies::every_x_solutions::EveryXSolutions;
+    use crate::branching::alternating::alternating_brancher::AlternatingBrancher;
+    use crate::branching::alternating::strategies::every_x_solutions::EveryXSolutions;
 
     #[test]
     fn test_every_other_solution() {

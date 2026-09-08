@@ -3,9 +3,9 @@ use pumpkin_core::branching::BrancherEvent;
 use pumpkin_core::branching::SelectionContext;
 
 #[cfg(doc)]
-use crate::branchers::alternating::AlternatingBrancher;
-use crate::branchers::alternating::BrancherToUse;
-use crate::branchers::alternating::strategies::AlternatingStrategy;
+use crate::branching::alternating::AlternatingBrancher;
+use crate::branching::alternating::BrancherToUse;
+use crate::branching::alternating::strategies::AlternatingStrategy;
 
 /// Specifies that the [`AlternatingBrancher`] should switch between
 /// [`BrancherToUse::Default`] and the provided brancher every `x`th considered restart.
@@ -88,8 +88,8 @@ mod tests {
     use pumpkin_core::state::State;
 
     use crate::DefaultBrancher;
-    use crate::branchers::alternating::alternating_brancher::AlternatingBrancher;
-    use crate::branchers::alternating::every_x_restarts::EveryXRestarts;
+    use crate::branching::alternating::alternating_brancher::AlternatingBrancher;
+    use crate::branching::alternating::every_x_restarts::EveryXRestarts;
     use crate::testing::TestRandom;
 
     #[test]

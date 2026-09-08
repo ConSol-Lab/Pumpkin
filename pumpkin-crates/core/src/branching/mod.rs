@@ -7,7 +7,7 @@
 //! allows it to inspect the domains of the variables and to make use of a random number generator.
 //!
 //! Implementations of [`Brancher`] (e.g. based on variable/value selection heuristics) are
-//! provided by the `pumpkin-branchers` crate.
+//! provided by the `pumpkin-branching` crate.
 //!
 //! A [`Brancher`] is expected to be passed to [`Solver::satisfy`], and [`Solver::optimise`]:
 //!
