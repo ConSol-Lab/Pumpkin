@@ -17,6 +17,8 @@ pub mod value_selection;
 pub mod variable_selection;
 
 mod default_brancher;
+#[cfg(test)]
+pub(crate) mod testing;
 
 pub use default_brancher::DefaultBrancher;
 #[cfg(doc)]

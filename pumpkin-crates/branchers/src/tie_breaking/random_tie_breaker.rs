@@ -121,9 +121,8 @@ impl<Var: Copy, Value: PartialOrd> TieBreaker<Var, Value> for RandomTieBreaker<V
 
 #[cfg(test)]
 mod tests {
-    use pumpkin_core::testing::TestRandom;
-
     use super::RandomTieBreaker;
+    use crate::testing::TestRandom;
     use crate::tie_breaking::TieBreaker;
     use crate::tie_breaking::random_tie_breaker::Direction;
 

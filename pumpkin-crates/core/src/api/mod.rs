@@ -150,10 +150,3 @@ pub mod asserts {
     pub use crate::pumpkin_asserts::PUMPKIN_ASSERT_MODERATE;
     pub use crate::pumpkin_asserts::PUMPKIN_ASSERT_SIMPLE;
 }
-
-pub mod testing {
-    //! Testing utilities exposed for use by crates which build upon the [`Solver`].
-    #[cfg(doc)]
-    use crate::Solver;
-    pub use crate::basic_types::testing::TestRandom;
-}

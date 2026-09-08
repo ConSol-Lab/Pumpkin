@@ -366,9 +366,9 @@ mod tests {
     use pumpkin_core::branching::SelectionContext;
     use pumpkin_core::predicate;
     use pumpkin_core::state::State;
-    use pumpkin_core::testing::TestRandom;
 
     use super::AutonomousSearch;
+    use crate::testing::TestRandom;
 
     #[test]
     fn brancher_picks_bumped_values() {

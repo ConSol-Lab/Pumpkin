@@ -90,13 +90,13 @@ mod tests {
     use pumpkin_core::branching::SelectionContext;
     use pumpkin_core::results::Solution;
     use pumpkin_core::state::State;
-    use pumpkin_core::testing::TestRandom;
 
     use crate::DefaultBrancher;
     use crate::branchers::alternating::AlternatingBrancher;
     use crate::branchers::alternating::every_x_restarts::EveryXRestarts;
     use crate::branchers::alternating::other_only::OtherOnly;
     use crate::branchers::alternating::until_solution::UntilSolution;
+    use crate::testing::TestRandom;
 
     #[test]
     fn test_switch_to_default_after_first_solution() {

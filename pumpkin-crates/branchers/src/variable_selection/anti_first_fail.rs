@@ -84,9 +84,9 @@ mod tests {
     use pumpkin_core::branching::SelectionContext;
     use pumpkin_core::predicate;
     use pumpkin_core::state::State;
-    use pumpkin_core::testing::TestRandom;
 
     use super::AntiFirstFail;
+    use crate::testing::TestRandom;
     use crate::variable_selection::VariableSelector;
 
     #[test]

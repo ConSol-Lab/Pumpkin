@@ -71,8 +71,8 @@ mod tests {
     use pumpkin_core::branching::SelectionContext;
     use pumpkin_core::predicate;
     use pumpkin_core::state::State;
-    use pumpkin_core::testing::TestRandom;
 
+    use crate::testing::TestRandom;
     use crate::variable_selection::RandomSelector;
     use crate::variable_selection::VariableSelector;
 

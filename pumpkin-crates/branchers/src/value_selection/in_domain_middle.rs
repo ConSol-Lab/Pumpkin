@@ -58,8 +58,8 @@ mod tests {
     use pumpkin_core::branching::SelectionContext;
     use pumpkin_core::predicate;
     use pumpkin_core::state::State;
-    use pumpkin_core::testing::TestRandom;
 
+    use crate::testing::TestRandom;
     use crate::value_selection::InDomainMiddle;
     use crate::value_selection::ValueSelector;
 

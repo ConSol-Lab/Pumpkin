@@ -66,9 +66,9 @@ where
 #[cfg(test)]
 mod tests {
     use pumpkin_core::state::State;
-    use pumpkin_core::testing::TestRandom;
 
     use super::*;
+    use crate::testing::TestRandom;
 
     #[test]
     fn test_correctly_selected() {
