@@ -46,11 +46,6 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
         }
     }
 
-    /// Returns whether there are any updates stored which have not been processed
-    pub(crate) fn has_updates(&self) -> bool {
-        !self.updated_tasks.is_empty()
-    }
-
     /// Returns the next updated task and removes it from the updated list
     pub(crate) fn pop_next_updated_task(&mut self) -> Option<Rc<Task<Var>>> {
         if self.updated_tasks.is_empty() {
