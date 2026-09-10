@@ -1,13 +1,14 @@
 use std::rc::Rc;
 
 use flatzinc::AnnExpr;
+use pumpkin_branching::DefaultBrancher;
+use pumpkin_branching::branching::dynamic_brancher::DynamicBrancher;
+use pumpkin_branching::branching::independent_variable_value_brancher::IndependentVariableValueBrancher;
+use pumpkin_branching::branching::warm_start::WarmStart;
+use pumpkin_branching::value_selection::InDomainMax;
+use pumpkin_branching::value_selection::InDomainMin;
+use pumpkin_branching::variable_selection::InputOrder;
 use pumpkin_solver::core::branching::Brancher;
-use pumpkin_solver::core::branching::branchers::dynamic_brancher::DynamicBrancher;
-use pumpkin_solver::core::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-use pumpkin_solver::core::branching::branchers::warm_start::WarmStart;
-use pumpkin_solver::core::branching::value_selection::InDomainMax;
-use pumpkin_solver::core::branching::value_selection::InDomainMin;
-use pumpkin_solver::core::branching::variable_selection::InputOrder;
 use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::core::variables::Literal;
 
@@ -210,7 +211,9 @@ fn create_from_search_strategy(
             )),
             None => {}
         }
-        brancher.add_brancher(Box::new(context.solver.default_brancher()));
+        brancher.add_brancher(Box::new(DefaultBrancher::default_over_all_variables(
+            context.solver,
+        )));
     }
 
     Ok(brancher)

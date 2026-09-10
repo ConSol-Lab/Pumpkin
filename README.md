@@ -108,6 +108,7 @@ Pumpkin consists of several different components:
     - [pumpkin-propagators](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/propagators); contains (most of) the propagators used by Pumpkin.
     - [pumpkin-constraints](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/constraints); contains convenient ways to add one or more propagators modelling certain constraints to the solver.
     - [pumpkin-conflict-resolvers](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/conflict-resolvers); contains the conflict resolvers (e.g., 1UIP or All-Decision conflict resolvers) used by Pumpkin.
+    - [pumpkin-branching](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/branching); contains the branching heuristics (e.g., variable/value selection strategies) used by Pumpkin.
     - [pumpkin-checking](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/checking); contains the types used for checking the soundness of propagators in Pumpkin.
 - The CLI contained in [pumpkin-solver](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver).
 - The Python bindings contained in [pumpkin-solver-py](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver-py).
