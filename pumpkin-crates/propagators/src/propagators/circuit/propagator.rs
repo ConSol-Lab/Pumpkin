@@ -1,0 +1,378 @@
+use fixedbitset::FixedBitSet;
+use pumpkin_core::conjunction;
+use pumpkin_core::declare_inference_label;
+use pumpkin_core::predicate;
+use pumpkin_core::predicates::PropositionalConjunction;
+use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::Domains;
+use pumpkin_core::propagation::EnqueueDecision;
+use pumpkin_core::propagation::EventsToRegister;
+use pumpkin_core::propagation::InferenceCheckers;
+use pumpkin_core::propagation::LocalId;
+use pumpkin_core::propagation::NotificationContext;
+use pumpkin_core::propagation::OpaqueDomainEvent;
+use pumpkin_core::propagation::Priority;
+use pumpkin_core::propagation::PropagationContext;
+use pumpkin_core::propagation::Propagator;
+use pumpkin_core::propagation::PropagatorConstructor;
+use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::state::Conflict;
+use pumpkin_core::state::PropagationStatusCP;
+use pumpkin_core::state::PropagatorConflict;
+use pumpkin_core::variables::IntegerVariable;
+
+use crate::circuit::CircuitChecker;
+
+#[derive(Debug)]
+pub struct CircuitConstructor<Var> {
+    pub successors: Box<[Var]>,
+    pub constraint_tag: ConstraintTag,
+}
+
+impl<Var: IntegerVariable + 'static> PropagatorConstructor for CircuitConstructor<Var> {
+    type PropagatorImpl = CircuitPropagator<Var>;
+
+    fn create(
+        self,
+        mut context: pumpkin_core::propagation::PropagatorConstructorContext,
+    ) -> (EventsToRegister, Self::PropagatorImpl) {
+        let mut recently_fixed = FixedBitSet::with_capacity(self.successors.len());
+        let mut registration = EventsToRegister::builder();
+
+        for (index, successor) in self.successors.iter().enumerate() {
+            registration =
+                registration.add(successor, DomainEvents::ASSIGN, LocalId::from(index as u32));
+            context.register_backtrack(
+                successor.clone(),
+                DomainEvents::ASSIGN,
+                LocalId::from(index as u32),
+            );
+
+            if context.is_fixed(successor) {
+                recently_fixed.insert(index);
+            }
+        }
+
+        (
+            registration.build(),
+            CircuitPropagator {
+                first_iteration: true,
+                successors: self.successors,
+                inference_code: InferenceCode::new(self.constraint_tag, CircuitPrevent),
+                recently_fixed,
+            },
+        )
+    }
+
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, CircuitPrevent),
+            Box::new(CircuitChecker {
+                successors: self.successors.clone(),
+            }),
+        );
+    }
+}
+
+declare_inference_label!(CircuitPrevent);
+
+#[derive(Debug, Clone)]
+pub struct CircuitPropagator<Var> {
+    first_iteration: bool,
+
+    successors: Box<[Var]>,
+    inference_code: InferenceCode,
+
+    recently_fixed: FixedBitSet,
+}
+
+impl<Var: IntegerVariable + 'static> Propagator for CircuitPropagator<Var> {
+    fn name(&self) -> &str {
+        "Circuit"
+    }
+
+    fn priority(&self) -> Priority {
+        // TODO
+        Priority::Medium
+    }
+
+    fn notify(
+        &mut self,
+        _context: NotificationContext,
+        local_id: LocalId,
+        _event: OpaqueDomainEvent,
+    ) -> EnqueueDecision {
+        self.recently_fixed.insert(local_id.unpack() as usize);
+        EnqueueDecision::Enqueue
+    }
+
+    fn notify_backtrack(
+        &mut self,
+        _context: Domains,
+        local_id: LocalId,
+        _event: OpaqueDomainEvent,
+    ) {
+        self.recently_fixed.remove(local_id.unpack() as usize);
+    }
+
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        // If it is the first iteration, then we remove self-loops
+        if self.first_iteration {
+            self.first_iteration = false;
+            self.remove_self_loops(&mut context)?;
+        }
+
+        self.check(context.domains())?;
+        self.prevent(context)
+    }
+
+    fn propagate_from_scratch(&self, _context: PropagationContext) -> PropagationStatusCP {
+        todo!()
+    }
+}
+
+impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
+    fn remove_self_loops(&self, context: &mut PropagationContext) -> PropagationStatusCP {
+        if self.successors.len() == 1 {
+            // There is only a single possible cycle; generally this case would not occur.
+            return Ok(());
+        }
+
+        for (i, successor) in self.successors.iter().enumerate() {
+            context.post(
+                predicate!(successor != (i + 1) as i32),
+                (conjunction!(), &self.inference_code),
+            )?;
+        }
+        Ok(())
+    }
+}
+
+impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
+    fn prevent(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        // First we identify the potential starts of chains; these are the variables which do not
+        // have any (fixed) incoming edge.
+        let mut has_incoming_edge = FixedBitSet::with_capacity(self.successors.len());
+        for successor in self.successors.iter() {
+            if let Some(fixed_value) = context.fixed_value(successor) {
+                has_incoming_edge.insert(domain_value_to_index(fixed_value));
+            }
+        }
+
+        // Now we go over all variables that are potential starts of chains.
+        for unmarked in has_incoming_edge.zeroes() {
+            // If they are not fixed, then we can continue
+            let Some(fixed_value) = context.fixed_value(&self.successors[unmarked]) else {
+                continue;
+            };
+
+            // Now we keep track of the chain
+            let mut chain = vec![unmarked];
+
+            // Next we keep unfolding the chain until we run into a variable that is not fixed;
+            // note that it should not be possible to run into a cycle here since check has run
+            // before this.
+            let mut next = domain_value_to_index(fixed_value);
+            while let Some(fixed_value_next) = context.fixed_value(&self.successors[next]) {
+                // We add the next value to the chain
+                chain.push(next);
+                // And continue to unfold the chain from there
+                next = domain_value_to_index(fixed_value_next);
+            }
+
+            // We have found the chain, we remove the edge from the end of the chain to the
+            // beginning of the chain (if it exists)
+            if context.contains(&self.successors[next], index_to_domain_value(unmarked)) {
+                let reason = self.create_prevent_explanation(context.domains(), &chain);
+                context.post(
+                    predicate!(self.successors[next] != index_to_domain_value(unmarked)),
+                    (reason, &self.inference_code),
+                )?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn create_prevent_explanation(
+        &self,
+        context: Domains,
+        path: &[usize],
+    ) -> PropositionalConjunction {
+        path.iter()
+            .map(|&index| {
+                let var = &self.successors[index];
+
+                predicate!(
+                    var == context
+                        .fixed_value(var)
+                        .expect("Expected every variable in the chain to be assigned")
+                )
+            })
+            .collect()
+    }
+}
+
+impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
+    fn check(&mut self, context: Domains) -> PropagationStatusCP {
+        // We keep track of:
+        // 1. `cycle` - The elements which are in the (potential) current cycle; these are used in
+        //    the explanation
+        // 2. `explored` - The elements which have been visited; once we encounter any of these
+        //    nodes, we can stop since we have already explored them
+        // 3. `explored_current_iteration` - The elements which have been visited as part of the
+        //    (potential) current cycle; used to detect when a cycle has occurred. Note that using
+        //    `explored` for this purpose would be incorrect and would lead to conflicts being
+        //    detected which are not actual cycles.
+        let mut cycle = Vec::default();
+        let mut explored = FixedBitSet::with_capacity(self.successors.len());
+        let mut explored_current_iteration = FixedBitSet::with_capacity(self.successors.len());
+
+        // We look at the variables which were recently fixed and use them as potential starts of
+        // cycles
+        while let Some(start) = self.recently_fixed.ones().next() {
+            self.recently_fixed.remove(start);
+
+            // If we have already explored this node before, then we can continue
+            if explored.contains(start) {
+                continue;
+            }
+
+            // We consider a new cycle
+            explored_current_iteration.clear();
+            cycle.clear();
+            let mut current = start;
+
+            // We will traverse the fixed path until we find a cycle
+            loop {
+                let var = &self.successors[current];
+
+                // If we have seen this node befor in the current iteration, then we can simply
+                // return here
+                if explored_current_iteration.contains(current) {
+                    // Of course, if it is a cycle containing all nodes, then we do not need to
+                    // report an error
+                    if cycle.len() == self.successors.len() {
+                        return Ok(());
+                    }
+
+                    // But if it is a cycle which contains all, then we should
+                    return Err(Conflict::Propagator(PropagatorConflict {
+                        conjunction: self.create_check_explanation(context, &cycle),
+                        inference_code: self.inference_code.clone(),
+                    }));
+                }
+
+                // If the current variable is fixed, then we continue looking for a cycle by going
+                // to the next node; if not, then we can break from this loop, since it is not a
+                // cycle
+                if let Some(fixed_value) = context.fixed_value(var) {
+                    // If we have already encountered this node, then we know that a cycle cannot
+                    // be found from this node.
+                    if explored.contains(current) {
+                        break;
+                    }
+
+                    // Next, we mark the current node as explored and as part of the potential
+                    // cycle
+                    explored.insert(current);
+                    explored_current_iteration.insert(current);
+                    cycle.push(current);
+
+                    // Then we move on to the next node
+                    current = domain_value_to_index(fixed_value);
+                } else {
+                    break;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn create_check_explanation(
+        &self,
+        context: Domains,
+        cycle: &[usize],
+    ) -> PropositionalConjunction {
+        cycle
+            .iter()
+            .map(|&index| {
+                let var = &self.successors[index];
+
+                predicate!(
+                    var == context
+                        .fixed_value(var)
+                        .expect("Expected each variable in the cycle to be assigned")
+                )
+            })
+            .collect()
+    }
+}
+
+const VALUE_OFFSET: usize = 1;
+
+#[inline]
+pub(crate) fn domain_value_to_index(domain_value: i32) -> usize {
+    domain_value as usize - VALUE_OFFSET
+}
+
+#[inline]
+pub(crate) fn index_to_domain_value(index: usize) -> i32 {
+    index as i32 + VALUE_OFFSET as i32
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_core::state::State;
+
+    use crate::circuit::CircuitConstructor;
+
+    #[test]
+    fn circuit_hamiltonian_path_conflict_detection() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(2, 2, None);
+        let y = state.new_interval_variable(3, 3, None);
+        let z = state.new_interval_variable(1, 1, None);
+
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(CircuitConstructor {
+            successors: vec![x, y, z].into(),
+            constraint_tag,
+        });
+
+        let result = state.propagate_to_fixed_point();
+
+        assert!(
+            result.is_ok(),
+            "If there is a cycle concerning all variables, then no conflict should be reported"
+        )
+    }
+
+    #[test]
+    fn circuit_conflict_detection_simple() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(2, 2, None);
+        let y = state.new_interval_variable(1, 1, None);
+        let z = state.new_interval_variable(1, 3, None);
+
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(CircuitConstructor {
+            successors: vec![x, y, z].into(),
+            constraint_tag,
+        });
+
+        let result = state.propagate_to_fixed_point();
+
+        assert!(
+            result.is_err(),
+            "If there is a cycle concerning all variables, then no conflict should be reported"
+        )
+    }
+}
