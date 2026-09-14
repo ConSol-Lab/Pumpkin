@@ -105,7 +105,7 @@ impl NotificationEngine {
         self.predicate_notifier.predicate_to_id.get_id(predicate)
     }
 
-    pub(crate) fn get_predicate(&mut self, predicate_id: PredicateId) -> Predicate {
+    pub(crate) fn get_predicate(&self, predicate_id: PredicateId) -> Predicate {
         self.predicate_notifier.get_predicate(predicate_id)
     }
 
@@ -305,7 +305,7 @@ impl NotificationEngine {
     /// to the trail. Propagators are notified and enqueued if needed about the domain events.
     pub(crate) fn notify_propagators_about_domain_events(
         &mut self,
-        assignments: &mut Assignments,
+        assignments: &Assignments,
         trailed_values: &mut TrailedValues,
         propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
@@ -353,7 +353,7 @@ impl NotificationEngine {
 
     pub(crate) fn process_backtrack_events(
         &mut self,
-        assignments: &mut Assignments,
+        assignments: &Assignments,
         trailed_values: &mut TrailedValues,
         propagators: &mut PropagatorStore,
     ) -> bool {
@@ -416,7 +416,7 @@ impl NotificationEngine {
         event: DomainEvent,
         propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
-        assignments: &mut Assignments,
+        assignments: &Assignments,
         trailed_values: &mut TrailedValues,
     ) {
         let context = NotificationContext::new(trailed_values, assignments);
@@ -429,7 +429,7 @@ impl NotificationEngine {
         }
     }
 
-    pub(crate) fn update_last_notified_index(&mut self, assignments: &mut Assignments) {
+    pub(crate) fn update_last_notified_index(&mut self, assignments: &Assignments) {
         self.last_notified_trail_index = assignments.num_trail_entries();
     }
 
@@ -456,7 +456,7 @@ impl NotificationEngine {
     /// to the trail. Propagators are notified and enqueued if needed about the domain events.
     pub(crate) fn notify_propagators_about_domain_events_test(
         &mut self,
-        assignments: &mut Assignments,
+        assignments: &Assignments,
         trailed_values: &mut TrailedValues,
         propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
@@ -526,7 +526,7 @@ impl NotificationEngine {
             .is_satisfied(
                 predicate_id,
                 assignments,
-                &mut self.predicate_notifier.predicate_to_id,
+                &self.predicate_notifier.predicate_to_id,
             );
         pumpkin_assert_extreme!(
             {
@@ -549,7 +549,7 @@ impl NotificationEngine {
         self.predicate_notifier.predicate_id_assignments.evaluate(
             predicate_id,
             assignments,
-            &mut self.predicate_notifier.predicate_to_id,
+            &self.predicate_notifier.predicate_to_id,
         )
     }
 
@@ -566,7 +566,7 @@ impl NotificationEngine {
             .is_falsified(
                 predicate_id,
                 assignments,
-                &mut self.predicate_notifier.predicate_to_id,
+                &self.predicate_notifier.predicate_to_id,
             );
 
         pumpkin_assert_extreme!(

@@ -314,7 +314,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                 // If we are synchronising then we need to search for the conflict which would have
                 // been found by the non-incremental propagator
                 let conflicting_profile =
-                    find_synchronised_conflict(&mut self.time_table, &self.parameters);
+                    find_synchronised_conflict(&self.time_table, &self.parameters);
                 // Now we need to find the same explanation as would have been found by
                 // the non-incremental propagator
                 if let Some(mut conflicting_profile) = conflicting_profile {

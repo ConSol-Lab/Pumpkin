@@ -198,7 +198,7 @@ impl ResolutionResolver {
         // level, and both will be decisions. This is accounted for below.
         while self
             .mode
-            .should_continue_resolving(&mut self.predicate_id_generator, &self.working_nogood)
+            .should_continue_resolving(&self.predicate_id_generator, &self.working_nogood)
         {
             // Replace the predicate from the nogood that has been assigned last on the trail.
             //
@@ -206,7 +206,7 @@ impl ResolutionResolver {
             // 1) Pop the predicate last assigned on the trail from the nogood.
             let next_predicate = self
                 .working_nogood
-                .pop_max_predicate(&mut self.predicate_id_generator, self.mode);
+                .pop_max_predicate(&self.predicate_id_generator, self.mode);
 
             // 2) Get the reason for the predicate and add it to the nogood.
             self.reason_buffer.clear();

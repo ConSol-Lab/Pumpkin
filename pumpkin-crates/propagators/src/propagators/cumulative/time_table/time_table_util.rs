@@ -375,7 +375,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContext,
     inference_code: &InferenceCode,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
-    updatable_structures: &mut UpdatableStructures<Var>,
+    updatable_structures: &UpdatableStructures<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     let mut profile_buffer = Vec::default();

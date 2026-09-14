@@ -315,7 +315,7 @@ impl PropagationMode {
     )]
     #[allow(unused, reason = "Used when using feature flag")]
     pub(crate) fn add_permanent_nogood_non_unit(
-        &mut self,
+        &self,
         nogood: Vec<Predicate>,
         input_nogood: &[Predicate],
         inference_code: InferenceCode,
@@ -325,7 +325,7 @@ impl PropagationMode {
         inference_codes: &mut KeyedVec<NogoodIndex, InferenceCode>,
         watch_lists: &mut KeyedVec<PredicateId, Vec<Watcher>>,
         permanent_nogood_ids: &mut Vec<NogoodId>,
-        statistics: &mut NogoodPropagatorStatistics,
+        statistics: &NogoodPropagatorStatistics,
         propagation_buffer: &mut PropagationBuffer,
     ) {
         #[cfg(feature = "check-propagations")]

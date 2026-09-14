@@ -20,7 +20,7 @@ pub(crate) struct ProofAtomics {
 impl ProofAtomics {
     /// Convert a predicate to the [`IntAtomic`] that is used in the proof.
     pub(crate) fn map_predicate_to_proof_atomic<'names>(
-        &mut self,
+        &self,
         predicate: Predicate,
         variable_names: &'names VariableNames,
     ) -> IntAtomic<&'names str, i32> {
