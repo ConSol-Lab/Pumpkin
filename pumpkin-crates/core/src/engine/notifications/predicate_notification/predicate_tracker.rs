@@ -407,7 +407,7 @@ impl PredicateTracker {
     }
 
     pub(super) fn on_update(
-        &mut self,
+        &self,
         predicate: Predicate,
         trailed_values: &mut TrailedValues,
         predicate_id_assignments: &mut PredicateIdAssignments,
@@ -821,7 +821,7 @@ mod tests {
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x >= 5)),
             &assignments,
-            &mut id_generator
+            &id_generator
         ));
         assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x <= 5))));
         assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x == 5))));
@@ -835,22 +835,22 @@ mod tests {
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x >= 5)),
             &assignments,
-            &mut id_generator
+            &id_generator
         ));
         assert!(predicate_id_assignments.is_falsified(
             id_generator.get_id(predicate!(x <= 5)),
             &assignments,
-            &mut id_generator
+            &id_generator
         ));
         assert!(predicate_id_assignments.is_falsified(
             id_generator.get_id(predicate!(x == 5)),
             &assignments,
-            &mut id_generator
+            &id_generator
         ));
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x != 5)),
             &assignments,
-            &mut id_generator
+            &id_generator
         ));
     }
 
@@ -894,7 +894,7 @@ mod tests {
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x <= 5)),
             &assignments,
-            &mut id_generator
+            &id_generator
         ));
         assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x >= 5))));
         assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x == 5))));
@@ -908,22 +908,22 @@ mod tests {
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x <= 5)),
             &assignments,
-            &mut id_generator
+            &id_generator
         ));
         assert!(predicate_id_assignments.is_falsified(
             id_generator.get_id(predicate!(x >= 5)),
             &assignments,
-            &mut id_generator
+            &id_generator
         ));
         assert!(predicate_id_assignments.is_falsified(
             id_generator.get_id(predicate!(x == 5)),
             &assignments,
-            &mut id_generator
+            &id_generator
         ));
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x != 5)),
             &assignments,
-            &mut id_generator
+            &id_generator
         ));
     }
 
@@ -967,12 +967,12 @@ mod tests {
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x != 5)),
             &assignments,
-            &mut id_generator
+            &id_generator
         ));
         assert!(predicate_id_assignments.is_falsified(
             id_generator.get_id(predicate!(x == 5)),
             &assignments,
-            &mut id_generator
+            &id_generator
         ));
         assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x >= 5))));
         assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x <= 5))));
@@ -1026,32 +1026,32 @@ mod tests {
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x == 6)),
             &assignments,
-            &mut id_generator
+            &id_generator
         ));
         assert!(predicate_id_assignments.is_falsified(
             id_generator.get_id(predicate!(x != 6)),
             &assignments,
-            &mut id_generator
+            &id_generator
         ));
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x != 5)),
             &assignments,
-            &mut id_generator
+            &id_generator
         ));
         assert!(predicate_id_assignments.is_falsified(
             id_generator.get_id(predicate!(x == 5)),
             &assignments,
-            &mut id_generator
+            &id_generator
         ));
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x >= 5)),
             &assignments,
-            &mut id_generator
+            &id_generator
         ));
         assert!(predicate_id_assignments.is_falsified(
             id_generator.get_id(predicate!(x <= 5)),
             &assignments,
-            &mut id_generator
+            &id_generator
         ));
     }
 

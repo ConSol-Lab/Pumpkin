@@ -333,7 +333,7 @@ impl WorkingNogood {
     /// Returns the next [`Predicate`] to resolve upon based on the trail.
     pub(crate) fn pop_max_predicate(
         &mut self,
-        predicate_id_generator: &mut PredicateIdGenerator,
+        predicate_id_generator: &PredicateIdGenerator,
         mode: AnalysisMode,
     ) -> Predicate {
         let next_predicate_id = self.to_process_heap.pop_max().unwrap();
@@ -674,7 +674,7 @@ impl WorkingNogood {
 /// should be resolved upon before the predicates which are explicitly on the trail.
 ///
 /// Panics if the provided [`Predicate`] is not currently true on the trail.
-fn get_heap_value(predicate: Predicate, context: &mut ConflictAnalysisContext<'_>) -> u32 {
+fn get_heap_value(predicate: Predicate, context: &ConflictAnalysisContext<'_>) -> u32 {
     if context.get_state().is_on_trail(predicate) {
         context
             .get_state()

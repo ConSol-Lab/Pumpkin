@@ -151,7 +151,7 @@ impl PseudoBooleanConstraintEncoder {
 
     pub(crate) fn from_function(
         function: &Function,
-        solver: &mut Solver,
+        solver: &Solver,
         encoding_algorithm: PseudoBooleanEncoding,
     ) -> Self {
         let mut encoder = PseudoBooleanConstraintEncoder::new(

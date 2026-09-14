@@ -63,10 +63,7 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
 
     /// Get the update info for the provided task (note that this method does not actually check
     /// whether the updated task was actually updated).
-    pub(crate) fn get_update_for_task(
-        &mut self,
-        updated_task: &Rc<Task<Var>>,
-    ) -> UpdatedTaskInfo<Var> {
+    pub(crate) fn get_update_for_task(&self, updated_task: &Rc<Task<Var>>) -> UpdatedTaskInfo<Var> {
         self.updates[updated_task.id.unpack() as usize].clone()
     }
 

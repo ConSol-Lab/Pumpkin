@@ -61,7 +61,7 @@ macro_rules! mark_literal_exprs {
 
 /// Go over all arrays and mark the identifiers that are elements of the array.
 fn mark_identifiers_in_arrays(
-    ast: &mut FlatZincAst,
+    ast: &FlatZincAst,
     context: &mut CompilationContext,
     marked_identifiers: &mut BTreeSet<Rc<str>>,
 ) {
@@ -112,7 +112,7 @@ fn mark_identifiers_in_arrays(
 
 /// Go over all constraints and add any identifier in the arguments to the `marked_identifiers` set.
 fn mark_identifiers_in_constraints(
-    ast: &mut FlatZincAst,
+    ast: &FlatZincAst,
     context: &mut CompilationContext,
     marked_identifiers: &mut BTreeSet<Rc<str>>,
 ) {
