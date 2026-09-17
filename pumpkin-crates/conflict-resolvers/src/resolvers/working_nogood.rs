@@ -91,7 +91,6 @@ impl WorkingNogood {
         predicate_id_generator: &mut PredicateIdGenerator,
         mode: AnalysisMode,
     ) {
-        // Its corresponding predicate id, computed once and reused below.
         let predicate_id = predicate_id_generator.get_id(predicate);
 
         if self.is_redundant(
