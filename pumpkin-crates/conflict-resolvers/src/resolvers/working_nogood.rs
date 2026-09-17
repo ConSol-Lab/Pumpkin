@@ -1,4 +1,3 @@
-use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::asserts::pumpkin_assert_eq_simple;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
@@ -79,27 +78,9 @@ impl WorkingNogood {
     ///
     /// **Note** - This can be called multiple times when using CPIP nogoods (see
     /// [`AnalysisMode`]).
-    fn add_asserting_predicate(
-        &mut self,
-        predicate: Predicate,
-        context: &mut ConflictAnalysisContext<'_>,
-        predicate_id_generator: &mut PredicateIdGenerator,
-        mode: AnalysisMode,
-    ) {
+    fn add_asserting_predicate(&mut self, predicate: Predicate) {
         // We push it directly into a vector since we do not need to resolve upon it
         self.processed_nogood_predicates.push(predicate);
-
-        pumpkin_assert_advanced!(
-            !self.iterative_minimisation
-                || !self.is_redundant(
-                    predicate,
-                    context,
-                    predicate_id_generator.get_id(predicate),
-                    predicate_id_generator,
-                    mode
-                ),
-            "The asserting predicate should not be redundant"
-        );
     }
 
     /// Adds a predicate to the current working nogood which is from the current checkpoint.
@@ -244,12 +225,11 @@ impl WorkingNogood {
     /// structures.
     pub(crate) fn drain_learned_nogood(
         &mut self,
-        predicate_id_generator: &mut PredicateIdGenerator,
+        predicate_id_generator: &PredicateIdGenerator,
         mode: AnalysisMode,
         statistics: &mut CpipStatistics,
-        context: &mut ConflictAnalysisContext,
     ) -> impl Iterator<Item = Predicate> {
-        let num_removed = self.remove_final_predicates(predicate_id_generator, mode, context);
+        let num_removed = self.remove_final_predicates(predicate_id_generator, mode);
 
         pumpkin_assert_eq_simple!(self.num_current_checkpoint(), 0);
 
@@ -276,9 +256,8 @@ impl WorkingNogood {
     /// [`WorkingNogood`] after [`AnalysisMode::should_continue_resolving`] returned false.
     pub(crate) fn remove_final_predicates(
         &mut self,
-        predicate_id_generator: &mut PredicateIdGenerator,
+        predicate_id_generator: &PredicateIdGenerator,
         mode: AnalysisMode,
-        context: &mut ConflictAnalysisContext,
     ) -> usize {
         let num_removed = self.num_current_checkpoint();
 
@@ -303,7 +282,7 @@ impl WorkingNogood {
             );
             previous_predicate = Some(predicate);
 
-            self.add_asserting_predicate(predicate, context, predicate_id_generator, mode);
+            self.add_asserting_predicate(predicate);
         }
 
         num_removed
@@ -333,7 +312,7 @@ impl WorkingNogood {
     /// Returns the next [`Predicate`] to resolve upon based on the trail.
     pub(crate) fn pop_max_predicate(
         &mut self,
-        predicate_id_generator: &mut PredicateIdGenerator,
+        predicate_id_generator: &PredicateIdGenerator,
         mode: AnalysisMode,
     ) -> Predicate {
         let next_predicate_id = self.to_process_heap.pop_max().unwrap();
@@ -674,7 +653,7 @@ impl WorkingNogood {
 /// should be resolved upon before the predicates which are explicitly on the trail.
 ///
 /// Panics if the provided [`Predicate`] is not currently true on the trail.
-fn get_heap_value(predicate: Predicate, context: &mut ConflictAnalysisContext<'_>) -> u32 {
+fn get_heap_value(predicate: Predicate, context: &ConflictAnalysisContext<'_>) -> u32 {
     if context.get_state().is_on_trail(predicate) {
         context
             .get_state()

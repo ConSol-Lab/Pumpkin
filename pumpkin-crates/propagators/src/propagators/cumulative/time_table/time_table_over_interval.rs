@@ -67,8 +67,6 @@ pub(crate) struct Event<Var> {
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug, Clone)]
 pub struct TimeTableOverIntervalPropagator<Var> {
-    /// Stores whether the time-table is empty
-    is_time_table_empty: bool,
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
     /// Stores structures which change during the search; used to store the bounds
@@ -97,7 +95,6 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
         let updatable_structures = UpdatableStructures::new(&parameters);
 
         TimeTableOverIntervalPropagator {
-            is_time_table_empty: true,
             parameters,
             updatable_structures,
             constraint_tag,
@@ -159,7 +156,6 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
             &self.parameters,
             self.inference_code.as_ref().unwrap(),
         )?;
-        self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
         propagate_based_on_timetable(
@@ -183,17 +179,12 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
-        // Note that it could be the case that `is_time_table_empty` is inaccurate here since it
-        // wasn't updated in `synchronise`; however, `synchronise` will only remove profiles
-        // meaning that `is_time_table_empty` will always return `false` when it is not
-        // empty and it might return `false` even when the time-table is not empty *but* it
-        // will never return `true` when the time-table is not empty.
+
         let result = should_enqueue(
-            &self.parameters,
             &self.updatable_structures,
             &updated_task,
             context.domains(),
-            self.is_time_table_empty,
+            &self.parameters,
         );
 
         update_bounds_task(

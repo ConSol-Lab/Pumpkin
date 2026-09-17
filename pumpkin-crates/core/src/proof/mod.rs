@@ -286,7 +286,7 @@ impl ProofLog {
         match self.internal_proof {
             Some(ProofImpl::CpProof {
                 mut writer,
-                mut proof_atomics,
+                proof_atomics,
                 ..
             }) => {
                 let atomic =

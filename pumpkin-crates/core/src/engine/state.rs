@@ -599,14 +599,14 @@ impl State {
         }
 
         let _ = self.notification_engine.process_backtrack_events(
-            &mut self.assignments,
+            &self.assignments,
             &mut self.trailed_values,
             &mut self.propagators,
         );
         self.notification_engine.clear_event_drain();
 
         self.notification_engine
-            .update_last_notified_index(&mut self.assignments);
+            .update_last_notified_index(&self.assignments);
         // Should be done after the assignments and trailed values have been synchronised
         self.notification_engine.synchronise(
             checkpoint,
@@ -654,7 +654,7 @@ impl State {
                 // Notify other propagators of the propagations and continue.
                 self.notification_engine
                     .notify_propagators_about_domain_events(
-                        &mut self.assignments,
+                        &self.assignments,
                         &mut self.trailed_values,
                         &mut self.propagators,
                         &mut self.propagator_queue,
@@ -665,7 +665,7 @@ impl State {
                         propagator_id,
                         &self.trailed_values,
                         &self.assignments,
-                        &mut self.reason_store,
+                        &self.reason_store,
                         &mut self.propagators,
                         &self.notification_engine
                     ),
@@ -766,7 +766,7 @@ impl State {
         // The initial domain events are due to the decision predicate.
         self.notification_engine
             .notify_propagators_about_domain_events(
-                &mut self.assignments,
+                &self.assignments,
                 &mut self.trailed_values,
                 &mut self.propagators,
                 &mut self.propagator_queue,

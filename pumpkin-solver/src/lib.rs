@@ -363,6 +363,14 @@ pub mod branching {
     use pumpkin_core::branching::Brancher;
 }
 
+pub mod checking {
+    //! Exposes a common interface used to check inferences.
+    //!
+    //! The main exposed type is the [`InferenceChecker`], which can be implemented to verify
+    //! whether inferences are sound w.r.t. an inference rule.
+    pub use pumpkin_checking::*;
+}
+
 pub mod core {
     //! The core interfaces and structures used by the pumpkin solver.
     pub use pumpkin_core::*;
