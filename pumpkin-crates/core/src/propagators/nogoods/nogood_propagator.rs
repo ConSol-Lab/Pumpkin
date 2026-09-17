@@ -550,19 +550,20 @@ impl Propagator for NogoodPropagator {
                 let propagating_predicate_id =
                     PredicateId::create_from_index(reason.unit_propagation_index() as usize);
 
-                self.temp_nogood_reason = self
-                    .nogood_predicates
-                    .get_nogood(id)
-                    .iter()
-                    .filter(|&&predicate_id| predicate_id != propagating_predicate_id)
-                    .map(|&predicate_id| context.get_predicate(predicate_id))
-                    .collect::<Vec<_>>();
+                self.temp_nogood_reason.clear();
+                self.temp_nogood_reason.extend(
+                    self.nogood_predicates
+                        .get_nogood(id)
+                        .iter()
+                        .filter(|&&predicate_id| predicate_id != propagating_predicate_id)
+                        .map(|&predicate_id| context.get_predicate(predicate_id)),
+                );
             } else {
                 match predicate_to_be_explained.get_predicate_type() {
                     PredicateType::UpperBound => {
-                        self.temp_nogood_reason = nogood
-                            .iter()
-                            .filter_map(|predicate_id| {
+                        self.temp_nogood_reason.clear();
+                        self.temp_nogood_reason
+                            .extend(nogood.iter().filter_map(|predicate_id| {
                                 let predicate = context.get_predicate(*predicate_id);
 
                                 (context.evaluate_predicate_at_trail_position(
@@ -574,13 +575,12 @@ impl Propagator for NogoodPropagator {
                                         || (predicate.is_not_equal_predicate()
                                             && predicate.get_right_hand_side() > rhs)))
                                     .then_some(predicate)
-                            })
-                            .collect();
+                            }));
                     }
                     PredicateType::LowerBound => {
-                        self.temp_nogood_reason = nogood
-                            .iter()
-                            .filter_map(|predicate_id| {
+                        self.temp_nogood_reason.clear();
+                        self.temp_nogood_reason
+                            .extend(nogood.iter().filter_map(|predicate_id| {
                                 let predicate = context.get_predicate(*predicate_id);
 
                                 (context.evaluate_predicate_at_trail_position(
@@ -592,18 +592,16 @@ impl Propagator for NogoodPropagator {
                                         || (predicate.is_not_equal_predicate()
                                             && predicate.get_right_hand_side() < rhs)))
                                     .then_some(predicate)
-                            })
-                            .collect();
+                            }));
                     }
                     PredicateType::NotEqual => {
-                        self.temp_nogood_reason = nogood
-                            .iter()
-                            .filter_map(|predicate_id| {
+                        self.temp_nogood_reason.clear();
+                        self.temp_nogood_reason
+                            .extend(nogood.iter().filter_map(|predicate_id| {
                                 let predicate = context.get_predicate(*predicate_id);
 
                                 (predicate.get_domain() != propagated_domain).then_some(predicate)
-                            })
-                            .collect();
+                            }));
                     }
                     PredicateType::Equal => unreachable!(),
                 }
@@ -614,10 +612,12 @@ impl Propagator for NogoodPropagator {
                 inference_code: self.inference_codes[info_id].clone(),
             }
         } else {
-            self.temp_nogood_reason = self.nogood_predicates.get_nogood(id)[1..]
-                .iter()
-                .map(|predicate_id| context.get_predicate(*predicate_id))
-                .collect::<Vec<_>>();
+            self.temp_nogood_reason.clear();
+            self.temp_nogood_reason.extend(
+                self.nogood_predicates.get_nogood(id)[1..]
+                    .iter()
+                    .map(|predicate_id| context.get_predicate(*predicate_id)),
+            );
 
             let info_id = self.nogood_predicates.get_nogood_index(&id);
 
