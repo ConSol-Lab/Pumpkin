@@ -91,10 +91,13 @@ impl WorkingNogood {
         predicate_id_generator: &mut PredicateIdGenerator,
         mode: AnalysisMode,
     ) {
+        // Its corresponding predicate id, computed once and reused below.
+        let predicate_id = predicate_id_generator.get_id(predicate);
+
         if self.is_redundant(
             predicate,
             context,
-            predicate_id_generator.get_id(predicate),
+            predicate_id,
             predicate_id_generator,
             mode,
         ) {
@@ -105,8 +108,6 @@ impl WorkingNogood {
 
         // We first retrieve the value that the predicate will get in the heap
         let heap_value = get_heap_value(predicate, context);
-        // And its corresponding predicate id
-        let predicate_id = predicate_id_generator.get_id(predicate);
 
         // Next, we restore the key in the heap
         self.to_process_heap.restore_key(predicate_id);
