@@ -536,6 +536,8 @@ impl Propagator for NogoodPropagator {
     ) -> LazyExplanation<'_> {
         let reason = LazyNogoodExplanation::from_bits(code);
         let id = reason.nogood_id();
+        self.temp_nogood_reason.clear();
+
         let result = if reason.explains_extended_propagation() {
             // The lazy explanations explains a propagation using extended nogood propagation.
             let nogood = &self.nogood_predicates.get_nogood(id);
@@ -550,7 +552,6 @@ impl Propagator for NogoodPropagator {
                 let propagating_predicate_id =
                     PredicateId::create_from_index(reason.unit_propagation_index() as usize);
 
-                self.temp_nogood_reason.clear();
                 self.temp_nogood_reason.extend(
                     self.nogood_predicates
                         .get_nogood(id)
@@ -561,7 +562,6 @@ impl Propagator for NogoodPropagator {
             } else {
                 match predicate_to_be_explained.get_predicate_type() {
                     PredicateType::UpperBound => {
-                        self.temp_nogood_reason.clear();
                         self.temp_nogood_reason
                             .extend(nogood.iter().filter_map(|predicate_id| {
                                 let predicate = context.get_predicate(*predicate_id);
@@ -578,7 +578,6 @@ impl Propagator for NogoodPropagator {
                             }));
                     }
                     PredicateType::LowerBound => {
-                        self.temp_nogood_reason.clear();
                         self.temp_nogood_reason
                             .extend(nogood.iter().filter_map(|predicate_id| {
                                 let predicate = context.get_predicate(*predicate_id);
@@ -595,7 +594,6 @@ impl Propagator for NogoodPropagator {
                             }));
                     }
                     PredicateType::NotEqual => {
-                        self.temp_nogood_reason.clear();
                         self.temp_nogood_reason
                             .extend(nogood.iter().filter_map(|predicate_id| {
                                 let predicate = context.get_predicate(*predicate_id);
@@ -612,7 +610,6 @@ impl Propagator for NogoodPropagator {
                 inference_code: self.inference_codes[info_id].clone(),
             }
         } else {
-            self.temp_nogood_reason.clear();
             self.temp_nogood_reason.extend(
                 self.nogood_predicates.get_nogood(id)[1..]
                     .iter()
