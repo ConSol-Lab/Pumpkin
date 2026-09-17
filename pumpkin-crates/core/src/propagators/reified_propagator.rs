@@ -229,7 +229,7 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
     }
 
     fn filter_enqueue_decision(
-        &mut self,
+        &self,
         mut context: NotificationContext<'_>,
         decision: EnqueueDecision,
     ) -> EnqueueDecision {

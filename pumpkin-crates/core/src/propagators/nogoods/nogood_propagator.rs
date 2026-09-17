@@ -1283,7 +1283,7 @@ impl NogoodPropagator {
                 &mut self.inference_codes,
                 &mut self.watch_lists,
                 &mut self.permanent_nogood_ids,
-                &mut self.statistics,
+                &self.statistics,
                 &mut self.propagation_buffer,
             )
         }
@@ -1419,7 +1419,7 @@ impl NogoodPropagator {
     fn clean_up_learned_nogoods_if_needed(
         &mut self,
         assignments: &Assignments,
-        reason_store: &mut ReasonStore,
+        reason_store: &ReasonStore,
         notification_engine: &mut NotificationEngine,
     ) {
         // The clean-up procedure is divided into four stages (for simplicity of implementation).
@@ -1525,7 +1525,7 @@ impl NogoodPropagator {
     fn has_a_watched_predicate_falsified_at_root_level(
         nogood: &[PredicateId],
         assignments: &Assignments,
-        notification_engine: &mut NotificationEngine,
+        notification_engine: &NotificationEngine,
     ) -> bool {
         let watcher1 = notification_engine.get_predicate(nogood[0]);
         let watcher2 = notification_engine.get_predicate(nogood[1]);
@@ -1669,7 +1669,7 @@ impl NogoodPropagator {
         nogood_info: &mut KeyedVec<NogoodIndex, NogoodInfo>,
         nogoods: &ArenaAllocator,
         assignments: &Assignments,
-        reason_store: &mut ReasonStore,
+        reason_store: &ReasonStore,
         notification_engine: &mut NotificationEngine,
         propagation_mode: PropagationMode,
     ) -> bool {
