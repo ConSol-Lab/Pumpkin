@@ -60,6 +60,12 @@ impl<Strategy: AlternatingStrategy> AlternatingStrategy for UntilSolution<Strate
         }
     }
 
+    fn on_conflict(&mut self) {
+        if !self.has_found_solution {
+            self.strategy_before_solution.on_conflict();
+        }
+    }
+
     fn is_restart_pointless(
         &mut self,
         default_brancher: &mut impl Brancher,

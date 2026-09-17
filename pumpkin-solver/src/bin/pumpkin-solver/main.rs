@@ -413,6 +413,13 @@ struct Args {
     /// The priority of the nogood propagator.
     #[arg(long = "nogood-priority", value_enum, default_value_t)]
     nogood_propagator_priority: Priority,
+
+    /// The number of conflicts until switching to the default free search strategy (if a solution
+    /// has been found).
+    ///
+    /// Only works when free search is used when solving an optimisation problem.
+    #[arg(long = "until-num-conflicts", default_value_t = 100)]
+    until_num_conflicts: u32,
 }
 
 fn configure_logging(
@@ -625,6 +632,7 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
+                    until_num_conflicts: args.until_num_conflicts,
                 },
                 NoLearningResolver,
             )?,
@@ -645,6 +653,7 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
+                    until_num_conflicts: args.until_num_conflicts,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::OneUIP,
@@ -669,6 +678,7 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
+                    until_num_conflicts: args.until_num_conflicts,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::CPIP,
@@ -693,6 +703,7 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
+                    until_num_conflicts: args.until_num_conflicts,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::BoundsCPIP,
@@ -717,6 +728,7 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
+                    until_num_conflicts: args.until_num_conflicts,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::AllDecision,

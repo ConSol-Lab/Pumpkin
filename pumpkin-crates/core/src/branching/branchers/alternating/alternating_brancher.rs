@@ -67,6 +67,7 @@ impl<Strategy: AlternatingStrategy, OtherBrancher: Brancher> Brancher
     fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
         self.default_brancher
             .on_appearance_in_conflict_predicate(predicate);
+
         if !self.strategy.will_always_use_default() {
             self.other_brancher
                 .on_appearance_in_conflict_predicate(predicate)
@@ -74,6 +75,8 @@ impl<Strategy: AlternatingStrategy, OtherBrancher: Brancher> Brancher
     }
 
     fn on_conflict(&mut self) {
+        self.strategy.on_conflict();
+
         self.default_brancher.on_conflict();
         if !self.strategy.will_always_use_default() {
             self.other_brancher.on_conflict();

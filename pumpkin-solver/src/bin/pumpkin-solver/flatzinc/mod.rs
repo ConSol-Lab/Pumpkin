@@ -13,7 +13,7 @@ use std::time::Instant;
 
 use pumpkin_core::branching::branchers::alternating::AlternatingBrancher;
 use pumpkin_core::branching::branchers::alternating::every_x_restarts::EveryXRestarts;
-use pumpkin_core::branching::branchers::alternating::until_solution::UntilSolution;
+use pumpkin_core::branching::branchers::alternating::until_x_conflicts_and_solution::UntilXConflictsAndSolution;
 use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_core::statistics::log_statistic;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
@@ -76,6 +76,12 @@ pub(crate) struct FlatZincOptions {
 
     /// Indicates that the solver should perform verbose logging
     pub(crate) verbose: bool,
+
+    /// The number of conflicts until the default free search is always used (if a solution has
+    /// been found).
+    ///
+    /// Only works on optimisation problems in combination with free search.
+    pub(crate) until_num_conflicts: u32,
 }
 
 fn log_statistics(
@@ -151,7 +157,10 @@ pub(crate) fn solve<R: ConflictResolver>(
             DynamicBrancher::new(vec![Box::new(AlternatingBrancher::new(
                 &solver,
                 instance.search.expect("Expected a search to be defined"),
-                UntilSolution::new(EveryXRestarts::new(1)),
+                UntilXConflictsAndSolution::new(
+                    EveryXRestarts::new(1),
+                    options.until_num_conflicts,
+                ),
             ))])
         } else {
             // If there is no objective, then we alternate between the provided strategy and the

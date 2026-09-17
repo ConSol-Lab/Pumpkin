@@ -25,6 +25,12 @@ pub trait AlternatingStrategy: Debug {
     ///
     /// See [`Brancher::on_restart`].
     fn on_restart(&mut self) {}
+
+    /// Called when a conflict is performed.
+    ///
+    /// See [`Brancher::on_conflict`].
+    fn on_conflict(&mut self) {}
+
     /// Called when a restart is considered but not necessarily performed.
     ///
     /// See [`Brancher::is_restart_pointless`].
@@ -65,3 +71,4 @@ pub mod every_x_restarts;
 pub mod every_x_solutions;
 pub mod other_only;
 pub mod until_solution;
+pub mod until_x_conflicts_and_solution;
