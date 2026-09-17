@@ -225,7 +225,7 @@ impl WorkingNogood {
     /// structures.
     pub(crate) fn drain_learned_nogood(
         &mut self,
-        predicate_id_generator: &mut PredicateIdGenerator,
+        predicate_id_generator: &PredicateIdGenerator,
         mode: AnalysisMode,
         statistics: &mut CpipStatistics,
     ) -> impl Iterator<Item = Predicate> {
@@ -256,7 +256,7 @@ impl WorkingNogood {
     /// [`WorkingNogood`] after [`AnalysisMode::should_continue_resolving`] returned false.
     pub(crate) fn remove_final_predicates(
         &mut self,
-        predicate_id_generator: &mut PredicateIdGenerator,
+        predicate_id_generator: &PredicateIdGenerator,
         mode: AnalysisMode,
     ) -> usize {
         let num_removed = self.num_current_checkpoint();

@@ -240,7 +240,7 @@ impl ResolutionResolver {
         let mut learned_nogood = self
             .working_nogood
             .drain_learned_nogood(
-                &mut self.predicate_id_generator,
+                &self.predicate_id_generator,
                 self.mode,
                 &mut self.statistics.cpip_statistics,
             )
