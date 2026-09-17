@@ -32,7 +32,6 @@ use crate::conflict_resolving::ConflictResolver;
 use crate::containers::HashMap;
 use crate::containers::HashSet;
 use crate::declare_inference_label;
-use crate::engine::Assignments;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::engine::State;
@@ -58,6 +57,7 @@ use crate::pumpkin_assert_simple;
 use crate::state::CurrentNogood;
 use crate::statistics::StatisticLogger;
 use crate::statistics::statistic_logging::should_log_statistics;
+use crate::variables::DomainGeneratorIterator;
 use crate::variables::DomainId;
 
 /// A solver which attempts to find a solution to a Constraint Satisfaction Problem (CSP) using
@@ -192,12 +192,13 @@ impl Default for SatisfactionSolverOptions {
 }
 
 impl ConstraintSatisfactionSolver {
-    pub(crate) fn assignments(&self) -> &Assignments {
-        &self.state.assignments
+    /// Returns an iterator over the [`DomainId`]s which are currently defined.
+    pub(crate) fn get_domain_ids(&self) -> DomainGeneratorIterator {
+        self.state.get_domain_ids()
     }
 
     /// This is a temporary accessor to help refactoring.
-    pub fn get_solution_reference(&self) -> SolutionReference<'_> {
+    pub(crate) fn get_solution_reference(&self) -> SolutionReference<'_> {
         self.state.get_solution_reference()
     }
 
@@ -624,10 +625,8 @@ impl ConstraintSatisfactionSolver {
         }
 
         // Otherwise proceed with standard branching.
-        let context = &mut SelectionContext::new(
-            &self.state.assignments,
-            &mut self.internal_parameters.random_generator,
-        );
+        let context =
+            &mut SelectionContext::new(&self.state, &mut self.internal_parameters.random_generator);
 
         // If there is a next decision, make the decision.
         let Some(decision_predicate) = brancher.next_decision(context) else {
@@ -755,7 +754,7 @@ impl ConstraintSatisfactionSolver {
                 brancher.on_unassign_integer(domain_id, previous_value)
             });
 
-        brancher.synchronise(&mut SelectionContext::new(&state.assignments, rng));
+        brancher.synchronise(&mut SelectionContext::new(state, rng));
     }
 
     /// Main propagation loop.
@@ -1148,8 +1147,10 @@ mod tests {
     }
     use super::ConstraintSatisfactionSolver;
     use super::CoreExtractionResult;
-    use crate::DefaultBrancher;
     use crate::basic_types::CSPSolverExecutionFlag;
+    use crate::branching::Brancher;
+    use crate::branching::BrancherEvent;
+    use crate::branching::SelectionContext;
     use crate::conflict_resolving::ConflictAnalysisContext;
     use crate::conflict_resolving::ConflictResolver;
     use crate::predicate;
@@ -1157,6 +1158,24 @@ mod tests {
     use crate::propagation::ReadDomains;
     use crate::pumpkin_assert_simple;
     use crate::termination::Indefinite;
+
+    /// A minimal [`Brancher`] which selects the first unfixed variable and assigns it its
+    /// lower-bound; used to drive search in tests which do not care about the branching heuristic.
+    #[derive(Debug)]
+    struct SimpleBrancher;
+
+    impl Brancher for SimpleBrancher {
+        fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
+            context
+                .get_domains()
+                .find(|&variable| !context.is_integer_fixed(variable))
+                .map(|variable| predicate!(variable == context.lower_bound(variable)))
+        }
+
+        fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+            vec![]
+        }
+    }
 
     fn is_same_core(core1: &[Predicate], core2: &[Predicate]) -> bool {
         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))
@@ -1181,7 +1200,7 @@ mod tests {
         expected_flag: CSPSolverExecutionFlag,
         expected_result: CoreExtractionResult,
     ) {
-        let mut brancher = DefaultBrancher::default_over_all_variables(&solver.state.assignments);
+        let mut brancher = SimpleBrancher;
         let mut resolver = NoLearningResolver;
 
         let flag = solver.solve_under_assumptions(

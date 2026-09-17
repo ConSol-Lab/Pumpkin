@@ -9,6 +9,7 @@
 //! To ensure that one of these occurs, we create two Boolean variables, l_xy and l_yx, to signify
 //! the two possibilities, and then post the constraint (l_xy \/ l_yx).
 
+use pumpkin_branching::DefaultBrancher;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_solver::Solver;
@@ -87,7 +88,7 @@ fn main() {
         }
     }
 
-    let mut brancher = solver.default_brancher();
+    let mut brancher = DefaultBrancher::default_over_all_variables(&solver);
     let mut resolver = ResolutionResolver::default();
     if matches!(
         solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver),

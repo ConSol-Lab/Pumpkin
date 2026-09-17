@@ -48,6 +48,7 @@ use crate::state::EmptyDomainConflict;
 use crate::state::PropagatorHandle;
 use crate::statistics::StatisticLogger;
 use crate::statistics::log_statistic;
+use crate::variables::DomainGeneratorIterator;
 use crate::variables::DomainId;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
@@ -276,6 +277,11 @@ impl State {
     /// Returns the number of created checkpoints.
     pub fn get_checkpoint(&self) -> usize {
         self.assignments.get_checkpoint()
+    }
+
+    /// Returns an iterator over the [`DomainId`]s which are currently defined.
+    pub fn get_domain_ids(&self) -> DomainGeneratorIterator {
+        self.assignments.get_domains()
     }
 }
 

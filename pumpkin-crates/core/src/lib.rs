@@ -35,7 +35,6 @@ mod api;
 
 pub use api::*;
 
-pub use crate::api::solver::DefaultBrancher;
 pub use crate::api::solver::Solver;
 pub use crate::basic_types::ConstraintOperationError;
 pub use crate::basic_types::Duration;
