@@ -3,10 +3,12 @@ use pumpkin_core::checkers::StrongRetentionChecker;
 use pumpkin_core::containers::HashSet;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
-use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use crate::arithmetic::BinaryEqualsChecker;
@@ -27,47 +29,49 @@ where
 {
     type PropagatorImpl = BinaryEqualsPropagator<AVar, BVar>;
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let BinaryEqualsPropagatorArgs {
             a,
             b,
             constraint_tag,
         } = self;
 
-        context.add_inference_checker(
-            InferenceCode::new(constraint_tag, super::BinaryEquals),
-            Box::new(BinaryEqualsChecker {
-                lhs: a.clone(),
-                rhs: b.clone(),
-            }),
-        );
+        let registration = EventsToRegister::builder()
+            .add(&a, DomainEvents::ANY_INT, super::ID_LHS)
+            .add(&b, DomainEvents::ANY_INT, super::ID_RHS)
+            .build();
 
-        context.add_consistency_checker(
+        let checker = BinaryEqualsChecker {
+            lhs: a.clone(),
+            rhs: b.clone(),
+        };
+
+        let mut checkers = RuntimeCheckers::builder();
+        let inference_code =
+            checkers.add_inference_checker(constraint_tag, super::BinaryEquals, checker.clone());
+        checkers.add_consistency_checker(
             ((super::ID_LHS, &a), (super::ID_RHS, &b)),
-            StrongRetentionChecker::new(
-                StrongConsistency::Domain,
-                BinaryEqualsChecker {
-                    lhs: a.clone(),
-                    rhs: b.clone(),
-                },
-            ),
+            StrongRetentionChecker::new(StrongConsistency::Domain, checker),
         );
 
-        context.register(a.clone(), DomainEvents::ANY_INT, super::ID_LHS);
-        context.register(b.clone(), DomainEvents::ANY_INT, super::ID_RHS);
-
-        BinaryEqualsPropagator {
+        let propagator = BinaryEqualsPropagator {
             a,
             b,
 
             a_removed_values: HashSet::default(),
             b_removed_values: HashSet::default(),
 
-            inference_code: InferenceCode::new(constraint_tag, super::BinaryEquals),
+            inference_code,
 
             has_backtracked: false,
             first_propagation_loop: true,
             reason: Predicate::trivially_false(),
+        };
+
+        PropagatorSpec {
+            registration,
+            checkers: checkers.build(),
+            propagator,
         }
     }
 }

@@ -9,13 +9,12 @@ use pumpkin_core::asserts::pumpkin_assert_extreme;
 use pumpkin_core::checkers::Scope;
 use pumpkin_core::checkers::WeakConsistency;
 use pumpkin_core::checkers::WeakRetentionChecker;
-use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::PropagationContext;
-use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::RuntimeCheckersBuilder;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -25,7 +24,6 @@ use crate::cumulative::Task;
 use crate::cumulative::UpdatableStructures;
 use crate::cumulative::UpdatedTaskInfo;
 use crate::cumulative::time_table::CheckerTask;
-use crate::cumulative::time_table::TimeTable;
 use crate::cumulative::time_table::TimeTableChecker;
 use crate::propagators::cumulative::time_table::propagation_handler::CumulativePropagationHandler;
 
@@ -43,33 +41,17 @@ pub(crate) struct ShouldEnqueueResult<Var> {
     pub(crate) update: Option<UpdatedTaskInfo<Var>>,
 }
 
-pub(crate) fn register_checkers<Var: IntegerVariable + 'static>(
-    context: &mut PropagatorConstructorContext,
-    constraint_tag: ConstraintTag,
+/// Adds the consistency checker of a time-table propagator over `parameters` to `checkers`.
+pub(crate) fn add_consistency_checker<Var: IntegerVariable + 'static>(
+    checkers: &mut RuntimeCheckersBuilder,
     parameters: &CumulativeParameters<Var>,
 ) {
-    context.add_inference_checker(
-        InferenceCode::new(constraint_tag, TimeTable),
-        Box::new(TimeTableChecker {
-            tasks: parameters
-                .tasks
-                .iter()
-                .map(|task| CheckerTask {
-                    start_time: task.start_variable.clone(),
-                    processing_time: task.processing_time,
-                    resource_usage: task.resource_usage,
-                })
-                .collect(),
-            capacity: parameters.capacity,
-        }),
-    );
-
     let mut scope = Scope::default();
     parameters.tasks.iter().for_each(|task| {
         task.start_variable.add_to_scope(&mut scope, task.id);
     });
 
-    context.add_consistency_checker(
+    checkers.add_consistency_checker(
         scope,
         WeakRetentionChecker::new(
             if parameters.options.allow_holes_in_domain {
@@ -98,11 +80,10 @@ pub(crate) fn register_checkers<Var: IntegerVariable + 'static>(
 /// such task exists). This method should be called in the
 /// [`ConstraintProgrammingPropagator::notify`] method.
 pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
-    parameters: &CumulativeParameters<Var>,
     updatable_structures: &UpdatableStructures<Var>,
     updated_task: &Rc<Task<Var>>,
     mut context: Domains,
-    empty_time_table: bool,
+    parameters: &CumulativeParameters<Var>,
 ) -> ShouldEnqueueResult<Var> {
     pumpkin_assert_extreme!(
         context.lower_bound(&updated_task.start_variable)
@@ -137,28 +118,15 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
         });
     }
 
-    result.decision = if parameters.options.allow_holes_in_domain {
-        // If there are updates then propagations might occur due to new mandatory parts being
-        // added. However, if there are no updates then because we allow holes in the domain, no
-        // updates can occur so we can skip propagation!
-        if updatable_structures.has_updates() || result.update.is_some() {
-            EnqueueDecision::Enqueue
-        } else {
-            EnqueueDecision::Skip
-        }
+    if parameters.options.allow_holes_in_domain && result.update.is_none() {
+        // If we allow holes in the domains, then we only need to enqueue when there has been a
+        // change in the time-table since all other values have already been removed, meaning that
+        // a change in the bounds of a task would not lead to a propagation.
+        result.decision = EnqueueDecision::Skip
     } else {
-        // If the time-table is empty and we have not received any updates (e.g. no mandatory parts
-        // have been introduced since the last propagation) then we can determine that no
-        // propagation will take place. It is not sufficient to check whether there have
-        // been no updates since it could be the case that a task which has been updated can
-        // now propagate due to an existing profile (this is due to the fact that we only
-        // propagate bounds and (currently) do not create holes in the domain!).
-        if !empty_time_table || updatable_structures.has_updates() || result.update.is_some() {
-            EnqueueDecision::Enqueue
-        } else {
-            EnqueueDecision::Skip
-        }
-    };
+        result.decision = EnqueueDecision::Enqueue;
+    }
+
     result
 }
 
@@ -259,7 +227,7 @@ fn debug_check_whether_profiles_are_maximal_and_sorted<'a, Var: IntegerVariable 
 pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContext,
     inference_code: &InferenceCode,
-    time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
+    time_table: impl ExactSizeIterator<Item = &'a ResourceProfile<Var>> + Clone,
     parameters: &CumulativeParameters<Var>,
     updatable_structures: &mut UpdatableStructures<Var>,
 ) -> PropagationStatusCP {
@@ -280,6 +248,11 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
             .all(|fixed_task| context.is_fixed(&fixed_task.start_variable)),
         "All of the fixed tasks should be fixed at this point"
     );
+
+    if time_table.len() == 0 {
+        // No propagation can take place since the time-table is empty
+        return Ok(());
+    }
 
     if parameters.options.generate_sequence {
         propagate_sequence_of_profiles(
@@ -433,7 +406,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContext,
     inference_code: &InferenceCode,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
-    updatable_structures: &mut UpdatableStructures<Var>,
+    updatable_structures: &UpdatableStructures<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     let mut profile_buffer = Vec::default();

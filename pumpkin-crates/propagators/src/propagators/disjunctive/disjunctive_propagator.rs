@@ -11,12 +11,15 @@ use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::propagator_conflict;
 use pumpkin_core::variables::IntegerVariable;
@@ -81,23 +84,10 @@ impl<Var> DisjunctiveConstructor<Var> {
 impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstructor<Var> {
     type PropagatorImpl = DisjunctivePropagator<Var>;
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        let DisjunctiveConstructor {
-            constraint_tag,
-            tasks: arg_tasks,
-        } = self;
-
-        let inference_code = InferenceCode::new(constraint_tag, DisjunctiveEdgeFinding);
-
-        context.add_inference_checker(
-            inference_code.clone(),
-            Box::new(DisjunctiveEdgeFindingChecker {
-                tasks: arg_tasks.clone().into(),
-            }),
-        );
-
-        let tasks = arg_tasks
-            .iter()
+    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
+        let tasks = self
+            .tasks
+            .into_iter()
             .enumerate()
             .map(|(index, task)| DisjunctiveTask {
                 start_time: task.start_time.clone(),
@@ -108,27 +98,45 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
         let theta_lambda_tree = ThetaLambdaTree::new(&tasks);
 
         let mut scope = Scope::default();
+        let mut registration = EventsToRegister::builder();
         for task in tasks.iter() {
-            context.register(task.start_time.clone(), DomainEvents::BOUNDS, task.id);
+            registration = registration.add(&task.start_time, DomainEvents::BOUNDS, task.id);
             task.start_time.add_to_scope(&mut scope, task.id);
         }
 
-        context.add_consistency_checker(
+        let checker = DisjunctiveEdgeFindingChecker {
+            tasks: tasks
+                .iter()
+                .map(|task| ArgDisjunctiveTask {
+                    start_time: task.start_time.clone(),
+                    processing_time: task.processing_time,
+                })
+                .collect(),
+        };
+
+        let mut checkers = RuntimeCheckers::builder();
+        let inference_code = checkers.add_inference_checker(
+            self.constraint_tag,
+            DisjunctiveEdgeFinding,
+            checker.clone(),
+        );
+        checkers.add_consistency_checker(
             scope,
-            WeakRetentionChecker::new(
-                WeakConsistency::Bounds,
-                DisjunctiveEdgeFindingChecker {
-                    tasks: arg_tasks.into(),
-                },
-            ),
+            WeakRetentionChecker::new(WeakConsistency::Bounds, checker),
         );
 
-        DisjunctivePropagator {
+        let propagator = DisjunctivePropagator {
             tasks: tasks.clone().into_boxed_slice(),
             sorted_tasks: tasks,
             theta_lambda_tree,
 
             inference_code,
+        };
+
+        PropagatorSpec {
+            registration: registration.build(),
+            checkers: checkers.build(),
+            propagator,
         }
     }
 }
@@ -267,7 +275,7 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
 /// - \[2\] R. A. Vasile, ‘Evaluating the Impact of Explanations on the Performance of an
 ///   Edge-Finding Propagator’.
 fn create_conflict_explanation<Var: IntegerVariable>(
-    theta_lambda_tree: &mut ThetaLambdaTree<Var>,
+    theta_lambda_tree: &ThetaLambdaTree<Var>,
     context: &PropagationContext,
     lct: i32,
 ) -> PropositionalConjunction {
@@ -332,7 +340,7 @@ fn create_conflict_explanation<Var: IntegerVariable>(
 fn create_propagation_explanation<'a, Var: IntegerVariable>(
     original_tasks: &'a [DisjunctiveTask<Var>],
     propagated_task_id: LocalId,
-    theta_lambda_tree: &mut ThetaLambdaTree<Var>,
+    theta_lambda_tree: &ThetaLambdaTree<Var>,
     context: &'a PropagationContext,
     new_bound: i32,
     lct_j: i32,

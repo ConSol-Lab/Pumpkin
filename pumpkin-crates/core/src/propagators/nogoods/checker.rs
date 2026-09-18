@@ -36,16 +36,26 @@ impl RetentionChecker for NogoodChecker<Predicate> {
             .filter(|&&predicate| domains.evaluate_predicate(predicate) != Some(true))
             .count();
 
-        if untrue_predicate_count >= 2 {
-            // If at least two predicates are not true, then the domain is
-            // unit-propagation consistent.
-            return true;
+        // If at least two predicates are not true, or any predicate is false, then the domains are
+        // unit-propagation consistent.
+        let is_consistent = untrue_predicate_count >= 2
+            || self
+                .nogood
+                .iter()
+                .any(|&predicate| domains.evaluate_predicate(predicate) == Some(false));
+
+        if !is_consistent {
+            log::error!(
+                "The nogood {:?} is not unit-propagation consistent; truth values: {:?}",
+                self.nogood,
+                self.nogood
+                    .iter()
+                    .map(|&predicate| (predicate, domains.evaluate_predicate(predicate)))
+                    .collect::<Vec<_>>()
+            );
         }
 
-        // At least one predicate must be false for the domain to be unit-propagation consistent.
-        self.nogood
-            .iter()
-            .any(|&predicate| domains.evaluate_predicate(predicate) == Some(false))
+        is_consistent
     }
 }
 

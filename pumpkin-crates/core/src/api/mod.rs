@@ -25,6 +25,7 @@ pub mod results {
     pub use crate::api::outputs::SolutionReference;
     pub use crate::api::outputs::solution_iterator;
     pub use crate::api::outputs::unsatisfiable;
+    pub use crate::basic_types::CSPSolverExecutionFlag;
     pub use crate::basic_types::Solution;
     #[cfg(doc)]
     use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;

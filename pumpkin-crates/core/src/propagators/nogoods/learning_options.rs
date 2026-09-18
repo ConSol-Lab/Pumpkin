@@ -1,3 +1,5 @@
+use crate::propagation::Priority;
+
 /// Options related to nogood management, i.e., how and when to remove learned nogoods from the
 /// database.
 #[derive(Debug, Copy, Clone)]
@@ -36,6 +38,8 @@ pub struct LearningOptions {
     pub lbd_threshold_low: u32,
     /// Specifies by how much the activity is increased when a nogood is bumped.
     pub activity_bump_increment: f32,
+    /// The priority of the nogood propagator.
+    pub nogood_propagator_priority: Priority,
 }
 impl Default for LearningOptions {
     fn default() -> Self {
@@ -48,6 +52,7 @@ impl Default for LearningOptions {
             lbd_threshold_high: 7,
             lbd_threshold_low: 3,
             activity_bump_increment: 1.0,
+            nogood_propagator_priority: Priority::High,
         }
     }
 }

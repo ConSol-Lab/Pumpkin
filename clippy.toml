@@ -1,6 +1,9 @@
 allowed-duplicate-crates = [
     "wit-bindgen",
     "regex-automata",
+    "anstream",
+    "anstyle-parse",
     "regex-syntax",
     "hashbrown",
+    "syn"
 ]

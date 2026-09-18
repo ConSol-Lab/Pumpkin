@@ -1,3 +1,4 @@
+mod consistency_store;
 mod propagation_checker;
 mod retention_checker;
 mod scope;
@@ -7,6 +8,7 @@ mod strong_retention_checker;
 pub mod support;
 mod weak_retention_checker;
 
+pub use consistency_store::*;
 pub use propagation_checker::*;
 pub use retention_checker::*;
 pub use scope::*;

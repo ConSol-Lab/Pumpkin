@@ -26,6 +26,7 @@ authors = [
     "Konstantin Sidorov",
     "Jeff Smits"
 ] # Ordered alphabetically based on last name!
+version = "0.5.0"
 
 [patch.crates-io]
 fnv = { git = "https://github.com/servo/rust-fnv", branch = "main" }
@@ -67,6 +68,7 @@ default_union_representation = "deny"
 missing_enforced_import_renames = "warn"
 mixed_read_write_in_expression = "deny"
 multiple_crate_versions = "warn"
+needless_pass_by_ref_mut = "warn"
 negative_feature_names = "deny"
 rc_mutex = "warn"
 redundant_feature_names = "warn"

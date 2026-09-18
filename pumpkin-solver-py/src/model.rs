@@ -16,6 +16,7 @@ use pumpkin_solver::core::proof::ConstraintTag;
 use pumpkin_solver::core::proof::ProofLog;
 use pumpkin_solver::core::rand::SeedableRng;
 use pumpkin_solver::core::rand::rngs::SmallRng;
+use pumpkin_solver::core::results::CSPSolverExecutionFlag;
 use pumpkin_solver::core::results::SolutionReference;
 use pumpkin_solver::core::termination::Indefinite;
 use pumpkin_solver::core::termination::TerminationCondition;
@@ -27,6 +28,7 @@ use pyo3::prelude::*;
 use crate::brancher::PythonBrancher;
 use crate::constraints::Constraint;
 use crate::optimisation::Direction;
+use crate::optimisation::FixPointPropagationResult;
 use crate::optimisation::OptimisationResult;
 use crate::optimisation::Optimiser;
 use crate::result::SatisfactionResult;
@@ -138,6 +140,26 @@ impl Model {
         Ok(literal.into())
     }
 
+    /// Get the lower bound of the given expression.
+    fn lower_bound(&self, expression: IntExpression) -> i32 {
+        self.solver.lower_bound(&expression.0)
+    }
+
+    /// Get the upper bound of the given expression.
+    fn upper_bound(&self, expression: IntExpression) -> i32 {
+        self.solver.upper_bound(&expression.0)
+    }
+
+    /// Test whether `value` is part of the domain of `expression`.
+    fn contains(&self, expression: IntExpression, value: i32) -> bool {
+        self.solver.contains(&expression.0, value)
+    }
+
+    /// Get the value of the given Boolean expression
+    fn evaluate(&self, expression: BoolExpression) -> Option<bool> {
+        self.solver.get_literal_value(expression.0)
+    }
+
     /// Create a new constraint tag.
     fn new_constraint_tag(&mut self) -> PyResult<Tag> {
         if self.solver.is_inconsistent() {
@@ -199,18 +221,14 @@ impl Model {
 
     /// Add the given constraint to the model.
     #[pyo3(signature = (constraint))]
-    fn add_constraint(&mut self, constraint: Constraint) -> PyResult<()> {
-        constraint
-            .post(&mut self.solver)
-            .map_err(|_| PyRuntimeError::new_err("inconsistency detected"))
+    fn add_constraint(&mut self, constraint: Constraint) {
+        constraint.post(&mut self.solver)
     }
 
     /// Add `premise -> constraint` to the model.
     #[pyo3(signature = (constraint, premise))]
-    fn add_implication(&mut self, constraint: Constraint, premise: BoolExpression) -> PyResult<()> {
-        constraint
-            .implied_by(&mut self.solver, premise.0)
-            .map_err(|_| PyRuntimeError::new_err("inconsistency detected"))
+    fn add_implication(&mut self, constraint: Constraint, premise: BoolExpression) {
+        constraint.implied_by(&mut self.solver, premise.0)
     }
 
     #[pyo3(signature = (timeout=None))]
@@ -280,6 +298,15 @@ impl Model {
             pumpkin_solver::core::results::SatisfactionResultUnderAssumptions::Unknown(_) => {
                 SatisfactionUnderAssumptionsResult::Unknown()
             }
+        }
+    }
+
+    #[pyo3()]
+    fn propagate_to_fixpoint(&mut self) -> FixPointPropagationResult {
+        match self.solver.propagate_to_fixpoint() {
+            CSPSolverExecutionFlag::Feasible => FixPointPropagationResult::Feasible,
+            CSPSolverExecutionFlag::Infeasible => FixPointPropagationResult::Infeasible,
+            CSPSolverExecutionFlag::Timeout => FixPointPropagationResult::Unknown,
         }
     }
 

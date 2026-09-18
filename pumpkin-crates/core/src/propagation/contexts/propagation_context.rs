@@ -1,16 +1,10 @@
-#[cfg(feature = "check-propagations")]
-use pumpkin_checking::BoxedChecker;
-use pumpkin_checking::InferenceChecker;
+use enumset::EnumSet;
 
 use crate::basic_types::PredicateId;
 use crate::checkers::BoxedRetentionChecker;
 #[cfg(feature = "check-consistency")]
 use crate::checkers::ConsistencyCheckerStore;
-#[cfg(feature = "check-propagations")]
-use crate::checkers::PropagationChecker;
 use crate::checkers::Scope;
-#[cfg(feature = "check-propagations")]
-use crate::containers::HashMap;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::EmptyDomainConflict;
@@ -22,9 +16,10 @@ use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::reason::StoredReason;
 use crate::engine::variables::Literal;
-use crate::proof::InferenceCode;
+use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
+use crate::propagation::EventDispatcher;
 use crate::propagation::HasAssignments;
 use crate::propagation::LocalId;
 #[cfg(doc)]
@@ -36,6 +31,7 @@ use crate::propagation::PropagatorVarId;
 #[cfg(doc)]
 use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_simple;
+use crate::variables::DomainId;
 use crate::variables::IntegerVariable;
 
 /// Provided to the propagator when it is notified of a domain event.
@@ -100,8 +96,6 @@ pub struct PropagationContext<'a> {
 
     #[cfg(feature = "check-consistency")]
     pub(crate) consistency_checkers: &'a mut ConsistencyCheckerStore,
-    #[cfg(feature = "check-propagations")]
-    pub(crate) inference_checkers: &'a mut HashMap<InferenceCode, Vec<PropagationChecker>>,
 }
 
 impl<'a> HasAssignments for PropagationContext<'a> {
@@ -126,10 +120,6 @@ impl<'a> PropagationContext<'a> {
         notification_engine: &'a mut NotificationEngine,
         propagator_id: PropagatorId,
         #[cfg(feature = "check-consistency")] consistency_checkers: &'a mut ConsistencyCheckerStore,
-        #[cfg(feature = "check-propagations")] inference_checkers: &'a mut HashMap<
-            InferenceCode,
-            Vec<PropagationChecker>,
-        >,
     ) -> Self {
         PropagationContext {
             trailed_values,
@@ -140,8 +130,6 @@ impl<'a> PropagationContext<'a> {
             reification_literal: None,
             #[cfg(feature = "check-consistency")]
             consistency_checkers,
-            #[cfg(feature = "check-propagations")]
-            inference_checkers,
         }
     }
 
@@ -170,33 +158,6 @@ impl<'a> PropagationContext<'a> {
         }
     }
 
-    /// Add an inference checker for inferences produced by the propagator.
-    ///
-    /// If the `check-propagations` feature is not enabled, this is a no-op.
-    pub fn add_inference_checker(
-        &mut self,
-        inference_code: InferenceCode,
-        checker: Box<dyn InferenceChecker<Predicate>>,
-    ) {
-        pumpkin_assert_simple!(
-            self.reification_literal.is_none(),
-            "Cannot add inference checkers from within a reified propagation context."
-        );
-
-        #[cfg(feature = "check-propagations")]
-        self.inference_checkers
-            .entry(inference_code)
-            .or_default()
-            .push(PropagationChecker::new(BoxedChecker::from(checker)));
-
-        // Use variables to avoid unused warnings.
-        #[cfg(not(feature = "check-propagations"))]
-        {
-            let _ = inference_code;
-            let _ = checker;
-        }
-    }
-
     /// Register the propagator to be enqueued when the provided [`Predicate`] becomes true.
     ///
     /// Returns the [`PredicateId`] assigned to the provided predicate, which will be provided
@@ -217,21 +178,20 @@ impl<'a> PropagationContext<'a> {
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`].
-    ///
-    /// See [`PropagatorConstructorContext::register`] for more information.
     pub fn register_domain_event(
         &mut self,
         var: impl IntegerVariable,
         domain_events: DomainEvents,
         local_id: LocalId,
     ) {
-        let propagator_var = PropagatorVarId {
-            propagator: self.propagator_id,
-            variable: local_id,
-        };
-
-        let mut watchers = Watchers::new(propagator_var, self.notification_engine);
-        var.watch_all(&mut watchers, domain_events.events());
+        var.register(
+            &mut NotificationEngineWatchers {
+                notificaton_engine: self.notification_engine,
+                propagator_id: self.propagator_id,
+            },
+            domain_events.events(),
+            local_id,
+        );
     }
 
     /// Stop being enqueued for events on the given integer variable.
@@ -290,6 +250,11 @@ impl<'a> PropagationContext<'a> {
             .is_predicate_id_satisfied(predicate_id, self.assignments)
     }
 
+    pub(crate) fn evaluate_predicate_id(&mut self, predicate_id: PredicateId) -> Option<bool> {
+        self.notification_engine
+            .evaluate_predicate_id(predicate_id, self.assignments)
+    }
+
     /// Returns the number of [`PredicateId`]s.
     pub(crate) fn num_predicate_ids(&self) -> usize {
         self.notification_engine.num_predicate_ids()
@@ -305,8 +270,6 @@ impl<'a> PropagationContext<'a> {
             reification_literal: self.reification_literal,
             #[cfg(feature = "check-consistency")]
             consistency_checkers: self.consistency_checkers,
-            #[cfg(feature = "check-propagations")]
-            inference_checkers: self.inference_checkers,
         }
     }
 }
@@ -371,5 +334,26 @@ pub(crate) fn build_reason(
             StoredReason::Eager(conjunction, inference_code)
         }
         Reason::DynamicLazy(code) => StoredReason::DynamicLazy(code),
+    }
+}
+
+/// Wrapper around the [`NotificationEngine`] that is tied to a specific propagator.
+///
+/// Implements [`EventDispatcher`] to handle registration of domain events.
+struct NotificationEngineWatchers<'a> {
+    propagator_id: PropagatorId,
+    notificaton_engine: &'a mut NotificationEngine,
+}
+
+impl EventDispatcher for NotificationEngineWatchers<'_> {
+    fn register(&mut self, domain_id: DomainId, events: EnumSet<DomainEvent>, local_id: LocalId) {
+        self.notificaton_engine.register(
+            domain_id,
+            events,
+            PropagatorVarId {
+                propagator: self.propagator_id,
+                variable: local_id,
+            },
+        );
     }
 }

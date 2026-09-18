@@ -13,7 +13,7 @@ use crate::flatzinc::compiler::context::Identifiers;
 use crate::flatzinc::compiler::context::VariableEquivalences;
 
 pub(crate) fn run(
-    ast: &mut FlatZincAst,
+    ast: &FlatZincAst,
     context: &mut CompilationContext,
     options: &FlatZincOptions,
 ) -> Result<(), FlatZincError> {
@@ -271,7 +271,7 @@ mod tests {
             annotations: vec![],
         });
 
-        let mut ast = ast_builder.build().expect("valid ast");
+        let ast = ast_builder.build().expect("valid ast");
         let mut solver = Solver::default();
         let mut context = CompilationContext::new(&mut solver);
         let options = FlatZincOptions::default();
@@ -279,7 +279,7 @@ mod tests {
         super::super::reserve_constraint_tags::run(&ast, &mut context)
             .expect("step should not fail");
         super::super::prepare_variables::run(&ast, &mut context).expect("step should not fail");
-        run(&mut ast, &mut context, &options).expect("step should not fail");
+        run(&ast, &mut context, &options).expect("step should not fail");
 
         assert_eq!(
             context.equivalences.representative("x"),
@@ -320,7 +320,7 @@ mod tests {
             annotations: vec![],
         });
 
-        let mut ast = ast_builder.build().expect("valid ast");
+        let ast = ast_builder.build().expect("valid ast");
         let mut solver = Solver::default();
         let mut context = CompilationContext::new(&mut solver);
         let options = FlatZincOptions {
@@ -331,7 +331,7 @@ mod tests {
         super::super::reserve_constraint_tags::run(&ast, &mut context)
             .expect("step should not fail");
         super::super::prepare_variables::run(&ast, &mut context).expect("step should not fail");
-        run(&mut ast, &mut context, &options).expect("step should not fail");
+        run(&ast, &mut context, &options).expect("step should not fail");
 
         assert_ne!(
             context.equivalences.representative("x"),

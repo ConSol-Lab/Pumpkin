@@ -8,13 +8,16 @@ use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -34,30 +37,38 @@ where
 {
     type PropagatorImpl = AbsoluteValuePropagator<VA, VB>;
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let AbsoluteValueArgs {
             signed,
             absolute,
             constraint_tag,
         } = self;
 
-        context.add_inference_checker(
-            InferenceCode::new(constraint_tag, AbsoluteValue),
-            Box::new(AbsoluteValueChecker {
+        let registration = EventsToRegister::builder()
+            .add(&signed, DomainEvents::BOUNDS, LocalId::from(0))
+            .add(&absolute, DomainEvents::BOUNDS, LocalId::from(1))
+            .build();
+
+        let mut checkers = RuntimeCheckers::builder();
+        let inference_code = checkers.add_inference_checker(
+            constraint_tag,
+            AbsoluteValue,
+            AbsoluteValueChecker {
                 signed: signed.clone(),
                 absolute: absolute.clone(),
-            }),
+            },
         );
 
-        context.register(signed.clone(), DomainEvents::BOUNDS, LocalId::from(0));
-        context.register(absolute.clone(), DomainEvents::BOUNDS, LocalId::from(1));
-
-        let inference_code = InferenceCode::new(constraint_tag, AbsoluteValue);
-
-        AbsoluteValuePropagator {
+        let propagator = AbsoluteValuePropagator {
             signed,
             absolute,
             inference_code,
+        };
+
+        PropagatorSpec {
+            registration,
+            checkers: checkers.build(),
+            propagator,
         }
     }
 }

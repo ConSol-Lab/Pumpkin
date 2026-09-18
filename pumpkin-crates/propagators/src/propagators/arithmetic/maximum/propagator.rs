@@ -10,10 +10,10 @@ use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
 #[cfg(doc)]
-use super::MaximumConstructor;
+use super::MaximumArgs;
 
 /// Bounds-consistent propagator which enforces `max(array) = rhs`. Can be constructed through
-/// [`MaximumConstructor`].
+/// [`MaximumArgs`].
 #[derive(Clone, Debug)]
 pub struct MaximumPropagator<ElementVar, Rhs> {
     pub(crate) array: Box<[ElementVar]>,
@@ -133,7 +133,7 @@ mod tests {
 
     use super::*;
     use crate::StateExt;
-    use crate::arithmetic::MaximumConstructor;
+    use crate::arithmetic::MaximumArgs;
 
     #[test]
     fn upper_bound_of_rhs_matches_maximum_upper_bound_of_array_at_initialise() {
@@ -146,7 +146,7 @@ mod tests {
         let rhs = state.new_interval_variable(1, 10, None);
         let constraint_tag = state.new_constraint_tag();
 
-        let _ = state.add_propagator(MaximumConstructor {
+        let _ = state.add_propagator(MaximumArgs {
             array: [a, b, c].into(),
             rhs,
             constraint_tag,
@@ -176,7 +176,7 @@ mod tests {
         let rhs = state.new_interval_variable(1, 10, None);
         let constraint_tag = state.new_constraint_tag();
 
-        let _ = state.add_propagator(MaximumConstructor {
+        let _ = state.add_propagator(MaximumArgs {
             array: [a, b, c].into(),
             rhs,
             constraint_tag,
@@ -206,7 +206,7 @@ mod tests {
         let rhs = state.new_interval_variable(1, 3, None);
         let constraint_tag = state.new_constraint_tag();
 
-        let _ = state.add_propagator(MaximumConstructor {
+        let _ = state.add_propagator(MaximumArgs {
             array: array.clone(),
             rhs,
             constraint_tag,
@@ -238,7 +238,7 @@ mod tests {
         let rhs = state.new_interval_variable(45, 60, None);
         let constraint_tag = state.new_constraint_tag();
 
-        let _ = state.add_propagator(MaximumConstructor {
+        let _ = state.add_propagator(MaximumArgs {
             array: array.clone(),
             rhs,
             constraint_tag,

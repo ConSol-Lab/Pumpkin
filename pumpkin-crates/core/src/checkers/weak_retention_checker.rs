@@ -32,7 +32,7 @@ impl<Inferences: InferenceChecker<Predicate> + Clone> WeakRetentionChecker<Infer
         }
     }
 
-    fn bound_not_updatable(&mut self, consequent: Predicate, premises: &[Predicate]) -> bool {
+    fn bound_not_updatable(&self, consequent: Predicate, premises: &[Predicate]) -> bool {
         let state =
             VariableState::prepare_for_conflict_check(premises.iter().copied(), Some(consequent))
                 .expect("Domain should not be inconsistent");

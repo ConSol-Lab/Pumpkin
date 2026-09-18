@@ -2,7 +2,6 @@ use log::warn;
 
 use super::Constraint;
 use super::NegatableConstraint;
-use crate::ConstraintOperationError;
 use crate::Solver;
 use crate::variables::Literal;
 
@@ -25,22 +24,13 @@ impl<'a, ConstraintImpl> ConstraintPoster<'a, ConstraintImpl> {
 
 impl<ConstraintImpl: Constraint> ConstraintPoster<'_, ConstraintImpl> {
     /// Add the [`Constraint`] to the [`Solver`].
-    ///
-    /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
-    /// to a root-level conflict.
-    pub fn post(mut self) -> Result<(), ConstraintOperationError> {
+    pub fn post(mut self) {
         self.constraint.take().unwrap().post(self.solver)
     }
 
     /// Add the half-reified version of the [`Constraint`] to the [`Solver`]; i.e. post the
     /// constraint `r -> constraint` where `r` is a reification literal.
-    ///
-    /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
-    /// to a root-level conflict.
-    pub fn implied_by(
-        mut self,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    pub fn implied_by(mut self, reification_literal: Literal) {
         self.constraint
             .take()
             .unwrap()
@@ -51,10 +41,7 @@ impl<ConstraintImpl: Constraint> ConstraintPoster<'_, ConstraintImpl> {
 impl<ConstraintImpl: NegatableConstraint> ConstraintPoster<'_, ConstraintImpl> {
     /// Add the reified version of the [`Constraint`] to the [`Solver`]; i.e. post the constraint
     /// `r <-> constraint` where `r` is a reification literal.
-    ///
-    /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
-    /// to a root-level conflict.
-    pub fn reify(mut self, reification_literal: Literal) -> Result<(), ConstraintOperationError> {
+    pub fn reify(mut self, reification_literal: Literal) {
         self.constraint
             .take()
             .unwrap()

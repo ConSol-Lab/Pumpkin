@@ -19,7 +19,9 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::state::propagator_conflict;
@@ -33,7 +35,9 @@ use crate::cumulative::CumulativeParameters;
 use crate::cumulative::ResourceProfile;
 use crate::cumulative::UpdatableStructures;
 use crate::cumulative::options::CumulativePropagatorOptions;
-use crate::cumulative::time_table::time_table_util::register_checkers;
+use crate::cumulative::time_table::CheckerTask;
+use crate::cumulative::time_table::TimeTableChecker;
+use crate::cumulative::time_table::time_table_util::add_consistency_checker;
 use crate::cumulative::util::create_tasks;
 use crate::cumulative::util::register_tasks;
 use crate::cumulative::util::update_bounds_task;
@@ -53,8 +57,6 @@ use crate::propagators::cumulative::time_table::propagation_handler::create_conf
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug, Clone)]
 pub struct TimeTablePerPointPropagator<Var> {
-    /// Stores whether the time-table is empty
-    is_time_table_empty: bool,
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
     /// Stores structures which change during the search; used to store the bounds
@@ -86,7 +88,6 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
         let updatable_structures = UpdatableStructures::new(&parameters);
 
         TimeTablePerPointPropagator {
-            is_time_table_empty: true,
             parameters,
             updatable_structures,
             constraint_tag,
@@ -98,15 +99,41 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
 impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPointPropagator<Var> {
     type PropagatorImpl = Self;
 
-    fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(
+        mut self,
+        mut context: PropagatorConstructorContext,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         self.updatable_structures
             .initialise_bounds_and_remove_fixed(context.domains(), &self.parameters);
-        register_tasks(&self.parameters.tasks, context.reborrow(), false);
-        register_checkers(&mut context, self.constraint_tag, &self.parameters);
+        let registration = register_tasks(&self.parameters.tasks, context.reborrow(), false);
 
-        self.inference_code = Some(InferenceCode::new(self.constraint_tag, TimeTable));
+        let mut checkers = RuntimeCheckers::builder();
+        self.inference_code = Some(
+            checkers.add_inference_checker(
+                self.constraint_tag,
+                TimeTable,
+                TimeTableChecker {
+                    tasks: self
+                        .parameters
+                        .tasks
+                        .iter()
+                        .map(|task| CheckerTask {
+                            start_time: task.start_variable.clone(),
+                            processing_time: task.processing_time,
+                            resource_usage: task.resource_usage,
+                        })
+                        .collect(),
+                    capacity: self.parameters.capacity,
+                },
+            ),
+        );
+        add_consistency_checker(&mut checkers, &self.parameters);
 
-        self
+        PropagatorSpec {
+            registration,
+            checkers: checkers.build(),
+            propagator: self,
+        }
     }
 }
 
@@ -121,7 +148,6 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
             self.inference_code.as_ref().unwrap(),
             &self.parameters,
         )?;
-        self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
         propagate_based_on_timetable(
@@ -145,17 +171,12 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
-        // Note that it could be the case that `is_time_table_empty` is inaccurate here since it
-        // wasn't updated in `synchronise`; however, `synchronise` will only remove profiles
-        // meaning that `is_time_table_empty` will always return `false` when it is not
-        // empty and it might return `false` even when the time-table is not empty *but* it
-        // will never return `true` when the time-table is not empty.
+
         let result = should_enqueue(
-            &self.parameters,
             &self.updatable_structures,
             &updated_task,
             context.domains(),
-            self.is_time_table_empty,
+            &self.parameters,
         );
 
         // Note that the non-incremental proapgator does not make use of `result.updated` since it

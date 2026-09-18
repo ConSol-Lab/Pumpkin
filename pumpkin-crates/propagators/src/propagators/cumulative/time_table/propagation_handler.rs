@@ -88,7 +88,7 @@ impl CumulativePropagationHandler {
     /// Propagates the lower-bound of the `propagating_task` to not conflict with all of the
     /// `profiles` anymore.
     pub(crate) fn propagate_chain_of_lower_bounds_with_explanations<Var>(
-        &mut self,
+        &self,
         context: &mut PropagationContext,
         profiles: &[&ResourceProfile<Var>],
         propagating_task: &Rc<Task<Var>>,
@@ -164,7 +164,7 @@ impl CumulativePropagationHandler {
     /// Propagates the upper-bound of the `propagating_task` to not conflict with all of the
     /// `profiles` anymore.
     pub(crate) fn propagate_chain_of_upper_bounds_with_explanations<Var>(
-        &mut self,
+        &self,
         context: &mut PropagationContext,
         profiles: &[&ResourceProfile<Var>],
         propagating_task: &Rc<Task<Var>>,
@@ -242,7 +242,7 @@ impl CumulativePropagationHandler {
 
     /// Propagates the lower-bound of the `propagating_task` to not conflict with `profile` anymore.
     pub(crate) fn propagate_lower_bound_with_explanations<Var>(
-        &mut self,
+        &self,
         context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
@@ -297,7 +297,7 @@ impl CumulativePropagationHandler {
 
     /// Propagates the upper-bound of the `propagating_task` to not conflict with `profile` anymore.
     pub(crate) fn propagate_upper_bound_with_explanations<Var>(
-        &mut self,
+        &self,
         context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
@@ -357,7 +357,7 @@ impl CumulativePropagationHandler {
     /// Propagates a hole in the domain; note that this explanation does not contain any of the
     /// bounds of `propagating_task`.
     pub(crate) fn propagate_holes_in_domain<Var>(
-        &mut self,
+        &self,
         context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
@@ -465,7 +465,7 @@ impl CumulativePropagationHandler {
 
     /// Either we get the stored stored profile explanation or we initialize it.
     fn get_stored_profile_explanation_or_init<Var>(
-        &mut self,
+        &self,
         context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
         capacity: i32,

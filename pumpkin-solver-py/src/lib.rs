@@ -1,3 +1,8 @@
+#![allow(
+    clippy::clone_on_copy,
+    reason = "PyO3 issue which will be fixed in a later release."
+)]
+
 mod brancher;
 mod constraints;
 mod model;

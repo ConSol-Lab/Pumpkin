@@ -22,6 +22,10 @@ impl<Var: Copy> InputOrder<Var> {
             variables: variables.to_vec(),
         }
     }
+
+    pub fn add_domain(&mut self, var: Var) {
+        self.variables.push(var)
+    }
 }
 
 impl VariableSelector<DomainId> for InputOrder<DomainId> {

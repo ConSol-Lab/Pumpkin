@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 
-use pumpkin_core::ConstraintOperationError;
 use pumpkin_core::Solver;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::constraints::Constraint;
@@ -174,7 +173,7 @@ impl<Var: IntegerVariable + 'static> CumulativeConstraint<Var> {
 }
 
 impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint<Var> {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) {
         match self.options.propagation_method {
             CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointPropagator::new(
                 &self.tasks,
@@ -232,11 +231,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
         }
     }
 
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
         match self.options.propagation_method {
             CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointPropagator::new(
                 &self.tasks,

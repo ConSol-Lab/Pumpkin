@@ -3,6 +3,14 @@ use pyo3::prelude::*;
 use crate::result::Solution;
 
 #[pyclass(from_py_object)]
+#[derive(Clone, Copy, Debug)]
+pub enum FixPointPropagationResult {
+    Feasible,
+    Infeasible,
+    Unknown,
+}
+
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub enum OptimisationResult {
     /// The problem was solved to optimality, and the solution is an optimal one.

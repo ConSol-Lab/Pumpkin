@@ -3,14 +3,13 @@ mod inequality;
 
 pub use equality::*;
 pub use inequality::*;
-use pumpkin_core::checkers::support::SupportsValue;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_propagators::arithmetic::AbsoluteValueArgs;
 use pumpkin_propagators::arithmetic::DivisionArgs;
-use pumpkin_propagators::arithmetic::IntegerMultiplicationArgs;
-use pumpkin_propagators::arithmetic::MaximumConstructor;
+use pumpkin_propagators::arithmetic::IntegerMultiplicationConstructor;
+use pumpkin_propagators::arithmetic::MaximumArgs;
 
 /// Creates the [`Constraint`] `a + b = c`.
 pub fn plus<Var: IntegerVariable + 'static>(
@@ -24,12 +23,12 @@ pub fn plus<Var: IntegerVariable + 'static>(
 
 /// Creates the [`Constraint`] `a * b = c`.
 pub fn times(
-    a: impl IntegerVariable + SupportsValue<f32> + 'static,
-    b: impl IntegerVariable + SupportsValue<f32> + 'static,
-    c: impl IntegerVariable + SupportsValue<f32> + 'static,
+    a: impl IntegerVariable + 'static,
+    b: impl IntegerVariable + 'static,
+    c: impl IntegerVariable + 'static,
     constraint_tag: ConstraintTag,
 ) -> impl Constraint {
-    IntegerMultiplicationArgs {
+    IntegerMultiplicationConstructor {
         a,
         b,
         c,
@@ -76,7 +75,7 @@ pub fn maximum<Var: IntegerVariable + 'static>(
     rhs: impl IntegerVariable + 'static,
     constraint_tag: ConstraintTag,
 ) -> impl Constraint {
-    MaximumConstructor {
+    MaximumArgs {
         array: array.into_iter().collect(),
         rhs,
         constraint_tag,

@@ -1,90 +1,54 @@
-use crate::checkers::BoxedRetentionChecker;
-use crate::checkers::Scope;
-use crate::containers::KeyedBitSet;
-use crate::containers::KeyedVec;
-use crate::containers::StorageKey;
-use crate::propagation::Domains;
-use crate::variables::DomainId;
+//! This module facilitates runtime verification in Pumpkin. It defines common types as well as the
+//! [`CheckerStore`] that owns the checkers that are active in the solver.
 
-/// Holds the consistency checkers in the solver.
+use pumpkin_checking::BoxedChecker;
+#[cfg(doc)]
+use pumpkin_checking::InferenceChecker;
+
+use crate::checkers::PropagationChecker;
+use crate::containers::HashMap;
+use crate::predicates::Predicate;
+use crate::proof::InferenceCode;
+
+/// Owns the runtime checkers present in the solver.
 ///
-/// Also responsible for enqueueing the checkers and dispatching them when instructed via
-/// [`ConsistencyCheckerStore::run_enqueued`].
+/// The runtime checkers consist of:
+/// - inference checkers, which verify that propagations are sound. Each is wrapped in a
+///   [`PropagationChecker`], which evaluates the inference against the solver state.
+///
+/// The consistency checkers, which verify that propagation is complete, are owned by the
+/// [`ConsistencyCheckerStore`](crate::checkers::ConsistencyCheckerStore) since they are scheduled
+/// rather than looked up.
 #[derive(Clone, Debug, Default)]
-pub struct ConsistencyCheckerStore {
-    /// The checkers in the store.
-    store: KeyedVec<CheckerId, (Scope, BoxedRetentionChecker)>,
-    /// Map from [`DomainId`] to the relevant checkers via their ID.
-    watch_list: KeyedVec<DomainId, Vec<CheckerId>>,
-    /// The checkers to run the next time.
-    queue: Vec<CheckerId>,
-    /// Marks which checkers are enqueued to prevent duplicate checkers in
-    /// [`ConsistencyCheckerStore::queue`].
-    enqueued: KeyedBitSet<CheckerId>,
+pub struct CheckerStore {
+    /// For each inference code we associate possibly many inference checkers.
+    inference_checkers: HashMap<InferenceCode, Vec<PropagationChecker>>,
 }
 
-impl ConsistencyCheckerStore {
-    /// Add a new `checker` to the store with the given `scope`.
-    pub fn register(&mut self, scope: Scope, checker: BoxedRetentionChecker) {
-        let checker_slot = self.store.new_slot();
-
-        for (_, domain) in scope.domains() {
-            self.watch_list.accomodate(domain, vec![]);
-            self.watch_list[domain].push(checker_slot.key());
-        }
-
-        let _ = checker_slot.populate((scope, checker));
+impl CheckerStore {
+    /// Get the [`PropagationChecker`]s for the given inference code.
+    pub fn for_inference_code(
+        &self,
+        inference_code: &InferenceCode,
+    ) -> impl ExactSizeIterator<Item = &PropagationChecker> {
+        self.inference_checkers
+            .get(inference_code)
+            .map(|checkers| itertools::Either::Left(checkers.iter()))
+            .unwrap_or(itertools::Either::Right(std::iter::empty()))
     }
 
-    /// Called when the domain is modified.
+    /// Add a new inference checker for the inference code.
     ///
-    /// Causes the checkers for this domain to be enqueued.
-    pub fn on_domain_event(&mut self, domain_id: DomainId) {
-        let Some(list) = self.watch_list.get(domain_id) else {
-            return;
-        };
-
-        for &checker_id in list {
-            if !self.enqueued.insert(checker_id) {
-                continue;
-            }
-
-            self.queue.push(checker_id);
-        }
-    }
-
-    /// Run the enqueued consistency checkers.
-    pub fn run_enqueued(&mut self, mut domains: Domains<'_>) -> bool {
-        for checker_id in self.queue.drain(..) {
-            assert!(self.enqueued.remove(checker_id));
-
-            let (scope, checker) = &mut self.store[checker_id];
-
-            if !checker.check_retention(scope, domains.reborrow()) {
-                return false;
-            }
-        }
-
-        true
-    }
-
-    /// Clear the queue of consistency checkers.
-    pub fn clear_queue(&mut self) {
-        self.queue.clear();
-        self.enqueued.clear();
-    }
-}
-
-/// An identifier for added checkers.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct CheckerId(u32);
-
-impl StorageKey for CheckerId {
-    fn index(&self) -> usize {
-        self.0 as usize
-    }
-
-    fn create_from_index(index: usize) -> Self {
-        CheckerId(index as u32)
+    /// An inference code can have multiple checkers, so if an [`InferenceChecker`] was already
+    /// registered for the given code, this new checker is simply added to the collection.
+    pub fn add_inference_checker(
+        &mut self,
+        inference_code: InferenceCode,
+        checker: BoxedChecker<Predicate>,
+    ) {
+        self.inference_checkers
+            .entry(inference_code)
+            .or_default()
+            .push(PropagationChecker::new(checker));
     }
 }

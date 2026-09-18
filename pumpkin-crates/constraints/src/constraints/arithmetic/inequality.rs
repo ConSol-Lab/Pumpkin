@@ -1,4 +1,3 @@
-use pumpkin_core::ConstraintOperationError;
 use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
@@ -107,7 +106,7 @@ struct Inequality<Var> {
 }
 
 impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) {
         LinearLessOrEqualPropagatorArgs {
             x: self.terms,
             c: self.rhs,
@@ -116,11 +115,7 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
         .post(solver)
     }
 
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
         LinearLessOrEqualPropagatorArgs {
             x: self.terms,
             c: self.rhs,
@@ -144,6 +139,8 @@ impl<Var: IntegerVariable + 'static> NegatableConstraint for Inequality<Var> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(deprecated, reason = "Using deprecated functions for testing")]
+
     use super::*;
 
     #[test]
@@ -153,12 +150,10 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
         let x = solver.new_named_bounded_integer(0, 0, "x");
 
-        let result = less_than([x], 0, constraint_tag).post(&mut solver);
-        assert_eq!(
-            result,
-            Err(ConstraintOperationError::InfeasiblePropagator),
-            "Expected {result:?} to be an `InfeasiblePropagator` error"
-        );
+        less_than([x], 0, constraint_tag).post(&mut solver);
+
+        let result = solver.propagate_to_fixpoint();
+        assert!(result.is_infeasible());
     }
 
     #[test]
@@ -168,11 +163,9 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
         let x = solver.new_named_bounded_integer(0, 0, "x");
 
-        let result = greater_than([x], 0, constraint_tag).post(&mut solver);
-        assert_eq!(
-            result,
-            Err(ConstraintOperationError::InfeasiblePropagator),
-            "Expected {result:?} to be an `InfeasiblePropagator` error"
-        );
+        greater_than([x], 0, constraint_tag).post(&mut solver);
+
+        let result = solver.propagate_to_fixpoint();
+        assert!(result.is_infeasible());
     }
 }

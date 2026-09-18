@@ -19,6 +19,7 @@ use drcp_format::writer::ProofWriter;
 use log::debug;
 use log::info;
 use log::trace;
+use pumpkin_core::containers::HashSet;
 use pumpkin_core::containers::KeyedVec;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
@@ -26,14 +27,19 @@ use pumpkin_core::predicates::PredicateType;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::Priority;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::CurrentNogood;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::state::PropagatorHandle;
 use pumpkin_core::state::State;
 
+use crate::deduction_propagator::DeductionPropagationMode;
 use crate::deduction_propagator::DeductionPropagator;
 use crate::deduction_propagator::DeductionPropagatorConstructor;
+use crate::deduction_propagator::MARKED_PROPAGATION_PRIORITY;
+use crate::deduction_propagator::UNMARKED_CONFLICT_PRIORITY;
+use crate::deduction_propagator::UNMARKED_UNIT_PROPAGATION_PRIORITY;
 use crate::predicate_heap::PredicateHeap;
 use crate::variables::Variables;
 
@@ -92,9 +98,36 @@ pub(crate) enum ProofProcessError {
 /// A deduction that was posted to the solver.
 #[derive(Clone, Debug)]
 struct PostedDeduction {
-    predicates: PropositionalConjunction,
-    handle: PropagatorHandle<DeductionPropagator>,
+    predicates: Rc<[Predicate]>,
+    conflict_detection_handle: PropagatorHandle<DeductionPropagator>,
+    unit_prop_handle: PropagatorHandle<DeductionPropagator>,
     marked: bool,
+}
+
+impl PostedDeduction {
+    /// Deactivates the propagators associated with this `PostedDeduction`.
+    fn deactivate_propagators(&self, state: &mut State) {
+        state
+            .get_propagator_mut(self.conflict_detection_handle)
+            .expect("All handles are valid")
+            .deactivate();
+        state
+            .get_propagator_mut(self.unit_prop_handle)
+            .expect("All handles are valid")
+            .deactivate();
+    }
+
+    /// Updates the priority of both propagators associated with this `PostedDeduction`.
+    fn update_propagators_priority(&self, state: &mut State, new_priority: Priority) {
+        state
+            .get_propagator_mut(self.conflict_detection_handle)
+            .expect("All handles are valid")
+            .set_priority(new_priority);
+        state
+            .get_propagator_mut(self.unit_prop_handle)
+            .expect("All handles are valid")
+            .set_priority(new_priority);
+    }
 }
 
 type DeductionStack = KeyedVec<ConstraintTag, Option<PostedDeduction>>;
@@ -153,10 +186,8 @@ impl ProofProcessor {
 
             let new_checkpoint = self.state.get_checkpoint() - 1;
             let _ = self.state.restore_to(new_checkpoint);
-            self.state
-                .get_propagator_mut(posted_deduction.handle)
-                .expect("all handles are valid")
-                .deactivate();
+
+            posted_deduction.deactivate_propagators(&mut self.state);
 
             debug!("Processing deduction {}", NonZero::from(tag));
             trace!("  nogood: {:?}", posted_deduction.predicates);
@@ -317,15 +348,25 @@ impl ProofProcessor {
             trace!("    {nogood:?}");
 
             self.state.new_checkpoint();
-            let handle = self.state.add_propagator(DeductionPropagatorConstructor {
-                nogood: nogood.iter().copied().collect(),
+            let nogood_rc = nogood.to_vec().into();
+            let conflict_handle = self.state.add_propagator(DeductionPropagatorConstructor {
+                nogood: Rc::clone(&nogood_rc),
                 constraint_tag,
+                priority: UNMARKED_CONFLICT_PRIORITY,
+                propagation_mode: DeductionPropagationMode::OnlyConflictDetection,
             });
 
+            let prop_handle = self.state.add_propagator(DeductionPropagatorConstructor {
+                nogood: Rc::clone(&nogood_rc),
+                constraint_tag,
+                priority: UNMARKED_UNIT_PROPAGATION_PRIORITY,
+                propagation_mode: DeductionPropagationMode::OnlyUnitPropagation,
+            });
             nogood_stack.accomodate(constraint_tag, None);
             nogood_stack[constraint_tag] = Some(PostedDeduction {
-                predicates: nogood,
-                handle,
+                predicates: nogood_rc,
+                conflict_detection_handle: conflict_handle,
+                unit_prop_handle: prop_handle,
                 marked: false,
             });
 
@@ -344,20 +385,20 @@ impl ProofProcessor {
         bound: IntAtomic<Rc<str>, i32>,
         mut nogood_stack: DeductionStack,
     ) -> Result<(Conclusion<Rc<str>, i32>, DeductionStack), ProofProcessError> {
-        let predicate = convert_proof_atomic_to_predicate(&self.variables, &bound)?;
+        let concluded_predicate = convert_proof_atomic_to_predicate(&self.variables, &bound)?;
         info!("Found dual bound conclusion");
-        trace!("bound = {predicate:?}");
+        trace!("bound = {concluded_predicate:?}");
 
         // If the claimed bound is not true given the current assignment, then the
         // conclusion does not follow by propagation.
-        if self.state.truth_value(predicate) != Some(true) {
+        if self.state.truth_value(concluded_predicate) != Some(true) {
             return Err(ProofProcessError::InvalidConclusion);
         }
 
         // If the dual bound is the initial bound on the objective variable, write the
         // correct proof in that situation and short-circuit.
-        if self.state.is_implied_by_initial_domain(predicate) {
-            self.to_process_heap.push(predicate, &self.state);
+        if self.state.is_implied_by_initial_domain(concluded_predicate) {
+            self.to_process_heap.push(concluded_predicate, &self.state);
 
             let inferences = self.explain_predicates(&mut nogood_stack, vec![]);
             let deduction_id = self.state.new_constraint_tag();
@@ -367,7 +408,7 @@ impl ProofProcessor {
                 constraint_id: deduction_id.into(),
                 premises: vec![convert_predicate_to_proof_atomic(
                     &self.variables,
-                    !predicate,
+                    !concluded_predicate,
                 )],
             });
 
@@ -376,7 +417,7 @@ impl ProofProcessor {
 
         let mut reason_buffer = vec![];
         let inference_code = self.state.get_propagation_reason(
-            predicate,
+            concluded_predicate,
             &mut reason_buffer,
             CurrentNogood::empty(),
         );
@@ -392,31 +433,25 @@ impl ProofProcessor {
         let used_constraint_tag = inference_code.expect("must be due to a propagation").tag();
         trace!("  constraint_tag = {}", NonZero::from(used_constraint_tag));
 
-        let Some(stack_entry) = nogood_stack
-            .get_mut(used_constraint_tag)
-            .map(|opt| opt.as_mut())
-        else {
-            return Err(ProofProcessError::InvalidConclusion);
-        };
+        // Now we explain _why_ the concluded predicate is true. In the output proof, we must insert
+        // a deduction that syntactally implies the conclusion. I.e., if the conclusion is [x >= 5],
+        // then we _must_ have a nogood `[x <= 4] -> false`.
+        //
+        // To achieve this, we look at the reason that currently the conclusion is true, and then
+        // insert the required deduction supported by the inferences as they exist in the processor
+        // at the moment.
+        self.to_process_heap.push(concluded_predicate, &self.state);
+        let inferences = self.explain_predicates(&mut nogood_stack, vec![]);
+        let deduction_id = self.state.new_constraint_tag();
 
-        if let Some(posted_deduction) = stack_entry {
-            posted_deduction.marked = true;
-        } else {
-            // In this case we have to explain by 'root propagation' and no deductions
-            // were used. The predicate is propagated by a propagator.
-            self.to_process_heap.push(predicate, &self.state);
-            let inferences = self.explain_predicates(&mut nogood_stack, vec![]);
-            let deduction_id = self.state.new_constraint_tag();
-
-            self.output_proof.push(ProofStage {
-                inferences,
-                constraint_id: deduction_id.into(),
-                premises: vec![convert_predicate_to_proof_atomic(
-                    &self.variables,
-                    !predicate,
-                )],
-            });
-        }
+        self.output_proof.push(ProofStage {
+            inferences,
+            constraint_id: deduction_id.into(),
+            premises: vec![convert_predicate_to_proof_atomic(
+                &self.variables,
+                !concluded_predicate,
+            )],
+        });
 
         Ok((Conclusion::DualBound(bound), nogood_stack))
     }
@@ -436,6 +471,7 @@ impl ProofProcessor {
             .as_mut()
             .expect("the deduction that triggered the conflict must be on the nogood stack");
         posted_deduction.marked = true;
+        posted_deduction.update_propagators_priority(&mut self.state, MARKED_PROPAGATION_PRIORITY);
 
         let inferences = self.explain_current_conflict(&mut nogood_stack, conflict);
 
@@ -481,7 +517,7 @@ impl ProofProcessor {
                     label: Some(label),
                 }));
 
-                mark_stack_entry(nogood_stack, inference_code);
+                self.mark_stack_entry(nogood_stack, inference_code);
 
                 conjunction
             }
@@ -511,7 +547,7 @@ impl ProofProcessor {
                         label: Some(label),
                     }));
 
-                    mark_stack_entry(nogood_stack, inference_code);
+                    self.mark_stack_entry(nogood_stack, inference_code);
                 }
 
                 predicates_to_explain.push(!empty_domain_confict.trigger_predicate);
@@ -537,9 +573,13 @@ impl ProofProcessor {
         let mut initial_bound_indices = HashMap::new();
         let mut reason_buffer = vec![];
 
+        let mut visited_predicates = HashSet::new();
         // For every predicate in the queue, we will introduce appropriate inferences into
         // the proof.
         while let Some(predicate) = self.to_process_heap.pop() {
+            if !visited_predicates.insert(predicate) {
+                continue;
+            }
             // The predicate is either propagated or an initial bound. If it is an
             // initial bound, we dispatch that here.
             if self.state.is_implied_by_initial_domain(predicate) {
@@ -588,7 +628,7 @@ impl ProofProcessor {
             // predicate. Those inferences do not need to be in the proof, so we only create an
             // inference for propagations by constraints.
             if let Some(inference_code) = inference_code {
-                mark_stack_entry(nogood_stack, inference_code.clone());
+                self.mark_stack_entry(nogood_stack, inference_code.clone());
 
                 let label = inference_code.label();
                 inferences.push(Some(Inference {
@@ -621,17 +661,18 @@ impl ProofProcessor {
 
         Ok(())
     }
-}
+    /// Given a [`DeductionStack`], mark the constraint indicated by the inference code as used.
+    fn mark_stack_entry(&mut self, stack: &mut DeductionStack, inference_code: InferenceCode) {
+        let used_constraint_tag = inference_code.tag();
 
-/// Given a [`DeductionStack`], mark the constraint indicated by the inference code as used.
-fn mark_stack_entry(stack: &mut DeductionStack, inference_code: InferenceCode) {
-    let used_constraint_tag = inference_code.tag();
+        trace!("Marking constraint {}", NonZero::from(used_constraint_tag));
 
-    trace!("Marking constraint {}", NonZero::from(used_constraint_tag));
-
-    let stack_entry = &mut stack[used_constraint_tag];
-    if let Some(posted_deduction) = stack_entry {
-        posted_deduction.marked = true;
+        let stack_entry = &mut stack[used_constraint_tag];
+        if let Some(posted_deduction) = stack_entry {
+            posted_deduction.marked = true;
+            posted_deduction
+                .update_propagators_priority(&mut self.state, MARKED_PROPAGATION_PRIORITY);
+        }
     }
 }
 
@@ -703,6 +744,18 @@ mod tests {
     use drcp_format::IntComparison::*;
     use drcp_format::reader::ReadAtomic;
     use drcp_format::reader::ReadStep;
+    use pumpkin_checking::InferenceChecker;
+    use pumpkin_checking::VariableState;
+    use pumpkin_core::declare_inference_label;
+    use pumpkin_core::propagation::EventsToRegister;
+    use pumpkin_core::propagation::PropagationContext;
+    use pumpkin_core::propagation::Propagator;
+    use pumpkin_core::propagation::PropagatorConstructor;
+    use pumpkin_core::propagation::PropagatorConstructorContext;
+    use pumpkin_core::propagation::PropagatorSpec;
+    use pumpkin_core::propagation::ReadDomains;
+    use pumpkin_core::propagation::RuntimeCheckers;
+    use pumpkin_core::state::PropagationStatusCP;
     use pumpkin_propagators::arithmetic::BinaryEqualsPropagatorArgs;
 
     use super::*;
@@ -779,6 +832,72 @@ mod tests {
         test_processing(state, variables, scaffold, expected);
     }
 
+    #[test]
+    fn dual_bound_conclusion_via_deduction_with_extra_premise_keeps_matching_singleton() {
+        let mut state = State::default();
+        let mut variables = Variables::default();
+
+        let a = state.new_interval_variable(0, 0, Some("a".into()));
+        variables.add_variable("a".into(), a);
+        let obj = state.new_interval_variable(0, 20, Some("obj".into()));
+        variables.add_variable("obj".into(), obj);
+
+        let constraint_tag = state.new_constraint_tag();
+        let _ = state.add_propagator(AlwaysConflictConstructor {
+            watched: predicate![obj >= 6],
+            other: predicate![a <= 0],
+            constraint_tag,
+        });
+
+        let scaffold = r#"
+            a 1 [a <= 0]
+            a 2 [obj >= 6]
+            n 2 1 2 0
+            n 3 2 0
+            c -2
+        "#;
+
+        let expected = vec![
+            inference(
+                8,
+                [],
+                Some(atomic("a", LessEqual, 0)),
+                None,
+                Some("initial_domain"),
+            ),
+            inference(
+                7,
+                [atomic("obj", GreaterEqual, 6), atomic("a", LessEqual, 0)],
+                None,
+                Some(1),
+                Some("always_conflict"),
+            ),
+            deduction(
+                2,
+                [atomic("a", LessEqual, 0), atomic("obj", GreaterEqual, 6)],
+                [8, 7],
+            ),
+            inference(
+                5,
+                [],
+                Some(atomic("a", LessEqual, 0)),
+                None,
+                Some("initial_domain"),
+            ),
+            inference(
+                4,
+                [atomic("a", LessEqual, 0)],
+                Some(atomic("obj", LessEqual, 5)),
+                Some(2),
+                Some("nogood"),
+            ),
+            deduction(6, [atomic("obj", GreaterEqual, 6)], [5, 4]),
+            Step::Conclusion(Conclusion::DualBound(atomic("obj", LessEqual, 5))),
+        ];
+
+        test_processing(state, variables, scaffold, expected);
+    }
+
     fn inference(
         constraint_id: u32,
         premises: impl Into<Vec<ReadAtomic<i32>>>,
@@ -844,5 +963,99 @@ mod tests {
         .collect::<Vec<_>>();
 
         assert_eq!(processed_proof, expected);
+    }
+
+    /// A [`PropagatorConstructor`] for [`AlwaysConflictPropagator`].
+    struct AlwaysConflictConstructor {
+        watched: Predicate,
+        other: Predicate,
+        constraint_tag: ConstraintTag,
+    }
+
+    impl PropagatorConstructor for AlwaysConflictConstructor {
+        type PropagatorImpl = AlwaysConflictPropagator;
+
+        fn create(
+            self,
+            mut context: PropagatorConstructorContext,
+        ) -> PropagatorSpec<Self::PropagatorImpl> {
+            declare_inference_label!(AlwaysConflict);
+
+            let AlwaysConflictConstructor {
+                watched,
+                other,
+                constraint_tag,
+            } = self;
+
+            // This propagator must not react to `other` becoming true. It only
+            // needs to fire once `watched` becomes true.
+            let _ = context.register_predicate(watched);
+
+            let mut checkers = RuntimeCheckers::builder();
+            let inference_code = checkers.add_inference_checker(
+                constraint_tag,
+                AlwaysConflict,
+                AlwaysConflictChecker { watched, other },
+            );
+
+            PropagatorSpec {
+                registration: EventsToRegister::empty(),
+                checkers: checkers.build(),
+                propagator: AlwaysConflictPropagator {
+                    watched,
+                    other,
+                    inference_code,
+                },
+            }
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    struct AlwaysConflictChecker {
+        watched: Predicate,
+        other: Predicate,
+    }
+
+    impl InferenceChecker<Predicate> for AlwaysConflictChecker {
+        fn check(
+            &self,
+            state: VariableState<Predicate>,
+            _premises: &[Predicate],
+            _consequent: Option<&Predicate>,
+        ) -> bool {
+            state.is_true(&self.watched) && state.is_true(&self.other)
+        }
+    }
+
+    /// A propagator that reports a conflict as soon as both `watched` and `other` are true.
+    ///
+    /// Since only `watched` is registered for notifications (see
+    /// [`AlwaysConflictConstructor::create`]), this propagator stays dormant until `watched` is
+    /// explicitly posited, regardless of when `other` becomes true.
+    #[derive(Clone)]
+    struct AlwaysConflictPropagator {
+        watched: Predicate,
+        other: Predicate,
+        inference_code: InferenceCode,
+    }
+
+    impl Propagator for AlwaysConflictPropagator {
+        fn name(&self) -> &str {
+            "AlwaysConflict"
+        }
+
+        fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
+            let is_watched_satisfied = context.evaluate_predicate(self.watched) == Some(true);
+            let is_other_satisfied = context.evaluate_predicate(self.other) == Some(true);
+
+            if is_watched_satisfied && is_other_satisfied {
+                return Err(Conflict::Propagator(PropagatorConflict {
+                    conjunction: [self.watched, self.other].into_iter().collect(),
+                    inference_code: self.inference_code.clone(),
+                }));
+            }
+
+            Ok(())
+        }
     }
 }

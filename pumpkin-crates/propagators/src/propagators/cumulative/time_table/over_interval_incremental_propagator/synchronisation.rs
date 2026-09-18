@@ -18,7 +18,7 @@ use crate::cumulative::time_table::propagation_handler::create_conflict_explanat
 /// time, however, the returned profile should be merged with adjacent profiles to create the
 /// returned conflict profile.
 pub(crate) fn find_synchronised_conflict<Var: IntegerVariable + 'static>(
-    time_table: &mut OverIntervalTimeTableType<Var>,
+    time_table: &OverIntervalTimeTableType<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> Option<ResourceProfile<Var>> {
     if time_table.is_empty() {

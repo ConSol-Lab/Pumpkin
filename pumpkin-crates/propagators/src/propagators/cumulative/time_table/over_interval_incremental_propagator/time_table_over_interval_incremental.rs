@@ -19,6 +19,8 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::propagator_conflict;
 use pumpkin_core::variables::IntegerVariable;
@@ -28,7 +30,9 @@ use super::removal;
 use crate::cumulative::options::CumulativePropagatorOptions;
 use crate::cumulative::time_table::create_time_table_over_interval_from_scratch;
 use crate::cumulative::time_table::propagate_from_scratch_time_table_interval;
-use crate::cumulative::time_table::time_table_util::register_checkers;
+use crate::cumulative::time_table::CheckerTask;
+use crate::cumulative::time_table::TimeTableChecker;
+use crate::cumulative::time_table::time_table_util::add_consistency_checker;
 use crate::cumulative::util::check_bounds_equal_at_propagation;
 use crate::cumulative::util::create_tasks;
 use crate::cumulative::util::register_tasks;
@@ -108,15 +112,17 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstruc
 {
     type PropagatorImpl = Self;
 
-    fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(
+        mut self,
+        mut context: PropagatorConstructorContext,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         // We only register for notifications of backtrack events if incremental backtracking is
         // enabled
-        register_tasks(
+        let registration = register_tasks(
             &self.parameters.tasks,
             context.reborrow(),
             self.parameters.options.incremental_backtracking,
         );
-        register_checkers(&mut context, self.constraint_tag, &self.parameters);
 
         // First we store the bounds in the parameters
         self.updatable_structures
@@ -124,9 +130,33 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstruc
 
         self.is_time_table_outdated = true;
 
-        self.inference_code = Some(InferenceCode::new(self.constraint_tag, TimeTable));
+        let mut checkers = RuntimeCheckers::builder();
+        self.inference_code = Some(
+            checkers.add_inference_checker(
+                self.constraint_tag,
+                TimeTable,
+                TimeTableChecker {
+                    tasks: self
+                        .parameters
+                        .tasks
+                        .iter()
+                        .map(|task| CheckerTask {
+                            start_time: task.start_variable.clone(),
+                            processing_time: task.processing_time,
+                            resource_usage: task.resource_usage,
+                        })
+                        .collect(),
+                    capacity: self.parameters.capacity,
+                },
+            ),
+        );
+        add_consistency_checker(&mut checkers, &self.parameters);
 
-        self
+        PropagatorSpec {
+            registration,
+            checkers: checkers.build(),
+            propagator: self,
+        }
     }
 }
 
@@ -156,13 +186,14 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
 
     /// Adds the added parts in the provided [`MandatoryPartAdjustments`] to the time-table; note
     /// that all of the adjustments are applied even if a conflict is found.
-    fn add_to_time_table(
+    ///
+    /// Returns true if the addition to the time-table caused an overflow of the capacity.
+    fn conflicting_after_addition_to_time_table(
         &mut self,
-        mut context: Domains,
         mandatory_part_adjustments: &MandatoryPartAdjustments,
         task: &Rc<Task<Var>>,
-    ) -> PropagationStatusCP {
-        let mut conflict = None;
+    ) -> bool {
+        let mut found_conflict = false;
         // We consider both of the possible update ranges
         // Note that the upper update range is first considered to avoid any issues with the
         // indices when processing the other update range
@@ -170,26 +201,16 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
             // First we attempt to find overlapping profiles
             match determine_profiles_to_update(&self.time_table, &update_range) {
                 Ok((start_index, end_index)) => {
-                    let result = insertion::insert_profiles_overlapping_with_added_mandatory_part(
-                        &mut self.time_table,
-                        start_index,
-                        end_index,
-                        &update_range,
-                        task,
-                        self.parameters.capacity,
-                    );
-                    if let Err(conflict_tasks) = result
-                        && conflict.is_none()
-                    {
-                        conflict = Some(Err(create_conflict_explanation(
-                            context.reborrow(),
-                            self.inference_code.as_ref().unwrap(),
-                            &conflict_tasks,
-                            self.parameters.options.explanation_type,
+                    let conflicting =
+                        insertion::conflicting_after_insertion_of_overlapping_mandatory(
+                            &mut self.time_table,
+                            start_index,
+                            end_index,
+                            &update_range,
+                            task,
                             self.parameters.capacity,
-                        )
-                        .into()));
-                    }
+                        );
+                    found_conflict |= conflicting;
                 }
                 Err(index_to_insert) => insertion::insert_profile_new_mandatory_part(
                     &mut self.time_table,
@@ -199,11 +220,8 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                 ),
             }
         }
-        if let Some(conflict) = conflict {
-            conflict
-        } else {
-            Ok(())
-        }
+
+        found_conflict
     }
 
     /// Removes the removed parts in the provided [`MandatoryPartAdjustments`] from the time-table
@@ -278,14 +296,13 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
             //
             // Note that the inconsistency returned here does not necessarily hold since other
             // updates could remove from the profile
-            let result = self.add_to_time_table(
-                context.domains(),
+            let conflicting = self.conflicting_after_addition_to_time_table(
                 &mandatory_part_adjustments,
                 &updated_task,
             );
 
             // If we have found an overflow then we mark that we need to check the profile
-            found_conflict |= result.is_err();
+            found_conflict |= conflicting;
 
             // Then we reset the update for the task since it has been processed
             self.updatable_structures
@@ -299,7 +316,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                 // If we are synchronising then we need to search for the conflict which would have
                 // been found by the non-incremental propagator
                 let conflicting_profile =
-                    find_synchronised_conflict(&mut self.time_table, &self.parameters);
+                    find_synchronised_conflict(&self.time_table, &self.parameters);
                 // Now we need to find the same explanation as would have been found by
                 // the non-incremental propagator
                 if let Some(mut conflicting_profile) = conflicting_profile {
@@ -434,11 +451,10 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         // However, this could mean that we potentially enqueue even though the time-table is empty
         // after backtracking but has not been recalculated yet.
         let result = should_enqueue(
-            &self.parameters,
             &self.updatable_structures,
             &updated_task,
             context.domains(),
-            self.time_table.is_empty(),
+            &self.parameters,
         );
 
         // If there is a task which now has a mandatory part then we store it and process it when

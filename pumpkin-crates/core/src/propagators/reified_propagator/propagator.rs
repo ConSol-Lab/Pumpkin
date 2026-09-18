@@ -145,7 +145,7 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
     }
 
     fn filter_enqueue_decision(
-        &mut self,
+        &self,
         mut context: NotificationContext<'_>,
         decision: EnqueueDecision,
     ) -> EnqueueDecision {
@@ -187,9 +187,13 @@ mod tests {
     use crate::predicates::PropositionalConjunction;
     use crate::proof::ConstraintTag;
     use crate::proof::InferenceCode;
+    use crate::proof::Unknown;
     use crate::propagation::DomainEvents;
+    use crate::propagation::EventsToRegister;
     use crate::propagation::PropagatorConstructor;
     use crate::propagation::PropagatorConstructorContext;
+    use crate::propagation::PropagatorSpec;
+    use crate::propagation::RuntimeCheckers;
     use crate::propagators::ReifiedPropagatorArgs;
     use crate::variables::DomainId;
 
@@ -205,14 +209,15 @@ mod tests {
         let t1 = triggered_conflict.clone();
         let t2 = triggered_conflict.clone();
 
-        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
-        solver.accept_inferences_by(inference_code.clone());
+        let inference_code =
+            solver.accept_inferences_by(ConstraintTag::create_from_index(0), Unknown);
         let i1 = inference_code.clone();
         let i2 = inference_code.clone();
 
         let _ = solver
             .new_propagator(ReifiedPropagatorArgs {
                 propagator: GenericPropagator::new(
+                    vec![a, b],
                     move |_: PropagationContext| {
                         Err(PropagatorConflict {
                             conjunction: t1.clone(),
@@ -247,6 +252,7 @@ mod tests {
         let propagator = solver
             .new_propagator(ReifiedPropagatorArgs {
                 propagator: GenericPropagator::new(
+                    vec![var],
                     move |mut ctx: PropagationContext| {
                         ctx.post(
                             predicate![var >= 3],
@@ -284,12 +290,13 @@ mod tests {
         let _ = solver.set_literal(reification_literal, true);
 
         let var = solver.new_variable(1, 1);
-        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
-        solver.accept_inferences_by(inference_code.clone());
+        let inference_code =
+            solver.accept_inferences_by(ConstraintTag::create_from_index(0), Unknown);
 
         let inconsistency = solver
             .new_propagator(ReifiedPropagatorArgs {
                 propagator: GenericPropagator::new(
+                    vec![var],
                     move |_: PropagationContext| {
                         Err(PropagatorConflict {
                             conjunction: conjunction!([var >= 1]),
@@ -325,12 +332,13 @@ mod tests {
         let reification_literal = solver.new_literal();
         let var = solver.new_variable(1, 5);
 
-        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
-        solver.accept_inferences_by(inference_code.clone());
+        let inference_code =
+            solver.accept_inferences_by(ConstraintTag::create_from_index(0), Unknown);
 
         let propagator = solver
             .new_propagator(ReifiedPropagatorArgs {
                 propagator: GenericPropagator::new(
+                    vec![var],
                     |_: PropagationContext| Ok(()),
                     move |context: Domains| {
                         if context.is_fixed(&var) {
@@ -367,16 +375,18 @@ mod tests {
     {
         type PropagatorImpl = Self;
 
-        fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
+            let mut registration = EventsToRegister::empty();
+
             for (index, variable) in self.variables_to_register.iter().enumerate() {
-                context.register(
-                    *variable,
-                    DomainEvents::ANY_INT,
-                    LocalId::from(index as u32),
-                );
+                registration.add(variable, DomainEvents::ANY_INT, LocalId::from(index as u32));
             }
 
-            self
+            PropagatorSpec {
+                registration,
+                checkers: RuntimeCheckers::empty(),
+                propagator: self,
+            }
         }
     }
 
@@ -403,11 +413,15 @@ mod tests {
         Propagation: Fn(PropagationContext) -> PropagationStatusCP,
         ConsistencyCheck: Fn(Domains) -> Option<PropagatorConflict>,
     {
-        pub(crate) fn new(propagation: Propagation, consistency_check: ConsistencyCheck) -> Self {
+        pub(crate) fn new(
+            variables_to_register: Vec<DomainId>,
+            propagation: Propagation,
+            consistency_check: ConsistencyCheck,
+        ) -> Self {
             GenericPropagator {
                 propagation,
                 consistency_check,
-                variables_to_register: vec![],
+                variables_to_register,
             }
         }
 

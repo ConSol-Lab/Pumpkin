@@ -1,13 +1,12 @@
-#[cfg(feature = "check-consistency")]
-use crate::checkers::BoxedRetentionChecker;
+use crate::checkers::ScopeItem;
 use crate::propagation::DomainEvents;
-#[cfg(feature = "check-consistency")]
-use crate::propagation::LocalId;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::PropagatorSpec;
+use crate::propagation::RuntimeCheckers;
+use crate::propagators::ReifiedChecker;
 use crate::propagators::ReifiedPropagator;
-#[cfg(feature = "check-consistency")]
 use crate::propagators::ReifiedRetentionChecker;
 use crate::variables::Literal;
 
@@ -25,79 +24,78 @@ where
 {
     type PropagatorImpl = ReifiedPropagator<WrappedPropagator>;
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(
+        self,
+        mut context: PropagatorConstructorContext,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let ReifiedPropagatorArgs {
             propagator,
             reification_literal,
         } = self;
 
-        let propagator = propagator.create(context.reborrow());
+        let PropagatorSpec {
+            mut registration,
+            propagator,
+            checkers,
+        } = propagator.create(context.reborrow());
 
-        let reification_literal_id = context.get_next_local_id();
+        // The local ID for the reification literal will be one larger than the largest ID
+        // registered by the wrapped propagator.
+        let reification_literal_id = registration
+            .iter()
+            .map(|(_, _, lid)| lid)
+            .max()
+            .expect("cannot reify propagators that do not register all variables immediately")
+            .successor();
 
-        context.register(
-            reification_literal,
+        registration.add(
+            &reification_literal,
             DomainEvents::BOUNDS,
             reification_literal_id,
         );
 
-        #[cfg(feature = "check-propagations")]
-        wrap_inference_checkers(&mut context, reification_literal);
+        let (inference_checkers, consistency_checkers) = checkers.into_parts();
 
-        #[cfg(feature = "check-consistency")]
-        wrap_consistency_checkers(&mut context, reification_literal, reification_literal_id);
+        let mut wrapped_checkers = RuntimeCheckers::empty();
+        for (inference_code, checker) in inference_checkers {
+            let _ = wrapped_checkers.add_inference_checker(
+                inference_code.tag(),
+                inference_code.label(),
+                ReifiedChecker {
+                    inner: checker,
+                    reification_literal,
+                },
+            );
+        }
+
+        // The reification literal becomes part of the scope of every wrapped consistency checker,
+        // since whether the wrapped constraint has to hold depends on it.
+        for (mut scope, checker) in consistency_checkers {
+            reification_literal.add_to_scope(&mut scope, reification_literal_id);
+            wrapped_checkers.add_consistency_checker(
+                scope,
+                ReifiedRetentionChecker {
+                    inner: checker,
+                    reification_literal,
+                    reification_literal_id,
+                },
+            );
+        }
 
         let name = format!("Reified({})", propagator.name());
 
-        ReifiedPropagator {
+        let propagator = ReifiedPropagator {
             propagator,
             reification_literal,
             reification_literal_id,
             name,
             reason_buffer: vec![],
+        };
+
+        PropagatorSpec {
+            registration,
+            checkers: wrapped_checkers,
+            propagator,
         }
-    }
-}
-
-/// Wrap inference checkers: the literal is already known, no local id needed.
-#[cfg(feature = "check-propagations")]
-fn wrap_inference_checkers(
-    context: &mut PropagatorConstructorContext<'_>,
-    reification_literal: Literal,
-) {
-    use crate::propagators::ReifiedChecker;
-
-    for (_, checker) in context.pending_inference_checkers.iter_mut() {
-        replace_with::replace_with_or_abort(checker, |inner_checker| {
-            use pumpkin_checking::BoxedChecker;
-
-            Box::new(ReifiedChecker {
-                inner: BoxedChecker::from(inner_checker),
-                reification_literal,
-            })
-        });
-    }
-}
-
-/// Wrap consistency checkers: add the reification literal to each scope with the now-known
-/// local id, then wrap the checker.
-#[cfg(feature = "check-consistency")]
-fn wrap_consistency_checkers(
-    context: &mut PropagatorConstructorContext<'_>,
-    reification_literal: Literal,
-    reification_literal_id: LocalId,
-) {
-    use crate::checkers::ScopeItem;
-
-    for (scope, checker) in context.pending_consistency_checkers.iter_mut() {
-        reification_literal.add_to_scope(scope, reification_literal_id);
-
-        replace_with::replace_with_or_abort(checker, |inner_checker| {
-            BoxedRetentionChecker::from(ReifiedRetentionChecker {
-                inner: inner_checker,
-                reification_literal,
-                reification_literal_id,
-            })
-        });
     }
 }

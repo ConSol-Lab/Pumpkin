@@ -140,4 +140,10 @@ pub trait InferenceLabel {
     fn to_str(&self) -> Arc<str>;
 }
 
+impl InferenceLabel for Arc<str> {
+    fn to_str(&self) -> Arc<str> {
+        Arc::clone(self)
+    }
+}
+
 declare_inference_label!(pub Unknown);

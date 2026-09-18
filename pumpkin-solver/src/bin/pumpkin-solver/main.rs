@@ -27,6 +27,7 @@ use parsers::dimacs::parse_cnf;
 use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
 use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
+use pumpkin_core::propagation::Priority;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_propagators::cumulative::options::CumulativePropagationMethod;
 use pumpkin_propagators::cumulative::time_table::CumulativeExplanationType;
@@ -165,11 +166,18 @@ struct Args {
     /// 1-UIP Minimisation is done; according to the idea proposed in "Generalized Conflict-Clause
     /// Strengthening for Satisfiability Solvers - Allen van Gelder (2011)".
     ///
-    /// If this flag is present then the minimisation is turned off.
+    /// Possible values: bool
+    #[arg(long = "recursive-minimisation", verbatim_doc_comment)]
+    recursive_minimisation: bool,
+
+    /// Decides whether to apply semantic minimisation during conflict analysis; according to the
+    /// idea proposed in "Semantic Learning for Lazy Clause Generation - Feydy et al. (2013)".
+    ///
+    /// If this flag is present then the minimisation is turned on.
     ///
     /// Possible values: bool
-    #[arg(long = "no-learning-minimise", verbatim_doc_comment)]
-    no_learning_clause_minimisation: bool,
+    #[arg(long = "no-iterative-minimisation", verbatim_doc_comment)]
+    no_iterative_minimisation: bool,
 
     /// Decides the sequence based on which the restarts are performed.
     ///
@@ -401,6 +409,10 @@ struct Args {
     /// The amount of memory (in MB) that is preallocated for storing nogoods.
     #[arg(long = "memory-preallocated", default_value_t = 50)]
     memory_preallocated: usize,
+
+    /// The priority of the nogood propagator.
+    #[arg(long = "nogood-priority", value_enum, default_value_t)]
+    nogood_propagator_priority: Priority,
 }
 
 fn configure_logging(
@@ -565,16 +577,17 @@ fn run() -> PumpkinResult<()> {
         lbd_threshold_low: args.learning_low_lbd_threshold,
         lbd_threshold_high: args.learning_high_lbd_threshold,
         activity_bump_increment: 1.0,
+        nogood_propagator_priority: args.nogood_propagator_priority,
     };
 
     let solver_options = SolverOptions {
         // 1 MB is 1_000_000 bytes
         memory_preallocated: args.memory_preallocated,
         restart_options,
-        should_minimise_nogoods: !args.no_learning_clause_minimisation,
         random_generator: SmallRng::seed_from_u64(args.random_seed),
         proof_log,
         learning_options,
+        analysis_mode: args.conflict_resolver,
     };
 
     let time_limit = args.time_limit.map(Duration::from_millis);
@@ -582,6 +595,9 @@ fn run() -> PumpkinResult<()> {
         .instance_path
         .to_str()
         .ok_or(PumpkinError::invalid_instance(args.instance_path.display()))?;
+
+    let recursive_minimisation = args.recursive_minimisation;
+    let iterative_minimisation = !args.no_iterative_minimisation;
 
     match file_format {
         FileFormat::CnfDimacsPLine => cnf_problem(solver_options, time_limit, instance_path)?,
@@ -612,7 +628,7 @@ fn run() -> PumpkinResult<()> {
                 },
                 NoLearningResolver,
             )?,
-            ConflictResolverType::UIP => flatzinc::solve(
+            ConflictResolverType::OneUIP => flatzinc::solve(
                 Solver::with_options(solver_options),
                 instance_path,
                 time_limit,
@@ -632,7 +648,80 @@ fn run() -> PumpkinResult<()> {
                 },
                 ResolutionResolver::new(
                     AnalysisMode::OneUIP,
-                    !args.no_learning_clause_minimisation,
+                    recursive_minimisation,
+                    iterative_minimisation,
+                ),
+            )?,
+            ConflictResolverType::ExtendedCPIP => flatzinc::solve(
+                Solver::with_options(solver_options),
+                instance_path,
+                time_limit,
+                FlatZincOptions {
+                    free_search: args.free_search,
+                    all_solutions: args.all_solutions,
+                    cumulative_options: CumulativeOptions::new(
+                        args.cumulative_allow_holes,
+                        args.cumulative_explanation_type,
+                        !args.cumulative_single_profiles,
+                        args.cumulative_propagation_method,
+                        args.cumulative_incremental_backtracking,
+                    ),
+                    optimisation_strategy: args.optimisation_strategy,
+                    proof_type: args.proof_path.map(|_| args.proof_type),
+                    verbose: args.verbose,
+                },
+                ResolutionResolver::new(
+                    AnalysisMode::CPIP,
+                    recursive_minimisation,
+                    iterative_minimisation,
+                ),
+            )?,
+            ConflictResolverType::BoundsExtendedCPIP => flatzinc::solve(
+                Solver::with_options(solver_options),
+                instance_path,
+                time_limit,
+                FlatZincOptions {
+                    free_search: args.free_search,
+                    all_solutions: args.all_solutions,
+                    cumulative_options: CumulativeOptions::new(
+                        args.cumulative_allow_holes,
+                        args.cumulative_explanation_type,
+                        !args.cumulative_single_profiles,
+                        args.cumulative_propagation_method,
+                        args.cumulative_incremental_backtracking,
+                    ),
+                    optimisation_strategy: args.optimisation_strategy,
+                    proof_type: args.proof_path.map(|_| args.proof_type),
+                    verbose: args.verbose,
+                },
+                ResolutionResolver::new(
+                    AnalysisMode::BoundsCPIP,
+                    recursive_minimisation,
+                    iterative_minimisation,
+                ),
+            )?,
+            ConflictResolverType::AllDecision => flatzinc::solve(
+                Solver::with_options(solver_options),
+                instance_path,
+                time_limit,
+                FlatZincOptions {
+                    free_search: args.free_search,
+                    all_solutions: args.all_solutions,
+                    cumulative_options: CumulativeOptions::new(
+                        args.cumulative_allow_holes,
+                        args.cumulative_explanation_type,
+                        !args.cumulative_single_profiles,
+                        args.cumulative_propagation_method,
+                        args.cumulative_incremental_backtracking,
+                    ),
+                    optimisation_strategy: args.optimisation_strategy,
+                    proof_type: args.proof_path.map(|_| args.proof_type),
+                    verbose: args.verbose,
+                },
+                ResolutionResolver::new(
+                    AnalysisMode::AllDecision,
+                    recursive_minimisation,
+                    iterative_minimisation,
                 ),
             )?,
         },
