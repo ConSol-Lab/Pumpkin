@@ -403,15 +403,23 @@ where
 
 impl<Var: IntegerVariable + 'static> RetentionChecker for LinearNotEqualChecker<Var> {
     fn check_retention(&mut self, _: &Scope, domains: Domains<'_>) -> bool {
-        let mut unfixed_terms = self.terms.iter().filter(|&term| !domains.is_fixed(term));
+        let unfixed_terms = self
+            .terms
+            .iter()
+            .filter(|&term| !domains.is_fixed(term))
+            .collect::<Vec<_>>();
 
-        let Some(unfixed_term) = unfixed_terms.next() else {
-            let sum = self
-                .terms
-                .iter()
-                .map(|term| i64::from(domains.lower_bound(term)))
-                .sum::<i64>();
-            let is_violated = sum == i64::from(self.bound);
+        let fixed_sum = self
+            .terms
+            .iter()
+            .filter_map(|term| domains.fixed_value(term))
+            .map(i64::from)
+            .sum::<i64>();
+
+        // 1. Check if the constraint is conflicting, which is the case if all terms are fixed and
+        //    sum to the bound
+        if unfixed_terms.is_empty() {
+            let is_violated = fixed_sum == i64::from(self.bound);
 
             if is_violated {
                 log::error!(
@@ -422,32 +430,31 @@ impl<Var: IntegerVariable + 'static> RetentionChecker for LinearNotEqualChecker<
             }
 
             return !is_violated;
-        };
+        }
 
-        if unfixed_terms.next().is_some() {
+        // 2. If at least two terms are unfixed then nothing can be propagated
+        if unfixed_terms.len() >= 2 {
             return true;
         }
 
-        let fixed_sum = self
-            .terms
-            .iter()
-            .filter(|&term| domains.is_fixed(term))
-            .map(|term| i64::from(domains.lower_bound(term)))
-            .sum::<i64>();
-        let Ok(forbidden) = i32::try_from(i64::from(self.bound) - fixed_sum) else {
-            return true;
+        // 3. Assert that the single unfixed term cannot take the value which completes the sum to
+        //    the bound
+        let unfixed_term = unfixed_terms[0];
+        let forbidden = i64::from(self.bound) - fixed_sum;
+        let is_removed = match i32::try_from(forbidden) {
+            Ok(forbidden) => !domains.contains(unfixed_term, forbidden),
+            Err(_) => true,
         };
 
-        if domains.contains(unfixed_term, forbidden) {
+        if !is_removed {
             log::error!(
                 "The value {forbidden} could be removed from {unfixed_term:?} by the linear disequality {:?} != {}",
                 self.terms,
                 self.bound
             );
-            return false;
         }
 
-        true
+        is_removed
     }
 }
 

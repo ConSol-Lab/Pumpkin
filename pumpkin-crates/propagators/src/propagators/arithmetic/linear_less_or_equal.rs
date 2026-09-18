@@ -339,6 +339,7 @@ where
 
 impl<Var: IntegerVariable + 'static> RetentionChecker for LinearLessOrEqualChecker<Var> {
     fn check_retention(&mut self, _: &Scope, domains: Domains<'_>) -> bool {
+        // 1. Check if the constraint is conflicting
         let bound = i64::from(self.bound);
         let lower_bound_sum = self
             .terms
@@ -355,8 +356,10 @@ impl<Var: IntegerVariable + 'static> RetentionChecker for LinearLessOrEqualCheck
             return false;
         }
 
-        // Each term is treated on its own, as the propagator does: terms over the same domain
-        // are not combined.
+        // 2. Assert that it is possible to assign the greatest value in the domain for each
+        //    variable
+        //  We do this by effectively assigning the greatest value to the variable whilst keeping
+        //  the other variables at their lower bound.
         self.terms.iter().all(|term| {
             let greatest = bound - (lower_bound_sum - i64::from(domains.lower_bound(term)));
             let is_tight = i64::from(domains.upper_bound(term)) <= greatest;

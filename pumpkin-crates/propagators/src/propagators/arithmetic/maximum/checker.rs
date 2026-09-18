@@ -53,24 +53,22 @@ where
     Rhs: IntegerVariable + 'static,
 {
     fn check_retention(&mut self, _: &Scope, domains: Domains<'_>) -> bool {
+        if self.array.is_empty() {
+            return false;
+        }
+
         let rhs_lower = domains.lower_bound(&self.rhs);
         let rhs_upper = domains.upper_bound(&self.rhs);
+        let mut greatest_lower = i32::MIN;
+        let mut greatest_upper = i32::MIN;
+        for element in self.array.iter() {
+            greatest_lower = greatest_lower.max(domains.lower_bound(element));
+            greatest_upper = greatest_upper.max(domains.upper_bound(element));
+        }
 
-        let Some(greatest_lower) = self
-            .array
-            .iter()
-            .map(|element| domains.lower_bound(element))
-            .max()
-        else {
-            return false;
-        };
-        let greatest_upper = self
-            .array
-            .iter()
-            .map(|element| domains.upper_bound(element))
-            .max()
-            .expect("the array has an element");
-
+        // 1. Assert that the bounds of the maximum match the bounds of the array: its lower bound
+        //    is at least the greatest lower bound and its upper bound is at most the greatest upper
+        //    bound
         if rhs_lower < greatest_lower {
             log::error!(
                 "The lower bound of {:?} could be raised to {greatest_lower} by the maximum of {:?}",
@@ -89,6 +87,7 @@ where
             return false;
         }
 
+        // 2. Assert that no element exceeds the upper bound of the maximum
         for element in self.array.iter() {
             if domains.upper_bound(element) > rhs_upper {
                 log::error!(
@@ -99,17 +98,19 @@ where
             }
         }
 
-        // When a single element can reach the lower bound of the maximum, it has to attain it.
-        // Elements are counted by position, as the propagator does.
-        let mut candidates = self
+        // 3. If only one element can be at least the lower bound of the maximum then it is the
+        //    maximum; assert that its lower bound is at least the lower bound of the maximum, the
+        //    upper bound is already equal by 1 and 2
+        //  Elements are counted by position, as the propagator does.
+        let candidates = self
             .array
             .iter()
-            .filter(|&element| domains.upper_bound(element) >= rhs_lower);
-        if let (Some(candidate), None) = (candidates.next(), candidates.next())
-            && domains.lower_bound(candidate) < rhs_lower
-        {
+            .filter(|&element| domains.upper_bound(element) >= rhs_lower)
+            .collect::<Vec<_>>();
+        if candidates.len() == 1 && domains.lower_bound(candidates[0]) < rhs_lower {
             log::error!(
-                "The lower bound of {candidate:?} could be raised to {rhs_lower}: it is the only element that can attain the maximum {:?}",
+                "The lower bound of {:?} could be raised to {rhs_lower}: it is the only element that can attain the maximum {:?}",
+                candidates[0],
                 self.rhs
             );
             return false;

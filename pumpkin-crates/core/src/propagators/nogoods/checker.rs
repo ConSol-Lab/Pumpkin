@@ -123,24 +123,29 @@ pub struct ExtendedNogoodChecker {
 
 impl RetentionChecker for ExtendedNogoodChecker {
     fn check_retention(&mut self, _: &Scope, domains: Domains<'_>) -> bool {
-        let mut free_domains = self
+        // 1. Determine the variables with a predicate which is not true; if there are none then the
+        //    nogood is conflicting
+        let free_domains = self
             .nogood
             .iter()
             .filter(|&&predicate| domains.evaluate_predicate(predicate) != Some(true))
-            .map(|predicate| predicate.get_domain());
-
-        let Some(free_domain) = free_domains.next() else {
+            .map(|predicate| predicate.get_domain())
+            .collect::<Vec<_>>();
+        if free_domains.is_empty() {
             log::error!(
                 "The nogood {:?} holds; it should have been reported as a conflict",
                 self.nogood
             );
             return false;
-        };
+        }
 
-        if free_domains.any(|domain| domain != free_domain) {
+        // 2. If predicates over at least two variables are not true then nothing can be propagated
+        let free_domain = free_domains[0];
+        if free_domains.iter().any(|&domain| domain != free_domain) {
             return true;
         }
 
+        // 3. Determine the values of the remaining variable which satisfy all of its predicates
         let mut lower = domains.lower_bound(&free_domain);
         let mut upper = domains.upper_bound(&free_domain);
         let mut excluded: HashSet<i32> = domains.get_holes(&free_domain).collect();
@@ -163,6 +168,7 @@ impl RetentionChecker for ExtendedNogoodChecker {
             }
         }
 
+        // 4. Assert that none of these values remain in the domain
         let num_values = (i64::from(upper) - i64::from(lower) + 1).max(0);
         let num_excluded = excluded
             .iter()

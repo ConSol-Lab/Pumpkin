@@ -222,6 +222,7 @@ where
             domains.fixed_value(&self.rhs),
         ) {
             (Some(lhs), Some(rhs)) => {
+                // 1. Both sides are fixed: check that the constraint is not conflicting
                 if lhs == rhs {
                     log::error!(
                         "{:?} and {:?} are both fixed to {lhs}; the disequality is violated",
@@ -232,6 +233,7 @@ where
                 lhs != rhs
             }
             (Some(value), None) => {
+                // 2. One side is fixed: assert that its value is removed from the other side
                 let is_removed = !domains.contains(&self.rhs, value);
                 if !is_removed {
                     log::error!(
@@ -243,6 +245,7 @@ where
                 is_removed
             }
             (None, Some(value)) => {
+                // 2. One side is fixed: assert that its value is removed from the other side
                 let is_removed = !domains.contains(&self.lhs, value);
                 if !is_removed {
                     log::error!(
@@ -253,6 +256,7 @@ where
                 }
                 is_removed
             }
+            // 3. Neither side is fixed: nothing can be propagated
             (None, None) => true,
         }
     }

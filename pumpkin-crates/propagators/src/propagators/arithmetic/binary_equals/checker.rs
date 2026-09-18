@@ -57,12 +57,14 @@ where
     Rhs: IntegerVariable + 'static,
 {
     fn check_retention(&mut self, _: &Scope, domains: Domains<'_>) -> bool {
+        // 1. Assert that the bounds are equal
         let lower = domains.lower_bound(&self.lhs);
         let upper = domains.upper_bound(&self.lhs);
         let same_bounds =
             lower == domains.lower_bound(&self.rhs) && upper == domains.upper_bound(&self.rhs);
-        // A domain may record holes outside its bounds, so only the holes within the shared
-        // bounds are compared.
+        // 2. Assert that the holes within the bounds are equal
+        //  A domain may record holes outside its bounds, so only those within the shared bounds
+        //  are compared.
         let are_equal = same_bounds
             && holes_within(&domains, &self.lhs, lower, upper)
                 == holes_within(&domains, &self.rhs, lower, upper);
