@@ -7,8 +7,6 @@ use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::DomainEvents;
-use crate::propagation::EventRegistration;
-use crate::propagation::InferenceCheckers;
 use crate::propagation::LocalId;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
@@ -34,10 +32,7 @@ pub struct HypercubeLinearConstructor {
 impl PropagatorConstructor for HypercubeLinearConstructor {
     type PropagatorImpl = HypercubeLinearPropagator;
 
-    fn create(
-        self,
-        mut context: PropagatorConstructorContext,
-    ) -> (EventRegistration, Self::PropagatorImpl) {
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let HypercubeLinearConstructor {
             hypercube,
             linear,
@@ -67,18 +62,13 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
             ]
         };
 
-        let propagator = HypercubeLinearPropagator {
+        HypercubeLinearPropagator {
             linear,
 
             hypercube_predicates,
             watched_predicates,
             inference_code: InferenceCode::new(constraint_tag, HypercubeLinear),
-        };
-
-        // TODO: This will be expanded with registration of predicates.
-        let registration = EventRegistration::empty();
-
-        (registration, propagator)
+        }
     }
 }
 

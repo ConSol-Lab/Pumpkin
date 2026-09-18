@@ -21,7 +21,6 @@ use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::variables::AffineView;
-use crate::propagation::EventTarget;
 use crate::propagation::LocalId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -100,18 +99,6 @@ impl SupportsValue for Literal {
 
     fn support_value(&self, support: &Support<i32>) -> i32 {
         self.integer_variable.support_value(support)
-    }
-}
-
-impl EventTarget for Literal {
-    fn register(
-        &self,
-        registration: &mut impl EventDispatcher,
-        events: EnumSet<DomainEvent>,
-        local_id: LocalId,
-    ) {
-        self.integer_variable
-            .register(registration, events, local_id);
     }
 }
 
@@ -204,6 +191,10 @@ impl IntegerVariable for Literal {
 
     fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32> {
         self.integer_variable.iterate_domain(assignment)
+    }
+
+    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
+        self.integer_variable.watch_all(watchers, events)
     }
 
     fn unwatch_all(&self, watchers: &mut Watchers<'_>) {

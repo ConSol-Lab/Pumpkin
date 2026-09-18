@@ -7,7 +7,6 @@ use enumset::enum_set;
 use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
-use pumpkin_core::propagation::EventRegistration;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
@@ -53,18 +52,15 @@ pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
     tasks: &[Rc<Task<Var>>],
     mut context: PropagatorConstructorContext<'_>,
     register_backtrack: bool,
-) -> EventRegistration {
-    let mut registration = EventRegistration::builder();
-
-    for task in tasks.iter() {
-        registration = registration.add(
-            &task.start_variable,
+) {
+    tasks.iter().for_each(|task| {
+        context.register(
+            task.start_variable.clone(),
             DomainEvents::new(enum_set!(
                 DomainEvent::LowerBound | DomainEvent::UpperBound | DomainEvent::Assign
             )),
             task.id,
         );
-
         if register_backtrack {
             context.register_backtrack(
                 task.start_variable.clone(),
@@ -74,9 +70,7 @@ pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
                 task.id,
             );
         }
-    }
-
-    registration.build()
+    });
 }
 
 /// Updates the bounds of the provided [`Task`] to those stored in

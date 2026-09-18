@@ -27,10 +27,7 @@ where
 {
     type PropagatorImpl = BinaryEqualsPropagator<AVar, BVar>;
 
-    fn create(
-        self,
-        mut context: PropagatorConstructorContext,
-    ) -> (EventRegistration, Self::PropagatorImpl) {
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let BinaryEqualsPropagatorArgs {
             a,
             b,

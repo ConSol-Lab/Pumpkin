@@ -11,8 +11,6 @@ use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::EventRegistration;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
@@ -83,13 +81,23 @@ impl<Var> DisjunctiveConstructor<Var> {
 impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstructor<Var> {
     type PropagatorImpl = DisjunctivePropagator<Var>;
 
-    fn create(
-        self,
-        mut context: PropagatorConstructorContext,
-    ) -> (EventRegistration, Self::PropagatorImpl) {
-        let tasks = self
-            .tasks
-            .into_iter()
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        let DisjunctiveConstructor {
+            constraint_tag,
+            tasks: arg_tasks,
+        } = self;
+
+        let inference_code = InferenceCode::new(constraint_tag, DisjunctiveEdgeFinding);
+
+        context.add_inference_checker(
+            inference_code.clone(),
+            Box::new(DisjunctiveEdgeFindingChecker {
+                tasks: arg_tasks.clone().into(),
+            }),
+        );
+
+        let tasks = arg_tasks
+            .iter()
             .enumerate()
             .map(|(index, task)| DisjunctiveTask {
                 start_time: task.start_time.clone(),
@@ -99,41 +107,29 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
             .collect::<Vec<_>>();
         let theta_lambda_tree = ThetaLambdaTree::new(&tasks);
 
-        let inference_code = InferenceCode::new(self.constraint_tag, DisjunctiveEdgeFinding);
-
         let mut scope = Scope::default();
-        let mut registration = EventRegistration::builder();
         for task in tasks.iter() {
-            registration = registration.add(&task.start_time, DomainEvents::BOUNDS, task.id);
+            context.register(task.start_time.clone(), DomainEvents::BOUNDS, task.id);
             task.start_time.add_to_scope(&mut scope, task.id);
         }
 
-        context.add_inference_checker(
-            inference_code,
-            Box::new(DisjunctiveEdgeFindingChecker {
-                tasks: self.tasks.clone().into(),
-            }),
-        );
-
         context.add_consistency_checker(
             scope,
-            Box::new(WeakRetentionChecker::new(
+            WeakRetentionChecker::new(
                 WeakConsistency::Bounds,
                 DisjunctiveEdgeFindingChecker {
-                    tasks: self.tasks.clone().into(),
+                    tasks: arg_tasks.into(),
                 },
-            )),
+            ),
         );
 
-        let propagator = DisjunctivePropagator {
+        DisjunctivePropagator {
             tasks: tasks.clone().into_boxed_slice(),
             sorted_tasks: tasks,
             theta_lambda_tree,
 
             inference_code,
-        };
-
-        (registration.build(), propagator)
+        }
     }
 }
 

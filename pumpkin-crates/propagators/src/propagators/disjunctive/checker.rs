@@ -50,19 +50,18 @@ fn overload_checking<Atomic: AtomicConstraint, Var: CheckerVariable<Atomic>>(
         .iter()
         .enumerate()
         .filter(|(_, task)| {
-            task.start_time.induced_lower_bound(&state) != IntExt::NegativeInf
-                && task.start_time.induced_upper_bound(&state) != IntExt::PositiveInf
+            task.start_time.induced_lower_bound(state) != IntExt::NegativeInf
+                && task.start_time.induced_upper_bound(state) != IntExt::PositiveInf
         })
         .collect::<Vec<_>>();
-    sorted_tasks.sort_by_key(|(_, task)| {
-        task.start_time.induced_upper_bound(&state) + task.processing_time
-    });
+    sorted_tasks
+        .sort_by_key(|(_, task)| task.start_time.induced_upper_bound(state) + task.processing_time);
 
     // Then we go over the tasks which are bounded in the state.
     for (index, task) in sorted_tasks {
         pumpkin_assert_simple!(
-            task.start_time.induced_lower_bound(&state) != IntExt::NegativeInf
-                && task.start_time.induced_upper_bound(&state) != IntExt::PositiveInf
+            task.start_time.induced_lower_bound(state) != IntExt::NegativeInf
+                && task.start_time.induced_upper_bound(state) != IntExt::PositiveInf
         );
         // And we add it to the theta.
         theta.add_to_theta(
@@ -71,12 +70,12 @@ fn overload_checking<Atomic: AtomicConstraint, Var: CheckerVariable<Atomic>>(
                 processing_time: task.processing_time,
                 id: LocalId::from(index as u32),
             },
-            &state,
+            state,
         );
 
         // If there is an overload of the interval, then we can report that a conflict has been
         // found.
-        if theta.ect() > task.start_time.induced_upper_bound(&state) + task.processing_time {
+        if theta.ect() > task.start_time.induced_upper_bound(state) + task.processing_time {
             return true;
         }
     }

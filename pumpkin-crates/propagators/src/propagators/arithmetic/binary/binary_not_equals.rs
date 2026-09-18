@@ -8,8 +8,6 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
-use pumpkin_core::propagation::EventRegistration;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -38,7 +36,7 @@ where
 {
     type PropagatorImpl = BinaryNotEqualsPropagator<AVar, BVar>;
 
-    fn create(self, _: PropagatorConstructorContext) -> (EventRegistration, Self::PropagatorImpl) {
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let BinaryNotEqualsPropagatorArgs {
             a,
             b,
@@ -54,19 +52,15 @@ where
         );
 
         // We only care about the case where one of the two is assigned
-        let registration = EventRegistration::builder()
-            .add(&a, DomainEvents::ASSIGN, LocalId::from(0))
-            .add(&b, DomainEvents::ASSIGN, LocalId::from(1))
-            .build();
+        context.register(a.clone(), DomainEvents::ASSIGN, LocalId::from(0));
+        context.register(b.clone(), DomainEvents::ASSIGN, LocalId::from(1));
 
-        let propagator = BinaryNotEqualsPropagator {
+        BinaryNotEqualsPropagator {
             a,
             b,
 
             inference_code: InferenceCode::new(constraint_tag, BinaryNotEquals),
-        };
-
-        (registration, propagator)
+        }
     }
 }
 

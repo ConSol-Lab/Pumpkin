@@ -13,7 +13,6 @@ use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
-use pumpkin_core::propagation::EventRegistration;
 use pumpkin_core::propagation::ExplanationContext;
 use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
@@ -46,10 +45,7 @@ where
 {
     type PropagatorImpl = LinearLessOrEqualPropagator<Var>;
 
-    fn create(
-        self,
-        mut context: PropagatorConstructorContext,
-    ) -> (EventRegistration, Self::PropagatorImpl) {
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let LinearLessOrEqualPropagatorArgs {
             x,
             c,
@@ -64,26 +60,26 @@ where
         let mut lower_bound_left_hand_side = 0_i64;
         let mut current_bounds = vec![];
 
-        let mut registration = EventRegistration::builder();
         for (i, x_i) in x.iter().enumerate() {
-            registration =
-                registration.add(x_i, DomainEvents::LOWER_BOUND, LocalId::from(i as u32));
+            context.register(
+                x_i.clone(),
+                DomainEvents::LOWER_BOUND,
+                LocalId::from(i as u32),
+            );
             lower_bound_left_hand_side += context.lower_bound(x_i) as i64;
             current_bounds.push(context.new_trailed_integer(context.lower_bound(x_i) as i64));
         }
 
         let lower_bound_left_hand_side = context.new_trailed_integer(lower_bound_left_hand_side);
 
-        let propagator = LinearLessOrEqualPropagator {
+        LinearLessOrEqualPropagator {
             x,
             c,
             lower_bound_left_hand_side,
             current_bounds: current_bounds.into(),
             inference_code: InferenceCode::new(constraint_tag, LinearBounds),
             reason_buffer: Vec::default(),
-        };
-
-        (registration.build(), propagator)
+        }
     }
 }
 

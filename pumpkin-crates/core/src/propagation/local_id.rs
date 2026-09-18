@@ -10,11 +10,6 @@ impl LocalId {
         LocalId(value)
     }
 
-    /// Get the next [`LocalId`].
-    pub const fn successor(self) -> Self {
-        LocalId(self.0 + 1)
-    }
-
     pub fn unpack(self) -> u32 {
         self.0
     }
