@@ -6,7 +6,9 @@ use pumpkin_checking::VariableState;
 
 use crate::checkers::RetentionChecker;
 use crate::checkers::Scope;
+use crate::containers::HashSet;
 use crate::predicates::Predicate;
+use crate::predicates::PredicateType;
 use crate::propagation::Domains;
 use crate::propagation::ReadDomains;
 
@@ -109,5 +111,144 @@ mod tests {
 
         let scope = Scope::from_iter([(LocalId::from(0), x), (LocalId::from(1), y)]);
         assert!(checker.check_retention(&scope, state.get_domains()));
+    }
+}
+
+/// The retention checker for extended nogood propagation: when the atomic constraints over all
+/// but one variable hold, that variable has no value left that satisfies its atomic constraints.
+#[derive(Debug, Clone)]
+pub struct ExtendedNogoodChecker {
+    pub nogood: Box<[Predicate]>,
+}
+
+impl RetentionChecker for ExtendedNogoodChecker {
+    fn check_retention(&mut self, _: &Scope, domains: Domains<'_>) -> bool {
+        let mut free_domains = self
+            .nogood
+            .iter()
+            .filter(|&&predicate| domains.evaluate_predicate(predicate) != Some(true))
+            .map(|predicate| predicate.get_domain());
+
+        let Some(free_domain) = free_domains.next() else {
+            log::error!(
+                "The nogood {:?} holds; it should have been reported as a conflict",
+                self.nogood
+            );
+            return false;
+        };
+
+        if free_domains.any(|domain| domain != free_domain) {
+            return true;
+        }
+
+        let mut lower = domains.lower_bound(&free_domain);
+        let mut upper = domains.upper_bound(&free_domain);
+        let mut excluded: HashSet<i32> = domains.get_holes(&free_domain).collect();
+        for predicate in self
+            .nogood
+            .iter()
+            .filter(|predicate| predicate.get_domain() == free_domain)
+        {
+            let value = predicate.get_right_hand_side();
+            match predicate.get_predicate_type() {
+                PredicateType::LowerBound => lower = lower.max(value),
+                PredicateType::UpperBound => upper = upper.min(value),
+                PredicateType::NotEqual => {
+                    let _ = excluded.insert(value);
+                }
+                PredicateType::Equal => {
+                    lower = lower.max(value);
+                    upper = upper.min(value);
+                }
+            }
+        }
+
+        let num_values = (i64::from(upper) - i64::from(lower) + 1).max(0);
+        let num_excluded = excluded
+            .iter()
+            .filter(|&&value| lower <= value && value <= upper)
+            .count() as i64;
+        let no_value_allowed = num_excluded == num_values;
+
+        if !no_value_allowed {
+            log::error!(
+                "The values of {free_domain} in [{lower}, {upper}] could be removed by the nogood {:?}",
+                self.nogood
+            );
+        }
+
+        no_value_allowed
+    }
+}
+
+#[cfg(test)]
+mod extended_tests {
+    use super::*;
+    use crate::conjunction;
+    use crate::predicate;
+    use crate::propagation::LocalId;
+    use crate::state::State;
+
+    #[test]
+    fn a_free_variable_with_allowed_values_is_not_consistent_under_extended_propagation() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, Some("x".into()));
+        let y = state.new_interval_variable(1, 1, Some("y".into()));
+        let nogood: Box<[Predicate]> = conjunction!([x >= 3] & [x <= 5] & [y == 1]).into();
+        let scope = Scope::from_iter([(LocalId::from(0), x), (LocalId::from(1), y)]);
+
+        let mut extended = ExtendedNogoodChecker {
+            nogood: nogood.clone(),
+        };
+        assert!(!extended.check_retention(&scope, state.get_domains()));
+
+        // Unit propagation cannot fire with two atomic constraints over `x` unassigned.
+        let mut unit = NogoodChecker { nogood };
+        assert!(unit.check_retention(&scope, state.get_domains()));
+    }
+
+    #[test]
+    fn a_free_variable_without_allowed_values_is_consistent() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, Some("x".into()));
+        let y = state.new_interval_variable(1, 1, Some("y".into()));
+        for value in 3..=5 {
+            let _ = state.post(predicate![x != value]).unwrap();
+        }
+
+        let mut checker = ExtendedNogoodChecker {
+            nogood: conjunction!([x >= 3] & [x <= 5] & [y == 1]).into(),
+        };
+        let scope = Scope::from_iter([(LocalId::from(0), x), (LocalId::from(1), y)]);
+
+        assert!(checker.check_retention(&scope, state.get_domains()));
+    }
+
+    #[test]
+    fn two_free_variables_are_consistent() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, Some("x".into()));
+        let y = state.new_interval_variable(0, 5, Some("y".into()));
+
+        let mut checker = ExtendedNogoodChecker {
+            nogood: conjunction!([x >= 3] & [x <= 5] & [y == 1]).into(),
+        };
+        let scope = Scope::from_iter([(LocalId::from(0), x), (LocalId::from(1), y)]);
+
+        assert!(checker.check_retention(&scope, state.get_domains()));
+    }
+
+    #[test]
+    fn a_nogood_that_holds_is_not_consistent() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(4, 4, Some("x".into()));
+        let y = state.new_interval_variable(1, 1, Some("y".into()));
+
+        let mut checker = ExtendedNogoodChecker {
+            nogood: conjunction!([x >= 3] & [x <= 5] & [y == 1]).into(),
+        };
+        let scope = Scope::from_iter([(LocalId::from(0), x), (LocalId::from(1), y)]);
+
+        assert!(!checker.check_retention(&scope, state.get_domains()));
     }
 }

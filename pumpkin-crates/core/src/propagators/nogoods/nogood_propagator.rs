@@ -1413,9 +1413,18 @@ impl NogoodPropagator {
         context: &mut PropagationContext,
     ) {
         let scope = build_nogood_scope(&nogood);
-        let checker = SelfDisablingChecker::new(super::NogoodChecker { nogood });
-        let _ = self.deletion_flags.push(checker.deletion_flag());
-        context.add_retention_checker(scope, checker);
+        match self.propagation_mode {
+            PropagationMode::UnitPropagation => {
+                let checker = SelfDisablingChecker::new(super::NogoodChecker { nogood });
+                let _ = self.deletion_flags.push(checker.deletion_flag());
+                context.add_retention_checker(scope, checker);
+            }
+            PropagationMode::ExtendedNogoodPropagation => {
+                let checker = SelfDisablingChecker::new(super::ExtendedNogoodChecker { nogood });
+                let _ = self.deletion_flags.push(checker.deletion_flag());
+                context.add_retention_checker(scope, checker);
+            }
+        }
     }
 }
 
