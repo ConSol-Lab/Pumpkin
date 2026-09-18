@@ -17,6 +17,17 @@ impl FromIterator<(LocalId, DomainId)> for Scope {
 }
 
 impl Scope {
+    /// The scope of the given variables, with the [`LocalId`] of each variable its position.
+    pub fn from_variables<'a, Variable: ScopeItem + 'a>(
+        variables: impl IntoIterator<Item = &'a Variable>,
+    ) -> Scope {
+        let mut scope = Scope::default();
+        for (index, variable) in variables.into_iter().enumerate() {
+            variable.add_to_scope(&mut scope, LocalId::from(index as u32));
+        }
+        scope
+    }
+
     /// Add a new domain to the scope with the given local id.
     ///
     /// Any previous occurrance of this local id will be overridden.

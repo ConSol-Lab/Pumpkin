@@ -1075,6 +1075,7 @@ dependencies = [
  "clap",
  "convert_case",
  "enumset",
+ "log",
  "pumpkin-checking",
  "pumpkin-core",
 ]

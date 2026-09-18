@@ -1,6 +1,6 @@
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::VariableState;
-use pumpkin_propagators::arithmetic::LinearLessOrEqualInferenceChecker;
+use pumpkin_propagators::arithmetic::LinearLessOrEqualChecker;
 
 use crate::inferences::Fact;
 use crate::inferences::InvalidInference;
@@ -52,7 +52,7 @@ fn verify_linear_inference(
     fact: &Fact,
     state: VariableState<Atomic>,
 ) -> Result<(), InvalidInference> {
-    let checker = LinearLessOrEqualInferenceChecker::new(linear.terms.clone().into(), linear.bound);
+    let checker = LinearLessOrEqualChecker::new(linear.terms.clone().into(), linear.bound);
 
     if checker.check(state, &fact.premises, fact.consequent.as_ref()) {
         Ok(())

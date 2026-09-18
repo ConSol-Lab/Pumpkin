@@ -2,7 +2,6 @@ use pumpkin_checking::BoxedChecker;
 use pumpkin_checking::InferenceChecker;
 
 use crate::checkers::BoxedRetentionChecker;
-#[cfg(doc)]
 use crate::checkers::RetentionChecker;
 use crate::checkers::Scope;
 use crate::predicates::Predicate;
@@ -70,6 +69,24 @@ impl RuntimeCheckers {
         self.retention_checkers.push((scope.into(), checker.into()));
     }
 
+    /// Add a checker that is both the inference checker and the retention checker of the
+    /// propagator's rule, with the retention checker over `scope`.
+    pub fn add_rule<Checker>(
+        &mut self,
+        scope: impl Into<Scope>,
+        constraint_tag: ConstraintTag,
+        inference_label: impl InferenceLabel,
+        checker: Checker,
+    ) -> InferenceCode
+    where
+        Checker: InferenceChecker<Predicate> + RetentionChecker + Clone + 'static,
+    {
+        let inference_code =
+            self.add_inference_checker(constraint_tag, inference_label, checker.clone());
+        self.add_retention_checker(scope, checker);
+        inference_code
+    }
+
     /// Split the checkers into the inference checkers and the retention checkers.
     #[allow(clippy::type_complexity, reason = "the tuple mirrors the two fields")]
     pub fn into_parts(
@@ -108,6 +125,22 @@ impl RuntimeCheckersBuilder {
         checker: impl Into<BoxedRetentionChecker>,
     ) {
         self.checkers.add_retention_checker(scope, checker);
+    }
+
+    /// Add a checker that is both the inference checker and the retention checker of the
+    /// propagator's rule, with the retention checker over `scope`.
+    pub fn add_rule<Checker>(
+        &mut self,
+        scope: impl Into<Scope>,
+        constraint_tag: ConstraintTag,
+        inference_label: impl InferenceLabel,
+        checker: Checker,
+    ) -> InferenceCode
+    where
+        Checker: InferenceChecker<Predicate> + RetentionChecker + Clone + 'static,
+    {
+        self.checkers
+            .add_rule(scope, constraint_tag, inference_label, checker)
     }
 
     /// Finish adding runtime checkers.
