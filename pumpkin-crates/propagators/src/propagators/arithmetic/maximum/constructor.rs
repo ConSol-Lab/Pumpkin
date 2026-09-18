@@ -1,3 +1,4 @@
+use pumpkin_core::checkers::Scope;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
@@ -39,14 +40,15 @@ where
             registration = registration.add(var, DomainEvents::BOUNDS, LocalId::from(idx as u32));
         }
 
-        registration = registration.add(
-            &rhs,
-            DomainEvents::BOUNDS,
-            LocalId::from(array.len() as u32),
-        );
+        let rhs_local_id = LocalId::from(array.len() as u32);
+        registration = registration.add(&rhs, DomainEvents::BOUNDS, rhs_local_id);
+
+        let mut scope = Scope::from_variables(array.iter());
+        rhs.add_to_scope(&mut scope, rhs_local_id);
 
         let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
+        let inference_code = checkers.add_rule(
+            scope,
             constraint_tag,
             Maximum,
             MaximumChecker {
