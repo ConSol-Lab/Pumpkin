@@ -5,6 +5,7 @@ use pumpkin_checking::InferenceChecker;
 #[cfg(feature = "check-propagations")]
 use pumpkin_checking::VariableState;
 
+use crate::basic_types::time::Instant;
 use crate::checkers::CheckerStore;
 use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
@@ -89,6 +90,9 @@ create_statistics_struct!(StateStatistics {
     num_propagators_called: usize,
     num_propagations: usize,
     num_conflicts: usize,
+    /// The cumulative number of seconds spent inside [`State::propagate_to_fixed_point`],
+    /// i.e., propagating all enqueued propagators to a fixed point (or until a conflict is found).
+    num_seconds_in_fixed_point_propagation: f64,
     /// The number of levels which were backjumped.
     ///
     /// For an individual backtrack due to a learned nogood, this is calculated according to the
@@ -135,6 +139,10 @@ impl State {
         log_statistic("failures", self.statistics.num_conflicts);
         log_statistic("propagations", self.statistics.num_propagators_called);
         log_statistic("nogoods", self.statistics.num_conflicts);
+        log_statistic(
+            "numSecondsInFixedPointPropagation",
+            self.statistics.num_seconds_in_fixed_point_propagation,
+        );
         if verbose {
             log_statistic(
                 "numAtomicConstraintsPropagated",
@@ -757,6 +765,8 @@ impl State {
     /// Once the [`State`] is conflicting, then the only operation that is defined is
     /// [`State::restore_to`]. All other operations and queries on the state are unspecified.
     pub fn propagate_to_fixed_point(&mut self) -> Result<(), Conflict> {
+        let start_time = Instant::now();
+
         // The initial domain events are due to the decision predicate.
         self.notification_engine
             .notify_propagators_about_domain_events(
@@ -767,20 +777,30 @@ impl State {
             );
 
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
+        let mut result = Ok(());
         while let Some(propagator_id) = self.propagator_queue.pop() {
-            self.propagate(propagator_id)?;
+            if let Err(conflict) = self.propagate(propagator_id) {
+                result = Err(conflict);
+                break;
+            }
         }
 
         // Only check fixed point propagation if there was no reported conflict,
         // since otherwise the state may be inconsistent.
-        pumpkin_assert_extreme!(DebugHelper::debug_fixed_point_propagation(
-            &self.trailed_values,
-            &self.assignments,
-            &self.propagators,
-            &self.notification_engine
-        ));
+        pumpkin_assert_extreme!(
+            result.is_err()
+                || DebugHelper::debug_fixed_point_propagation(
+                    &self.trailed_values,
+                    &self.assignments,
+                    &self.propagators,
+                    &self.notification_engine
+                )
+        );
 
-        Ok(())
+        self.statistics.num_seconds_in_fixed_point_propagation +=
+            start_time.elapsed().as_secs_f64();
+
+        result
     }
 }
 

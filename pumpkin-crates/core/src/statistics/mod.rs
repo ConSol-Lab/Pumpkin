@@ -55,7 +55,7 @@ macro_rules! create_statistics_struct {
 
         impl $crate::statistics::Statistic for $name {
             fn log(&self, statistic_logger: $crate::statistics::StatisticLogger) {
-                $(self.$field.log(statistic_logger.attach_to_prefix(stringify!($field),)));+
+                $($crate::statistics::Statistic::log(&self.$field, statistic_logger.attach_to_prefix(stringify!($field))));+
             }
         }
     };
