@@ -10,7 +10,7 @@ use super::predicates::predicate::Predicate;
 use super::reason::ReasonStore;
 use crate::basic_types::PropositionalConjunction;
 #[cfg(feature = "check-consistency")]
-use crate::checkers::ConsistencyCheckerStore;
+use crate::checkers::RetentionCheckerStore;
 use crate::engine::cp::Assignments;
 use crate::propagation::ExplanationContext;
 use crate::propagation::PropagationContext;
@@ -79,7 +79,7 @@ impl DebugHelper {
             let num_entries_on_trail_before_propagation = assignments_clone.num_trail_entries();
 
             #[cfg(feature = "check-consistency")]
-            let mut consistency_checkers = ConsistencyCheckerStore::default();
+            let mut retention_checkers = RetentionCheckerStore::default();
 
             let mut reason_store = Default::default();
             let context = PropagationContext::new(
@@ -89,7 +89,7 @@ impl DebugHelper {
                 &mut notification_engine_clone,
                 PropagatorId(propagator_id as u32),
                 #[cfg(feature = "check-consistency")]
-                &mut consistency_checkers,
+                &mut retention_checkers,
             );
             let propagation_status_cp = propagator.propagate_from_scratch(context);
 
@@ -260,7 +260,7 @@ impl DebugHelper {
 
             if adding_predicates_was_successful {
                 #[cfg(feature = "check-consistency")]
-                let mut consistency_checkers = ConsistencyCheckerStore::default();
+                let mut retention_checkers = RetentionCheckerStore::default();
 
                 // Now propagate using the debug propagation method.
                 let mut reason_store = Default::default();
@@ -271,7 +271,7 @@ impl DebugHelper {
                     &mut notification_engine_clone,
                     propagator_id,
                     #[cfg(feature = "check-consistency")]
-                    &mut consistency_checkers,
+                    &mut retention_checkers,
                 );
                 let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
 
@@ -382,7 +382,7 @@ impl DebugHelper {
                     let num_predicates_before = assignments_clone.num_trail_entries();
 
                     #[cfg(feature = "check-consistency")]
-                    let mut consistency_checkers = ConsistencyCheckerStore::default();
+                    let mut retention_checkers = RetentionCheckerStore::default();
 
                     let context = PropagationContext::new(
                         &mut trailed_values_clone,
@@ -391,7 +391,7 @@ impl DebugHelper {
                         &mut notification_engine_clone,
                         propagator_id,
                         #[cfg(feature = "check-consistency")]
-                        &mut consistency_checkers,
+                        &mut retention_checkers,
                     );
                     let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
 
@@ -451,7 +451,7 @@ impl DebugHelper {
 
         if adding_predicates_was_successful {
             #[cfg(feature = "check-consistency")]
-            let mut consistency_checkers = ConsistencyCheckerStore::default();
+            let mut retention_checkers = RetentionCheckerStore::default();
 
             //  now propagate using the debug propagation method
             let mut reason_store = Default::default();
@@ -462,7 +462,7 @@ impl DebugHelper {
                 &mut notification_engine_clone,
                 propagator_id,
                 #[cfg(feature = "check-consistency")]
-                &mut consistency_checkers,
+                &mut retention_checkers,
             );
             let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
             assert!(

@@ -1,5 +1,3 @@
-use pumpkin_core::checkers::StrongConsistency;
-use pumpkin_core::checkers::StrongRetentionChecker;
 use pumpkin_core::containers::HashSet;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
@@ -41,17 +39,14 @@ where
             .add(&b, DomainEvents::ANY_INT, super::ID_RHS)
             .build();
 
-        let checker = BinaryEqualsChecker {
-            lhs: a.clone(),
-            rhs: b.clone(),
-        };
-
         let mut checkers = RuntimeCheckers::builder();
-        let inference_code =
-            checkers.add_inference_checker(constraint_tag, super::BinaryEquals, checker.clone());
-        checkers.add_consistency_checker(
-            ((super::ID_LHS, &a), (super::ID_RHS, &b)),
-            StrongRetentionChecker::new(StrongConsistency::Domain, checker),
+        let inference_code = checkers.add_inference_checker(
+            constraint_tag,
+            super::BinaryEquals,
+            BinaryEqualsChecker {
+                lhs: a.clone(),
+                rhs: b.clone(),
+            },
         );
 
         let propagator = BinaryEqualsPropagator {

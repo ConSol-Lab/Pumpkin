@@ -16,8 +16,8 @@ use crate::proof::InferenceCode;
 /// - inference checkers, which verify that propagations are sound. Each is wrapped in a
 ///   [`PropagationChecker`], which evaluates the inference against the solver state.
 ///
-/// The consistency checkers, which verify that propagation is complete, are owned by the
-/// [`ConsistencyCheckerStore`](crate::checkers::ConsistencyCheckerStore) since they are scheduled
+/// The retention checkers, which verify that propagation is complete, are owned by the
+/// [`RetentionCheckerStore`](crate::checkers::RetentionCheckerStore) since they are scheduled
 /// rather than looked up.
 #[derive(Clone, Debug, Default)]
 pub struct CheckerStore {

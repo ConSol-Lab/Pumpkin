@@ -37,7 +37,6 @@ use crate::cumulative::UpdatableStructures;
 use crate::cumulative::options::CumulativePropagatorOptions;
 use crate::cumulative::time_table::CheckerTask;
 use crate::cumulative::time_table::TimeTableChecker;
-use crate::cumulative::time_table::time_table_util::add_consistency_checker;
 use crate::cumulative::util::create_tasks;
 use crate::cumulative::util::register_tasks;
 use crate::cumulative::util::update_bounds_task;
@@ -127,7 +126,6 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPoint
                 },
             ),
         );
-        add_consistency_checker(&mut checkers, &self.parameters);
 
         PropagatorSpec {
             registration,

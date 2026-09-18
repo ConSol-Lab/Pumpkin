@@ -2,9 +2,6 @@ use std::cmp::Reverse;
 use std::cmp::min;
 
 use pumpkin_core::asserts::pumpkin_assert_simple;
-use pumpkin_core::checkers::Scope;
-use pumpkin_core::checkers::WeakConsistency;
-use pumpkin_core::checkers::WeakRetentionChecker;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
@@ -97,32 +94,24 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
             .collect::<Vec<_>>();
         let theta_lambda_tree = ThetaLambdaTree::new(&tasks);
 
-        let mut scope = Scope::default();
         let mut registration = EventsToRegister::builder();
         for task in tasks.iter() {
             registration = registration.add(&task.start_time, DomainEvents::BOUNDS, task.id);
-            task.start_time.add_to_scope(&mut scope, task.id);
         }
-
-        let checker = DisjunctiveEdgeFindingChecker {
-            tasks: tasks
-                .iter()
-                .map(|task| ArgDisjunctiveTask {
-                    start_time: task.start_time.clone(),
-                    processing_time: task.processing_time,
-                })
-                .collect(),
-        };
 
         let mut checkers = RuntimeCheckers::builder();
         let inference_code = checkers.add_inference_checker(
             self.constraint_tag,
             DisjunctiveEdgeFinding,
-            checker.clone(),
-        );
-        checkers.add_consistency_checker(
-            scope,
-            WeakRetentionChecker::new(WeakConsistency::Bounds, checker),
+            DisjunctiveEdgeFindingChecker {
+                tasks: tasks
+                    .iter()
+                    .map(|task| ArgDisjunctiveTask {
+                        start_time: task.start_time.clone(),
+                        processing_time: task.processing_time,
+                    })
+                    .collect(),
+            },
         );
 
         let propagator = DisjunctivePropagator {

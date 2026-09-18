@@ -17,11 +17,11 @@ use crate::propagation::PropagatorConstructor;
 /// Used when creating a new propagator in [`PropagatorConstructor::create`]. Two kinds of checkers
 /// can be added:
 /// - inference checkers, which verify that the propagations are sound,
-/// - consistency checkers, which verify that the propagator prunes as much as it advertises.
+/// - retention checkers, which verify that the propagator has nothing left to propagate.
 #[derive(Clone, Debug)]
 pub struct RuntimeCheckers {
     inference_checkers: Vec<(InferenceCode, BoxedChecker<Predicate>)>,
-    consistency_checkers: Vec<(Scope, BoxedRetentionChecker)>,
+    retention_checkers: Vec<(Scope, BoxedRetentionChecker)>,
 }
 
 impl RuntimeCheckers {
@@ -32,7 +32,7 @@ impl RuntimeCheckers {
     pub fn empty() -> RuntimeCheckers {
         RuntimeCheckers {
             inference_checkers: vec![],
-            consistency_checkers: vec![],
+            retention_checkers: vec![],
         }
     }
 
@@ -60,18 +60,17 @@ impl RuntimeCheckers {
         inference_code
     }
 
-    /// Add a [`RetentionChecker`] over the given scope to verify that the propagator prunes as
-    /// much as it advertises.
-    pub fn add_consistency_checker(
+    /// Add a [`RetentionChecker`] over the given scope to verify that the propagator has nothing
+    /// left to propagate at fixpoints.
+    pub fn add_retention_checker(
         &mut self,
         scope: impl Into<Scope>,
         checker: impl Into<BoxedRetentionChecker>,
     ) {
-        self.consistency_checkers
-            .push((scope.into(), checker.into()));
+        self.retention_checkers.push((scope.into(), checker.into()));
     }
 
-    /// Split the checkers into the inference checkers and the consistency checkers.
+    /// Split the checkers into the inference checkers and the retention checkers.
     #[allow(clippy::type_complexity, reason = "the tuple mirrors the two fields")]
     pub fn into_parts(
         self,
@@ -79,7 +78,7 @@ impl RuntimeCheckers {
         Vec<(InferenceCode, BoxedChecker<Predicate>)>,
         Vec<(Scope, BoxedRetentionChecker)>,
     ) {
-        (self.inference_checkers, self.consistency_checkers)
+        (self.inference_checkers, self.retention_checkers)
     }
 }
 
@@ -101,14 +100,14 @@ impl RuntimeCheckersBuilder {
             .add_inference_checker(constraint_tag, inference_label, checker)
     }
 
-    /// Add a [`RetentionChecker`] over the given scope to verify that the propagator prunes as
-    /// much as it advertises.
-    pub fn add_consistency_checker(
+    /// Add a [`RetentionChecker`] over the given scope to verify that the propagator has nothing
+    /// left to propagate at fixpoints.
+    pub fn add_retention_checker(
         &mut self,
         scope: impl Into<Scope>,
         checker: impl Into<BoxedRetentionChecker>,
     ) {
-        self.checkers.add_consistency_checker(scope, checker);
+        self.checkers.add_retention_checker(scope, checker);
     }
 
     /// Finish adding runtime checkers.

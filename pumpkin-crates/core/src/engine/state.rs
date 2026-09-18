@@ -5,7 +5,7 @@ use pumpkin_checking::InferenceChecker;
 
 use crate::checkers::BoxedRetentionChecker;
 use crate::checkers::CheckerStore;
-use crate::checkers::ConsistencyCheckerStore;
+use crate::checkers::RetentionCheckerStore;
 use crate::checkers::Scope;
 use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
@@ -84,8 +84,8 @@ pub struct State {
 
     /// Runtime checkers to run in the propagation loop.
     checkers: CheckerStore,
-    /// The consistency checkers, which verify that propagation is complete, and their scheduling.
-    pub(crate) consistency_checkers: ConsistencyCheckerStore,
+    /// The retention checkers, which verify that propagation is complete, and their scheduling.
+    pub(crate) retention_checkers: RetentionCheckerStore,
 }
 
 create_statistics_struct!(StateStatistics {
@@ -116,7 +116,7 @@ impl Default for State {
             statistics: StateStatistics::default(),
             constraint_tags: KeyGenerator::default(),
             checkers: CheckerStore::default(),
-            consistency_checkers: Default::default(),
+            retention_checkers: Default::default(),
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are
@@ -360,7 +360,7 @@ impl State {
                 .register(domain_id, events, propagator_var);
         }
 
-        let (inference_checkers, consistency_checkers) = checkers.into_parts();
+        let (inference_checkers, retention_checkers) = checkers.into_parts();
 
         if cfg!(feature = "check-propagations") {
             // Only register the checkers when this feature is enabled. This is an if statement
@@ -372,8 +372,8 @@ impl State {
         }
 
         if cfg!(feature = "check-consistency") {
-            for (scope, checker) in consistency_checkers {
-                self.consistency_checkers.register(scope, checker);
+            for (scope, checker) in retention_checkers {
+                self.retention_checkers.register(scope, checker);
             }
         }
 
@@ -414,13 +414,13 @@ impl State {
         inference_code
     }
 
-    /// Add a consistency checker for the scope.
-    pub fn add_consistency_checker(
+    /// Add a retention checker for the scope.
+    pub fn add_retention_checker(
         &mut self,
         scope: impl Into<Scope>,
         checker: impl Into<BoxedRetentionChecker>,
     ) {
-        self.consistency_checkers
+        self.retention_checkers
             .register(scope.into(), checker.into());
     }
 }
@@ -466,7 +466,7 @@ impl State {
             reason_store,
             notification_engine,
             #[cfg(feature = "check-consistency")]
-            consistency_checkers,
+            retention_checkers,
             ..
         } = self;
         let propagator = propagators.get_propagator_mut(handle);
@@ -477,7 +477,7 @@ impl State {
             notification_engine,
             handle.propagator_id(),
             #[cfg(feature = "check-consistency")]
-            consistency_checkers,
+            retention_checkers,
         );
         (propagator, context)
     }
@@ -669,7 +669,7 @@ impl State {
                 reason_store,
                 notification_engine,
                 #[cfg(feature = "check-consistency")]
-                consistency_checkers,
+                retention_checkers,
                 ..
             } = self;
             let propagator = &mut propagators[propagator_id];
@@ -680,7 +680,7 @@ impl State {
                 notification_engine,
                 propagator_id,
                 #[cfg(feature = "check-consistency")]
-                consistency_checkers,
+                retention_checkers,
             );
             propagator.propagate(context)
         };
@@ -689,7 +689,7 @@ impl State {
         self.check_propagations(num_trail_entries_before);
 
         #[cfg(feature = "check-consistency")]
-        self.enqueue_consistency_checkers(num_trail_entries_before);
+        self.enqueue_retention_checkers(num_trail_entries_before);
 
         match propagation_status {
             Ok(_) => {
@@ -719,7 +719,7 @@ impl State {
                 self.check_conflict(&conflict);
 
                 #[cfg(feature = "check-consistency")]
-                self.consistency_checkers.clear_queue();
+                self.retention_checkers.clear_queue();
 
                 self.statistics.num_conflicts += 1;
                 if let Conflict::Propagator(inner) = &conflict {
@@ -795,11 +795,11 @@ impl State {
     }
 
     #[cfg(feature = "check-consistency")]
-    fn enqueue_consistency_checkers(&mut self, first_propagation_index: usize) {
+    fn enqueue_retention_checkers(&mut self, first_propagation_index: usize) {
         for trail_index in first_propagation_index..self.assignments.num_trail_entries() {
             let entry = self.assignments.get_trail_entry(trail_index);
 
-            self.consistency_checkers
+            self.retention_checkers
                 .on_domain_event(entry.predicate.get_domain());
         }
     }
@@ -834,7 +834,7 @@ impl State {
 
         if cfg!(feature = "check-consistency") {
             assert!(
-                self.consistency_checkers
+                self.retention_checkers
                     .run_enqueued(Domains::new(&self.assignments, &mut self.trailed_values))
             );
         }
@@ -1229,7 +1229,7 @@ impl State {
             reason_store,
             notification_engine,
             #[cfg(feature = "check-consistency")]
-            consistency_checkers,
+            retention_checkers,
             ..
         } = self;
         PropagationContext::new(
@@ -1239,7 +1239,7 @@ impl State {
             notification_engine,
             PropagatorId(0),
             #[cfg(feature = "check-consistency")]
-            consistency_checkers,
+            retention_checkers,
         )
     }
 }

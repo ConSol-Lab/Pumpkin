@@ -3,7 +3,7 @@ use enumset::EnumSet;
 use crate::basic_types::PredicateId;
 use crate::checkers::BoxedRetentionChecker;
 #[cfg(feature = "check-consistency")]
-use crate::checkers::ConsistencyCheckerStore;
+use crate::checkers::RetentionCheckerStore;
 use crate::checkers::Scope;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
@@ -95,7 +95,7 @@ pub struct PropagationContext<'a> {
     reification_literal: Option<Literal>,
 
     #[cfg(feature = "check-consistency")]
-    pub(crate) consistency_checkers: &'a mut ConsistencyCheckerStore,
+    pub(crate) retention_checkers: &'a mut RetentionCheckerStore,
 }
 
 impl<'a> HasAssignments for PropagationContext<'a> {
@@ -119,7 +119,7 @@ impl<'a> PropagationContext<'a> {
         reason_store: &'a mut ReasonStore,
         notification_engine: &'a mut NotificationEngine,
         propagator_id: PropagatorId,
-        #[cfg(feature = "check-consistency")] consistency_checkers: &'a mut ConsistencyCheckerStore,
+        #[cfg(feature = "check-consistency")] retention_checkers: &'a mut RetentionCheckerStore,
     ) -> Self {
         PropagationContext {
             trailed_values,
@@ -129,25 +129,25 @@ impl<'a> PropagationContext<'a> {
             notification_engine,
             reification_literal: None,
             #[cfg(feature = "check-consistency")]
-            consistency_checkers,
+            retention_checkers,
         }
     }
 
-    /// Add a consistency checker for the given constraint and scope.
+    /// Add a retention checker for the given constraint and scope.
     ///
     /// If the `check-consistency` feature is not enabled, this is a no-op.
-    pub fn add_consistency_checker(
+    pub fn add_retention_checker(
         &mut self,
         scope: impl Into<Scope>,
         checker: impl Into<BoxedRetentionChecker>,
     ) {
         pumpkin_assert_simple!(
             self.reification_literal.is_none(),
-            "Cannot add consistency checkers from within a reified propagation context."
+            "Cannot add retention checkers from within a reified propagation context."
         );
 
         #[cfg(feature = "check-consistency")]
-        self.consistency_checkers
+        self.retention_checkers
             .register(scope.into(), checker.into());
 
         // Use variables to avoid unused warnings.
@@ -269,7 +269,7 @@ impl<'a> PropagationContext<'a> {
             notification_engine: self.notification_engine,
             reification_literal: self.reification_literal,
             #[cfg(feature = "check-consistency")]
-            consistency_checkers: self.consistency_checkers,
+            retention_checkers: self.retention_checkers,
         }
     }
 }

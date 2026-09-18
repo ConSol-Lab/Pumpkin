@@ -7,10 +7,6 @@ use pumpkin_checking::IntExt;
 use super::TransformableVariable;
 use crate::checkers::Scope;
 use crate::checkers::ScopeItem;
-use crate::checkers::support::Support;
-use crate::checkers::support::SupportsValue;
-use crate::checkers::support::UnpackUnsupportedValue;
-use crate::checkers::support::UnsupportedValue;
 use crate::engine::Assignments;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
@@ -55,13 +51,6 @@ impl<Inner> AffineView<Inner> {
         match rounding {
             Rounding::Up => <i32 as NumExt>::div_ceil(inverted_translation, self.scale),
             Rounding::Down => <i32 as NumExt>::div_floor(inverted_translation, self.scale),
-            Rounding::None => {
-                if inverted_translation % self.scale == 0 {
-                    inverted_translation / self.scale
-                } else {
-                    panic!("do not want to round but cannot unscale")
-                }
-            }
         }
     }
 
@@ -73,44 +62,6 @@ impl<Inner> AffineView<Inner> {
 impl<Inner: ScopeItem> ScopeItem for AffineView<Inner> {
     fn add_to_scope(&self, scope: &mut Scope, local_id: LocalId) {
         self.inner.add_to_scope(scope, local_id);
-    }
-}
-
-impl<Inner> UnpackUnsupportedValue for AffineView<Inner>
-where
-    Inner: UnpackUnsupportedValue,
-{
-    fn unpack(&self, unsupported_value: UnsupportedValue) -> i32 {
-        self.map(self.inner.unpack(unsupported_value))
-    }
-}
-
-impl<Inner> SupportsValue<i32> for AffineView<Inner>
-where
-    Inner: SupportsValue<i32>,
-{
-    fn assign(&self, value: i32, support: &mut Support<i32>) {
-        let value = self.invert(value, Rounding::None);
-        self.inner.assign(value, support);
-    }
-
-    fn support_value(&self, support: &Support<i32>) -> i32 {
-        self.map(self.inner.support_value(support))
-    }
-}
-
-impl<Inner> SupportsValue<f32> for AffineView<Inner>
-where
-    Inner: SupportsValue<f32>,
-{
-    fn assign(&self, value: f32, support: &mut Support<f32>) {
-        let inverted_translation = value - self.offset as f32;
-        let value = inverted_translation / self.scale as f32;
-        self.inner.assign(value, support);
-    }
-
-    fn support_value(&self, support: &Support<f32>) -> f32 {
-        self.scale as f32 * self.inner.support_value(support) + self.offset as f32
     }
 }
 
@@ -471,7 +422,6 @@ impl From<DomainId> for AffineView<DomainId> {
 enum Rounding {
     Up,
     Down,
-    None,
 }
 
 #[cfg(test)]

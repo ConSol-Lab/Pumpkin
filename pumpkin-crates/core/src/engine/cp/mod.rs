@@ -15,7 +15,7 @@ mod tests {
     use assignments::Assignments;
 
     #[cfg(feature = "check-consistency")]
-    use crate::checkers::ConsistencyCheckerStore;
+    use crate::checkers::RetentionCheckerStore;
     use crate::conjunction;
     use crate::containers::StorageKey;
     use crate::engine::TrailedValues;
@@ -39,7 +39,7 @@ mod tests {
         {
             let mut notification_engine = NotificationEngine::default();
             #[cfg(feature = "check-consistency")]
-            let mut consistency_checker_store = ConsistencyCheckerStore::default();
+            let mut consistency_checker_store = RetentionCheckerStore::default();
             let mut context = PropagationContext::new(
                 &mut trailed_values,
                 &mut assignments,
@@ -74,7 +74,7 @@ mod tests {
         {
             let mut notification_engine = NotificationEngine::default();
             #[cfg(feature = "check-consistency")]
-            let mut consistency_checker_store = ConsistencyCheckerStore::default();
+            let mut consistency_checker_store = RetentionCheckerStore::default();
             let mut context = PropagationContext::new(
                 &mut trailed_values,
                 &mut assignments,
@@ -109,7 +109,7 @@ mod tests {
         {
             let mut notification_engine = NotificationEngine::default();
             #[cfg(feature = "check-consistency")]
-            let mut consistency_checker_store = ConsistencyCheckerStore::default();
+            let mut consistency_checker_store = RetentionCheckerStore::default();
             let mut context = PropagationContext::new(
                 &mut trailed_values,
                 &mut assignments,

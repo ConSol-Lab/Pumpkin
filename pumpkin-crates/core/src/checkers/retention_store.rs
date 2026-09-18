@@ -6,12 +6,12 @@ use crate::containers::StorageKey;
 use crate::propagation::Domains;
 use crate::variables::DomainId;
 
-/// Holds the consistency checkers in the solver.
+/// Holds the retention checkers in the solver.
 ///
 /// Also responsible for enqueueing the checkers and dispatching them when instructed via
-/// [`ConsistencyCheckerStore::run_enqueued`].
+/// [`RetentionCheckerStore::run_enqueued`].
 #[derive(Clone, Debug, Default)]
-pub struct ConsistencyCheckerStore {
+pub struct RetentionCheckerStore {
     /// The checkers in the store.
     store: KeyedVec<CheckerId, (Scope, BoxedRetentionChecker)>,
     /// Map from [`DomainId`] to the relevant checkers via their ID.
@@ -19,11 +19,11 @@ pub struct ConsistencyCheckerStore {
     /// The checkers to run the next time.
     queue: Vec<CheckerId>,
     /// Marks which checkers are enqueued to prevent duplicate checkers in
-    /// [`ConsistencyCheckerStore::queue`].
+    /// [`RetentionCheckerStore::queue`].
     enqueued: KeyedBitSet<CheckerId>,
 }
 
-impl ConsistencyCheckerStore {
+impl RetentionCheckerStore {
     /// Add a new `checker` to the store with the given `scope`.
     pub fn register(&mut self, scope: Scope, checker: BoxedRetentionChecker) {
         let checker_slot = self.store.new_slot();
@@ -53,7 +53,7 @@ impl ConsistencyCheckerStore {
         }
     }
 
-    /// Run the enqueued consistency checkers.
+    /// Run the enqueued retention checkers.
     pub fn run_enqueued(&mut self, mut domains: Domains<'_>) -> bool {
         for checker_id in self.queue.drain(..) {
             assert!(self.enqueued.remove(checker_id));
@@ -68,7 +68,7 @@ impl ConsistencyCheckerStore {
         true
     }
 
-    /// Clear the queue of consistency checkers.
+    /// Clear the queue of retention checkers.
     pub fn clear_queue(&mut self) {
         self.queue.clear();
         self.enqueued.clear();

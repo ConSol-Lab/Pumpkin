@@ -102,7 +102,7 @@ pub struct NogoodPropagator {
     #[allow(unused, reason = "Will be reintroduced with database management")]
     handle: PropagatorHandle<NogoodPropagator>,
 
-    /// Flags shared with consistency checkers to signal that a nogood has been deleted.
+    /// Flags shared with retention checkers to signal that a nogood has been deleted.
     ///
     /// When clause management deletes a nogood, the corresponding flag is set to `true`, causing
     /// the checker to become a no-op.
@@ -1132,7 +1132,7 @@ impl NogoodPropagator {
         let _ = self.inference_codes.push(inference_code);
 
         #[cfg(feature = "check-consistency")]
-        self.add_consistency_checker(checker_predicates, context);
+        self.add_retention_checker(checker_predicates, context);
 
         let watcher = Watcher {
             nogood_id,
@@ -1313,12 +1313,12 @@ impl NogoodPropagator {
                 &mut self.propagation_buffer,
             );
 
-            // The consistency checker is only registered when the nogood was actually stored:
+            // The retention checker is only registered when the nogood was actually stored:
             // extended nogood propagation buffers nogoods over a single domain instead. The
             // deletion flags must stay index-aligned with `nogood_info`.
             #[cfg(feature = "check-consistency")]
             if self.nogood_info.len() > num_nogoods_before {
-                self.add_consistency_checker(input_nogood.into(), context);
+                self.add_retention_checker(input_nogood.into(), context);
             }
         }
     }
@@ -1405,9 +1405,9 @@ fn get_domain_info(
 }
 
 impl NogoodPropagator {
-    /// Add a consistency checker for the given nogood predicates.
+    /// Add a retention checker for the given nogood predicates.
     #[cfg(feature = "check-consistency")]
-    fn add_consistency_checker(
+    fn add_retention_checker(
         &mut self,
         nogood: Box<[Predicate]>,
         context: &mut PropagationContext,
@@ -1415,13 +1415,13 @@ impl NogoodPropagator {
         let scope = build_nogood_scope(&nogood);
         let checker = SelfDisablingChecker::new(super::NogoodChecker { nogood });
         let _ = self.deletion_flags.push(checker.deletion_flag());
-        context.add_consistency_checker(scope, checker);
+        context.add_retention_checker(scope, checker);
     }
 }
 
 /// Build a [`Scope`] for a nogood by extracting unique [`DomainId`]s from its predicates.
 ///
-/// Avoids multiple enqueuing of the consistency checker if the nogood contains multiple
+/// Avoids multiple enqueuing of the retention checker if the nogood contains multiple
 /// predicates over the same variable.
 #[cfg(feature = "check-consistency")]
 fn build_nogood_scope(predicates: &[Predicate]) -> Scope {
@@ -1447,7 +1447,7 @@ fn build_nogood_scope(predicates: &[Predicate]) -> Scope {
 impl NogoodPropagator {
     /// Set the deletion flag for every nogood that has been marked as deleted in `nogood_info`.
     ///
-    /// Called after clause management removes nogoods so that consistency checkers self-disable.
+    /// Called after clause management removes nogoods so that retention checkers self-disable.
     fn signal_deleted_checker_flags(&self) {
         for idx in 0..self.nogood_info.len() {
             let idx = NogoodIndex::create_from_index(idx);

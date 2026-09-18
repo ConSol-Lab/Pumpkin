@@ -247,7 +247,7 @@ impl TestSolver {
             reason_store,
             notification_engine,
             #[cfg(feature = "check-consistency")]
-            consistency_checkers,
+            retention_checkers,
             ..
         } = &mut self.state;
 
@@ -258,7 +258,7 @@ impl TestSolver {
             notification_engine,
             propagator,
             #[cfg(feature = "check-consistency")]
-            consistency_checkers,
+            retention_checkers,
         );
 
         propagators[propagator].propagate(context)
@@ -280,7 +280,7 @@ impl TestSolver {
                     reason_store,
                     notification_engine,
                     #[cfg(feature = "check-consistency")]
-                    consistency_checkers,
+                    retention_checkers,
                     ..
                 } = &mut self.state;
 
@@ -291,7 +291,7 @@ impl TestSolver {
                     notification_engine,
                     propagator,
                     #[cfg(feature = "check-consistency")]
-                    consistency_checkers,
+                    retention_checkers,
                 );
 
                 propagators[propagator].propagate(context)?;

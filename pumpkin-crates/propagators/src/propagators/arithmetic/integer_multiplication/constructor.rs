@@ -1,5 +1,3 @@
-use pumpkin_core::checkers::WeakConsistency;
-use pumpkin_core::checkers::WeakRetentionChecker;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::propagation::DomainEvents;
@@ -16,9 +14,9 @@ use super::propagator::IntegerMultiplicationPropagator;
 
 declare_inference_label!(IntegerMultiplication);
 
-pub(super) const ID_A: LocalId = LocalId::from(0);
-pub(super) const ID_B: LocalId = LocalId::from(1);
-pub(super) const ID_C: LocalId = LocalId::from(2);
+const ID_A: LocalId = LocalId::from(0);
+const ID_B: LocalId = LocalId::from(1);
+const ID_C: LocalId = LocalId::from(2);
 
 /// The [`PropagatorConstructor`] for [`IntegerMultiplicationPropagator`].
 ///
@@ -62,21 +60,6 @@ where
                 b: b.clone(),
                 c: c.clone(),
             },
-        );
-        // The propagator is bounds(R) consistent in the interval-arithmetic sense, i.e. it is at
-        // the fixpoint of the inference rule that `IntegerMultiplicationChecker` implements. A
-        // support-based (relational) check would require a case split on signs that the
-        // propagator does not perform.
-        checkers.add_consistency_checker(
-            ((ID_A, &a), (ID_B, &b), (ID_C, &c)),
-            WeakRetentionChecker::new(
-                WeakConsistency::Bounds,
-                IntegerMultiplicationChecker {
-                    a: a.clone(),
-                    b: b.clone(),
-                    c: c.clone(),
-                },
-            ),
         );
 
         let propagator = IntegerMultiplicationPropagator::new(a, b, c, inference_code);

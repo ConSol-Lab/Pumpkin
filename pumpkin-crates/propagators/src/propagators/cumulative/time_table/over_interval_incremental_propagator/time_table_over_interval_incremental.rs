@@ -32,7 +32,6 @@ use crate::cumulative::time_table::create_time_table_over_interval_from_scratch;
 use crate::cumulative::time_table::propagate_from_scratch_time_table_interval;
 use crate::cumulative::time_table::CheckerTask;
 use crate::cumulative::time_table::TimeTableChecker;
-use crate::cumulative::time_table::time_table_util::add_consistency_checker;
 use crate::cumulative::util::check_bounds_equal_at_propagation;
 use crate::cumulative::util::create_tasks;
 use crate::cumulative::util::register_tasks;
@@ -150,7 +149,6 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstruc
                 },
             ),
         );
-        add_consistency_checker(&mut checkers, &self.parameters);
 
         PropagatorSpec {
             registration,

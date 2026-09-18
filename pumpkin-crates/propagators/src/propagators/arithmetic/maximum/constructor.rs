@@ -1,6 +1,3 @@
-use pumpkin_core::checkers::Scope;
-use pumpkin_core::checkers::StrongConsistency;
-use pumpkin_core::checkers::StrongRetentionChecker;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
@@ -37,29 +34,25 @@ where
             constraint_tag,
         } = self;
 
-        let mut scope = Scope::default();
         let mut registration = EventsToRegister::builder();
         for (idx, var) in array.iter().enumerate() {
-            let local_id = LocalId::from(idx as u32);
-            registration = registration.add(var, DomainEvents::BOUNDS, local_id);
-            var.add_to_scope(&mut scope, local_id);
+            registration = registration.add(var, DomainEvents::BOUNDS, LocalId::from(idx as u32));
         }
 
-        let rhs_local_id = LocalId::from(array.len() as u32);
-        registration = registration.add(&rhs, DomainEvents::BOUNDS, rhs_local_id);
-        rhs.add_to_scope(&mut scope, rhs_local_id);
-
-        let checker = MaximumChecker {
-            array: array.clone(),
-            rhs: rhs.clone(),
-        };
+        registration = registration.add(
+            &rhs,
+            DomainEvents::BOUNDS,
+            LocalId::from(array.len() as u32),
+        );
 
         let mut checkers = RuntimeCheckers::builder();
-        let inference_code =
-            checkers.add_inference_checker(constraint_tag, Maximum, checker.clone());
-        checkers.add_consistency_checker(
-            scope,
-            StrongRetentionChecker::new(StrongConsistency::Bounds, checker),
+        let inference_code = checkers.add_inference_checker(
+            constraint_tag,
+            Maximum,
+            MaximumChecker {
+                array: array.clone(),
+                rhs: rhs.clone(),
+            },
         );
 
         let propagator = MaximumPropagator {

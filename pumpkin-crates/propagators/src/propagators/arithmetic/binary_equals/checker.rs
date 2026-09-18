@@ -2,13 +2,6 @@ use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::IntExt;
-use pumpkin_core::checkers::support::Support;
-use pumpkin_core::checkers::support::SupportGenerator;
-use pumpkin_core::checkers::support::SupportsValue;
-use pumpkin_core::checkers::support::UnsupportedValue;
-use pumpkin_core::propagation::Domains;
-use pumpkin_core::propagation::LocalId;
-use pumpkin_core::variables::IntegerVariable;
 
 #[derive(Clone, Debug)]
 pub struct BinaryEqualsChecker<Lhs, Rhs> {
@@ -48,34 +41,5 @@ where
         }
 
         !consistent
-    }
-}
-
-impl<Lhs, Rhs> SupportGenerator for BinaryEqualsChecker<Lhs, Rhs>
-where
-    Lhs: IntegerVariable + SupportsValue,
-    Rhs: IntegerVariable + SupportsValue,
-{
-    type Value = i32;
-
-    fn support(
-        &mut self,
-        support: &mut Support<Self::Value>,
-        local_id: LocalId,
-        value: UnsupportedValue,
-        _: &Domains<'_>,
-    ) {
-        let value = match local_id {
-            super::ID_LHS => self.lhs.unpack(value),
-            super::ID_RHS => self.rhs.unpack(value),
-            _ => unreachable!(),
-        };
-
-        self.lhs.assign(value, support);
-        self.rhs.assign(value, support);
-    }
-
-    fn is_solution(&self, support: &Support<Self::Value>) -> bool {
-        self.lhs.support_value(support) == self.rhs.support_value(support)
     }
 }

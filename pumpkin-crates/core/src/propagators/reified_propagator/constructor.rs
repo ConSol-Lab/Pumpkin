@@ -54,7 +54,7 @@ where
             reification_literal_id,
         );
 
-        let (inference_checkers, consistency_checkers) = checkers.into_parts();
+        let (inference_checkers, retention_checkers) = checkers.into_parts();
 
         let mut wrapped_checkers = RuntimeCheckers::empty();
         for (inference_code, checker) in inference_checkers {
@@ -68,11 +68,11 @@ where
             );
         }
 
-        // The reification literal becomes part of the scope of every wrapped consistency checker,
+        // The reification literal becomes part of the scope of every wrapped retention checker,
         // since whether the wrapped constraint has to hold depends on it.
-        for (mut scope, checker) in consistency_checkers {
+        for (mut scope, checker) in retention_checkers {
             reification_literal.add_to_scope(&mut scope, reification_literal_id);
-            wrapped_checkers.add_consistency_checker(
+            wrapped_checkers.add_retention_checker(
                 scope,
                 ReifiedRetentionChecker {
                     inner: checker,
