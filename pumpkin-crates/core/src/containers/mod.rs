@@ -1,12 +1,14 @@
 //! Contains containers which are used by the solver.
 mod key_generator;
 mod key_value_heap;
+mod keyed_bit_set;
 mod keyed_vec;
 mod sparse_set;
 
 use fnv::FnvBuildHasher;
 pub use key_generator::*;
 pub use key_value_heap::*;
+pub use keyed_bit_set::*;
 pub use keyed_vec::*;
 pub use sparse_set::*;
 

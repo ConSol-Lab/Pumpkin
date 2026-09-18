@@ -2,6 +2,8 @@ use enumset::EnumSet;
 use pumpkin_checking::CheckerVariable;
 
 use super::TransformableVariable;
+use crate::checkers::Scope;
+use crate::checkers::ScopeItem;
 use crate::containers::StorageKey;
 use crate::engine::Assignments;
 use crate::engine::notifications::DomainEvent;
@@ -32,6 +34,12 @@ impl DomainId {
 
     pub fn id(&self) -> u32 {
         self.id
+    }
+}
+
+impl ScopeItem for DomainId {
+    fn add_to_scope(&self, scope: &mut Scope, local_id: LocalId) {
+        scope.add_domain(local_id, *self);
     }
 }
 

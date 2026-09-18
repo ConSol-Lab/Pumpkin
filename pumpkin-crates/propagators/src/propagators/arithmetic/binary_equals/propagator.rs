@@ -2,25 +2,17 @@
 use std::slice;
 
 use bitfield_struct::bitfield;
-use pumpkin_checking::AtomicConstraint;
-use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
-use pumpkin_checking::IntExt;
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::conjunction;
 use pumpkin_core::containers::HashSet;
-use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateConstructor;
 use pumpkin_core::predicates::PredicateType;
-use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvent;
-use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
-use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::ExplanationContext;
 use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
@@ -29,109 +21,44 @@ use pumpkin_core::propagation::OpaqueDomainEvent;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
-use pumpkin_core::propagation::PropagatorConstructor;
-use pumpkin_core::propagation::PropagatorConstructorContext;
-use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::EmptyDomainConflict;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
 
-declare_inference_label!(BinaryEquals);
-
-/// The [`PropagatorConstructor`] for the [`BinaryEqualsPropagator`].
-#[derive(Clone, Debug)]
-pub struct BinaryEqualsPropagatorArgs<AVar, BVar> {
-    pub a: AVar,
-    pub b: BVar,
-    pub constraint_tag: ConstraintTag,
-}
-
-impl<AVar, BVar> PropagatorConstructor for BinaryEqualsPropagatorArgs<AVar, BVar>
-where
-    AVar: IntegerVariable + 'static,
-    BVar: IntegerVariable + 'static,
-{
-    type PropagatorImpl = BinaryEqualsPropagator<AVar, BVar>;
-
-    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
-        let BinaryEqualsPropagatorArgs {
-            a,
-            b,
-            constraint_tag,
-        } = self;
-
-        let registration = EventsToRegister::builder()
-            .add(&a, DomainEvents::ANY_INT, LocalId::from(0))
-            .add(&b, DomainEvents::ANY_INT, LocalId::from(1))
-            .build();
-
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
-            constraint_tag,
-            BinaryEquals,
-            BinaryEqualsChecker {
-                lhs: a.clone(),
-                rhs: b.clone(),
-            },
-        );
-
-        let propagator = BinaryEqualsPropagator {
-            a,
-            b,
-
-            a_removed_values: HashSet::default(),
-            b_removed_values: HashSet::default(),
-
-            inference_code,
-
-            has_backtracked: false,
-            first_propagation_loop: true,
-            reason: Predicate::trivially_false(),
-        };
-
-        PropagatorSpec {
-            registration,
-            checkers: checkers.build(),
-            propagator,
-        }
-    }
-}
-
 /// Propagator for the constraint `a = b`.
 #[derive(Clone, Debug)]
 pub struct BinaryEqualsPropagator<AVar, BVar> {
-    a: AVar,
-    b: BVar,
+    pub(super) a: AVar,
+    pub(super) b: BVar,
 
     /// The removed value from [`Self::a`].
     ///
     /// These are tracked to make sure that they are also removed from [`Self::b`].
-    a_removed_values: HashSet<i32>,
+    pub(super) a_removed_values: HashSet<i32>,
     /// The removed value from [`Self::b`]
     ///
     /// These are tracked to make sure that they are also removed from [`Self::a`].
-    b_removed_values: HashSet<i32>,
+    pub(super) b_removed_values: HashSet<i32>,
 
     /// If a backtrack has occurred which caused one of the removals to be backtracked then we need
     /// to ensure that we do not erroneously remove values which are now part of the domain after
     /// backtracking.
-    has_backtracked: bool,
+    pub(super) has_backtracked: bool,
 
     /// If it is the first time that the propagator is called then we need to ensure that the
     /// domains of [`Self::a`] and [`Self::b`] are equal to the intersection of these domains.
-    first_propagation_loop: bool,
+    pub(super) first_propagation_loop: bool,
 
-    inference_code: InferenceCode,
+    pub(super) inference_code: InferenceCode,
 
     /// A re-usable buffer to store the explanations of propagations. This will always be a single
     /// [`Predicate`].
     ///
     /// This field is only written to in the `lazy_explanation` function, as that returns a slice
     /// which needs to be owned somewhere. Hence we put that ownership here.
-    reason: Predicate,
+    pub(super) reason: Predicate,
 }
 
 impl<AVar, BVar> BinaryEqualsPropagator<AVar, BVar>
@@ -409,47 +336,6 @@ struct BinaryEqualsPropagation {
     /// Padding
     #[bits(16)]
     __: u16,
-}
-
-#[derive(Clone, Debug)]
-pub struct BinaryEqualsChecker<Lhs, Rhs> {
-    pub lhs: Lhs,
-    pub rhs: Rhs,
-}
-
-impl<Lhs, Rhs, Atomic> InferenceChecker<Atomic> for BinaryEqualsChecker<Lhs, Rhs>
-where
-    Atomic: AtomicConstraint,
-    Lhs: CheckerVariable<Atomic>,
-    Rhs: CheckerVariable<Atomic>,
-{
-    fn check(
-        &self,
-        mut state: pumpkin_checking::VariableState<Atomic>,
-        _: &[Atomic],
-        _: Option<&Atomic>,
-    ) -> bool {
-        // We apply the domain of variable 2 to variable 1. If the state remains consistent, then
-        // the step is unsound!
-        let mut consistent = true;
-
-        if let IntExt::Int(value) = self.rhs.induced_upper_bound(&state) {
-            let atomic = self.lhs.atomic_less_than(value);
-            consistent &= state.apply(&atomic);
-        }
-
-        if let IntExt::Int(value) = self.rhs.induced_lower_bound(&state) {
-            let atomic = self.lhs.atomic_greater_than(value);
-            consistent &= state.apply(&atomic);
-        }
-
-        for value in self.rhs.induced_holes(&state).collect::<Vec<_>>() {
-            let atomic = self.lhs.atomic_not_equal(value);
-            consistent &= state.apply(&atomic);
-        }
-
-        !consistent
-    }
 }
 
 #[cfg(test)]

@@ -1,92 +1,24 @@
-use pumpkin_checking::AtomicConstraint;
-use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
-use pumpkin_checking::IntExt;
 use pumpkin_core::conjunction;
-use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
-use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
-use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::EventsToRegister;
-use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
-use pumpkin_core::propagation::PropagatorConstructor;
-use pumpkin_core::propagation::PropagatorConstructorContext;
-use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
-#[derive(Clone, Debug)]
-pub struct MaximumArgs<ElementVar, Rhs> {
-    pub array: Box<[ElementVar]>,
-    pub rhs: Rhs,
-    pub constraint_tag: ConstraintTag,
-}
-
-declare_inference_label!(Maximum);
-
-impl<ElementVar, Rhs> PropagatorConstructor for MaximumArgs<ElementVar, Rhs>
-where
-    ElementVar: IntegerVariable + 'static,
-    Rhs: IntegerVariable + 'static,
-{
-    type PropagatorImpl = MaximumPropagator<ElementVar, Rhs>;
-
-    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
-        let MaximumArgs {
-            array,
-            rhs,
-            constraint_tag,
-        } = self;
-
-        let mut registration = EventsToRegister::builder();
-        for (idx, var) in array.iter().enumerate() {
-            registration = registration.add(var, DomainEvents::BOUNDS, LocalId::from(idx as u32));
-        }
-
-        registration = registration.add(
-            &rhs,
-            DomainEvents::BOUNDS,
-            LocalId::from(array.len() as u32),
-        );
-
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
-            constraint_tag,
-            Maximum,
-            MaximumChecker {
-                array: array.clone(),
-                rhs: rhs.clone(),
-            },
-        );
-
-        let propagator = MaximumPropagator {
-            array,
-            rhs,
-            inference_code,
-        };
-
-        PropagatorSpec {
-            registration: registration.build(),
-            checkers: checkers.build(),
-            propagator,
-        }
-    }
-}
+#[cfg(doc)]
+use super::MaximumArgs;
 
 /// Bounds-consistent propagator which enforces `max(array) = rhs`. Can be constructed through
 /// [`MaximumArgs`].
 #[derive(Clone, Debug)]
 pub struct MaximumPropagator<ElementVar, Rhs> {
-    array: Box<[ElementVar]>,
-    rhs: Rhs,
-    inference_code: InferenceCode,
+    pub(crate) array: Box<[ElementVar]>,
+    pub(crate) rhs: Rhs,
+    pub(crate) inference_code: InferenceCode,
 }
 
 impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Propagator
@@ -191,45 +123,6 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct MaximumChecker<ElementVar, Rhs> {
-    pub array: Box<[ElementVar]>,
-    pub rhs: Rhs,
-}
-
-impl<ElementVar, Rhs, Atomic> InferenceChecker<Atomic> for MaximumChecker<ElementVar, Rhs>
-where
-    Atomic: AtomicConstraint,
-    ElementVar: CheckerVariable<Atomic>,
-    Rhs: CheckerVariable<Atomic>,
-{
-    fn check(
-        &self,
-        state: pumpkin_checking::VariableState<Atomic>,
-        _: &[Atomic],
-        _: Option<&Atomic>,
-    ) -> bool {
-        let lowest_maximum = self
-            .array
-            .iter()
-            .map(|element| element.induced_lower_bound(&state))
-            .max()
-            .unwrap_or(IntExt::NegativeInf);
-        let highest_maximum = self
-            .array
-            .iter()
-            .map(|element| element.induced_upper_bound(&state))
-            .max()
-            .unwrap_or(IntExt::PositiveInf);
-
-        // If the intersection between the domain of `rhs` and `[lowest_maximum,
-        // highest_maximum]` is empty, there is a conflict.
-
-        lowest_maximum > self.rhs.induced_upper_bound(&state)
-            || highest_maximum < self.rhs.induced_lower_bound(&state)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use pumpkin_core::predicate;
@@ -240,6 +133,7 @@ mod tests {
 
     use super::*;
     use crate::StateExt;
+    use crate::arithmetic::MaximumArgs;
 
     #[test]
     fn upper_bound_of_rhs_matches_maximum_upper_bound_of_array_at_initialise() {

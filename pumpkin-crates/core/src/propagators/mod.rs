@@ -1,5 +1,5 @@
 pub mod hypercube_linear;
 pub mod nogoods;
-pub(crate) mod reified_propagator;
+mod reified_propagator;
 
 pub use reified_propagator::*;

@@ -1,6 +1,10 @@
 use enumset::EnumSet;
 
 use crate::basic_types::PredicateId;
+use crate::checkers::BoxedRetentionChecker;
+#[cfg(feature = "check-consistency")]
+use crate::checkers::RetentionCheckerStore;
+use crate::checkers::Scope;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::EmptyDomainConflict;
@@ -89,6 +93,9 @@ pub struct PropagationContext<'a> {
     pub(crate) propagator_id: PropagatorId,
     pub(crate) notification_engine: &'a mut NotificationEngine,
     reification_literal: Option<Literal>,
+
+    #[cfg(feature = "check-consistency")]
+    pub(crate) retention_checkers: &'a mut RetentionCheckerStore,
 }
 
 impl<'a> HasAssignments for PropagationContext<'a> {
@@ -112,6 +119,7 @@ impl<'a> PropagationContext<'a> {
         reason_store: &'a mut ReasonStore,
         notification_engine: &'a mut NotificationEngine,
         propagator_id: PropagatorId,
+        #[cfg(feature = "check-consistency")] retention_checkers: &'a mut RetentionCheckerStore,
     ) -> Self {
         PropagationContext {
             trailed_values,
@@ -120,6 +128,33 @@ impl<'a> PropagationContext<'a> {
             propagator_id,
             notification_engine,
             reification_literal: None,
+            #[cfg(feature = "check-consistency")]
+            retention_checkers,
+        }
+    }
+
+    /// Add a retention checker for the given constraint and scope.
+    ///
+    /// If the `check-consistency` feature is not enabled, this is a no-op.
+    pub fn add_retention_checker(
+        &mut self,
+        scope: impl Into<Scope>,
+        checker: impl Into<BoxedRetentionChecker>,
+    ) {
+        pumpkin_assert_simple!(
+            self.reification_literal.is_none(),
+            "Cannot add retention checkers from within a reified propagation context."
+        );
+
+        #[cfg(feature = "check-consistency")]
+        self.retention_checkers
+            .register(scope.into(), checker.into());
+
+        // Use variables to avoid unused warnings.
+        #[cfg(not(feature = "check-consistency"))]
+        {
+            let _ = scope;
+            let _ = checker;
         }
     }
 
@@ -233,6 +268,8 @@ impl<'a> PropagationContext<'a> {
             propagator_id: self.propagator_id,
             notification_engine: self.notification_engine,
             reification_literal: self.reification_literal,
+            #[cfg(feature = "check-consistency")]
+            retention_checkers: self.retention_checkers,
         }
     }
 }

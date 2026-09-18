@@ -8,6 +8,8 @@ use pumpkin_checking::VariableState;
 use super::DomainId;
 use super::IntegerVariable;
 use super::TransformableVariable;
+use crate::checkers::Scope;
+use crate::checkers::ScopeItem;
 use crate::engine::Assignments;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
@@ -73,6 +75,12 @@ macro_rules! forward {
         ) -> $return_type $(where $($where_clause)*)? {
             self.$field.$name($($param_name),*)
         }
+    }
+}
+
+impl ScopeItem for Literal {
+    fn add_to_scope(&self, scope: &mut Scope, local_id: LocalId) {
+        self.integer_variable.add_to_scope(scope, local_id);
     }
 }
 

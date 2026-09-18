@@ -5,6 +5,7 @@ use pumpkin_checking::BoxedChecker;
 #[cfg(doc)]
 use pumpkin_checking::InferenceChecker;
 
+use crate::checkers::PropagationChecker;
 use crate::containers::HashMap;
 use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
@@ -12,19 +13,24 @@ use crate::proof::InferenceCode;
 /// Owns the runtime checkers present in the solver.
 ///
 /// The runtime checkers consist of:
-/// - inference checkers, which verify that propagations are sound.
+/// - inference checkers, which verify that propagations are sound. Each is wrapped in a
+///   [`PropagationChecker`], which evaluates the inference against the solver state.
+///
+/// The retention checkers, which verify that propagation is complete, are owned by the
+/// [`RetentionCheckerStore`](crate::checkers::RetentionCheckerStore) since they are scheduled
+/// rather than looked up.
 #[derive(Clone, Debug, Default)]
 pub struct CheckerStore {
     /// For each inference code we associate possibly many inference checkers.
-    inference_checkers: HashMap<InferenceCode, Vec<BoxedChecker<Predicate>>>,
+    inference_checkers: HashMap<InferenceCode, Vec<PropagationChecker>>,
 }
 
 impl CheckerStore {
-    /// Get the [`InferenceChecker`]s for the given inference code.
+    /// Get the [`PropagationChecker`]s for the given inference code.
     pub fn for_inference_code(
         &self,
         inference_code: &InferenceCode,
-    ) -> impl ExactSizeIterator<Item = &BoxedChecker<Predicate>> {
+    ) -> impl ExactSizeIterator<Item = &PropagationChecker> {
         self.inference_checkers
             .get(inference_code)
             .map(|checkers| itertools::Either::Left(checkers.iter()))
@@ -33,7 +39,7 @@ impl CheckerStore {
 
     /// Add a new inference checker for the inference code.
     ///
-    /// An inference code can have multiple checkers, so if an inference checker was already
+    /// An inference code can have multiple checkers, so if an [`InferenceChecker`] was already
     /// registered for the given code, this new checker is simply added to the collection.
     pub fn add_inference_checker(
         &mut self,
@@ -41,8 +47,8 @@ impl CheckerStore {
         checker: BoxedChecker<Predicate>,
     ) {
         self.inference_checkers
-            .entry(inference_code.clone())
+            .entry(inference_code)
             .or_default()
-            .push(checker);
+            .push(PropagationChecker::new(checker));
     }
 }

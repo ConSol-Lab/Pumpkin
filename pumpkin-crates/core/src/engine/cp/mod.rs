@@ -14,6 +14,8 @@ pub use trailed::*;
 mod tests {
     use assignments::Assignments;
 
+    #[cfg(feature = "check-consistency")]
+    use crate::checkers::RetentionCheckerStore;
     use crate::conjunction;
     use crate::containers::StorageKey;
     use crate::engine::TrailedValues;
@@ -36,12 +38,16 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut notification_engine = NotificationEngine::default();
+            #[cfg(feature = "check-consistency")]
+            let mut consistency_checker_store = RetentionCheckerStore::default();
             let mut context = PropagationContext::new(
                 &mut trailed_values,
                 &mut assignments,
                 &mut reason_store,
                 &mut notification_engine,
                 PropagatorId(0),
+                #[cfg(feature = "check-consistency")]
+                &mut consistency_checker_store,
             );
 
             let result = context.post(
@@ -67,12 +73,16 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut notification_engine = NotificationEngine::default();
+            #[cfg(feature = "check-consistency")]
+            let mut consistency_checker_store = RetentionCheckerStore::default();
             let mut context = PropagationContext::new(
                 &mut trailed_values,
                 &mut assignments,
                 &mut reason_store,
                 &mut notification_engine,
                 PropagatorId(0),
+                #[cfg(feature = "check-consistency")]
+                &mut consistency_checker_store,
             );
 
             let result = context.post(
@@ -98,12 +108,16 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut notification_engine = NotificationEngine::default();
+            #[cfg(feature = "check-consistency")]
+            let mut consistency_checker_store = RetentionCheckerStore::default();
             let mut context = PropagationContext::new(
                 &mut trailed_values,
                 &mut assignments,
                 &mut reason_store,
                 &mut notification_engine,
                 PropagatorId(0),
+                #[cfg(feature = "check-consistency")]
+                &mut consistency_checker_store,
             );
 
             let result = context.post(

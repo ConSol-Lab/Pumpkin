@@ -1,5 +1,11 @@
 use std::cmp::max;
 use std::ops::Not;
+#[cfg(feature = "check-consistency")]
+use std::sync::Arc;
+#[cfg(feature = "check-consistency")]
+use std::sync::atomic::AtomicBool;
+#[cfg(feature = "check-consistency")]
+use std::sync::atomic::Ordering;
 
 use bitfield_struct::bitfield;
 use log::warn;
@@ -9,6 +15,10 @@ use super::NogoodId;
 use super::NogoodInfo;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PropositionalConjunction;
+#[cfg(feature = "check-consistency")]
+use crate::checkers::Scope;
+#[cfg(feature = "check-consistency")]
+use crate::checkers::SelfDisablingChecker;
 use crate::containers::HashSet;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
@@ -91,6 +101,13 @@ pub struct NogoodPropagator {
     /// proapgated literal to see if this propagator propagated a predicate.
     #[allow(unused, reason = "Will be reintroduced with database management")]
     handle: PropagatorHandle<NogoodPropagator>,
+
+    /// Flags shared with retention checkers to signal that a nogood has been deleted.
+    ///
+    /// When clause management deletes a nogood, the corresponding flag is set to `true`, causing
+    /// the checker to become a no-op.
+    #[cfg(feature = "check-consistency")]
+    deletion_flags: KeyedVec<NogoodIndex, Arc<AtomicBool>>,
     /// What form of propagation is performed (e.g., unit propagation, or extended nogood
     /// propagation).
     ///
@@ -194,6 +211,8 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             lbd_helper: Default::default(),
             bumped_nogoods: Default::default(),
             temp_nogood_reason: Default::default(),
+            #[cfg(feature = "check-consistency")]
+            deletion_flags: Default::default(),
             propagation_mode: self.propagation_mode,
             semantic_minimiser: Default::default(),
             priority: self.priority,
@@ -1094,6 +1113,10 @@ impl NogoodPropagator {
             .propagation_mode
             .calculate_lbd(context, &nogood, &mut self.lbd_helper);
 
+        // Capture checker predicates before conversion to PredicateIds.
+        #[cfg(feature = "check-consistency")]
+        let checker_predicates: Box<[Predicate]> = nogood.clone().into();
+
         let nogood = nogood
             .iter()
             .map(|predicate| context.get_id(*predicate))
@@ -1107,6 +1130,9 @@ impl NogoodPropagator {
             .nogood_info
             .push(NogoodInfo::new_learned_nogood_info(lbd));
         let _ = self.inference_codes.push(inference_code);
+
+        #[cfg(feature = "check-consistency")]
+        self.add_retention_checker(checker_predicates, context);
 
         let watcher = Watcher {
             nogood_id,
@@ -1270,6 +1296,9 @@ impl NogoodPropagator {
         //
         // The preprocessing ensures that all predicates are unassigned.
         else {
+            #[cfg(feature = "check-consistency")]
+            let num_nogoods_before = self.nogood_info.len();
+
             self.propagation_mode.add_permanent_nogood_non_unit(
                 nogood,
                 &input_nogood,
@@ -1282,7 +1311,15 @@ impl NogoodPropagator {
                 &mut self.permanent_nogood_ids,
                 &self.statistics,
                 &mut self.propagation_buffer,
-            )
+            );
+
+            // The retention checker is only registered when the nogood was actually stored:
+            // extended nogood propagation buffers nogoods over a single domain instead. The
+            // deletion flags must stay index-aligned with `nogood_info`.
+            #[cfg(feature = "check-consistency")]
+            if self.nogood_info.len() > num_nogoods_before {
+                self.add_retention_checker(input_nogood.into(), context);
+            }
         }
     }
 }
@@ -1365,6 +1402,69 @@ fn get_domain_info(
         last_describing_predicate_id,
         is_falsified,
     )
+}
+
+impl NogoodPropagator {
+    /// Add a retention checker for the given nogood predicates.
+    #[cfg(feature = "check-consistency")]
+    fn add_retention_checker(
+        &mut self,
+        nogood: Box<[Predicate]>,
+        context: &mut PropagationContext,
+    ) {
+        let scope = build_nogood_scope(&nogood);
+        match self.propagation_mode {
+            PropagationMode::UnitPropagation => {
+                let checker = SelfDisablingChecker::new(super::NogoodChecker { nogood });
+                let _ = self.deletion_flags.push(checker.deletion_flag());
+                context.add_retention_checker(scope, checker);
+            }
+            PropagationMode::ExtendedNogoodPropagation => {
+                let checker = SelfDisablingChecker::new(super::ExtendedNogoodChecker { nogood });
+                let _ = self.deletion_flags.push(checker.deletion_flag());
+                context.add_retention_checker(scope, checker);
+            }
+        }
+    }
+}
+
+/// Build a [`Scope`] for a nogood by extracting unique [`DomainId`]s from its predicates.
+///
+/// Avoids multiple enqueuing of the retention checker if the nogood contains multiple
+/// predicates over the same variable.
+#[cfg(feature = "check-consistency")]
+fn build_nogood_scope(predicates: &[Predicate]) -> Scope {
+    use crate::containers::HashSet;
+    use crate::containers::KeyGenerator;
+    use crate::variables::DomainId;
+
+    let mut scope = Scope::default();
+    let mut seen: HashSet<DomainId> = HashSet::default();
+    let mut id_generator = KeyGenerator::default();
+
+    for predicate in predicates {
+        let domain = predicate.get_domain();
+        if seen.insert(domain) {
+            scope.add_domain(id_generator.next_key(), domain);
+        }
+    }
+
+    scope
+}
+
+#[cfg(feature = "check-consistency")]
+impl NogoodPropagator {
+    /// Set the deletion flag for every nogood that has been marked as deleted in `nogood_info`.
+    ///
+    /// Called after clause management removes nogoods so that retention checkers self-disable.
+    fn signal_deleted_checker_flags(&self) {
+        for idx in 0..self.nogood_info.len() {
+            let idx = NogoodIndex::create_from_index(idx);
+            if self.nogood_info[idx].is_deleted {
+                self.deletion_flags[idx].store(true, Ordering::Relaxed);
+            }
+        }
+    }
 }
 
 /// Methods concerning the watchers and watch lists
@@ -1515,6 +1615,8 @@ impl NogoodPropagator {
         }
 
         if removed_at_least_one_nogood {
+            #[cfg(feature = "check-consistency")]
+            self.signal_deleted_checker_flags();
             self.remove_deleted_nogoods_from_watchers(assignments, notification_engine);
         }
     }

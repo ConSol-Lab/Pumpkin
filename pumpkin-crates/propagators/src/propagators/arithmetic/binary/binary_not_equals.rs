@@ -1,6 +1,8 @@
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
+use pumpkin_core::checkers::RetentionChecker;
+use pumpkin_core::checkers::Scope;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
@@ -53,7 +55,8 @@ where
             .build();
 
         let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
+        let inference_code = checkers.add_rule(
+            ((LocalId::from(0), &a), (LocalId::from(1), &b)),
             constraint_tag,
             BinaryNotEquals,
             BinaryNotEqualsChecker {
@@ -208,6 +211,57 @@ where
     }
 }
 
+impl<Lhs, Rhs> RetentionChecker for BinaryNotEqualsChecker<Lhs, Rhs>
+where
+    Lhs: IntegerVariable + 'static,
+    Rhs: IntegerVariable + 'static,
+{
+    fn check_retention(&mut self, _: &Scope, domains: Domains<'_>) -> bool {
+        match (
+            domains.fixed_value(&self.lhs),
+            domains.fixed_value(&self.rhs),
+        ) {
+            (Some(lhs), Some(rhs)) => {
+                // 1. Both sides are fixed: check that the constraint is not conflicting
+                if lhs == rhs {
+                    log::error!(
+                        "{:?} and {:?} are both fixed to {lhs}; the disequality is violated",
+                        self.lhs,
+                        self.rhs
+                    );
+                }
+                lhs != rhs
+            }
+            (Some(value), None) => {
+                // 2. One side is fixed: assert that its value is removed from the other side
+                let is_removed = !domains.contains(&self.rhs, value);
+                if !is_removed {
+                    log::error!(
+                        "The value {value} could be removed from {:?} since {:?} is fixed to it",
+                        self.rhs,
+                        self.lhs
+                    );
+                }
+                is_removed
+            }
+            (None, Some(value)) => {
+                // 2. One side is fixed: assert that its value is removed from the other side
+                let is_removed = !domains.contains(&self.lhs, value);
+                if !is_removed {
+                    log::error!(
+                        "The value {value} could be removed from {:?} since {:?} is fixed to it",
+                        self.lhs,
+                        self.rhs
+                    );
+                }
+                is_removed
+            }
+            // 3. Neither side is fixed: nothing can be propagated
+            (None, None) => true,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use pumpkin_core::state::State;
@@ -300,5 +354,56 @@ mod tests {
 
         state.assert_bounds(a, 0, 5);
         state.assert_bounds(b, 6, 10);
+    }
+}
+
+#[cfg(test)]
+mod retention_tests {
+    use pumpkin_core::state::State;
+
+    use super::*;
+
+    #[test]
+    fn retention_fails_when_the_fixed_value_is_present_in_the_other_domain() {
+        let mut state = State::default();
+        let a = state.new_interval_variable(3, 3, None);
+        let b = state.new_interval_variable(0, 5, None);
+
+        let mut checker = BinaryNotEqualsChecker { lhs: a, rhs: b };
+        let scope = Scope::from_variables([a, b].iter());
+
+        assert!(!checker.check_retention(&scope, state.get_domains()));
+    }
+
+    #[test]
+    fn retention_holds_with_both_sides_unfixed() {
+        let mut state = State::default();
+        let a = state.new_interval_variable(0, 5, None);
+        let b = state.new_interval_variable(0, 5, None);
+
+        let mut checker = BinaryNotEqualsChecker { lhs: a, rhs: b };
+        let scope = Scope::from_variables([a, b].iter());
+
+        assert!(checker.check_retention(&scope, state.get_domains()));
+    }
+
+    #[test]
+    fn retention_holds_at_the_fixpoint_of_the_propagator() {
+        let mut state = State::default();
+        let a = state.new_interval_variable(3, 3, None);
+        let b = state.new_interval_variable(0, 5, None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(BinaryNotEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
+
+        let mut checker = BinaryNotEqualsChecker { lhs: a, rhs: b };
+        let scope = Scope::from_variables([a, b].iter());
+
+        assert!(checker.check_retention(&scope, state.get_domains()));
     }
 }

@@ -1,12 +1,6 @@
-use pumpkin_checking::AtomicConstraint;
-use pumpkin_checking::BoxedChecker;
-use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
-
 use crate::engine::PropagationStatusCP;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::predicates::Predicate;
-use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
@@ -16,88 +10,10 @@ use crate::propagation::NotificationContext;
 use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
-use crate::propagation::PropagatorConstructor;
-use crate::propagation::PropagatorConstructorContext;
-use crate::propagation::PropagatorSpec;
 use crate::propagation::ReadDomains;
-use crate::propagation::RuntimeCheckers;
 use crate::pumpkin_assert_simple;
 use crate::state::Conflict;
 use crate::variables::Literal;
-
-/// A [`PropagatorConstructor`] for the reified propagator.
-#[derive(Clone, Debug)]
-pub struct ReifiedPropagatorArgs<WrappedArgs> {
-    pub propagator: WrappedArgs,
-    pub reification_literal: Literal,
-}
-
-impl<WrappedArgs, WrappedPropagator> PropagatorConstructor for ReifiedPropagatorArgs<WrappedArgs>
-where
-    WrappedArgs: PropagatorConstructor<PropagatorImpl = WrappedPropagator>,
-    WrappedPropagator: Propagator + Clone,
-{
-    type PropagatorImpl = ReifiedPropagator<WrappedPropagator>;
-
-    fn create(
-        self,
-        mut context: PropagatorConstructorContext,
-    ) -> PropagatorSpec<Self::PropagatorImpl> {
-        let ReifiedPropagatorArgs {
-            propagator,
-            reification_literal,
-        } = self;
-
-        let PropagatorSpec {
-            mut registration,
-            propagator,
-            checkers,
-        } = propagator.create(context.reborrow());
-
-        // The local ID for the reification literal will be one larger than the largest ID
-        // registered by the wrapped propagator.
-        let reification_literal_id = registration
-            .iter()
-            .map(|(_, _, lid)| lid)
-            .max()
-            .expect("cannot reify propagators that do not register all variables immediately")
-            .successor();
-
-        registration.add(
-            &self.reification_literal,
-            DomainEvents::BOUNDS,
-            reification_literal_id,
-        );
-
-        let mut wrapped_checkers = RuntimeCheckers::empty();
-        for (inference_code, checker) in checkers.into_iter() {
-            let _ = wrapped_checkers.add_inference_checker(
-                inference_code.tag(),
-                inference_code.label(),
-                ReifiedChecker {
-                    inner: checker,
-                    reification_literal,
-                },
-            );
-        }
-
-        let name = format!("Reified({})", propagator.name());
-
-        let propagator = ReifiedPropagator {
-            propagator,
-            reification_literal,
-            reification_literal_id,
-            name,
-            reason_buffer: vec![],
-        };
-
-        PropagatorSpec {
-            registration,
-            checkers: wrapped_checkers,
-            propagator,
-        }
-    }
-}
 
 /// Propagator for the constraint `r -> p`, where `r` is a Boolean literal and `p` is an arbitrary
 /// propagator.
@@ -108,16 +24,16 @@ where
 /// propagated to false.
 #[derive(Clone, Debug)]
 pub struct ReifiedPropagator<WrappedPropagator> {
-    propagator: WrappedPropagator,
-    reification_literal: Literal,
+    pub(super) propagator: WrappedPropagator,
+    pub(super) reification_literal: Literal,
     /// The formatted name of the propagator.
-    name: String,
+    pub(super) name: String,
     /// The `LocalId` of the reification literal. Is guaranteed to be a larger ID than any of the
     /// registered ids of the wrapped propagator.
-    reification_literal_id: LocalId,
+    pub(super) reification_literal_id: LocalId,
 
     /// Holds the lazy explanations.
-    reason_buffer: Vec<Predicate>,
+    pub(super) reason_buffer: Vec<Predicate>,
 }
 
 impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<WrappedPropagator> {
@@ -259,37 +175,6 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ReifiedChecker<Atomic: AtomicConstraint, Var> {
-    pub inner: BoxedChecker<Atomic>,
-    pub reification_literal: Var,
-}
-
-impl<Atomic: AtomicConstraint + Clone, Var: CheckerVariable<Atomic>> InferenceChecker<Atomic>
-    for ReifiedChecker<Atomic, Var>
-{
-    fn check(
-        &self,
-        state: pumpkin_checking::VariableState<Atomic>,
-        premises: &[Atomic],
-        consequent: Option<&Atomic>,
-    ) -> bool {
-        if self.reification_literal.induced_domain_contains(&state, 0) {
-            return false;
-        }
-
-        if let Some(consequent) = consequent
-            && self
-                .reification_literal
-                .does_atomic_constrain_self(consequent)
-        {
-            self.inner.check(state, premises, None)
-        } else {
-            self.inner.check(state, premises, consequent)
-        }
-    }
-}
-
 #[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
@@ -303,7 +188,13 @@ mod tests {
     use crate::proof::ConstraintTag;
     use crate::proof::InferenceCode;
     use crate::proof::Unknown;
+    use crate::propagation::DomainEvents;
     use crate::propagation::EventsToRegister;
+    use crate::propagation::PropagatorConstructor;
+    use crate::propagation::PropagatorConstructorContext;
+    use crate::propagation::PropagatorSpec;
+    use crate::propagation::RuntimeCheckers;
+    use crate::propagators::ReifiedPropagatorArgs;
     use crate::variables::DomainId;
 
     #[test]

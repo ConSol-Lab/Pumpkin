@@ -240,14 +240,28 @@ impl TestSolver {
     }
 
     pub fn propagate(&mut self, propagator: PropagatorId) -> Result<(), Conflict> {
+        let State {
+            propagators,
+            trailed_values,
+            assignments,
+            reason_store,
+            notification_engine,
+            #[cfg(feature = "check-consistency")]
+            retention_checkers,
+            ..
+        } = &mut self.state;
+
         let context = PropagationContext::new(
-            &mut self.state.trailed_values,
-            &mut self.state.assignments,
-            &mut self.state.reason_store,
-            &mut self.state.notification_engine,
+            trailed_values,
+            assignments,
+            reason_store,
+            notification_engine,
             propagator,
+            #[cfg(feature = "check-consistency")]
+            retention_checkers,
         );
-        self.state.propagators[propagator].propagate(context)
+
+        propagators[propagator].propagate(context)
     }
 
     pub fn propagate_until_fixed_point(
@@ -259,14 +273,28 @@ impl TestSolver {
         loop {
             {
                 // Specify the life-times to be able to retrieve the trail entries
+                let State {
+                    propagators,
+                    trailed_values,
+                    assignments,
+                    reason_store,
+                    notification_engine,
+                    #[cfg(feature = "check-consistency")]
+                    retention_checkers,
+                    ..
+                } = &mut self.state;
+
                 let context = PropagationContext::new(
-                    &mut self.state.trailed_values,
-                    &mut self.state.assignments,
-                    &mut self.state.reason_store,
-                    &mut self.state.notification_engine,
+                    trailed_values,
+                    assignments,
+                    reason_store,
+                    notification_engine,
                     propagator,
+                    #[cfg(feature = "check-consistency")]
+                    retention_checkers,
                 );
-                self.state.propagators[propagator].propagate(context)?;
+
+                propagators[propagator].propagate(context)?;
                 self.notify_propagator(propagator);
             }
             if self.state.assignments.num_trail_entries() == num_trail_entries {

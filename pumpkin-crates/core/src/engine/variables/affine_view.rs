@@ -5,6 +5,8 @@ use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::IntExt;
 
 use super::TransformableVariable;
+use crate::checkers::Scope;
+use crate::checkers::ScopeItem;
 use crate::engine::Assignments;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
@@ -54,6 +56,12 @@ impl<Inner> AffineView<Inner> {
 
     fn map(&self, value: i32) -> i32 {
         self.scale * value + self.offset
+    }
+}
+
+impl<Inner: ScopeItem> ScopeItem for AffineView<Inner> {
+    fn add_to_scope(&self, scope: &mut Scope, local_id: LocalId) {
+        self.inner.add_to_scope(scope, local_id);
     }
 }
 

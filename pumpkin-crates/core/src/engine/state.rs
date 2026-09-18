@@ -2,10 +2,11 @@ use std::sync::Arc;
 
 use pumpkin_checking::BoxedChecker;
 use pumpkin_checking::InferenceChecker;
-#[cfg(feature = "check-propagations")]
-use pumpkin_checking::VariableState;
 
+use crate::checkers::BoxedRetentionChecker;
 use crate::checkers::CheckerStore;
+use crate::checkers::RetentionCheckerStore;
+use crate::checkers::Scope;
 use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
@@ -83,6 +84,8 @@ pub struct State {
 
     /// Runtime checkers to run in the propagation loop.
     checkers: CheckerStore,
+    /// The retention checkers, which verify that propagation is complete, and their scheduling.
+    pub(crate) retention_checkers: RetentionCheckerStore,
 }
 
 create_statistics_struct!(StateStatistics {
@@ -113,6 +116,7 @@ impl Default for State {
             statistics: StateStatistics::default(),
             constraint_tags: KeyGenerator::default(),
             checkers: CheckerStore::default(),
+            retention_checkers: Default::default(),
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are
@@ -356,12 +360,20 @@ impl State {
                 .register(domain_id, events, propagator_var);
         }
 
+        let (inference_checkers, retention_checkers) = checkers.into_parts();
+
         if cfg!(feature = "check-propagations") {
             // Only register the checkers when this feature is enabled. This is an if statement
             // instead of a #[cfg(...)] to avoid the 'unused variable' warning that we would
             // otherwise get on `self.checkers`.
-            for (inference_code, checker) in checkers.into_iter() {
+            for (inference_code, checker) in inference_checkers {
                 self.checkers.add_inference_checker(inference_code, checker);
+            }
+        }
+
+        if cfg!(feature = "check-consistency") {
+            for (scope, checker) in retention_checkers {
+                self.retention_checkers.register(scope, checker);
             }
         }
 
@@ -401,6 +413,16 @@ impl State {
             .add_inference_checker(inference_code.clone(), BoxedChecker::new(Box::new(checker)));
         inference_code
     }
+
+    /// Add a retention checker for the scope.
+    pub fn add_retention_checker(
+        &mut self,
+        scope: impl Into<Scope>,
+        checker: impl Into<BoxedRetentionChecker>,
+    ) {
+        self.retention_checkers
+            .register(scope.into(), checker.into());
+    }
 }
 
 /// Operations for retrieving propagators.
@@ -437,16 +459,27 @@ impl State {
         &mut self,
         handle: PropagatorHandle<P>,
     ) -> (Option<&mut P>, PropagationContext<'_>) {
-        (
-            self.propagators.get_propagator_mut(handle),
-            PropagationContext::new(
-                &mut self.trailed_values,
-                &mut self.assignments,
-                &mut self.reason_store,
-                &mut self.notification_engine,
-                handle.propagator_id(),
-            ),
-        )
+        let Self {
+            propagators,
+            trailed_values,
+            assignments,
+            reason_store,
+            notification_engine,
+            #[cfg(feature = "check-consistency")]
+            retention_checkers,
+            ..
+        } = self;
+        let propagator = propagators.get_propagator_mut(handle);
+        let context = PropagationContext::new(
+            trailed_values,
+            assignments,
+            reason_store,
+            notification_engine,
+            handle.propagator_id(),
+            #[cfg(feature = "check-consistency")]
+            retention_checkers,
+        );
+        (propagator, context)
     }
 }
 
@@ -629,19 +662,34 @@ impl State {
         let num_trail_entries_before = self.assignments.num_trail_entries();
 
         let propagation_status = {
-            let propagator = &mut self.propagators[propagator_id];
+            let Self {
+                propagators,
+                trailed_values,
+                assignments,
+                reason_store,
+                notification_engine,
+                #[cfg(feature = "check-consistency")]
+                retention_checkers,
+                ..
+            } = self;
+            let propagator = &mut propagators[propagator_id];
             let context = PropagationContext::new(
-                &mut self.trailed_values,
-                &mut self.assignments,
-                &mut self.reason_store,
-                &mut self.notification_engine,
+                trailed_values,
+                assignments,
+                reason_store,
+                notification_engine,
                 propagator_id,
+                #[cfg(feature = "check-consistency")]
+                retention_checkers,
             );
             propagator.propagate(context)
         };
 
         #[cfg(feature = "check-propagations")]
         self.check_propagations(num_trail_entries_before);
+
+        #[cfg(feature = "check-consistency")]
+        self.enqueue_retention_checkers(num_trail_entries_before);
 
         match propagation_status {
             Ok(_) => {
@@ -669,6 +717,9 @@ impl State {
             Err(conflict) => {
                 #[cfg(feature = "check-propagations")]
                 self.check_conflict(&conflict);
+
+                #[cfg(feature = "check-consistency")]
+                self.retention_checkers.clear_queue();
 
                 self.statistics.num_conflicts += 1;
                 if let Conflict::Propagator(inner) = &conflict {
@@ -743,6 +794,16 @@ impl State {
         }
     }
 
+    #[cfg(feature = "check-consistency")]
+    fn enqueue_retention_checkers(&mut self, first_propagation_index: usize) {
+        for trail_index in first_propagation_index..self.assignments.num_trail_entries() {
+            let entry = self.assignments.get_trail_entry(trail_index);
+
+            self.retention_checkers
+                .on_domain_event(entry.predicate.get_domain());
+        }
+    }
+
     /// Performs fixed-point propagation using the propagators defined in the [`State`].
     ///
     /// The posted [`Predicate`]s (using [`State::post`]) and added propagators (using
@@ -771,6 +832,13 @@ impl State {
             self.propagate(propagator_id)?;
         }
 
+        if cfg!(feature = "check-consistency") {
+            assert!(
+                self.retention_checkers
+                    .run_enqueued(Domains::new(&self.assignments, &mut self.trailed_values))
+            );
+        }
+
         // Only check fixed point propagation if there was no reported conflict,
         // since otherwise the state may be inconsistent.
         pumpkin_assert_extreme!(DebugHelper::debug_fixed_point_propagation(
@@ -788,37 +856,33 @@ impl State {
 impl State {
     /// Run the checker for the given inference code on the given inference.
     fn run_checker(
-        &self,
+        &mut self,
         premises: impl IntoIterator<Item = Predicate>,
         consequent: Option<Predicate>,
         inference_code: &InferenceCode,
     ) {
         let premises: Vec<_> = premises.into_iter().collect();
 
-        let any_checker_accepts_inference =
-            self.checkers
-                .for_inference_code(inference_code)
-                .any(|checker| {
-                    // Construct the variable state for the conflict check.
-                    let variable_state = VariableState::prepare_for_conflict_check(
-                        premises.clone(),
-                        consequent,
-                    )
-                    .unwrap_or_else(|domain| {
-                        panic!(
-                            "inconsistent atomics over domain {domain:?} in inference by {inference_code:?}"
-                        )
-                    });
+        let checkers = self.checkers.for_inference_code(inference_code);
+        assert!(
+            checkers.len() > 0,
+            "missing checker for inference code {inference_code:?}"
+        );
 
-                    checker.check(variable_state, &premises, consequent.as_ref())
-                });
+        let results = checkers
+            .map(|checker| {
+                checker.check(
+                    &premises,
+                    consequent,
+                    Domains::new(&self.assignments, &mut self.trailed_values),
+                )
+            })
+            .collect::<Vec<_>>();
+        let any_checker_accepts_inference = results.iter().any(Result::is_ok);
 
         assert!(
             any_checker_accepts_inference,
-            "checker for inference code {:?} fails on inference {:?} -> {:?}",
-            inference_code,
-            premises.into_iter().collect::<Vec<_>>(),
-            consequent,
+            "checker for inference code {inference_code:?} fails on inference {premises:?} -> {consequent:?}: {results:?}"
         );
     }
 }
@@ -1159,12 +1223,23 @@ impl State {
     }
 
     pub fn get_propagation_context(&mut self) -> PropagationContext<'_> {
+        let Self {
+            trailed_values,
+            assignments,
+            reason_store,
+            notification_engine,
+            #[cfg(feature = "check-consistency")]
+            retention_checkers,
+            ..
+        } = self;
         PropagationContext::new(
-            &mut self.trailed_values,
-            &mut self.assignments,
-            &mut self.reason_store,
-            &mut self.notification_engine,
+            trailed_values,
+            assignments,
+            reason_store,
+            notification_engine,
             PropagatorId(0),
+            #[cfg(feature = "check-consistency")]
+            retention_checkers,
         )
     }
 }
