@@ -40,7 +40,8 @@ where
             .build();
 
         let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
+        let inference_code = checkers.add_rule(
+            ((super::ID_LHS, &a), (super::ID_RHS, &b)),
             constraint_tag,
             super::BinaryEquals,
             BinaryEqualsChecker {
