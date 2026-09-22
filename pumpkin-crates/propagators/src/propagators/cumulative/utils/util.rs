@@ -76,7 +76,11 @@ pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
         }
     }
 
-    registration.build()
+    if tasks.is_empty() {
+        EventsToRegister::empty()
+    } else {
+        registration.build()
+    }
 }
 
 /// Updates the bounds of the provided [`Task`] to those stored in
