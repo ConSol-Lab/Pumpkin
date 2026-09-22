@@ -32,7 +32,7 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
         .iter()
         .filter_map(|x| {
             // We only add tasks which have a non-zero resource usage
-            if x.resource_usage > 0 {
+            if x.resource_usage > 0 && x.processing_time > 0 {
                 let return_value = Some(Task {
                     start_variable: x.start_time.clone(),
                     processing_time: x.processing_time,
