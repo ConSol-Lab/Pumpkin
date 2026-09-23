@@ -104,8 +104,8 @@ pub struct NogoodPropagator {
 
     /// Flags shared with retention checkers to signal that a nogood has been deleted.
     ///
-    /// When clause management deletes a nogood, the corresponding flag is set to `true`, causing
-    /// the checker to become a no-op.
+    /// When clause management deletes a nogood, the corresponding flag is set to `true`,
+    /// causing the checker to become a no-op.
     #[cfg(feature = "check-consistency")]
     deletion_flags: KeyedVec<NogoodIndex, Arc<AtomicBool>>,
     /// What form of propagation is performed (e.g., unit propagation, or extended nogood
@@ -1314,8 +1314,8 @@ impl NogoodPropagator {
             );
 
             // The retention checker is only registered when the nogood was actually stored:
-            // extended nogood propagation buffers nogoods over a single domain instead. The
-            // deletion flags must stay index-aligned with `nogood_info`.
+            // extended nogood propagation buffers nogoods over a single domain instead.
+            // The deletion flags must stay index-aligned with `nogood_info`.
             #[cfg(feature = "check-consistency")]
             if self.nogood_info.len() > num_nogoods_before {
                 self.add_retention_checker(input_nogood.into(), context);
@@ -1430,8 +1430,8 @@ impl NogoodPropagator {
 
 /// Build a [`Scope`] for a nogood by extracting unique [`DomainId`]s from its predicates.
 ///
-/// Avoids multiple enqueuing of the retention checker if the nogood contains multiple
-/// predicates over the same variable.
+/// Avoids multiple enqueuing of the retention checker if the nogood contains multiple predicates
+/// over the same variable.
 #[cfg(feature = "check-consistency")]
 fn build_nogood_scope(predicates: &[Predicate]) -> Scope {
     use crate::containers::HashSet;

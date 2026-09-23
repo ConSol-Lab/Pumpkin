@@ -20,12 +20,12 @@ pub struct DisjunctiveEdgeFindingChecker<Var> {
     pub tasks: Box<[ArgDisjunctiveTask<Var>]>,
 }
 
-/// Performs overload checking on the provided `tasks` and returns true if a conflict could be
-/// found.
+/// Performs overload checking on the provided `tasks`
+/// and returns true if a conflict could be found.
 ///
 /// Recall the following:
-/// We try to find a set omega of jobs with the following property: `p_omega > lct_omega -
-/// est_omega`.
+/// We try to find a set omega of jobs with the following property:
+/// `p_omega > lct_omega - est_omega`.
 fn overload_checking<Atomic: AtomicConstraint, Var: CheckerVariable<Atomic>>(
     tasks: &[ArgDisjunctiveTask<Var>],
     state: &VariableState<Atomic>,
@@ -73,8 +73,8 @@ fn overload_checking<Atomic: AtomicConstraint, Var: CheckerVariable<Atomic>>(
             state,
         );
 
-        // If there is an overload of the interval, then we can report that a conflict has been
-        // found.
+        // If there is an overload of the interval,
+        // then we can report that a conflict has been found.
         if theta.ect() > task.start_time.induced_upper_bound(state) + task.processing_time {
             return true;
         }
@@ -126,8 +126,8 @@ where
                 let mut assigned_state = state.clone();
                 let _ = assigned_state.apply(&task.start_time.atomic_equal(i));
 
-                // If we do not find a conflict using overload checking, then it is not a valid
-                // explanation.
+                // If we do not find a conflict using overload checking,
+                // then it is not a valid explanation.
                 if !overload_checking(&self.tasks, &assigned_state) {
                     return false;
                 }

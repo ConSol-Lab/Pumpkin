@@ -38,8 +38,8 @@ impl RetentionChecker for NogoodChecker<Predicate> {
             .filter(|&&predicate| domains.evaluate_predicate(predicate) != Some(true))
             .count();
 
-        // If at least two predicates are not true, or any predicate is false, then the domains are
-        // unit-propagation consistent.
+        // If at least two predicates are not true, or any predicate is false,
+        // then the domains are unit-propagation consistent.
         let is_consistent = untrue_predicate_count >= 2
             || self
                 .nogood
@@ -114,8 +114,9 @@ mod tests {
     }
 }
 
-/// The retention checker for extended nogood propagation: when the atomic constraints over all
-/// but one variable hold, that variable has no value left that satisfies its atomic constraints.
+/// The retention checker for extended nogood propagation:
+/// when the atomic constraints over all but one variable hold,
+/// that variable has no value left that satisfies its atomic constraints.
 #[derive(Debug, Clone)]
 pub struct ExtendedNogoodChecker {
     pub nogood: Box<[Predicate]>,

@@ -41,14 +41,17 @@ impl Debug for DebugDyn<'_> {
 pub(crate) struct DebugHelper {}
 
 impl DebugHelper {
-    /// Method which checks whether the reported fixed point is correct (i.e. whether any
-    /// propagations/conflicts were missed)
+    /// Method which checks whether the reported fixed point is correct (i.e.
+    /// whether any propagations/conflicts were missed)
     ///
     /// This method is only to be called after the solver completed propagation until a fixed point
     /// and no conflict was detected
     ///
     /// Additionally checks whether the internal data structures of the clausal propagator are okay
-    /// and consistent with the assignments_propositional
+    /// and consistent
+    /// with the assignments_propositional Only reachable from the retention checking,
+    /// which is why it carries that feature.
+    #[cfg(feature = "check-consistency")]
     pub(crate) fn debug_fixed_point_propagation(
         trailed_values: &TrailedValues,
         assignments: &Assignments,

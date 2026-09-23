@@ -12,14 +12,14 @@ use crate::propagation::LocalId;
 use crate::propagation::ReadDomains;
 use crate::variables::Literal;
 
-/// A [`RetentionChecker`] wrapper that skips the inner check when the reification literal is
-/// not assigned to true.
+/// A [`RetentionChecker`] wrapper that skips the inner check
+/// when the reification literal is not assigned to true.
 #[derive(Debug, Clone)]
 pub struct ReifiedRetentionChecker {
     pub inner: BoxedRetentionChecker,
     pub reification_literal: Literal,
-    /// The [`LocalId`] of the reification literal in the scope, used to strip it before passing
-    /// the scope to the inner checker.
+    /// The [`LocalId`] of the reification literal in the scope,
+    /// used to strip it before passing the scope to the inner checker.
     pub reification_literal_id: LocalId,
 }
 

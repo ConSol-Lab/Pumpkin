@@ -13,8 +13,8 @@ use crate::propagation::PropagatorConstructor;
 
 /// Holds the runtime checkers that are added by a propagator.
 ///
-/// Used when creating a new propagator in [`PropagatorConstructor::create`]. Two kinds of checkers
-/// can be added:
+/// Used when creating a new propagator in [`PropagatorConstructor::create`].
+/// Two kinds of checkers can be added:
 /// - inference checkers, which verify that the propagations are sound,
 /// - retention checkers, which verify that the propagator has nothing left to propagate.
 #[derive(Clone, Debug)]
@@ -69,8 +69,8 @@ impl RuntimeCheckers {
         self.retention_checkers.push((scope.into(), checker.into()));
     }
 
-    /// Add a checker that is both the inference checker and the retention checker of the
-    /// propagator's rule, with the retention checker over `scope`.
+    /// Add a checker that is both the inference checker
+    /// and the retention checker of the propagator's rule, with the retention checker over `scope`.
     pub fn add_rule<Checker>(
         &mut self,
         scope: impl Into<Scope>,
@@ -127,8 +127,8 @@ impl RuntimeCheckersBuilder {
         self.checkers.add_retention_checker(scope, checker);
     }
 
-    /// Add a checker that is both the inference checker and the retention checker of the
-    /// propagator's rule, with the retention checker over `scope`.
+    /// Add a checker that is both the inference checker
+    /// and the retention checker of the propagator's rule, with the retention checker over `scope`.
     pub fn add_rule<Checker>(
         &mut self,
         scope: impl Into<Scope>,
@@ -145,8 +145,8 @@ impl RuntimeCheckersBuilder {
 
     /// Finish adding runtime checkers.
     ///
-    /// Panics if runtime verification is enabled and no inference checkers are added. If it is
-    /// expected behavior that no checkers are added, use [`RuntimeCheckers::empty`].
+    /// Panics if runtime verification is enabled and no inference checkers are added.
+    /// If it is expected behavior that no checkers are added, use [`RuntimeCheckers::empty`].
     pub fn build(self) -> RuntimeCheckers {
         if cfg!(feature = "check-propagations") {
             assert!(

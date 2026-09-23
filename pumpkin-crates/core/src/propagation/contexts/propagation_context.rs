@@ -148,7 +148,7 @@ impl<'a> PropagationContext<'a> {
 
         #[cfg(feature = "check-consistency")]
         self.retention_checkers
-            .register(scope.into(), checker.into());
+            .register(scope.into(), checker.into(), self.propagator_id);
 
         // Use variables to avoid unused warnings.
         #[cfg(not(feature = "check-consistency"))]

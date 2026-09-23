@@ -7,13 +7,15 @@ use crate::propagation::Domains;
 
 /// A runtime verifier that determines whether a propagator has nothing left to propagate.
 ///
-/// The contract mirrors the retention conditions of the formally verified proof checker: in the
-/// current domains no inference of the propagator's rule applies, i.e. giving any variable in
-/// the scope any value of its domain does not let the rule report a conflict. Each propagator
-/// supplies its own checker, which may exploit the structure of its rule to decide this cheaply.
+/// The contract mirrors the retention conditions of the formally verified proof checker:
+/// in the current domains no inference of the propagator's rule applies,
+/// i.e. giving any variable in the scope any value of its domain does not let the rule report a
+/// conflict.
+/// Each propagator supplies its own checker,
+/// which may exploit the structure of its rule to decide this cheaply.
 pub trait RetentionChecker: Debug + DynClone {
-    /// Returns `true` if the propagator has nothing left to propagate in `domains`, and `false`
-    /// if some inference of its rule still applies.
+    /// Returns `true` if the propagator has nothing left to propagate in `domains`,
+    /// and `false` if some inference of its rule still applies.
     fn check_retention(&mut self, scope: &Scope, domains: Domains<'_>) -> bool;
 }
 

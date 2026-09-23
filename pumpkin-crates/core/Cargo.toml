@@ -41,6 +41,9 @@ wasm-bindgen-test = "0.3"
 
 [features]
 check-consistency = []
+# Consult every retention checker at each fixpoint rather than only those watching a domain that
+# changed. Slower, and independent of which propagators were notified.
+check-consistency-all = ["check-consistency"]
 check-propagations = []
 check-deductions = []
 debug-checks = []

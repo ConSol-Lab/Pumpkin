@@ -16,9 +16,9 @@ use crate::proof::InferenceCode;
 /// - inference checkers, which verify that propagations are sound. Each is wrapped in a
 ///   [`PropagationChecker`], which evaluates the inference against the solver state.
 ///
-/// The retention checkers, which verify that propagation is complete, are owned by the
-/// [`RetentionCheckerStore`](crate::checkers::RetentionCheckerStore) since they are scheduled
-/// rather than looked up.
+/// The retention checkers, which verify that propagation is complete,
+/// are owned by the [`RetentionCheckerStore`](crate::checkers::RetentionCheckerStore)
+/// since they are scheduled rather than looked up.
 #[derive(Clone, Debug, Default)]
 pub struct CheckerStore {
     /// For each inference code we associate possibly many inference checkers.
@@ -39,8 +39,9 @@ impl CheckerStore {
 
     /// Add a new inference checker for the inference code.
     ///
-    /// An inference code can have multiple checkers, so if an [`InferenceChecker`] was already
-    /// registered for the given code, this new checker is simply added to the collection.
+    /// An inference code can have multiple checkers,
+    /// so if an [`InferenceChecker`] was already registered for the given code,
+    /// this new checker is simply added to the collection.
     pub fn add_inference_checker(
         &mut self,
         inference_code: InferenceCode,

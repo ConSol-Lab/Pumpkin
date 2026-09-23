@@ -6,11 +6,11 @@ use super::RetentionChecker;
 use super::Scope;
 use crate::propagation::Domains;
 
-/// A [`RetentionChecker`] wrapper that skips the inner check when the associated constraint has
-/// been deleted.
+/// A [`RetentionChecker`] wrapper that skips the inner check
+/// when the associated constraint has been deleted.
 ///
-/// The deletion flag is shared with the constraint owner (e.g. the nogood propagator). Setting the
-/// flag to `true` causes the checker to become a permanent no-op.
+/// The deletion flag is shared with the constraint owner (e.g. the nogood propagator).
+/// Setting the flag to `true` causes the checker to become a permanent no-op.
 #[derive(Debug, Clone)]
 pub struct SelfDisablingChecker<T> {
     inner: T,

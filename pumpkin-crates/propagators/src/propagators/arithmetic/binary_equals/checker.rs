@@ -63,8 +63,8 @@ where
         let same_bounds =
             lower == domains.lower_bound(&self.rhs) && upper == domains.upper_bound(&self.rhs);
         // 2. Assert that the holes within the bounds are equal
-        //  A domain may record holes outside its bounds, so only those within the shared bounds
-        //  are compared.
+        //  A domain may record holes outside its bounds,
+        //  so only those within the shared bounds are compared.
         let are_equal = same_bounds
             && holes_within(&domains, &self.lhs, lower, upper)
                 == holes_within(&domains, &self.rhs, lower, upper);

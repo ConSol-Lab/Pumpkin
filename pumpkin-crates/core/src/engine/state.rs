@@ -3,10 +3,12 @@ use std::sync::Arc;
 use pumpkin_checking::BoxedChecker;
 use pumpkin_checking::InferenceChecker;
 
-use crate::checkers::BoxedRetentionChecker;
 use crate::checkers::CheckerStore;
 use crate::checkers::RetentionCheckerStore;
-use crate::checkers::Scope;
+#[cfg(feature = "check-consistency")]
+use crate::checkers::RetentionCoverage;
+#[cfg(feature = "check-consistency")]
+use crate::checkers::RetentionFailure;
 use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
@@ -84,7 +86,7 @@ pub struct State {
 
     /// Runtime checkers to run in the propagation loop.
     checkers: CheckerStore,
-    /// The retention checkers, which verify that propagation is complete, and their scheduling.
+    /// The retention checkers, which verify that propagation is complete, and their queue.
     pub(crate) retention_checkers: RetentionCheckerStore,
 }
 
@@ -153,6 +155,26 @@ impl State {
             }
         }
     }
+}
+
+/// Whether the retention checkers of a propagator with this name are kept.
+///
+/// `PUMPKIN_RETENTION_PROPAGATORS` holds the names to keep, separated by commas,
+/// as reported by [`Propagator::name`].
+/// When it is unset or empty every propagator is checked.
+fn retention_checking_covers(propagator: &str) -> bool {
+    static SELECTED: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+
+    let selected = SELECTED.get_or_init(|| {
+        std::env::var("PUMPKIN_RETENTION_PROPAGATORS")
+            .unwrap_or_default()
+            .split(',')
+            .map(|name| name.trim().to_owned())
+            .filter(|name| !name.is_empty())
+            .collect()
+    });
+
+    selected.is_empty() || selected.iter().any(|name| name == propagator)
 }
 
 /// Operations to create .
@@ -372,8 +394,14 @@ impl State {
         }
 
         if cfg!(feature = "check-consistency") {
+            if !retention_checking_covers(propagator.name()) {
+                self.retention_checkers
+                    .exclude(original_handle.propagator_id());
+            }
+
             for (scope, checker) in retention_checkers {
-                self.retention_checkers.register(scope, checker);
+                self.retention_checkers
+                    .register(scope, checker, original_handle.propagator_id());
             }
         }
 
@@ -412,16 +440,6 @@ impl State {
         self.checkers
             .add_inference_checker(inference_code.clone(), BoxedChecker::new(Box::new(checker)));
         inference_code
-    }
-
-    /// Add a retention checker for the scope.
-    pub fn add_retention_checker(
-        &mut self,
-        scope: impl Into<Scope>,
-        checker: impl Into<BoxedRetentionChecker>,
-    ) {
-        self.retention_checkers
-            .register(scope.into(), checker.into());
     }
 }
 
@@ -688,9 +706,6 @@ impl State {
         #[cfg(feature = "check-propagations")]
         self.check_propagations(num_trail_entries_before);
 
-        #[cfg(feature = "check-consistency")]
-        self.enqueue_retention_checkers(num_trail_entries_before);
-
         match propagation_status {
             Ok(_) => {
                 // Notify other propagators of the propagations and continue.
@@ -717,9 +732,6 @@ impl State {
             Err(conflict) => {
                 #[cfg(feature = "check-propagations")]
                 self.check_conflict(&conflict);
-
-                #[cfg(feature = "check-consistency")]
-                self.retention_checkers.clear_queue();
 
                 self.statistics.num_conflicts += 1;
                 if let Conflict::Propagator(inner) = &conflict {
@@ -755,12 +767,75 @@ impl State {
         }
     }
 
-    /// For every item on the trail starting at index `first_propagation_index`, run the
-    /// inference checker for it.
+    /// Ask every propagator watching a domain that changed since `start_index`
+    /// whether it has anything left to propagate.
     ///
-    /// This method should be called after every propagator invocation, so all elements on the
-    /// trail starting at `first_propagation_index` should be propagations. Otherwise this function
-    /// will panic.
+    /// The other propagators were asked when their domains last changed.
+    /// This panics if a propagator reports that it has not finished.
+    #[cfg(feature = "check-consistency")]
+    fn run_retention_checkers(&mut self, start_index: usize) {
+        for index in start_index..self.assignments.num_trail_entries() {
+            let domain = self
+                .assignments
+                .get_trail_entry(index)
+                .predicate
+                .get_domain();
+            self.retention_checkers.on_domain_event(domain);
+        }
+
+        let coverage = if cfg!(feature = "check-consistency-all") {
+            RetentionCoverage::All
+        } else {
+            RetentionCoverage::Notified
+        };
+        let outcome = self.retention_checkers.run(
+            coverage,
+            Domains::new(&self.assignments, &mut self.trailed_values),
+        );
+
+        if let Err(failure) = outcome {
+            self.report_retention_failure(&failure);
+        }
+
+        // The same claim, verified by re-propagating instead of by asking the checkers.
+        // The state may be inconsistent after a conflict,
+        // which is why this is only reached when propagation succeeded.
+        pumpkin_assert_extreme!(DebugHelper::debug_fixed_point_propagation(
+            &self.trailed_values,
+            &self.assignments,
+            &self.propagators,
+            &self.notification_engine
+        ));
+    }
+
+    /// Panics, naming the propagator that is not finished and the variables it watches.
+    #[cfg(feature = "check-consistency")]
+    fn report_retention_failure(&self, failure: &RetentionFailure) -> ! {
+        let propagator = self.propagators[failure.propagator].name();
+        let variables = failure
+            .variables
+            .iter()
+            .map(|&domain| match self.variable_names.get_int_name(domain) {
+                Some(name) => name.to_owned(),
+                None => format!("{domain:?}"),
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        panic!(
+            "Propagation reported a fixed point, but the retention checker of the propagator \
+             '{propagator}' reports that it still has something to propagate over {variables}. \
+             The checker describes what it expected in a message logged at the error level, \
+             which is only visible when a logger is installed."
+        )
+    }
+
+    /// For every item on the trail starting at index `first_propagation_index`,
+    /// run the inference checker for it.
+    ///
+    /// This method should be called after every propagator invocation,
+    /// so all elements on the trail starting at `first_propagation_index` should be propagations.
+    /// Otherwise this function will panic.
     ///
     /// If the checker rejects the inference, this method panics.
     #[cfg(feature = "check-propagations")]
@@ -794,16 +869,6 @@ impl State {
         }
     }
 
-    #[cfg(feature = "check-consistency")]
-    fn enqueue_retention_checkers(&mut self, first_propagation_index: usize) {
-        for trail_index in first_propagation_index..self.assignments.num_trail_entries() {
-            let entry = self.assignments.get_trail_entry(trail_index);
-
-            self.retention_checkers
-                .on_domain_event(entry.predicate.get_domain());
-        }
-    }
-
     /// Performs fixed-point propagation using the propagators defined in the [`State`].
     ///
     /// The posted [`Predicate`]s (using [`State::post`]) and added propagators (using
@@ -818,6 +883,14 @@ impl State {
     /// Once the [`State`] is conflicting, then the only operation that is defined is
     /// [`State::restore_to`]. All other operations and queries on the state are unspecified.
     pub fn propagate_to_fixed_point(&mut self) -> Result<(), Conflict> {
+        // Read before the notification below advances it:
+        // the trail grew by everything posted since the previous fixpoint, which is the decision.
+        // This is the only thing [`State::run_retention_checkers`] needs,
+        // and it ties the checking to a position the notification engine already maintains,
+        // including across backtracking.
+        #[cfg(feature = "check-consistency")]
+        let retention_checking_start_index = self.notification_engine.last_notified_trail_index();
+
         // The initial domain events are due to the decision predicate.
         self.notification_engine
             .notify_propagators_about_domain_events(
@@ -832,21 +905,9 @@ impl State {
             self.propagate(propagator_id)?;
         }
 
-        if cfg!(feature = "check-consistency") {
-            assert!(
-                self.retention_checkers
-                    .run_enqueued(Domains::new(&self.assignments, &mut self.trailed_values))
-            );
-        }
-
-        // Only check fixed point propagation if there was no reported conflict,
-        // since otherwise the state may be inconsistent.
-        pumpkin_assert_extreme!(DebugHelper::debug_fixed_point_propagation(
-            &self.trailed_values,
-            &self.assignments,
-            &self.propagators,
-            &self.notification_engine
-        ));
+        // A conflict leaves the state inconsistent, and returns before reaching this.
+        #[cfg(feature = "check-consistency")]
+        self.run_retention_checkers(retention_checking_start_index);
 
         Ok(())
     }
@@ -1256,6 +1317,175 @@ mod tests {
     use crate::state::State;
 
     declare_inference_label!(TestLabel);
+
+    /// A retention checker that accepts everything and counts how often it was consulted.
+    #[cfg(feature = "check-consistency")]
+    #[derive(Debug, Clone)]
+    struct CountingChecker(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+
+    #[cfg(feature = "check-consistency")]
+    impl crate::checkers::RetentionChecker for CountingChecker {
+        fn check_retention(
+            &mut self,
+            _: &crate::checkers::Scope,
+            _: crate::propagation::Domains<'_>,
+        ) -> bool {
+            let _ = self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            true
+        }
+    }
+
+    /// A propagator that derives nothing, carrying the retention checker a test wants to observe.
+    ///
+    /// Every retention checker belongs to a propagator, so a test that wants one has to attach it
+    /// to a propagator as well.
+    #[cfg(feature = "check-consistency")]
+    #[derive(Debug, Clone)]
+    struct CheckedPropagator<Checker> {
+        variable: crate::variables::DomainId,
+        checker: Checker,
+    }
+
+    #[cfg(feature = "check-consistency")]
+    impl<Checker> crate::propagation::PropagatorConstructor for CheckedPropagator<Checker>
+    where
+        Checker: crate::checkers::RetentionChecker + Clone + 'static,
+    {
+        type PropagatorImpl = CheckedPropagator<Checker>;
+
+        fn create(
+            self,
+            _: crate::propagation::PropagatorConstructorContext,
+        ) -> crate::propagation::PropagatorSpec<Self::PropagatorImpl> {
+            let registration = crate::propagation::EventsToRegister::builder()
+                .add(
+                    &self.variable,
+                    crate::propagation::DomainEvents::ANY_INT,
+                    crate::propagation::LocalId::from(0),
+                )
+                .build();
+
+            // Not the builder, which insists on an inference checker when propagations are
+            // checked; this propagator makes no inferences.
+            let mut checkers = crate::propagation::RuntimeCheckers::empty();
+            checkers.add_retention_checker(
+                crate::checkers::Scope::from_variables([self.variable].iter()),
+                self.checker.clone(),
+            );
+
+            crate::propagation::PropagatorSpec {
+                registration,
+                checkers,
+                propagator: self,
+            }
+        }
+    }
+
+    #[cfg(feature = "check-consistency")]
+    impl<Checker> crate::propagation::Propagator for CheckedPropagator<Checker>
+    where
+        Checker: crate::checkers::RetentionChecker + Clone + 'static,
+    {
+        fn name(&self) -> &str {
+            "Checked"
+        }
+
+        fn propagate_from_scratch(
+            &self,
+            _: crate::propagation::PropagationContext,
+        ) -> crate::state::PropagationStatusCP {
+            Ok(())
+        }
+    }
+
+    /// A retention checker that always reports that something is left to propagate.
+    #[cfg(feature = "check-consistency")]
+    #[derive(Debug, Clone)]
+    struct UnfinishedChecker;
+
+    #[cfg(feature = "check-consistency")]
+    impl crate::checkers::RetentionChecker for UnfinishedChecker {
+        fn check_retention(
+            &mut self,
+            _: &crate::checkers::Scope,
+            _: crate::propagation::Domains<'_>,
+        ) -> bool {
+            false
+        }
+    }
+
+    /// A state with an unfinished checker on a variable that the pending predicate does not touch.
+    #[cfg(feature = "check-consistency")]
+    fn state_with_an_unfinished_checker() -> State {
+        let mut state = State::default();
+        let touched = state.new_interval_variable(1, 10, None);
+        let untouched = state.new_interval_variable(1, 10, None);
+
+        // The propagator is added after the first fixpoint, so the declarations of the variables
+        // are already accounted for, and propagated once more so that its own queue is drained.
+        state.propagate_to_fixed_point().expect("no conflict");
+        let _ = state.add_propagator(CheckedPropagator {
+            variable: untouched,
+            checker: UnfinishedChecker,
+        });
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.new_checkpoint();
+        let _ = state
+            .post(predicate!(touched >= 5))
+            .expect("the value is in the domain");
+        state
+    }
+
+    #[cfg(all(feature = "check-consistency", not(feature = "check-consistency-all")))]
+    #[test]
+    fn a_checker_whose_domains_did_not_change_is_not_consulted() {
+        let mut state = state_with_an_unfinished_checker();
+        state.propagate_to_fixed_point().expect("no conflict");
+    }
+
+    #[cfg(feature = "check-consistency-all")]
+    #[test]
+    #[should_panic(expected = "still has something to propagate")]
+    fn every_checker_is_consulted_with_the_wider_coverage() {
+        let mut state = state_with_an_unfinished_checker();
+        let _ = state.propagate_to_fixed_point();
+    }
+
+    /// A predicate posted from outside propagation is on the trail before propagation starts.
+    /// A propagator that should have reacted to it but did nothing writes no entry of its own,
+    /// so unless the checkers watching it are enqueued here,
+    /// nothing asks whether it was at a fixpoint.
+    #[cfg(feature = "check-consistency")]
+    #[test]
+    fn a_posted_predicate_enqueues_the_retention_checkers_watching_it() {
+        use std::sync::Arc;
+        use std::sync::atomic::AtomicUsize;
+        use std::sync::atomic::Ordering;
+
+        let mut state = State::default();
+        let x = state.new_interval_variable(1, 10, None);
+
+        let runs = Arc::new(AtomicUsize::new(0));
+        let _ = state.add_propagator(CheckedPropagator {
+            variable: x,
+            checker: CountingChecker(Arc::clone(&runs)),
+        });
+
+        state.propagate_to_fixed_point().expect("no conflict");
+        let before_the_decision = runs.load(Ordering::Relaxed);
+
+        state.new_checkpoint();
+        let _ = state
+            .post(predicate!(x >= 5))
+            .expect("the value is in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        assert!(
+            runs.load(Ordering::Relaxed) > before_the_decision,
+            "the retention checker was not consulted after the predicate was posted"
+        );
+    }
 
     #[test]
     fn reason_correct_after_creation_variable() {

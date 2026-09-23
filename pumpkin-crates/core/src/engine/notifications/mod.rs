@@ -429,6 +429,15 @@ impl NotificationEngine {
         }
     }
 
+    /// The length of the trail when the propagators were last notified.
+    ///
+    /// Notification happens during propagation and after backtracking,
+    /// so between two fixpoints this is the length the trail had at the end of the previous one.
+    #[cfg(feature = "check-consistency")]
+    pub(crate) fn last_notified_trail_index(&self) -> usize {
+        self.last_notified_trail_index
+    }
+
     pub(crate) fn update_last_notified_index(&mut self, assignments: &Assignments) {
         self.last_notified_trail_index = assignments.num_trail_entries();
     }
