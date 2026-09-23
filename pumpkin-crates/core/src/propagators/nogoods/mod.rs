@@ -6,6 +6,9 @@ mod nogood_propagator;
 mod propagation_buffer;
 mod propagation_mode;
 mod semantic_minimiser;
+#[allow(deprecated, reason = "Will be refactored")]
+#[cfg(test)]
+mod tests;
 
 pub use learning_options::*;
 pub(crate) use nogood_id::*;
