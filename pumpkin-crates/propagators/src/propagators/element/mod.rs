@@ -8,7 +8,8 @@ pub use propagator::*;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::propagation::LocalId;
 
-const ID_LHS: LocalId = LocalId::from(0);
+declare_inference_label!(Element);
+const ID_INDEX: LocalId = LocalId::from(0);
 const ID_RHS: LocalId = LocalId::from(1);
-
-declare_inference_label!(BinaryEquals);
+// local ids of array vars are shifted by ID_X_OFFSET
+const ID_X_OFFSET: u32 = 2;

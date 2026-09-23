@@ -1,91 +1,12 @@
-use pumpkin_checking::checkers::IntegerDivisionChecker;
-use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conjunction;
-use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
-use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
-use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::EventsToRegister;
-use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
-use pumpkin_core::propagation::PropagatorConstructor;
-use pumpkin_core::propagation::PropagatorConstructorContext;
-use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
-
-/// The [`PropagatorConstructor`] for the [`DivisionPropagator`].
-#[derive(Clone, Debug)]
-pub struct DivisionArgs<VA, VB, VC> {
-    pub numerator: VA,
-    pub denominator: VB,
-    pub rhs: VC,
-    pub constraint_tag: ConstraintTag,
-}
-
-const ID_NUMERATOR: LocalId = LocalId::from(0);
-const ID_DENOMINATOR: LocalId = LocalId::from(1);
-const ID_RHS: LocalId = LocalId::from(2);
-
-declare_inference_label!(Division);
-
-impl<VA, VB, VC> PropagatorConstructor for DivisionArgs<VA, VB, VC>
-where
-    VA: IntegerVariable + 'static,
-    VB: IntegerVariable + 'static,
-    VC: IntegerVariable + 'static,
-{
-    type PropagatorImpl = DivisionPropagator<VA, VB, VC>;
-
-    fn create(self, context: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
-        let DivisionArgs {
-            numerator,
-            denominator,
-            rhs,
-            constraint_tag,
-        } = self;
-
-        pumpkin_assert_simple!(
-            !context.contains(&denominator, 0),
-            "Denominator cannot contain 0"
-        );
-
-        let registration = EventsToRegister::builder()
-            .add(&numerator, DomainEvents::BOUNDS, ID_NUMERATOR)
-            .add(&denominator, DomainEvents::BOUNDS, ID_DENOMINATOR)
-            .add(&rhs, DomainEvents::BOUNDS, ID_RHS)
-            .build();
-
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
-            constraint_tag,
-            Division,
-            IntegerDivisionChecker {
-                numerator: numerator.clone(),
-                denominator: denominator.clone(),
-                rhs: rhs.clone(),
-            },
-        );
-
-        let propagator = DivisionPropagator {
-            numerator,
-            denominator,
-            rhs,
-            inference_code,
-        };
-
-        PropagatorSpec {
-            registration,
-            checkers: checkers.build(),
-            propagator,
-        }
-    }
-}
 
 /// A propagator for maintaining the constraint `numerator / denominator = rhs`; note that this
 /// propagator performs truncating division (i.e. rounding towards 0).
@@ -95,10 +16,10 @@ where
 /// The implementation is ported from [OR-tools](https://github.com/google/or-tools/blob/870edf6f7bff6b8ff0d267d936be7e331c5b8c2d/ortools/sat/integer_expr.cc#L1209C1-L1209C19).
 #[derive(Clone, Debug)]
 pub struct DivisionPropagator<VA, VB, VC> {
-    numerator: VA,
-    denominator: VB,
-    rhs: VC,
-    inference_code: InferenceCode,
+    pub(super) numerator: VA,
+    pub(super) denominator: VB,
+    pub(super) rhs: VC,
+    pub(super) inference_code: InferenceCode,
 }
 
 impl<VA: 'static, VB: 'static, VC: 'static> Propagator for DivisionPropagator<VA, VB, VC>
@@ -421,73 +342,4 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use pumpkin_checking::InferenceChecker;
-    use pumpkin_core::state::State;
-
-    use super::*;
-
-    #[test]
-    fn detects_conflicts() {
-        let mut state = State::default();
-        let numerator = state.new_interval_variable(1, 1, None);
-        let denominator = state.new_interval_variable(2, 2, None);
-        let rhs = state.new_interval_variable(2, 2, None);
-        let constraint_tag = state.new_constraint_tag();
-
-        let _ = state.add_propagator(DivisionArgs {
-            numerator,
-            denominator,
-            rhs,
-            constraint_tag,
-        });
-
-        let _ = state.propagate_to_fixed_point().unwrap_err();
-    }
-
-    #[test]
-    fn checker_does_not_report_false_conflict_for_tight_but_valid_quotient() {
-        use pumpkin_checking::Comparison;
-        use pumpkin_checking::TestAtomic;
-        use pumpkin_checking::VariableState;
-
-        let premises = [
-            TestAtomic {
-                name: "numerator",
-                comparison: Comparison::Equal,
-                value: 7,
-            },
-            TestAtomic {
-                name: "denominator",
-                comparison: Comparison::GreaterEqual,
-                value: 2,
-            },
-            TestAtomic {
-                name: "denominator",
-                comparison: Comparison::LessEqual,
-                value: 3,
-            },
-            TestAtomic {
-                name: "rhs",
-                comparison: Comparison::Equal,
-                value: 3,
-            },
-        ];
-
-        let state = VariableState::prepare_for_conflict_check(premises, None)
-            .expect("no conflicting atomics");
-
-        let checker = IntegerDivisionChecker {
-            numerator: "numerator",
-            denominator: "denominator",
-            rhs: "rhs",
-        };
-
-        // div_floor(7, 2) = 3 is the max corner, so the true upper bound is 3 (matching rhs); a
-        // buggy `.min()` over the floor-corners instead yields 2, which would wrongly conflict.
-        assert!(!checker.check(state, &premises, None));
-    }
 }

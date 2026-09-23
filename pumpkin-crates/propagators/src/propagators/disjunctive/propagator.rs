@@ -1,32 +1,21 @@
 use std::cmp::Reverse;
 use std::cmp::min;
 
-use pumpkin_checking::checkers::DisjunctiveCheckerTask;
-use pumpkin_checking::checkers::DisjunctiveEdgeFindingChecker;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
-use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
-use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
-use pumpkin_core::propagation::PropagatorConstructor;
-use pumpkin_core::propagation::PropagatorConstructorContext;
-use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::propagator_conflict;
 use pumpkin_core::variables::IntegerVariable;
 
-use super::disjunctive_task::ArgDisjunctiveTask;
 use super::disjunctive_task::DisjunctiveTask;
 use super::theta_lambda_tree::ThetaLambdaTree;
-use crate::propagators::disjunctive::DisjunctiveEdgeFinding;
 
 /// [`Propagator`] responsible for using disjunctive reasoning to propagate the [Disjunctive](https://sofdem.github.io/gccat/gccat/Cdisjunctive.html) constraint.
 ///
@@ -49,86 +38,16 @@ use crate::propagators::disjunctive::DisjunctiveEdgeFinding;
 #[derive(Debug, Clone)]
 pub struct DisjunctivePropagator<Var: IntegerVariable> {
     /// The tasks which serve as the input to the disjunctive constraint
-    tasks: Box<[DisjunctiveTask<Var>]>,
+    pub(super) tasks: Box<[DisjunctiveTask<Var>]>,
     /// An additional list of tasks which allows us to sort them (we require [`Disjunctive::tasks`]
     /// to keep track of the right indices).
-    sorted_tasks: Vec<DisjunctiveTask<Var>>,
+    pub(super) sorted_tasks: Vec<DisjunctiveTask<Var>>,
     /// The theta-lambda tree used to calculate the earliest completion time of a set of tasks.
     ///
     /// For an explanation of how it is used, see the documentation and \[1\].
-    theta_lambda_tree: ThetaLambdaTree<Var>,
+    pub(super) theta_lambda_tree: ThetaLambdaTree<Var>,
 
-    inference_code: InferenceCode,
-}
-
-#[derive(Debug)]
-pub struct DisjunctiveConstructor<Var> {
-    constraint_tag: ConstraintTag,
-    tasks: Vec<ArgDisjunctiveTask<Var>>,
-}
-
-impl<Var> DisjunctiveConstructor<Var> {
-    pub fn new(
-        tasks: impl IntoIterator<Item = ArgDisjunctiveTask<Var>>,
-        constraint_tag: ConstraintTag,
-    ) -> Self {
-        Self {
-            constraint_tag,
-            tasks: tasks.into_iter().collect(),
-        }
-    }
-}
-
-impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstructor<Var> {
-    type PropagatorImpl = DisjunctivePropagator<Var>;
-
-    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
-        let tasks = self
-            .tasks
-            .into_iter()
-            .enumerate()
-            .map(|(index, task)| DisjunctiveTask {
-                start_time: task.start_time.clone(),
-                processing_time: task.processing_time,
-                id: LocalId::from(index as u32),
-            })
-            .collect::<Vec<_>>();
-        let theta_lambda_tree = ThetaLambdaTree::new(&tasks);
-
-        let mut registration = EventsToRegister::builder();
-        for task in tasks.iter() {
-            registration = registration.add(&task.start_time, DomainEvents::BOUNDS, task.id);
-        }
-
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
-            self.constraint_tag,
-            DisjunctiveEdgeFinding,
-            DisjunctiveEdgeFindingChecker {
-                tasks: tasks
-                    .iter()
-                    .map(|task| DisjunctiveCheckerTask {
-                        start_time: task.start_time.clone(),
-                        processing_time: task.processing_time,
-                    })
-                    .collect(),
-            },
-        );
-
-        let propagator = DisjunctivePropagator {
-            tasks: tasks.clone().into_boxed_slice(),
-            sorted_tasks: tasks,
-            theta_lambda_tree,
-
-            inference_code,
-        };
-
-        PropagatorSpec {
-            registration: registration.build(),
-            checkers: checkers.build(),
-            propagator,
-        }
-    }
+    pub(super) inference_code: InferenceCode,
 }
 
 impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
@@ -423,46 +342,4 @@ fn create_propagation_explanation<'a, Var: IntegerVariable>(
     explanation.push(predicate!(propagated_task.start_time >= r));
 
     explanation.into()
-}
-
-#[cfg(test)]
-mod tests {
-    use pumpkin_core::state::State;
-
-    use crate::disjunctive::ArgDisjunctiveTask;
-    use crate::disjunctive::DisjunctiveConstructor;
-
-    #[test]
-    fn propagator_propagates_lower_bound() {
-        let mut state = State::default();
-        let c = state.new_interval_variable(4, 26, None);
-        let d = state.new_interval_variable(13, 13, None);
-        let e = state.new_interval_variable(5, 10, None);
-        let f = state.new_interval_variable(5, 10, None);
-
-        let constraint_tag = state.new_constraint_tag();
-        let _ = state.add_propagator(DisjunctiveConstructor::new(
-            [
-                ArgDisjunctiveTask {
-                    start_time: c,
-                    processing_time: 4,
-                },
-                ArgDisjunctiveTask {
-                    start_time: d,
-                    processing_time: 5,
-                },
-                ArgDisjunctiveTask {
-                    start_time: e,
-                    processing_time: 3,
-                },
-                ArgDisjunctiveTask {
-                    start_time: f,
-                    processing_time: 3,
-                },
-            ],
-            constraint_tag,
-        ));
-        state.propagate_to_fixed_point().expect("No conflict");
-        assert_eq!(state.lower_bound(c), 18);
-    }
 }

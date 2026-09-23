@@ -1,128 +1,48 @@
 use std::rc::Rc;
 
-use enumset::enum_set;
-use pumpkin_checking::checkers::LinearNotEqualChecker;
 use pumpkin_core::asserts::pumpkin_assert_extreme;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
-use pumpkin_core::checkers::Scope;
-use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
-use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvent;
-use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
-use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
-use pumpkin_core::propagation::PropagatorConstructor;
-use pumpkin_core::propagation::PropagatorConstructorContext;
-use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
-declare_inference_label!(LinearNotEquals);
-
-/// The [`PropagatorConstructor`] for the [`LinearNotEqualPropagator`].
-#[derive(Clone, Debug)]
-pub struct LinearNotEqualPropagatorArgs<Var> {
-    /// The terms of the sum
-    pub terms: Rc<[Var]>,
-    /// The right-hand side of the sum
-    pub rhs: i32,
-    /// The constraint tag of the constraint this propagator is propagating for.
-    pub constraint_tag: ConstraintTag,
-}
-
-impl<Var> PropagatorConstructor for LinearNotEqualPropagatorArgs<Var>
-where
-    Var: IntegerVariable + 'static,
-{
-    type PropagatorImpl = LinearNotEqualPropagator<Var>;
-
-    fn create(
-        self,
-        mut context: PropagatorConstructorContext,
-    ) -> PropagatorSpec<Self::PropagatorImpl> {
-        let LinearNotEqualPropagatorArgs {
-            terms,
-            rhs,
-            constraint_tag,
-        } = self;
-
-        let mut registration = EventsToRegister::builder();
-        for (i, x_i) in terms.iter().enumerate() {
-            registration = registration.add(x_i, DomainEvents::ASSIGN, LocalId::from(i as u32));
-            context.register_backtrack(
-                x_i.clone(),
-                DomainEvents::new(enum_set!(DomainEvent::Assign | DomainEvent::Removal)),
-                LocalId::from(i as u32),
-            );
-        }
-
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_rule(
-            Scope::from_variables(terms.iter()),
-            constraint_tag,
-            LinearNotEquals,
-            LinearNotEqualChecker {
-                terms: terms.as_ref().into(),
-                bound: rhs,
-            },
-        );
-
-        let mut propagator = LinearNotEqualPropagator {
-            terms,
-            rhs,
-            number_of_fixed_terms: 0,
-            fixed_lhs: 0,
-            unfixed_variable_has_been_updated: false,
-            should_recalculate_lhs: false,
-            inference_code,
-        };
-
-        propagator.recalculate_fixed_variables(context.domains());
-
-        PropagatorSpec {
-            registration: registration.build(),
-            checkers: checkers.build(),
-            propagator,
-        }
-    }
-}
 
 /// Propagator for the constraint `\sum x_i != rhs`, where `x_i` are
 /// integer variables and `rhs` is an integer constant.
 #[derive(Clone, Debug)]
 pub struct LinearNotEqualPropagator<Var> {
     /// The terms of the sum
-    terms: Rc<[Var]>,
+    pub(super) terms: Rc<[Var]>,
     /// The right-hand side of the sum
-    rhs: i32,
+    pub(super) rhs: i32,
 
     /// The inference code for this propagator.
-    inference_code: InferenceCode,
+    pub(super) inference_code: InferenceCode,
 
     /// The number of fixed terms; note that this constraint can only propagate when there is a
     /// single unfixed variable and can only detect conflicts if all variables are assigned
-    number_of_fixed_terms: usize,
+    pub(super) number_of_fixed_terms: usize,
     /// The sum of the values of the fixed terms
-    fixed_lhs: i32,
+    pub(super) fixed_lhs: i32,
     /// Indicates whether the single unfixed variable has been updated; if this is the case then
     /// the propagator is not scheduled again
-    unfixed_variable_has_been_updated: bool,
+    pub(super) unfixed_variable_has_been_updated: bool,
     /// Indicates whether the value of [`LinearNotEqualPropagator::fixed_lhs`] is invalid and
     /// should be recalculated
-    should_recalculate_lhs: bool,
+    pub(super) should_recalculate_lhs: bool,
 }
 
 impl<Var> Propagator for LinearNotEqualPropagator<Var>
@@ -312,7 +232,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     /// Note that this method always sets the `unfixed_variable_has_been_updated` to true; this
     /// might be too lenient as it could be the case that synchronisation does not lead to the
     /// re-adding of the removed value.
-    fn recalculate_fixed_variables(&mut self, context: Domains) {
+    pub(super) fn recalculate_fixed_variables(&mut self, context: Domains) {
         self.unfixed_variable_has_been_updated = false;
         (self.fixed_lhs, self.number_of_fixed_terms) =
             self.terms
@@ -365,114 +285,5 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
             self.should_recalculate_lhs || self.fixed_lhs == expected_fixed_lhs;
 
         number_of_fixed_terms_is_correct && lhs_is_outdated_or_correct
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use pumpkin_core::conjunction;
-    use pumpkin_core::predicate;
-    use pumpkin_core::predicates::Predicate;
-    use pumpkin_core::predicates::PropositionalConjunction;
-    use pumpkin_core::propagation::CurrentNogood;
-    use pumpkin_core::state::Conflict;
-    use pumpkin_core::state::State;
-    use pumpkin_core::variables::TransformableVariable;
-
-    use super::*;
-    use crate::StateExt;
-
-    #[test]
-    fn test_value_is_removed() {
-        let mut state = State::default();
-        let x = state.new_interval_variable(2, 2, None);
-        let y = state.new_interval_variable(1, 5, None);
-
-        let constraint_tag = state.new_constraint_tag();
-
-        let _ = state.add_propagator(LinearNotEqualPropagatorArgs {
-            terms: [x.scaled(1), y.scaled(-1)].into(),
-            rhs: 0,
-            constraint_tag,
-        });
-        state.propagate_to_fixed_point().expect("non-empty domain");
-
-        state.assert_bounds(x, 2, 2);
-        state.assert_bounds(y, 1, 5);
-        assert!(!state.contains(y, 2));
-    }
-
-    #[test]
-    fn test_empty_domain_is_detected() {
-        let mut state = State::default();
-        let x = state.new_interval_variable(2, 2, None);
-        let y = state.new_interval_variable(2, 2, None);
-
-        let constraint_tag = state.new_constraint_tag();
-
-        let _ = state.add_propagator(LinearNotEqualPropagatorArgs {
-            terms: [x.scaled(1), y.scaled(-1)].into(),
-            rhs: 0,
-            constraint_tag,
-        });
-        let err = state.propagate_to_fixed_point().expect_err("empty domain");
-
-        let expected = conjunction!([x == 2] & [y == 2]);
-
-        match err {
-            Conflict::EmptyDomain(_) => panic!("expected an explicit conflict"),
-            Conflict::Propagator(conflict) => assert_eq!(expected, conflict.conjunction),
-        }
-    }
-
-    #[test]
-    fn explanation_for_propagation() {
-        let mut state = State::default();
-        let x = state.new_interval_variable(2, 2, None).scaled(1);
-        let y = state.new_interval_variable(1, 5, None).scaled(-1);
-
-        let constraint_tag = state.new_constraint_tag();
-
-        let _ = state.add_propagator(LinearNotEqualPropagatorArgs {
-            terms: [x, y].into(),
-            rhs: 0,
-            constraint_tag,
-        });
-        state.propagate_to_fixed_point().expect("non-empty domain");
-
-        let mut reason_buffer: Vec<Predicate> = vec![];
-        let _ = state.get_propagation_reason(
-            predicate![y != -2],
-            &mut reason_buffer,
-            CurrentNogood::empty(),
-        );
-        let reason: PropositionalConjunction = reason_buffer.into();
-
-        assert_eq!(conjunction!([x == 2]), reason);
-    }
-
-    #[test]
-    fn satisfied_constraint_does_not_trigger_conflict() {
-        let mut state = State::default();
-        let x = state.new_interval_variable(0, 3, None);
-        let y = state.new_interval_variable(0, 3, None);
-
-        let constraint_tag = state.new_constraint_tag();
-
-        let _ = state.add_propagator(LinearNotEqualPropagatorArgs {
-            terms: [x.scaled(1), y.scaled(-1)].into(),
-            rhs: 0,
-            constraint_tag,
-        });
-
-        let _ = state.post(predicate![x != 0]).unwrap();
-        let _ = state.post(predicate![x != 2]).unwrap();
-        let _ = state.post(predicate![x != 3]).unwrap();
-
-        let _ = state.post(predicate![y != 0]).unwrap();
-        let _ = state.post(predicate![y != 1]).unwrap();
-        let _ = state.post(predicate![y != 2]).unwrap();
-
-        state.propagate_to_fixed_point().expect("non-empty domain");
     }
 }

@@ -1,8 +1,11 @@
 mod checks;
+mod constructor;
 mod debug;
 mod insertion;
+mod propagator;
 mod removal;
 mod synchronisation;
-mod time_table_over_interval_incremental;
+#[cfg(test)]
+mod tests;
 
-pub use time_table_over_interval_incremental::*;
+pub use propagator::*;
