@@ -2,6 +2,8 @@
 
 use bitfield_struct::bitfield;
 use pumpkin_checking::IntExt;
+use pumpkin_checking::checkers::compute_quotient_bound_ext;
+use pumpkin_checking::checkers::product_bound_ext;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::InferenceCode;
@@ -9,9 +11,6 @@ use pumpkin_core::propagation::ExplanationContext;
 use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::variables::IntegerVariable;
-
-use super::shared::compute_quotient_bound_ext;
-use super::shared::product_bound_ext;
 
 /// Builds the lazy explanation for a propagation performed by
 /// [`super::propagator::IntegerMultiplicationPropagator`], minimizing which domain bounds are

@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use pumpkin_checking::checkers::NogoodChecker;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
@@ -15,7 +16,6 @@ use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::propagation::RuntimeCheckers;
-use pumpkin_core::propagators::nogoods::NogoodChecker;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;

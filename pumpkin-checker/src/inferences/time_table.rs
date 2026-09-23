@@ -1,7 +1,7 @@
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::VariableState;
-use pumpkin_propagators::cumulative::time_table::CheckerTask;
-use pumpkin_propagators::cumulative::time_table::TimeTableChecker;
+use pumpkin_checking::checkers::CheckerTask;
+use pumpkin_checking::checkers::TimeTableChecker;
 
 use super::Fact;
 use crate::inferences::InvalidInference;

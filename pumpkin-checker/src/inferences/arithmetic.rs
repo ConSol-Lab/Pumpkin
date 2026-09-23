@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::VariableState;
-use pumpkin_propagators::arithmetic::BinaryEqualsChecker;
+use pumpkin_checking::checkers::BinaryEqualsChecker;
 
 use super::Fact;
 use crate::inferences::InvalidInference;

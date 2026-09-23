@@ -1,3 +1,4 @@
+use pumpkin_checking::checkers::BinaryEqualsChecker;
 use pumpkin_core::containers::HashSet;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
@@ -9,7 +10,6 @@ use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
-use crate::arithmetic::BinaryEqualsChecker;
 use crate::arithmetic::BinaryEqualsPropagator;
 
 /// The [`PropagatorConstructor`] for the [`BinaryEqualsPropagator`].

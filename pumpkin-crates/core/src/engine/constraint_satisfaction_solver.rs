@@ -5,6 +5,7 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use pumpkin_checking::checkers::NogoodChecker;
 #[allow(
     clippy::disallowed_types,
     reason = "any rand generator is a valid implementation of Random"
@@ -47,7 +48,6 @@ use crate::proof::explain_root_assignment;
 use crate::proof::finalize_proof;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::store::PropagatorHandle;
-use crate::propagators::nogoods::NogoodChecker;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
 use crate::propagators::nogoods::PropagationMode;

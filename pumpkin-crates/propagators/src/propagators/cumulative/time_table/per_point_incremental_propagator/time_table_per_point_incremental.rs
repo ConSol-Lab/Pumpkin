@@ -3,6 +3,8 @@ use std::collections::btree_map::Entry;
 use std::fmt::Debug;
 use std::rc::Rc;
 
+use pumpkin_checking::checkers::CheckerTask;
+use pumpkin_checking::checkers::TimeTableChecker;
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::asserts::pumpkin_assert_extreme;
 use pumpkin_core::conjunction;
@@ -32,9 +34,7 @@ use crate::cumulative::ResourceProfile;
 use crate::cumulative::Task;
 use crate::cumulative::UpdatableStructures;
 use crate::cumulative::options::CumulativePropagatorOptions;
-use crate::cumulative::time_table::CheckerTask;
 use crate::cumulative::time_table::PerPointTimeTableType;
-use crate::cumulative::time_table::TimeTableChecker;
 #[cfg(doc)]
 use crate::cumulative::time_table::TimeTablePerPointPropagator;
 use crate::cumulative::time_table::create_time_table_per_point_from_scratch;

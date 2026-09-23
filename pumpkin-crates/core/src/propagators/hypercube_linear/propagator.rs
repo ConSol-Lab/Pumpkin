@@ -1,3 +1,5 @@
+use pumpkin_checking::checkers::HypercubeLinearChecker;
+
 use crate::basic_types::PredicateId;
 use crate::declare_inference_label;
 use crate::engine::PropagationStatusCP;
@@ -17,7 +19,6 @@ use crate::propagation::PropagatorSpec;
 use crate::propagation::ReadDomains;
 use crate::propagation::RuntimeCheckers;
 use crate::propagators::hypercube_linear::Hypercube;
-use crate::propagators::hypercube_linear::HypercubeLinearChecker;
 use crate::propagators::hypercube_linear::LinearInequality;
 use crate::pumpkin_assert_simple;
 use crate::state::PropagatorConflict;

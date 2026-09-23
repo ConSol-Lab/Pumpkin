@@ -1,10 +1,5 @@
-use pumpkin_checking::AtomicConstraint;
-use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
-use pumpkin_checking::IntExt;
-use pumpkin_checking::VariableState;
+use pumpkin_checking::checkers::LinearLessOrEqualChecker;
 use pumpkin_core::asserts::pumpkin_assert_simple;
-use pumpkin_core::checkers::RetentionChecker;
 use pumpkin_core::checkers::Scope;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
@@ -300,83 +295,6 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct LinearLessOrEqualChecker<Var> {
-    terms: Box<[Var]>,
-    bound: i32,
-}
-
-impl<Var> LinearLessOrEqualChecker<Var> {
-    pub fn new(terms: Box<[Var]>, bound: i32) -> Self {
-        LinearLessOrEqualChecker { terms, bound }
-    }
-}
-
-impl<Var, Atomic> InferenceChecker<Atomic> for LinearLessOrEqualChecker<Var>
-where
-    Var: CheckerVariable<Atomic>,
-    Atomic: AtomicConstraint,
-{
-    fn check(
-        &self,
-        variable_state: VariableState<Atomic>,
-        _: &[Atomic],
-        _: Option<&Atomic>,
-    ) -> bool {
-        // Next, we evaluate the linear inequality. The lower bound of the
-        // left-hand side must exceed the bound in the constraint. Note that the accumulator is an
-        // IntExt, and if the lower bound of one of the terms is -infty, then the left-hand side
-        // will be -infty regardless of the other terms.
-        let left_hand_side: IntExt<i64> = self
-            .terms
-            .iter()
-            .map(|variable| variable.induced_lower_bound(&variable_state).into())
-            .sum();
-
-        left_hand_side > i64::from(self.bound)
-    }
-}
-
-impl<Var: IntegerVariable + 'static> RetentionChecker for LinearLessOrEqualChecker<Var> {
-    fn check_retention(&mut self, _: &Scope, domains: Domains<'_>) -> bool {
-        // 1. Check if the constraint is conflicting
-        let bound = i64::from(self.bound);
-        let lower_bound_sum = self
-            .terms
-            .iter()
-            .map(|term| i64::from(domains.lower_bound(term)))
-            .sum::<i64>();
-
-        if lower_bound_sum > bound {
-            log::error!(
-                "The lower bounds of {:?} exceed the bound {} of the linear inequality",
-                self.terms,
-                self.bound
-            );
-            return false;
-        }
-
-        // 2. Assert that it is possible to assign the greatest value in the domain for each
-        //    variable
-        //  We do this by effectively assigning the greatest value to the variable whilst keeping
-        //  the other variables at their lower bound.
-        self.terms.iter().all(|term| {
-            let greatest = bound - (lower_bound_sum - i64::from(domains.lower_bound(term)));
-            let is_tight = i64::from(domains.upper_bound(term)) <= greatest;
-
-            if !is_tight {
-                log::error!(
-                    "The upper bound of {term:?} could be lowered to {greatest} by the linear inequality {:?} <= {}",
-                    self.terms,
-                    self.bound
-                );
-            }
-
-            is_tight
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use pumpkin_core::conjunction;
@@ -449,50 +367,6 @@ mod tests {
         let _ = state
             .propagate_to_fixed_point()
             .expect_err("Expected overflow to be detected");
-    }
-
-    #[test]
-    fn retention_fails_when_an_upper_bound_can_be_lowered() {
-        let mut state = State::default();
-        let x = state.new_interval_variable(1, 5, None);
-        let y = state.new_interval_variable(0, 10, None);
-
-        let mut checker = LinearLessOrEqualChecker::new([x, y].into(), 7);
-        let scope = Scope::from_variables([x, y].iter());
-
-        assert!(!checker.check_retention(&scope, state.get_domains()));
-    }
-
-    #[test]
-    fn retention_holds_at_the_fixpoint_of_the_propagator() {
-        let mut state = State::default();
-        let x = state.new_interval_variable(1, 5, None);
-        let y = state.new_interval_variable(0, 10, None);
-        let constraint_tag = state.new_constraint_tag();
-
-        let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
-            x: [x, y].into(),
-            c: 7,
-            constraint_tag,
-        });
-        state.propagate_to_fixed_point().expect("no empty domains");
-
-        let mut checker = LinearLessOrEqualChecker::new([x, y].into(), 7);
-        let scope = Scope::from_variables([x, y].iter());
-
-        assert!(checker.check_retention(&scope, state.get_domains()));
-    }
-
-    #[test]
-    fn retention_fails_when_the_lower_bounds_exceed_the_bound() {
-        let mut state = State::default();
-        let x = state.new_interval_variable(4, 5, None);
-        let y = state.new_interval_variable(4, 10, None);
-
-        let mut checker = LinearLessOrEqualChecker::new([x, y].into(), 7);
-        let scope = Scope::from_variables([x, y].iter());
-
-        assert!(!checker.check_retention(&scope, state.get_domains()));
     }
 
     #[test]

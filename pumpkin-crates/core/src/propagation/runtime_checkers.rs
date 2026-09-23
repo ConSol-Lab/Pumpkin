@@ -1,8 +1,8 @@
 use pumpkin_checking::BoxedChecker;
+use pumpkin_checking::BoxedRetentionChecker;
 use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::RetentionChecker;
 
-use crate::checkers::BoxedRetentionChecker;
-use crate::checkers::RetentionChecker;
 use crate::checkers::Scope;
 use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
@@ -20,7 +20,7 @@ use crate::propagation::PropagatorConstructor;
 #[derive(Clone, Debug)]
 pub struct RuntimeCheckers {
     inference_checkers: Vec<(InferenceCode, BoxedChecker<Predicate>)>,
-    retention_checkers: Vec<(Scope, BoxedRetentionChecker)>,
+    retention_checkers: Vec<(Scope, BoxedRetentionChecker<Predicate>)>,
 }
 
 impl RuntimeCheckers {
@@ -64,9 +64,10 @@ impl RuntimeCheckers {
     pub fn add_retention_checker(
         &mut self,
         scope: impl Into<Scope>,
-        checker: impl Into<BoxedRetentionChecker>,
+        checker: impl RetentionChecker<Predicate> + 'static,
     ) {
-        self.retention_checkers.push((scope.into(), checker.into()));
+        self.retention_checkers
+            .push((scope.into(), BoxedRetentionChecker::new(checker)));
     }
 
     /// Add a checker that is both the inference checker
@@ -79,7 +80,7 @@ impl RuntimeCheckers {
         checker: Checker,
     ) -> InferenceCode
     where
-        Checker: InferenceChecker<Predicate> + RetentionChecker + Clone + 'static,
+        Checker: InferenceChecker<Predicate> + RetentionChecker<Predicate> + Clone + 'static,
     {
         let inference_code =
             self.add_inference_checker(constraint_tag, inference_label, checker.clone());
@@ -93,7 +94,7 @@ impl RuntimeCheckers {
         self,
     ) -> (
         Vec<(InferenceCode, BoxedChecker<Predicate>)>,
-        Vec<(Scope, BoxedRetentionChecker)>,
+        Vec<(Scope, BoxedRetentionChecker<Predicate>)>,
     ) {
         (self.inference_checkers, self.retention_checkers)
     }
@@ -122,7 +123,7 @@ impl RuntimeCheckersBuilder {
     pub fn add_retention_checker(
         &mut self,
         scope: impl Into<Scope>,
-        checker: impl Into<BoxedRetentionChecker>,
+        checker: impl RetentionChecker<Predicate> + 'static,
     ) {
         self.checkers.add_retention_checker(scope, checker);
     }
@@ -137,7 +138,7 @@ impl RuntimeCheckersBuilder {
         checker: Checker,
     ) -> InferenceCode
     where
-        Checker: InferenceChecker<Predicate> + RetentionChecker + Clone + 'static,
+        Checker: InferenceChecker<Predicate> + RetentionChecker<Predicate> + Clone + 'static,
     {
         self.checkers
             .add_rule(scope, constraint_tag, inference_label, checker)

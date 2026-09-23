@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 
+use pumpkin_checking::checkers::NogoodChecker;
+
 use crate::Random;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
@@ -30,7 +32,6 @@ use crate::propagation::CurrentNogood;
 use crate::propagation::ExplanationContext;
 use crate::propagation::HasAssignments;
 use crate::propagation::ReadDomains;
-use crate::propagators::nogoods::NogoodChecker;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_eq_simple;
 use crate::state::PropagatorHandle;

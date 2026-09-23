@@ -2,9 +2,9 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
-use super::RetentionChecker;
-use super::Scope;
-use crate::propagation::Domains;
+use pumpkin_checking::AtomicConstraint;
+use pumpkin_checking::RetentionChecker;
+use pumpkin_checking::VariableState;
 
 /// A [`RetentionChecker`] wrapper that skips the inner check
 /// when the associated constraint has been deleted.
@@ -34,11 +34,15 @@ impl<T> SelfDisablingChecker<T> {
     }
 }
 
-impl<T: RetentionChecker + Clone> RetentionChecker for SelfDisablingChecker<T> {
-    fn check_retention(&mut self, scope: &Scope, domains: Domains<'_>) -> bool {
+impl<Atomic, T> RetentionChecker<Atomic> for SelfDisablingChecker<T>
+where
+    Atomic: AtomicConstraint,
+    T: RetentionChecker<Atomic> + Clone,
+{
+    fn check_retention(&self, state: &VariableState<Atomic>) -> bool {
         if self.is_deleted.load(Ordering::Relaxed) {
             return true;
         }
-        self.inner.check_retention(scope, domains)
+        self.inner.check_retention(state)
     }
 }

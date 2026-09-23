@@ -1,15 +1,10 @@
 use std::rc::Rc;
 
 use enumset::enum_set;
-use pumpkin_checking::AtomicConstraint;
-use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
-use pumpkin_checking::IntExt;
-use pumpkin_checking::VariableState;
+use pumpkin_checking::checkers::LinearNotEqualChecker;
 use pumpkin_core::asserts::pumpkin_assert_extreme;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
-use pumpkin_core::checkers::RetentionChecker;
 use pumpkin_core::checkers::Scope;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
@@ -373,91 +368,6 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct LinearNotEqualChecker<Var> {
-    pub terms: Box<[Var]>,
-    pub bound: i32,
-}
-
-impl<Var, Atomic> InferenceChecker<Atomic> for LinearNotEqualChecker<Var>
-where
-    Var: CheckerVariable<Atomic>,
-    Atomic: AtomicConstraint,
-{
-    fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
-        // We evaluate the linear sum. It should be fixed to the bound for a conflict to
-        // exist.
-        let mut left_hand_side = IntExt::Int(0);
-
-        for term in self.terms.iter() {
-            let Some(value) = term.induced_fixed_value(&state) else {
-                return false;
-            };
-
-            left_hand_side += i64::from(value);
-        }
-
-        left_hand_side == i64::from(self.bound)
-    }
-}
-
-impl<Var: IntegerVariable + 'static> RetentionChecker for LinearNotEqualChecker<Var> {
-    fn check_retention(&mut self, _: &Scope, domains: Domains<'_>) -> bool {
-        let unfixed_terms = self
-            .terms
-            .iter()
-            .filter(|&term| !domains.is_fixed(term))
-            .collect::<Vec<_>>();
-
-        let fixed_sum = self
-            .terms
-            .iter()
-            .filter_map(|term| domains.fixed_value(term))
-            .map(i64::from)
-            .sum::<i64>();
-
-        // 1. Check if the constraint is conflicting, which is the case if all terms are fixed and
-        //    sum to the bound
-        if unfixed_terms.is_empty() {
-            let is_violated = fixed_sum == i64::from(self.bound);
-
-            if is_violated {
-                log::error!(
-                    "The fixed terms {:?} sum to the forbidden value {} of the linear disequality",
-                    self.terms,
-                    self.bound
-                );
-            }
-
-            return !is_violated;
-        }
-
-        // 2. If at least two terms are unfixed then nothing can be propagated
-        if unfixed_terms.len() >= 2 {
-            return true;
-        }
-
-        // 3. Assert that the single unfixed term cannot take the value which completes the sum to
-        //    the bound
-        let unfixed_term = unfixed_terms[0];
-        let forbidden = i64::from(self.bound) - fixed_sum;
-        let is_removed = match i32::try_from(forbidden) {
-            Ok(forbidden) => !domains.contains(unfixed_term, forbidden),
-            Err(_) => true,
-        };
-
-        if !is_removed {
-            log::error!(
-                "The value {forbidden} could be removed from {unfixed_term:?} by the linear disequality {:?} != {}",
-                self.terms,
-                self.bound
-            );
-        }
-
-        is_removed
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use pumpkin_core::conjunction;
@@ -539,67 +449,6 @@ mod tests {
         let reason: PropositionalConjunction = reason_buffer.into();
 
         assert_eq!(conjunction!([x == 2]), reason);
-    }
-
-    #[test]
-    fn retention_fails_when_the_forbidden_value_is_present() {
-        let mut state = State::default();
-        let x = state.new_interval_variable(3, 3, None);
-        let y = state.new_interval_variable(0, 10, None);
-
-        let mut checker = LinearNotEqualChecker {
-            terms: [x, y].into(),
-            bound: 5,
-        };
-        let scope = Scope::from_variables([x, y].iter());
-
-        assert!(!checker.check_retention(&scope, state.get_domains()));
-    }
-
-    #[test]
-    fn retention_holds_when_the_forbidden_value_is_absent() {
-        let mut state = State::default();
-        let x = state.new_interval_variable(3, 3, None);
-        let y = state.new_interval_variable(0, 10, None);
-        let _ = state.post(predicate![y != 2]).unwrap();
-
-        let mut checker = LinearNotEqualChecker {
-            terms: [x, y].into(),
-            bound: 5,
-        };
-        let scope = Scope::from_variables([x, y].iter());
-
-        assert!(checker.check_retention(&scope, state.get_domains()));
-    }
-
-    #[test]
-    fn retention_holds_with_two_unfixed_terms() {
-        let mut state = State::default();
-        let x = state.new_interval_variable(0, 5, None);
-        let y = state.new_interval_variable(0, 10, None);
-
-        let mut checker = LinearNotEqualChecker {
-            terms: [x, y].into(),
-            bound: 5,
-        };
-        let scope = Scope::from_variables([x, y].iter());
-
-        assert!(checker.check_retention(&scope, state.get_domains()));
-    }
-
-    #[test]
-    fn retention_fails_when_the_fixed_terms_sum_to_the_bound() {
-        let mut state = State::default();
-        let x = state.new_interval_variable(3, 3, None);
-        let y = state.new_interval_variable(2, 2, None);
-
-        let mut checker = LinearNotEqualChecker {
-            terms: [x, y].into(),
-            bound: 5,
-        };
-        let scope = Scope::from_variables([x, y].iter());
-
-        assert!(!checker.check_retention(&scope, state.get_domains()));
     }
 
     #[test]

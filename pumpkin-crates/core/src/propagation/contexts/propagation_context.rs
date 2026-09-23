@@ -1,7 +1,9 @@
 use enumset::EnumSet;
+#[cfg(feature = "check-consistency")]
+use pumpkin_checking::BoxedRetentionChecker;
+use pumpkin_checking::RetentionChecker;
 
 use crate::basic_types::PredicateId;
-use crate::checkers::BoxedRetentionChecker;
 #[cfg(feature = "check-consistency")]
 use crate::checkers::RetentionCheckerStore;
 use crate::checkers::Scope;
@@ -139,7 +141,7 @@ impl<'a> PropagationContext<'a> {
     pub fn add_retention_checker(
         &mut self,
         scope: impl Into<Scope>,
-        checker: impl Into<BoxedRetentionChecker>,
+        checker: impl RetentionChecker<Predicate> + 'static,
     ) {
         pumpkin_assert_simple!(
             self.reification_literal.is_none(),
@@ -147,8 +149,11 @@ impl<'a> PropagationContext<'a> {
         );
 
         #[cfg(feature = "check-consistency")]
-        self.retention_checkers
-            .register(scope.into(), checker.into(), self.propagator_id);
+        self.retention_checkers.register(
+            scope.into(),
+            BoxedRetentionChecker::new(checker),
+            self.propagator_id,
+        );
 
         // Use variables to avoid unused warnings.
         #[cfg(not(feature = "check-consistency"))]

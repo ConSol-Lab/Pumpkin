@@ -9,6 +9,10 @@ use std::sync::atomic::Ordering;
 
 use bitfield_struct::bitfield;
 use log::warn;
+#[cfg(feature = "check-consistency")]
+use pumpkin_checking::checkers::ExtendedNogoodChecker;
+#[cfg(feature = "check-consistency")]
+use pumpkin_checking::checkers::NogoodChecker;
 
 use super::LearningOptions;
 use super::NogoodId;
@@ -1415,12 +1419,12 @@ impl NogoodPropagator {
         let scope = build_nogood_scope(&nogood);
         match self.propagation_mode {
             PropagationMode::UnitPropagation => {
-                let checker = SelfDisablingChecker::new(super::NogoodChecker { nogood });
+                let checker = SelfDisablingChecker::new(NogoodChecker { nogood });
                 let _ = self.deletion_flags.push(checker.deletion_flag());
                 context.add_retention_checker(scope, checker);
             }
             PropagationMode::ExtendedNogoodPropagation => {
-                let checker = SelfDisablingChecker::new(super::ExtendedNogoodChecker { nogood });
+                let checker = SelfDisablingChecker::new(ExtendedNogoodChecker { nogood });
                 let _ = self.deletion_flags.push(checker.deletion_flag());
                 context.add_retention_checker(scope, checker);
             }

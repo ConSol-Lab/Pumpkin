@@ -5,6 +5,8 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
+use pumpkin_checking::checkers::CheckerTask;
+use pumpkin_checking::checkers::TimeTableChecker;
 use pumpkin_core::asserts::pumpkin_assert_extreme;
 use pumpkin_core::conjunction;
 use pumpkin_core::proof::ConstraintTag;
@@ -35,8 +37,6 @@ use crate::cumulative::CumulativeParameters;
 use crate::cumulative::ResourceProfile;
 use crate::cumulative::UpdatableStructures;
 use crate::cumulative::options::CumulativePropagatorOptions;
-use crate::cumulative::time_table::CheckerTask;
-use crate::cumulative::time_table::TimeTableChecker;
 use crate::cumulative::util::create_tasks;
 use crate::cumulative::util::register_tasks;
 use crate::cumulative::util::update_bounds_task;

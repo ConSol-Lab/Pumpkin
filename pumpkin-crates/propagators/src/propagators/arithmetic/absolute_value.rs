@@ -1,16 +1,10 @@
-use pumpkin_checking::AtomicConstraint;
-use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
-use pumpkin_checking::IntExt;
-use pumpkin_core::checkers::RetentionChecker;
-use pumpkin_core::checkers::Scope;
+use pumpkin_checking::checkers::AbsoluteValueChecker;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
@@ -186,115 +180,6 @@ where
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct AbsoluteValueChecker<VA, VB> {
-    signed: VA,
-    absolute: VB,
-}
-
-impl<VA, VB, Atomic> InferenceChecker<Atomic> for AbsoluteValueChecker<VA, VB>
-where
-    VA: CheckerVariable<Atomic>,
-    VB: CheckerVariable<Atomic>,
-    Atomic: AtomicConstraint,
-{
-    fn check(
-        &self,
-        state: pumpkin_checking::VariableState<Atomic>,
-        _: &[Atomic],
-        _: Option<&Atomic>,
-    ) -> bool {
-        let signed_lower = self.signed.induced_lower_bound(&state);
-        let signed_upper = self.signed.induced_upper_bound(&state);
-        let absolute_lower = self.absolute.induced_lower_bound(&state);
-        let absolute_upper = self.absolute.induced_upper_bound(&state);
-
-        if absolute_lower < 0 {
-            // The absolute value cannot have negative values.
-            return true;
-        }
-
-        // Now we compute the interval for |signed| based on the domain of signed.
-        let (computed_signed_lower, computed_signed_upper) = if signed_lower >= 0 {
-            (signed_lower, signed_upper)
-        } else if signed_upper <= 0 {
-            (-signed_upper, -signed_lower)
-        } else if signed_lower < 0 && 0_i32 < signed_upper {
-            (IntExt::Int(0), std::cmp::max(-signed_lower, signed_upper))
-        } else {
-            unreachable!()
-        };
-
-        // The intervals should not match, otherwise there is no conflict.
-        computed_signed_lower != absolute_lower || computed_signed_upper != absolute_upper
-    }
-}
-
-impl<VA, VB> RetentionChecker for AbsoluteValueChecker<VA, VB>
-where
-    VA: IntegerVariable + 'static,
-    VB: IntegerVariable + 'static,
-{
-    fn check_retention(&mut self, _: &Scope, domains: Domains<'_>) -> bool {
-        let signed_lower = i64::from(domains.lower_bound(&self.signed));
-        let signed_upper = i64::from(domains.upper_bound(&self.signed));
-        let absolute_lower = i64::from(domains.lower_bound(&self.absolute));
-        let absolute_upper = i64::from(domains.upper_bound(&self.absolute));
-
-        let greatest_absolute = signed_lower.abs().max(signed_upper.abs());
-        let least_absolute = if signed_lower <= 0 && 0 <= signed_upper {
-            0
-        } else {
-            signed_lower.abs().min(signed_upper.abs())
-        };
-
-        // 1. Assert that the lower bound of absolute is at least the least absolute value of
-        //    signed, which is 0 when signed can be 0
-        if absolute_lower < least_absolute {
-            log::error!(
-                "The lower bound of {:?} could be raised to {least_absolute} by the absolute value of {:?}",
-                self.absolute,
-                self.signed
-            );
-            return false;
-        }
-
-        // 2. Assert that the upper bound of absolute equals the greatest absolute value of signed
-        //  The bounds of signed lie within [-ub(absolute), ub(absolute)] at the same time.
-        if absolute_upper != greatest_absolute {
-            log::error!(
-                "The upper bound of {:?} is {absolute_upper} while the greatest absolute value of {:?} is {greatest_absolute}",
-                self.absolute,
-                self.signed
-            );
-            return false;
-        }
-
-        // 3. Assert that the bound of signed nearest to zero is at least the lower bound of
-        //    absolute in magnitude when the sign of signed is fixed
-        //  When signed can be 0, the propagator does not remove the values nearest to zero.
-        if signed_upper <= 0 && -signed_upper < absolute_lower {
-            log::error!(
-                "The upper bound of {:?} could be lowered to {} by the lower bound of {:?}",
-                self.signed,
-                -absolute_lower,
-                self.absolute
-            );
-            return false;
-        }
-        if signed_lower >= 0 && signed_lower < absolute_lower {
-            log::error!(
-                "The lower bound of {:?} could be raised to {absolute_lower} by the lower bound of {:?}",
-                self.signed,
-                self.absolute
-            );
-            return false;
-        }
-
-        true
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use pumpkin_core::state::State;
@@ -408,68 +293,5 @@ mod tests {
         state.propagate_to_fixed_point().expect("no empty domains");
 
         state.assert_bounds(signed, 3, 5);
-    }
-}
-
-#[cfg(test)]
-mod retention_tests {
-    use pumpkin_core::state::State;
-
-    use super::*;
-
-    #[test]
-    fn retention_fails_when_the_upper_bound_of_absolute_exceeds_the_greatest_absolute_value() {
-        let mut state = State::default();
-        let signed = state.new_interval_variable(-3, 5, None);
-        let absolute = state.new_interval_variable(0, 10, None);
-
-        let mut checker = AbsoluteValueChecker { signed, absolute };
-        let scope = Scope::from_variables([signed, absolute].iter());
-
-        assert!(!checker.check_retention(&scope, state.get_domains()));
-    }
-
-    #[test]
-    fn retention_fails_when_the_lower_bound_of_absolute_is_below_the_least_absolute_value() {
-        let mut state = State::default();
-        let signed = state.new_interval_variable(2, 5, None);
-        let absolute = state.new_interval_variable(0, 5, None);
-
-        let mut checker = AbsoluteValueChecker { signed, absolute };
-        let scope = Scope::from_variables([signed, absolute].iter());
-
-        assert!(!checker.check_retention(&scope, state.get_domains()));
-    }
-
-    #[test]
-    fn retention_fails_when_a_sign_fixed_signed_reaches_below_the_lower_bound_of_absolute() {
-        let mut state = State::default();
-        let signed = state.new_interval_variable(-5, -1, None);
-        let absolute = state.new_interval_variable(3, 5, None);
-
-        let mut checker = AbsoluteValueChecker { signed, absolute };
-        let scope = Scope::from_variables([signed, absolute].iter());
-
-        assert!(!checker.check_retention(&scope, state.get_domains()));
-    }
-
-    #[test]
-    fn retention_holds_at_the_fixpoint_of_the_propagator() {
-        let mut state = State::default();
-        let signed = state.new_interval_variable(-3, 5, None);
-        let absolute = state.new_interval_variable(0, 10, None);
-        let constraint_tag = state.new_constraint_tag();
-
-        let _ = state.add_propagator(AbsoluteValueArgs {
-            signed,
-            absolute,
-            constraint_tag,
-        });
-        state.propagate_to_fixed_point().expect("no empty domains");
-
-        let mut checker = AbsoluteValueChecker { signed, absolute };
-        let scope = Scope::from_variables([signed, absolute].iter());
-
-        assert!(checker.check_retention(&scope, state.get_domains()));
     }
 }

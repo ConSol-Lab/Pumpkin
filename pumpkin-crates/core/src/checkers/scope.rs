@@ -1,5 +1,10 @@
+use pumpkin_checking::VariableState;
+
 use crate::containers::HashMap;
+use crate::predicate;
+use crate::predicates::Predicate;
 use crate::propagation::LocalId;
+use crate::propagation::ReadDomains;
 use crate::variables::DomainId;
 
 /// The scope of a constraint is the collection of variables involved in the relation.
@@ -40,11 +45,23 @@ impl Scope {
         self.domains.iter().map(|(lid, did)| (*lid, *did))
     }
 
-    /// Returns a copy of this scope with the entry for `local_id` removed.
-    pub fn without(&self, local_id: LocalId) -> Scope {
-        let mut scope = self.clone();
-        let _ = scope.domains.remove(&local_id);
-        scope
+    /// The current domains of the variables in the scope, which is the state a retention checker
+    /// reads.
+    pub fn snapshot(&self, domains: &impl ReadDomains) -> VariableState<Predicate> {
+        let mut state = VariableState::default();
+
+        for (_, domain) in self.domains() {
+            let lower_bound = domains.lower_bound(&domain);
+            let upper_bound = domains.upper_bound(&domain);
+            let _ = state.apply(&predicate![domain >= lower_bound]);
+            let _ = state.apply(&predicate![domain <= upper_bound]);
+
+            for hole in domains.get_holes(&domain) {
+                let _ = state.apply(&predicate![domain != hole]);
+            }
+        }
+
+        state
     }
 }
 

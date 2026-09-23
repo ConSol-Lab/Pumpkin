@@ -974,8 +974,6 @@ dependencies = [
  "fnv",
  "fzn-rs",
  "pumpkin-checking",
- "pumpkin-core",
- "pumpkin-propagators",
  "thiserror",
 ]
 
@@ -985,6 +983,7 @@ version = "0.5.0"
 dependencies = [
  "dyn-clone",
  "fnv",
+ "log",
  "thiserror",
 ]
 

@@ -1,3 +1,4 @@
+use pumpkin_checking::checkers::MaximumChecker;
 use pumpkin_core::checkers::Scope;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::propagation::DomainEvents;
@@ -9,7 +10,6 @@ use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
-use crate::arithmetic::MaximumChecker;
 use crate::arithmetic::MaximumPropagator;
 use crate::arithmetic::maximum::Maximum;
 

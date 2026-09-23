@@ -1,17 +1,11 @@
 use std::fmt::Debug;
 
-use pumpkin_checking::AtomicConstraint;
-use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
-use pumpkin_checking::IntExt;
-use pumpkin_checking::VariableState;
-
-#[derive(Debug, Clone)]
-pub struct HypercubeLinearChecker<Atomic, Var> {
-    pub hypercube: Vec<Atomic>,
-    pub terms: Vec<Var>,
-    pub bound: i32,
-}
+use super::HypercubeLinearChecker;
+use crate::AtomicConstraint;
+use crate::CheckerVariable;
+use crate::InferenceChecker;
+use crate::IntExt;
+use crate::VariableState;
 
 impl<Atomic, Var> InferenceChecker<Atomic> for HypercubeLinearChecker<Atomic, Var>
 where

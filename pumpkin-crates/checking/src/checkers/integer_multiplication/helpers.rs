@@ -1,9 +1,9 @@
-use pumpkin_checking::IntExt;
+use crate::IntExt;
 
 /// Performs interval arithmetic multiplication.
 ///
 /// Returns [a_min .. a_max] * [b_min .. b_max], generalized to [`IntExt`] operands.
-pub(super) fn product_bound_ext(
+pub fn product_bound_ext(
     a_min: IntExt<i64>,
     a_max: IntExt<i64>,
     b_min: IntExt<i64>,
@@ -22,7 +22,7 @@ pub(super) fn product_bound_ext(
 /// If no propagation is possible, returns [`None`].
 ///
 /// Generalized to [`IntExt<i64>`] operands.
-pub(super) fn compute_quotient_bound_ext(
+pub fn compute_quotient_bound_ext(
     num_min: IntExt<i64>,
     num_max: IntExt<i64>,
     den_min: IntExt<i64>,

@@ -1,6 +1,6 @@
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::VariableState;
-use pumpkin_propagators::arithmetic::LinearLessOrEqualChecker;
+use pumpkin_checking::checkers::LinearLessOrEqualChecker;
 
 use crate::inferences::Fact;
 use crate::inferences::InvalidInference;

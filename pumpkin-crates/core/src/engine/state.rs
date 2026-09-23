@@ -1324,11 +1324,10 @@ mod tests {
     struct CountingChecker(std::sync::Arc<std::sync::atomic::AtomicUsize>);
 
     #[cfg(feature = "check-consistency")]
-    impl crate::checkers::RetentionChecker for CountingChecker {
+    impl pumpkin_checking::RetentionChecker<crate::predicates::Predicate> for CountingChecker {
         fn check_retention(
-            &mut self,
-            _: &crate::checkers::Scope,
-            _: crate::propagation::Domains<'_>,
+            &self,
+            _: &pumpkin_checking::VariableState<crate::predicates::Predicate>,
         ) -> bool {
             let _ = self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             true
@@ -1349,7 +1348,7 @@ mod tests {
     #[cfg(feature = "check-consistency")]
     impl<Checker> crate::propagation::PropagatorConstructor for CheckedPropagator<Checker>
     where
-        Checker: crate::checkers::RetentionChecker + Clone + 'static,
+        Checker: pumpkin_checking::RetentionChecker<crate::predicates::Predicate> + Clone + 'static,
     {
         type PropagatorImpl = CheckedPropagator<Checker>;
 
@@ -1384,7 +1383,7 @@ mod tests {
     #[cfg(feature = "check-consistency")]
     impl<Checker> crate::propagation::Propagator for CheckedPropagator<Checker>
     where
-        Checker: crate::checkers::RetentionChecker + Clone + 'static,
+        Checker: pumpkin_checking::RetentionChecker<crate::predicates::Predicate> + Clone + 'static,
     {
         fn name(&self) -> &str {
             "Checked"
@@ -1404,11 +1403,10 @@ mod tests {
     struct UnfinishedChecker;
 
     #[cfg(feature = "check-consistency")]
-    impl crate::checkers::RetentionChecker for UnfinishedChecker {
+    impl pumpkin_checking::RetentionChecker<crate::predicates::Predicate> for UnfinishedChecker {
         fn check_retention(
-            &mut self,
-            _: &crate::checkers::Scope,
-            _: crate::propagation::Domains<'_>,
+            &self,
+            _: &pumpkin_checking::VariableState<crate::predicates::Predicate>,
         ) -> bool {
             false
         }

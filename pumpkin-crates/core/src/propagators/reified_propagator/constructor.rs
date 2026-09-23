@@ -1,3 +1,6 @@
+use pumpkin_checking::checkers::ReifiedChecker;
+use pumpkin_checking::checkers::ReifiedRetentionChecker;
+
 use crate::checkers::ScopeItem;
 use crate::propagation::DomainEvents;
 use crate::propagation::Propagator;
@@ -5,9 +8,7 @@ use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorSpec;
 use crate::propagation::RuntimeCheckers;
-use crate::propagators::ReifiedChecker;
 use crate::propagators::ReifiedPropagator;
-use crate::propagators::ReifiedRetentionChecker;
 use crate::variables::Literal;
 
 /// A [`PropagatorConstructor`] for the reified propagator.
@@ -77,7 +78,6 @@ where
                 ReifiedRetentionChecker {
                     inner: checker,
                     reification_literal,
-                    reification_literal_id,
                 },
             );
         }

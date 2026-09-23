@@ -1,6 +1,6 @@
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::VariableState;
-use pumpkin_core::propagators::nogoods::NogoodChecker;
+use pumpkin_checking::checkers::NogoodChecker;
 
 use crate::inferences::Fact;
 use crate::inferences::InvalidInference;

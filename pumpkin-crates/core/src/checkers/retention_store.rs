@@ -1,8 +1,10 @@
-use crate::checkers::BoxedRetentionChecker;
+use pumpkin_checking::BoxedRetentionChecker;
+
 use crate::checkers::Scope;
 use crate::containers::KeyedBitSet;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
+use crate::predicates::Predicate;
 use crate::propagation::Domains;
 use crate::propagation::PropagatorId;
 use crate::variables::DomainId;
@@ -30,7 +32,7 @@ pub struct RetentionCheckerStore {
 #[derive(Clone, Debug)]
 struct Entry {
     scope: Scope,
-    checker: BoxedRetentionChecker,
+    checker: BoxedRetentionChecker<Predicate>,
     /// The propagator whose rule the checker describes.
     propagator: PropagatorId,
 }
@@ -71,7 +73,7 @@ impl RetentionCheckerStore {
     pub fn register(
         &mut self,
         scope: Scope,
-        checker: BoxedRetentionChecker,
+        checker: BoxedRetentionChecker<Predicate>,
         propagator: PropagatorId,
     ) {
         if self.is_excluded(propagator) {
@@ -114,20 +116,20 @@ impl RetentionCheckerStore {
     pub fn run(
         &mut self,
         coverage: RetentionCoverage,
-        mut domains: Domains<'_>,
+        domains: Domains<'_>,
     ) -> Result<(), RetentionFailure> {
         match coverage {
             RetentionCoverage::Notified => {
                 while let Some(checker_id) = self.queue.pop() {
                     assert!(self.enqueued.remove(checker_id));
-                    self.check(checker_id, domains.reborrow())?;
+                    self.check(checker_id, &domains)?;
                 }
             }
             RetentionCoverage::All => {
                 self.clear_queue();
 
                 for index in 0..self.store.len() {
-                    self.check(CheckerId::create_from_index(index), domains.reborrow())?;
+                    self.check(CheckerId::create_from_index(index), &domains)?;
                 }
             }
         }
@@ -141,14 +143,13 @@ impl RetentionCheckerStore {
         self.enqueued.clear();
     }
 
-    fn check(
-        &mut self,
-        checker_id: CheckerId,
-        domains: Domains<'_>,
-    ) -> Result<(), RetentionFailure> {
-        let entry = &mut self.store[checker_id];
+    fn check(&self, checker_id: CheckerId, domains: &Domains<'_>) -> Result<(), RetentionFailure> {
+        let entry = &self.store[checker_id];
 
-        if entry.checker.check_retention(&entry.scope, domains) {
+        if entry
+            .checker
+            .check_retention(&entry.scope.snapshot(domains))
+        {
             return Ok(());
         }
 

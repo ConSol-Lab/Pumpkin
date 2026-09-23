@@ -1,6 +1,8 @@
 use std::cmp::Reverse;
 use std::cmp::min;
 
+use pumpkin_checking::checkers::DisjunctiveCheckerTask;
+use pumpkin_checking::checkers::DisjunctiveEdgeFindingChecker;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::predicate;
@@ -24,7 +26,6 @@ use pumpkin_core::variables::IntegerVariable;
 use super::disjunctive_task::ArgDisjunctiveTask;
 use super::disjunctive_task::DisjunctiveTask;
 use super::theta_lambda_tree::ThetaLambdaTree;
-use crate::disjunctive::checker::DisjunctiveEdgeFindingChecker;
 use crate::propagators::disjunctive::DisjunctiveEdgeFinding;
 
 /// [`Propagator`] responsible for using disjunctive reasoning to propagate the [Disjunctive](https://sofdem.github.io/gccat/gccat/Cdisjunctive.html) constraint.
@@ -106,7 +107,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
             DisjunctiveEdgeFindingChecker {
                 tasks: tasks
                     .iter()
-                    .map(|task| ArgDisjunctiveTask {
+                    .map(|task| DisjunctiveCheckerTask {
                         start_time: task.start_time.clone(),
                         processing_time: task.processing_time,
                     })

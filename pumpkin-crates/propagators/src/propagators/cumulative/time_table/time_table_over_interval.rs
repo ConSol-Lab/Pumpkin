@@ -1,5 +1,7 @@
 use std::rc::Rc;
 
+use pumpkin_checking::checkers::CheckerTask;
+use pumpkin_checking::checkers::TimeTableChecker;
 use pumpkin_core::asserts::pumpkin_assert_extreme;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
@@ -34,8 +36,6 @@ use crate::cumulative::ResourceProfile;
 use crate::cumulative::Task;
 use crate::cumulative::UpdatableStructures;
 use crate::cumulative::options::CumulativePropagatorOptions;
-use crate::cumulative::time_table::CheckerTask;
-use crate::cumulative::time_table::TimeTableChecker;
 #[cfg(doc)]
 use crate::cumulative::time_table::TimeTablePerPointPropagator;
 use crate::cumulative::util::create_tasks;

@@ -1,3 +1,5 @@
+use pumpkin_checking::checkers::CheckerTask;
+use pumpkin_checking::checkers::TimeTableChecker;
 use std::fmt::Debug;
 use std::ops::Range;
 use std::rc::Rc;
@@ -30,8 +32,6 @@ use super::removal;
 use crate::cumulative::options::CumulativePropagatorOptions;
 use crate::cumulative::time_table::create_time_table_over_interval_from_scratch;
 use crate::cumulative::time_table::propagate_from_scratch_time_table_interval;
-use crate::cumulative::time_table::CheckerTask;
-use crate::cumulative::time_table::TimeTableChecker;
 use crate::cumulative::util::check_bounds_equal_at_propagation;
 use crate::cumulative::util::create_tasks;
 use crate::cumulative::util::register_tasks;
