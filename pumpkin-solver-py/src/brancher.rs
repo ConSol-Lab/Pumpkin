@@ -13,7 +13,7 @@ use pumpkin_solver::core::variables::DomainId;
 use crate::variables::IntExpression;
 
 #[derive(Debug)]
-pub struct PythonBrancher {
+pub(crate) struct PythonBrancher {
     warm_start: WarmStart<AffineView<DomainId>>,
     default_brancher: DefaultBrancher,
 }
