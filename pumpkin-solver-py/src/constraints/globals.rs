@@ -26,7 +26,7 @@ macro_rules! python_constraint {
         }
 
         impl $name {
-            pub fn post(
+            pub(crate) fn post(
                 self,
                 solver: &mut pumpkin_solver::Solver,
             ) {
@@ -36,7 +36,7 @@ macro_rules! python_constraint {
                 ).post(solver)
             }
 
-            pub fn implied_by(
+            pub(crate) fn implied_by(
                 self,
                 solver: &mut pumpkin_solver::Solver,
                 reification_literal: pumpkin_solver::core::variables::Literal,
