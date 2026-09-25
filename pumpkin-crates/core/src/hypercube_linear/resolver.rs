@@ -820,64 +820,12 @@ impl HypercubeLinearResolver {
             .scale
             .abs();
 
-        let mut linear_terms = self
-            .state
-            .conflicting_linear
-            .terms()
-            .map(|term| {
-                term.scale
-                    .checked_mul(scale_conflict)
-                    .ok_or(FourierError::IntegerOverflow)
-                    .map(|scaled_weight| (scaled_weight, term.inner))
-            })
-            .chain(
-                tightly_propagating_reason
-                    .linear
-                    .terms()
-                    .map(|reason_term| {
-                        reason_term
-                            .scale
-                            .checked_mul(scale_reason)
-                            .ok_or(FourierError::IntegerOverflow)
-                            .map(|scaled_weight| (scaled_weight, reason_term.inner))
-                    }),
-            )
-            .collect::<Result<Vec<(_, _)>, _>>()?;
-
-        let mut linear_rhs = self
-            .state
-            .conflicting_linear
-            .bound()
-            .checked_add(
-                tightly_propagating_reason
-                    .linear
-                    .bound()
-                    .checked_mul(scale_reason)
-                    .ok_or(FourierError::IntegerOverflow)?,
-            )
-            .ok_or(FourierError::IntegerOverflow)?;
-
-        // Normalize the linear component of the hypercube linear to hopefully avoid overflows in
-        // the future.
-        let normalize_by = linear_terms
-            .iter()
-            .map(|(weight, _)| *weight)
-            .chain(std::iter::once(linear_rhs))
-            .reduce(gcd)
-            .unwrap_or(linear_rhs);
-
-        linear_terms.iter_mut().for_each(|(weight, _)| {
-            *weight = <i32 as NumExt>::div_ceil(*weight, normalize_by);
-        });
-        linear_rhs = <i32 as NumExt>::div_ceil(linear_rhs, normalize_by);
-
-        self.state.conflicting_linear = LinearInequality::new(
-            linear_terms
-                .into_iter()
-                .map(|(weight, domain)| (NonZero::new(weight).unwrap(), domain)),
-            linear_rhs,
-        )
-        .ok_or(FourierError::ResultOfEliminationTriviallySatisfiable)?;
+        self.state.conflicting_linear = fourier_combination(
+            &self.state.conflicting_linear,
+            scale_conflict,
+            &tightly_propagating_reason.linear,
+            scale_reason,
+        )?;
 
         Ok(())
     }
@@ -1100,6 +1048,67 @@ fn linear_propagates_at(
     }
 
     false
+}
+
+/// Computes `scale_conflict * conflict + scale_reason * reason`, normalized by the greatest common
+/// divisor of its weights and bound.
+///
+/// Both scales are positive, and they are chosen such that the pivot domain is eliminated.
+fn fourier_combination(
+    conflict: &LinearInequality,
+    scale_conflict: i32,
+    reason: &LinearInequality,
+    scale_reason: i32,
+) -> Result<LinearInequality, FourierError> {
+    let scale_terms = |linear: &LinearInequality, scale: i32| {
+        linear
+            .terms()
+            .map(move |term| {
+                term.scale
+                    .checked_mul(scale)
+                    .ok_or(FourierError::IntegerOverflow)
+                    .map(|scaled_weight| (scaled_weight, term.inner))
+            })
+            .collect::<Result<Vec<_>, _>>()
+    };
+
+    let mut linear_terms = scale_terms(conflict, scale_conflict)?;
+    linear_terms.extend(scale_terms(reason, scale_reason)?);
+
+    // Both sides of both inequalities are scaled.
+    let mut linear_rhs = conflict
+        .bound()
+        .checked_mul(scale_conflict)
+        .ok_or(FourierError::IntegerOverflow)?
+        .checked_add(
+            reason
+                .bound()
+                .checked_mul(scale_reason)
+                .ok_or(FourierError::IntegerOverflow)?,
+        )
+        .ok_or(FourierError::IntegerOverflow)?;
+
+    // Normalize the linear component of the hypercube linear to hopefully avoid overflows in
+    // the future.
+    let normalize_by = linear_terms
+        .iter()
+        .map(|(weight, _)| *weight)
+        .chain(std::iter::once(linear_rhs))
+        .reduce(gcd)
+        .unwrap_or(linear_rhs);
+
+    linear_terms.iter_mut().for_each(|(weight, _)| {
+        *weight = <i32 as NumExt>::div_ceil(*weight, normalize_by);
+    });
+    linear_rhs = <i32 as NumExt>::div_ceil(linear_rhs, normalize_by);
+
+    LinearInequality::new(
+        linear_terms
+            .into_iter()
+            .map(|(weight, domain)| (NonZero::new(weight).unwrap(), domain)),
+        linear_rhs,
+    )
+    .ok_or(FourierError::ResultOfEliminationTriviallySatisfiable)
 }
 
 /// Returns true if Fourier resolution of the conflict with the reason, without tightening the
@@ -1457,5 +1466,40 @@ mod tests {
     #[test]
     fn bound_tightened_by_a_hole_needs_weakening() {
         assert!(!fourier_resolvent_is_conflicting(-1, -1, 1, 3, -3, -1));
+    }
+
+    /// `2 * (x + y <= 5) + 1 * (-2x + z <= -7)` is `2y + z <= 3`; both bounds are scaled.
+    #[test]
+    fn fourier_combination_scales_both_bounds() {
+        let x = DomainId::new(0);
+        let y = DomainId::new(1);
+        let z = DomainId::new(2);
+
+        let result = fourier_combination(
+            &linear_inequality!(1 x + 1 y <= 5),
+            2,
+            &linear_inequality!(-2 x + 1 z <= -7),
+            1,
+        );
+
+        assert_eq!(result.ok(), Some(linear_inequality!(2 y + 1 z <= 3)));
+    }
+
+    /// `4 * (2x - 2y <= -6) + 2 * (-4x + 4z <= 0)` is `-8y + 8z <= -24`, which normalizes to
+    /// `-y + z <= -3`.
+    #[test]
+    fn fourier_combination_normalizes_by_the_gcd() {
+        let x = DomainId::new(0);
+        let y = DomainId::new(1);
+        let z = DomainId::new(2);
+
+        let result = fourier_combination(
+            &linear_inequality!(2 x + -2 y <= -6),
+            4,
+            &linear_inequality!(-4 x + 4 z <= 0),
+            2,
+        );
+
+        assert_eq!(result.ok(), Some(linear_inequality!(-1 y + 1 z <= -3)));
     }
 }
