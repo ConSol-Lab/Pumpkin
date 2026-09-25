@@ -899,4 +899,49 @@ mod tests {
         assert!(state.propagate_to_fixed_point().is_ok());
         assert_eq!(state.upper_bound(x), 10);
     }
+
+    #[test]
+    fn explanation_of_falsified_hypercube_predicate_includes_bound_of_its_variable() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(0, 10, None);
+        let y = state.new_interval_variable(2, 10, None);
+
+        // [x <= 5] /\ [y >= 2] -> x + y <= 4. Once x >= 3, the slack is 4 - 3 - 2 = -1, so
+        // [x <= 5] is propagated to false. The lower bound of x contributes to that slack.
+        let hypercube =
+            Hypercube::new([predicate![x <= 5], predicate![y >= 2]]).expect("not inconsistent");
+        let linear = LinearInequality::new(
+            [(NonZero::new(1).unwrap(), x), (NonZero::new(1).unwrap(), y)],
+            4,
+        )
+        .expect("not trivially satisfiable");
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(HypercubeLinearConstructor {
+            hypercube,
+            linear,
+            constraint_tag,
+        });
+        assert!(state.propagate_to_fixed_point().is_ok());
+
+        state.new_checkpoint();
+        let _ = state.post(predicate![x >= 3]).expect("domain not empty");
+        assert!(state.propagate_to_fixed_point().is_ok());
+        assert_eq!(state.lower_bound(x), 6);
+
+        let mut reason = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![x >= 6],
+            &mut reason,
+            crate::state::CurrentNogood::empty(),
+        );
+        reason.sort();
+        // A bound can appear both in the hypercube and as the bound of its term.
+        reason.dedup();
+
+        let mut expected = vec![predicate![x >= 3], predicate![y >= 2]];
+        expected.sort();
+        assert_eq!(reason, expected);
+    }
 }

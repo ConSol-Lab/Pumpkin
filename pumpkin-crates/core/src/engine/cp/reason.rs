@@ -225,6 +225,11 @@ fn convert_hl_to_clause(
 
         let unsatisfied_predicate = unsatisfied_hypercube_predicates[0];
 
+        // Either the unassigned predicate is propagated to false because the hypercube linear
+        // slack is negative, or the linear propagates a weaker bound on the term of its domain.
+        let propagates_unsatisfied_predicate_to_false =
+            predicate_to_explain == !unsatisfied_predicate;
+
         // Add all true predicates in the hypercube.
         destination_buffer.extend(
             hypercube
@@ -237,7 +242,21 @@ fn convert_hl_to_clause(
             linear
                 .terms()
                 .filter_map(|term| {
-                    if term.inner == predicate_to_explain.get_domain() {
+                    let excluded = if propagates_unsatisfied_predicate_to_false {
+                        // The term contributes to the slack through its bound in the state,
+                        // unless the unassigned predicate bounds it from below; then it
+                        // contributes through that predicate, which is not part of the reason.
+                        term.inner == unsatisfied_predicate.get_domain()
+                            && ((term.scale.is_positive()
+                                && unsatisfied_predicate.is_lower_bound_predicate())
+                                || (term.scale.is_negative()
+                                    && unsatisfied_predicate.is_upper_bound_predicate()))
+                    } else {
+                        // The propagated term is explained by the bounds of the other terms.
+                        term.inner == predicate_to_explain.get_domain()
+                    };
+
+                    if excluded {
                         None
                     } else {
                         let lb = context
