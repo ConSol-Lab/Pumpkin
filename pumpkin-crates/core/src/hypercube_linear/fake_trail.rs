@@ -83,10 +83,13 @@ impl FakeTrail {
 
 impl TrailView for FakeTrail {
     fn trail_position_of_predicate(&self, predicate: Predicate) -> Option<usize> {
-        self.assignments
-            .iter()
-            .find(|a| a.predicate == predicate)
-            .map(|a| a.trail_position)
+        if let Some(assignment) = self.assignments.iter().find(|a| a.predicate == predicate) {
+            return Some(assignment.trail_position);
+        }
+
+        // Otherwise, the first trail position at which the predicate is implied by the bounds.
+        (0..=self.current_trail_position())
+            .find(|&trail_position| self.truth_value_at(predicate, trail_position) == Some(true))
     }
 
     fn checkpoint_for_predicate(&self, predicate: Predicate) -> Option<usize> {
@@ -125,6 +128,8 @@ impl TrailView for FakeTrail {
                 lb >= rhs
             } else if predicate.is_upper_bound_predicate() {
                 ub <= rhs
+            } else if predicate.is_not_equal_predicate() {
+                rhs < lb || rhs > ub
             } else {
                 false
             };
@@ -159,6 +164,12 @@ impl TrailView for FakeTrail {
             .expect("no assignment at trail position")
     }
 
+    fn is_decision(&self, trail_position: usize) -> bool {
+        !self
+            .reasons
+            .contains_key(&self.predicate_at_trail_position(trail_position))
+    }
+
     fn truth_value_at(&self, predicate: Predicate, trail_position: usize) -> Option<bool> {
         let domain = predicate.get_domain();
         let rhs = predicate.get_right_hand_side();
@@ -177,6 +188,14 @@ impl TrailView for FakeTrail {
             if ub <= rhs {
                 Some(true)
             } else if lb > rhs {
+                Some(false)
+            } else {
+                None
+            }
+        } else if predicate.is_not_equal_predicate() {
+            if rhs < lb || rhs > ub {
+                Some(true)
+            } else if lb == rhs && ub == rhs {
                 Some(false)
             } else {
                 None

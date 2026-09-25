@@ -34,6 +34,7 @@ use crate::predicates::Predicate;
 #[cfg(feature = "hl-checks")]
 use crate::proof::ConstraintTag;
 use crate::propagation::ExplanationContext;
+use crate::pumpkin_assert_simple;
 use crate::state::Conflict;
 use crate::state::EmptyDomainConflict;
 use crate::state::State;
@@ -51,6 +52,7 @@ create_statistics_struct!(ResolverStatistics {
     num_learned_hls: usize,
     num_propositional_resolutions: usize,
     num_skipped_propositional_resolutions: usize,
+    num_resolutions_on_decisions: usize,
 });
 
 #[derive(Clone, Debug)]
@@ -283,6 +285,11 @@ impl HypercubeLinearResolver {
                 continue;
             }
 
+            if trail.is_decision(trail_position) {
+                self.resolve_on_decision(trail, trail_position, pivot);
+                continue;
+            }
+
             self.state.proof_file.borrow_mut().intermediate_deduction(
                 self.state
                     .working_hypercube
@@ -298,6 +305,52 @@ impl HypercubeLinearResolver {
             self.resolve(trail, trail_position, pivot, explanation);
             self.simplify_conflict();
         }
+    }
+
+    /// Handles a pivot that is implied by the decision at `trail_position`, which has no reason.
+    ///
+    /// This happens when the conflict holds several predicates over the decision variable that
+    /// together do not propagate at an earlier checkpoint, e.g. `[x != 3]` and `[x <= 7]` implied
+    /// by the decision `[x <= 2]`, or both bounds implied by the decision `[x == v]`. The
+    /// predicates at the conflict checkpoint that the decision implies are replaced by the
+    /// decision itself. The resulting hypercube implies the old one, so the constraint is
+    /// weaker and still implied. The decision is then the only predicate over its domain at the
+    /// conflict checkpoint, as in a clause that has the decision as its unique implication
+    /// point.
+    fn resolve_on_decision(
+        &mut self,
+        trail: &impl TrailView,
+        trail_position: usize,
+        pivot: Predicate,
+    ) {
+        let decision = trail.predicate_at_trail_position(trail_position);
+        trace!("  => {pivot} is implied by the decision {decision}");
+        pumpkin_assert_simple!(decision.implies(pivot));
+
+        self.statistics.num_resolutions_on_decisions += 1;
+
+        // A pivot that contributes to the linear is first moved into the hypercube. The pivot is
+        // the current bound of its domain, so this does not change the slack.
+        let pivot_contributes_to_linear = self
+            .state
+            .conflicting_linear
+            .term_for_domain(pivot.get_domain())
+            .is_some_and(|term| predicate_applies_to_term(pivot, term));
+        if pivot_contributes_to_linear && let Some(bound) = BoundPredicate::new(pivot) {
+            self.state.conflicting_linear = std::mem::take(&mut self.state.conflicting_linear)
+                .weaken_to_zero(bound)
+                .expect("weakening the conflict does not make it trivially satisfiable");
+        }
+
+        self.state
+            .hypercube_predicates_on_conflict_dl
+            .retain(|p| !decision.implies(p));
+        self.state
+            .predicates_to_explain
+            .retain(|p| !decision.implies(p));
+        self.state
+            .hypercube_predicates_on_conflict_dl
+            .push(decision, trail);
     }
 
     /// Simplify the conflicting hypercube linear given any equalities in the conflicting hypercube.
@@ -1466,6 +1519,35 @@ mod tests {
     #[test]
     fn bound_tightened_by_a_hole_needs_weakening() {
         assert!(!fourier_resolvent_is_conflicting(-1, -1, 1, 3, -3, -1));
+    }
+
+    /// The conflict holds `[x != 3]` and `[x <= 7]`, which are both implied by the decision
+    /// `[x <= 2]` and together do not propagate at DL 1. They are replaced by the decision, so the
+    /// learned clause `[y >= 1] /\ [x <= 2] -> false` propagates `[x >= 3]` at DL 1.
+    #[test_log::test]
+    fn predicates_implied_by_a_decision_are_replaced_by_the_decision() {
+        let mut trail_builder = FakeTrail::builder();
+
+        let x = trail_builder.domain(0, 10);
+        let y = trail_builder.domain(0, 10);
+
+        let mut trail = trail_builder
+            .decide(predicate![y >= 1])
+            .decide(predicate![x <= 2])
+            .build();
+
+        let mut resolver = HypercubeLinearResolver::default();
+        let result = resolver.run_resolution(
+            &mut trail,
+            [predicate![y >= 1], predicate![x != 3], predicate![x <= 7]],
+            LinearInequality::trivially_false(),
+        );
+
+        let expected_hypercube =
+            Hypercube::new([predicate![y >= 1], predicate![x <= 2]]).expect("not inconsistent");
+
+        assert_eq!(result.hypercube, expected_hypercube);
+        assert!(result.linear.is_trivially_false());
     }
 
     /// `2 * (x + y <= 5) + 1 * (-2x + z <= -7)` is `2y + z <= 3`; both bounds are scaled.

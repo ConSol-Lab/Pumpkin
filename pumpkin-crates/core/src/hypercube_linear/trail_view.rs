@@ -30,6 +30,9 @@ pub(crate) trait TrailView {
     /// predicate is a direct trail entry or an implied predicate.
     fn predicate_at_trail_position(&self, trail_position: usize) -> Predicate;
 
+    /// Returns true if the entry at `trail_position` is a decision, i.e. it has no reason.
+    fn is_decision(&self, trail_position: usize) -> bool;
+
     /// Evaluate the predicate at the given trail position.
     fn truth_value_at(&self, predicate: Predicate, trail_position: usize) -> Option<bool>;
 
@@ -109,6 +112,13 @@ impl TrailView for State {
 
     fn predicate_at_trail_position(&self, trail_position: usize) -> Predicate {
         self.assignments.get_trail_entry(trail_position).predicate
+    }
+
+    fn is_decision(&self, trail_position: usize) -> bool {
+        self.assignments
+            .get_trail_entry(trail_position)
+            .reason
+            .is_none()
     }
 
     fn truth_value_at(&self, predicate: Predicate, trail_position: usize) -> Option<bool> {
