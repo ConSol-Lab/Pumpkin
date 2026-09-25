@@ -353,14 +353,12 @@ impl Propagator for HypercubeLinearPropagator {
                     let bound_in_hypercube = self.hypercube.lower_bound(&term_to_propagate);
                     let bound_i64 = slack + i64::from(i32::max(bound_in_state, bound_in_hypercube));
 
-                    let bound = match i32::try_from(bound_i64) {
-                        Ok(bound) => bound,
-                        Err(_) if bound_i64.is_negative() => todo!(
-                            "wanting to tighten the upper bound to a value smaller than i32::MIN"
-                        ),
-                        // If we want to set the upper bound to a value larger than i32::MAX,
-                        // it can never tighten the existing bound of `term_to_propagate`.
-                        Err(_) => return Ok(()),
+                    // The slack is at least 0 and both bounds are at least i32::MIN, so the bound
+                    // can only be out of range by exceeding i32::MAX. Then it can never tighten
+                    // the existing bound of `term_to_propagate`.
+                    let Ok(bound) = i32::try_from(bound_i64) else {
+                        pumpkin_assert_simple!(bound_i64 > i64::from(i32::MAX));
+                        return Ok(());
                     };
 
                     context.post(predicate![term_to_propagate <= bound], 0_u64)?;
