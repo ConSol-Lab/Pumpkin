@@ -748,8 +748,12 @@ impl HypercubeLinearResolver {
         trace!("  - slack conflict: {conflict_slack}");
         trace!("  - slack b: {reason_slack}");
 
-        let tightly_propagating_reason = if i64::from(weight_in_reason) * conflict_slack.abs()
-            > i64::from(weight_in_conflicting) * reason_slack
+        // The resolvent `|w_r| * conflict + |w_c| * reason` stays conflicting if
+        // `|w_r| * |slack_c| > |w_c| * slack_r`. In that case the reason does not have to be
+        // tightened. The weights have opposite signs, so the comparison needs their absolute
+        // values.
+        let tightly_propagating_reason = if i64::from(weight_in_reason.abs()) * conflict_slack.abs()
+            > i64::from(weight_in_conflicting.abs()) * reason_slack
         {
             Cow::Borrowed(explanation)
         } else {
