@@ -64,6 +64,10 @@ pub struct HypercubeLinearResolver {
     /// True if the names are written to the trace, false if not.
     logged_variable_names: bool,
 
+    /// True if the reason is used without tightening when Fourier resolution with it already
+    /// yields a conflicting constraint; false if the reason is always tightened.
+    skip_unneeded_weakening: bool,
+
     /// All learned constraints with their constraint tag.
     ///
     /// Used to detect when re-learning the same constraint again.
@@ -79,9 +83,17 @@ impl HypercubeLinearResolver {
             prop_resolver: Box::new(StandardResH::default()),
             statistics: Default::default(),
             logged_variable_names: false,
+            skip_unneeded_weakening: false,
             #[cfg(feature = "hl-checks")]
             learned_constraints: Default::default(),
         }
+    }
+
+    /// Sets whether the reason is used without tightening when Fourier resolution with it
+    /// already yields a conflicting constraint. By default, the reason is always tightened.
+    pub fn with_skip_unneeded_weakening(mut self, skip_unneeded_weakening: bool) -> Self {
+        self.skip_unneeded_weakening = skip_unneeded_weakening;
+        self
     }
 }
 
@@ -748,13 +760,29 @@ impl HypercubeLinearResolver {
         trace!("  - slack conflict: {conflict_slack}");
         trace!("  - slack b: {reason_slack}");
 
-        // The resolvent `|w_r| * conflict + |w_c| * reason` stays conflicting if
-        // `|w_r| * |slack_c| > |w_c| * slack_r`. In that case the reason does not have to be
-        // tightened. The weights have opposite signs, so the comparison needs their absolute
-        // values.
-        let tightly_propagating_reason = if i64::from(weight_in_reason.abs()) * conflict_slack.abs()
-            > i64::from(weight_in_conflicting.abs()) * reason_slack
-        {
+        // The bound on the pivot domain that the conflict uses.
+        let conflict_bound = if weight_in_conflicting.is_positive() {
+            trail.lower_bound_at_trail_position(pivot.get_domain(), trail_position)
+        } else {
+            trail.upper_bound_at_trail_position(pivot.get_domain(), trail_position)
+        };
+        let reason_pivot_term_lower_bound = affine_lower_bound_at(
+            trail,
+            pivot.get_domain().scaled(weight_in_reason),
+            trail_position,
+        );
+
+        let skip_weakening = self.skip_unneeded_weakening
+            && fourier_resolvent_is_conflicting(
+                weight_in_conflicting,
+                conflict_slack,
+                weight_in_reason,
+                reason_slack,
+                reason_pivot_term_lower_bound,
+                conflict_bound,
+            );
+
+        let tightly_propagating_reason = if skip_weakening {
             Cow::Borrowed(explanation)
         } else {
             compute_tightly_propagating_reason(
@@ -1074,6 +1102,32 @@ fn linear_propagates_at(
     false
 }
 
+/// Returns true if Fourier resolution of the conflict with the reason, without tightening the
+/// reason first, yields a linear that is still conflicting.
+///
+/// The resolvent is `|w_r| * conflict + |w_c| * reason`, where `w_c` and `w_r` are the weights
+/// of the pivot domain `x` in the conflict and the reason. Its slack is
+/// `|w_r| * slack_c + |w_c| * (slack_r + lb(w_r * x) - w_r * d)`, where `d` is the bound on `x`
+/// that the conflict uses; the second term is the slack of the reason with `x` fixed at `d`.
+/// This accounts for rounding in the propagation of the reason and for holes that tightened the
+/// bound of `x` beyond the propagated bound.
+fn fourier_resolvent_is_conflicting(
+    weight_in_conflicting: i32,
+    conflict_slack: i64,
+    weight_in_reason: i32,
+    reason_slack: i64,
+    reason_pivot_term_lower_bound: i32,
+    conflict_bound: i32,
+) -> bool {
+    let reason_slack_at_conflict_bound = reason_slack + i64::from(reason_pivot_term_lower_bound)
+        - i64::from(weight_in_reason) * i64::from(conflict_bound);
+
+    let resolvent_slack = i64::from(weight_in_reason.abs()) * conflict_slack
+        + i64::from(weight_in_conflicting.abs()) * reason_slack_at_conflict_bound;
+
+    resolvent_slack < 0
+}
+
 /// Use weakening to obtain a hypercube linear that propagates the given term without any rounding.
 fn compute_tightly_propagating_reason<'expl>(
     trail: &impl TrailView,
@@ -1363,5 +1417,45 @@ mod tests {
             Hypercube::from_single_predicate(predicate![x >= 2]),
         );
         assert_eq!(result.linear, linear_inequality!(2 y + 3 z <= 18));
+    }
+
+    /// Reason `2x <= 1` with `x` in `[0, 5]` propagates `x <= 0` with rounding; conflict
+    /// `-3x <= -1` has slack -1. The resolvent `2 * (-3x <= -1) + 3 * (2x <= 1)` is `0 <= 1`, so
+    /// the reason has to be tightened.
+    #[test]
+    fn rounded_upper_bound_propagation_needs_weakening() {
+        assert!(!fourier_resolvent_is_conflicting(-3, -1, 2, 1, 0, 0));
+    }
+
+    /// Reason `x + y <= 10` with `x` in `[0, 20]` and `y >= 0` propagates `x <= 10` exactly, with
+    /// slack 10; conflict `-x <= -11` has slack -1. The resolvent is `y <= -1`, which is
+    /// conflicting, although the reason slack is large.
+    #[test]
+    fn exact_upper_bound_propagation_with_large_slack_does_not_need_weakening() {
+        assert!(fourier_resolvent_is_conflicting(-1, -1, 1, 10, 0, 10));
+    }
+
+    /// Reason `-x + y <= -10` with `x` in `[0, 20]` and `y >= 0` propagates `x >= 10` exactly,
+    /// with slack 10 and `lb(-x) = -20`; conflict `x <= 9` has slack -1. The resolvent is
+    /// `y <= -1`, which is conflicting.
+    #[test]
+    fn exact_lower_bound_propagation_does_not_need_weakening() {
+        assert!(fourier_resolvent_is_conflicting(1, -1, -1, 10, -20, 10));
+    }
+
+    /// Reason `-2x <= -1` with `x` in `[0, 5]` propagates `x >= 1` with rounding, with slack 9 and
+    /// `lb(-2x) = -10`; conflict `3x <= 2` has slack -1. The resolvent
+    /// `2 * (3x <= 2) + 3 * (-2x <= -1)` is `0 <= 1`, so the reason has to be tightened.
+    #[test]
+    fn rounded_lower_bound_propagation_needs_weakening() {
+        assert!(!fourier_resolvent_is_conflicting(3, -1, -2, 9, -10, 1));
+    }
+
+    /// Reason `-x1 + x3 + x5 <= 0` propagates `x3 <= 0` with slack 3 and `lb(x3) = -3`; a hole at 0
+    /// lowers the upper bound to -1, which the conflict `x1 - x3 - x5 <= 0` uses, with slack -1.
+    /// The resolvent is `0 <= 0`, so the reason cannot be used as is.
+    #[test]
+    fn bound_tightened_by_a_hole_needs_weakening() {
+        assert!(!fourier_resolvent_is_conflicting(-1, -1, 1, 3, -3, -1));
     }
 }

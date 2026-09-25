@@ -413,6 +413,13 @@ struct Args {
     /// Ignored if not using hypercube linear resolver or not logging a proof.
     #[arg(long = "hl-proof-with-intermediates", default_value_t)]
     hl_proof_with_intermediates: bool,
+
+    /// Skip tightening the reason in a Fourier resolution step if the resolution already yields a
+    /// conflicting constraint. By default, the reason is always tightened.
+    ///
+    /// Ignored if not using hypercube linear resolver.
+    #[arg(long = "hl-skip-unneeded-weakening", default_value_t)]
+    hl_skip_unneeded_weakening: bool,
     /// The priority of the nogood propagator.
     #[arg(long = "nogood-priority", value_enum, default_value_t)]
     nogood_propagator_priority: Priority,
@@ -761,7 +768,8 @@ fn run() -> PumpkinResult<()> {
                         verbose: args.verbose.log_level_filter() >= LevelFilter::Info,
                         use_hypercube_linear: true,
                     },
-                    HypercubeLinearResolver::new(trace),
+                    HypercubeLinearResolver::new(trace)
+                        .with_skip_unneeded_weakening(args.hl_skip_unneeded_weakening),
                 )?
             }
         },
