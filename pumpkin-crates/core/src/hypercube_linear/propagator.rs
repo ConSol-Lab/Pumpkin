@@ -433,20 +433,34 @@ impl Propagator for HypercubeLinearPropagator {
                 .linear
                 .term_for_domain(unassigned_predicate.get_domain())
             {
+                // As in the incremental propagation, the weaker bound only holds if the
+                // unassigned predicate bounds the term from below; otherwise the negation of the
+                // predicate does not bound the term from above.
+                if !could_propagate_weaker_predicate(unassigned_predicate, term) {
+                    return Ok(());
+                }
+
                 let bound_in_state = context.lower_bound(&term);
                 let bound_in_hypercube = self.hypercube.lower_bound(&term);
                 let bound_i64 = slack + i64::from(i32::max(bound_in_state, bound_in_hypercube));
-                let new_upper_bound = match i32::try_from(slack + bound_i64) {
-                    Ok(bound) => bound,
-                    Err(_) => return Ok(()),
+                let Ok(new_upper_bound) = i32::try_from(bound_i64) else {
+                    pumpkin_assert_simple!(bound_i64 > i64::from(i32::MAX));
+                    return Ok(());
                 };
 
+                // The bound holds whether or not the unassigned predicate becomes true, so the
+                // reason consists of the other predicates of the hypercube.
                 let reason = self
                     .linear
                     .terms()
                     .filter(|&t| t != term)
                     .map(|term| predicate![term >= context.lower_bound(&term)])
-                    .chain(self.hypercube_predicates.iter().copied())
+                    .chain(
+                        self.hypercube_predicates
+                            .iter()
+                            .copied()
+                            .filter(|&p| p != unassigned_predicate),
+                    )
                     .collect::<PropositionalConjunction>();
 
                 context.post(
@@ -856,5 +870,33 @@ mod tests {
 
         assert!(state.propagate_to_fixed_point().is_ok());
         assert_eq!(state.upper_bound(y), 1000);
+    }
+
+    #[test]
+    fn no_weaker_propagation_for_an_unassigned_upper_bound_on_a_positive_term() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(0, 10, None);
+        let y = state.new_interval_variable(2, 10, None);
+
+        // [x <= 5] /\ [y >= 2] -> x + y <= 4 has slack 2. If [x <= 5] becomes false, x can be
+        // up to 10, so no upper bound on x follows.
+        let hypercube =
+            Hypercube::new([predicate![x <= 5], predicate![y >= 2]]).expect("not inconsistent");
+        let linear = LinearInequality::new(
+            [(NonZero::new(1).unwrap(), x), (NonZero::new(1).unwrap(), y)],
+            4,
+        )
+        .expect("not trivially satisfiable");
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(HypercubeLinearConstructor {
+            hypercube,
+            linear,
+            constraint_tag,
+        });
+
+        assert!(state.propagate_to_fixed_point().is_ok());
+        assert_eq!(state.upper_bound(x), 10);
     }
 }
