@@ -22,6 +22,7 @@ use crate::propagation::PropagatorSpec;
 use crate::propagation::ReadDomains;
 use crate::propagation::RuntimeCheckers;
 use crate::pumpkin_assert_simple;
+use crate::state::Conflict;
 use crate::state::PropagatorConflict;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
@@ -140,6 +141,22 @@ impl HypercubeLinearPropagator {
             .position(|&pid| !context.is_predicate_id_satisfied(pid))
     }
 
+    /// The conflict when the hypercube is satisfied and the lower bounds of the terms violate the
+    /// linear inequality.
+    fn linear_conflict(&self, context: &PropagationContext<'_>) -> Conflict {
+        let conjunction = self
+            .linear
+            .terms()
+            .map(|term| predicate![term >= context.lower_bound(&term)])
+            .chain(self.hypercube_predicates.iter().copied())
+            .collect::<PropositionalConjunction>();
+
+        Conflict::Propagator(PropagatorConflict {
+            conjunction,
+            inference_code: self.inference_code.clone(),
+        })
+    }
+
     /// Propagates the linear inequality of the hypercube linear.
     ///
     /// Does _not_ check that the hypercube is satisfied.
@@ -153,18 +170,7 @@ impl HypercubeLinearPropagator {
             // Therefore we explicitly check for this case, and trigger a conflict. If the linear
             // is not trivially false, the conflict check is unnecessary as the propagation will
             // also trigger a conflict.
-
-            let conjunction = self
-                .linear
-                .terms()
-                .map(|term| predicate![term >= context.lower_bound(&term)])
-                .chain(self.hypercube_predicates.iter().copied())
-                .collect::<PropositionalConjunction>();
-
-            return Err(crate::state::Conflict::Propagator(PropagatorConflict {
-                conjunction,
-                inference_code: self.inference_code.clone(),
-            }));
+            return Err(self.linear_conflict(&context));
         }
 
         for term in self.linear.terms() {
@@ -172,8 +178,11 @@ impl HypercubeLinearPropagator {
             let term_upper_bound_i64 = slack + term_lower_bound;
             let term_upper_bound = match i32::try_from(term_upper_bound_i64) {
                 Ok(bound) => bound,
+                // The upper bound is smaller than i32::MIN, and therefore smaller than the lower
+                // bound of the term. So the lower bounds of the terms violate the linear
+                // inequality.
                 Err(_) if term_upper_bound_i64.is_negative() => {
-                    todo!("wanting to tighten the upper bound to a value smaller than i32::MIN")
+                    return Err(self.linear_conflict(&context));
                 }
                 // If we want to set the upper bound to a value larger than i32::MAX,
                 // it can never tighten the existing bound of `term_to_propagate`.
@@ -794,5 +803,29 @@ mod tests {
 
         assert!(state.propagate_to_fixed_point().is_ok());
         assert_eq!(state.lower_bound(z), -1);
+    }
+
+    #[test]
+    fn upper_bound_below_i32_min_is_a_conflict() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(0, 10, None);
+        let y = state.new_interval_variable(5, 10, None);
+
+        // x + y <= i32::MIN, so the upper bound for x would be i32::MIN - 5.
+        let linear = LinearInequality::new(
+            [(NonZero::new(1).unwrap(), x), (NonZero::new(1).unwrap(), y)],
+            i32::MIN,
+        )
+        .expect("not trivially satisfiable");
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(HypercubeLinearConstructor {
+            hypercube: Hypercube::default(),
+            linear,
+            constraint_tag,
+        });
+
+        assert!(state.propagate_to_fixed_point().is_err());
     }
 }
