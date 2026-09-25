@@ -924,6 +924,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpkin-branching"
+version = "0.5.0"
+dependencies = [
+ "enum-map",
+ "log",
+ "pumpkin-core",
+]
+
+[[package]]
 name = "pumpkin-checker"
 version = "0.5.0"
 dependencies = [
@@ -1047,6 +1056,7 @@ dependencies = [
  "env_logger",
  "flatzinc",
  "log",
+ "pumpkin-branching",
  "pumpkin-checker",
  "pumpkin-checking",
  "pumpkin-conflict-resolvers",
@@ -1065,6 +1075,7 @@ dependencies = [
 name = "pumpkin-solver-py"
 version = "0.5.0"
 dependencies = [
+ "pumpkin-branching",
  "pumpkin-conflict-resolvers",
  "pumpkin-constraints",
  "pumpkin-solver",
