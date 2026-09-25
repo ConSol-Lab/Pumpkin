@@ -110,21 +110,39 @@ impl ProofLog {
             return Ok(inference_tag);
         };
 
+        println!("{inference_tag:?}");
         let inference = Inference {
             constraint_id: inference_tag.into(),
             premises: premises
                 .into_iter()
-                .filter(|&predicate| !is_likely_a_constant(predicate, variable_names, assignments))
+                .filter(|&predicate| {
+                    print!("{:?},", predicate);
+                    !is_likely_a_constant(
+                        predicate,
+                        variable_names,
+                        assignments,
+                        Some(proof_atomics),
+                    )
+                })
                 .map(|premise| proof_atomics.map_predicate_to_proof_atomic(premise, variable_names))
                 .collect(),
             consequent: propagated
-                .filter(|&predicate| !is_likely_a_constant(predicate, variable_names, assignments))
+                .filter(|&predicate| {
+                    !is_likely_a_constant(
+                        predicate,
+                        variable_names,
+                        assignments,
+                        Some(proof_atomics),
+                    )
+                })
                 .map(|predicate| {
                     proof_atomics.map_predicate_to_proof_atomic(predicate, variable_names)
                 }),
             generated_by: Some(inference_code.tag().into()),
             label: Some(inference_code.label()),
         };
+
+        println!("\n---------");
 
         writer.log_inference(inference)?;
 
@@ -148,7 +166,7 @@ impl ProofLog {
             });
         }
 
-        if is_likely_a_constant(predicate, variable_names, assignments) {
+        if is_likely_a_constant(predicate, variable_names, assignments, None) {
             // The predicate is over a constant variable. We assume we do not want to
             // log these if they have no name.
 
@@ -156,7 +174,6 @@ impl ProofLog {
         }
 
         let inference_tag = constraint_tags.next_key();
-
         let Some(ProofImpl::CpProof {
             writer,
             propagation_order_hint: Some(propagation_sequence),
@@ -231,7 +248,12 @@ impl ProofLog {
                     premises: premises
                         .into_iter()
                         .filter(|&predicate| {
-                            !is_likely_a_constant(predicate, variable_names, assignments)
+                            !is_likely_a_constant(
+                                predicate,
+                                variable_names,
+                                assignments,
+                                Some(proof_atomics),
+                            )
                         })
                         .map(|premise| {
                             proof_atomics.map_predicate_to_proof_atomic(premise, variable_names)
@@ -371,8 +393,15 @@ fn is_likely_a_constant(
     predicate: Predicate,
     variable_names: &VariableNames,
     assignments: &Assignments,
+    proof_atomics: Option<&ProofAtomics>,
 ) -> bool {
     let domain = predicate.get_domain();
+
+    if let Some(proof_atomics) = proof_atomics
+        && let Some(underlying) = proof_atomics.get_underlying_predicate(predicate)
+    {
+        return is_likely_a_constant(underlying, variable_names, assignments, Some(proof_atomics));
+    }
 
     let is_fixed =
         assignments.get_initial_lower_bound(domain) == assignments.get_initial_upper_bound(domain);
