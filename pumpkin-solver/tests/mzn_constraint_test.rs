@@ -19,7 +19,9 @@ macro_rules! mzn_test {
         mod $name {
             use super::*;
 
-            fn run(resolver_options: &[&str]) {
+            // The variant is part of the prefix of the log files, so that the two variants, which
+            // may run concurrently, do not write to the same files.
+            fn run(variant: &str, resolver_options: &[&str]) {
                 let mut actual_options: Vec<String> = vec![];
                 actual_options.extend($options);
                 actual_options.extend(resolver_options.iter().map(|option| option.to_string()));
@@ -30,19 +32,22 @@ macro_rules! mzn_test {
                     false,
                     TestType::SolutionEnumeration,
                     actual_options,
-                    stringify!($name),
+                    &format!("{}_{variant}", stringify!($name)),
                 );
                 assert!(output.ends_with("==========\n"));
             }
 
             #[test]
             fn one_uip() {
-                run(&[]);
+                run("one_uip", &[]);
             }
 
             #[test]
             fn hypercube_linear() {
-                run(&["--conflict-resolver", "hypercube-linear"]);
+                run(
+                    "hypercube_linear",
+                    &["--conflict-resolver", "hypercube-linear"],
+                );
             }
         }
     };
