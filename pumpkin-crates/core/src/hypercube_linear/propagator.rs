@@ -184,9 +184,9 @@ impl HypercubeLinearPropagator {
                 Err(_) if term_upper_bound_i64.is_negative() => {
                     return Err(self.linear_conflict(&context));
                 }
-                // If we want to set the upper bound to a value larger than i32::MAX,
-                // it can never tighten the existing bound of `term_to_propagate`.
-                Err(_) => return Ok(()),
+                // If we want to set the upper bound to a value larger than i32::MAX, it can never
+                // tighten the existing bound of this term. The other terms may still propagate.
+                Err(_) => continue,
             };
 
             context.post(predicate![term <= term_upper_bound], 0_u64)?;
@@ -827,5 +827,36 @@ mod tests {
         });
 
         assert!(state.propagate_to_fixed_point().is_err());
+    }
+
+    #[test]
+    fn upper_bound_above_i32_max_does_not_stop_propagation_of_other_terms() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(2_147_483_000, 2_147_483_600, None);
+        let y = state.new_interval_variable(0, 2000, None);
+        let z = state.new_interval_variable(-2_147_483_000, 0, None);
+
+        // x + y + z <= 1000 has slack 1000. The upper bound for x would be larger than
+        // i32::MAX, while y can be tightened to at most 1000.
+        let linear = LinearInequality::new(
+            [
+                (NonZero::new(1).unwrap(), x),
+                (NonZero::new(1).unwrap(), y),
+                (NonZero::new(1).unwrap(), z),
+            ],
+            1000,
+        )
+        .expect("not trivially satisfiable");
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(HypercubeLinearConstructor {
+            hypercube: Hypercube::default(),
+            linear,
+            constraint_tag,
+        });
+
+        assert!(state.propagate_to_fixed_point().is_ok());
+        assert_eq!(state.upper_bound(y), 1000);
     }
 }
