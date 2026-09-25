@@ -110,13 +110,11 @@ impl ProofLog {
             return Ok(inference_tag);
         };
 
-        println!("{inference_tag:?}");
         let inference = Inference {
             constraint_id: inference_tag.into(),
             premises: premises
                 .into_iter()
                 .filter(|&predicate| {
-                    print!("{:?},", predicate);
                     !is_likely_a_constant(
                         predicate,
                         variable_names,
@@ -141,8 +139,6 @@ impl ProofLog {
             generated_by: Some(inference_code.tag().into()),
             label: Some(inference_code.label()),
         };
-
-        println!("\n---------");
 
         writer.log_inference(inference)?;
 
