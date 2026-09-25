@@ -166,7 +166,7 @@ impl PropagationMode {
                 // There are two scenarios:
                 // nogood[0] is unassigned -> propagate the predicate to false
                 // nogood[0] is assigned true -> conflict.
-                let reason = Reason::DynamicLazy(nogood_id.id as u64);
+                let reason = Reason::DynamicLazy(nogood_id.into_bits() as u64);
 
                 let predicate = !context.get_predicate(nogood_predicates[0]);
                 let result = context.post(predicate, reason);
@@ -298,7 +298,8 @@ impl PropagationMode {
                             propagator_id == handle.propagator_id();
                         // Then we check whether the lazy reason for the propagation was this
                         // particular nogood
-                        let code_matches_id = code.is_none() || *code.unwrap() == id.id as u64;
+                        let code_matches_id =
+                            code.is_none() || *code.unwrap() == id.into_bits() as u64;
                         return propagated_by_nogood_propagator && code_matches_id;
                     }
                 }
@@ -356,6 +357,20 @@ impl PropagationMode {
                     // 0th, then we proceed to add watchers
                     nogood.swap(1, position);
 
+                    // Binary nogoods are stored inline in the watchers
+                    if nogood.len() == 2 {
+                        let _ = NogoodPropagator::add_binary_nogood(
+                            context,
+                            [nogood[0], nogood[1]],
+                            inference_code,
+                            nogood_predicates,
+                            nogood_info,
+                            inference_codes,
+                            watch_lists,
+                        );
+                        return;
+                    }
+
                     // Add the nogood to the database.
                     //
                     // Currently we always allocate a fresh ID
@@ -390,6 +405,20 @@ impl PropagationMode {
                 }
             }
             PropagationMode::UnitPropagation => {
+                // Binary nogoods are stored inline in the watchers
+                if nogood.len() == 2 {
+                    let _ = NogoodPropagator::add_binary_nogood(
+                        context,
+                        [nogood[0], nogood[1]],
+                        inference_code,
+                        nogood_predicates,
+                        nogood_info,
+                        inference_codes,
+                        watch_lists,
+                    );
+                    return;
+                }
+
                 // Add the nogood to the database.
                 //
                 // Currently we always allocate a fresh ID

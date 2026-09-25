@@ -89,6 +89,15 @@ impl ArenaAllocator {
         nogood_id
     }
 
+    /// Allocates a fresh [`NogoodIndex`] without inserting a nogood into the arena.
+    ///
+    /// This is used for binary nogoods, which are stored inline in their watchers.
+    pub(crate) fn allocate_index_only(&mut self) -> NogoodIndex {
+        let index = NogoodIndex(self.current_index);
+        self.current_index += 1;
+        index
+    }
+
     /// Returns the index of the provided [`NogoodId`].
     ///
     /// In other words, if the nogood with ID [`NogoodId`] was the `n`th nogood to be inserted then

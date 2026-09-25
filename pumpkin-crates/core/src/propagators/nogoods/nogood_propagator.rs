@@ -214,6 +214,9 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
 /// that is observed to be `false`, it will be made the cached predicate. That way, whenever the
 /// watcher is triggered, the propagator may be able to quickly determine if the nogood can be
 /// skipped by looking at the cached predicate.
+///
+/// Binary nogoods (see [`NogoodId::is_binary`]) are not stored in the arena; instead, the cached
+/// predicate of a watcher of a binary nogood is always the *other* predicate in the nogood.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Watcher {
     pub(crate) nogood_id: NogoodId,
@@ -271,6 +274,7 @@ impl NogoodPropagator {
         predicate_id: PredicateId,
         watch_lists: &mut KeyedVec<PredicateId, Vec<Watcher>>,
     ) {
+        pumpkin_assert_simple!(!watcher.nogood_id.is_binary());
         let index_in_zeroth_watchlist = watch_lists[predicate_id]
             .iter()
             .position(|other_watcher| other_watcher.nogood_id == watcher.nogood_id)
@@ -352,6 +356,21 @@ impl Propagator for NogoodPropagator {
                 // We first check whether the cached predicate might already make the nogood
                 // satisfied
                 if context.is_predicate_id_falsified(watcher.cached_predicate) {
+                    index += 1;
+                    continue;
+                }
+
+                // Binary nogoods are stored inline in the watchers; the cached predicate is the
+                // other predicate in the nogood, which is not falsified, so it is propagated to be
+                // false (leading to a conflict if it is already satisfied).
+                if watcher.nogood_id.is_binary() {
+                    self.statistics.num_unit_propagations += 1;
+                    let propagated_predicate = !context.get_predicate(watcher.cached_predicate);
+                    context.post(
+                        propagated_predicate,
+                        binary_nogood_reason(watcher.nogood_id, predicate_id),
+                    )?;
+
                     index += 1;
                     continue;
                 }
@@ -518,7 +537,35 @@ impl Propagator for NogoodPropagator {
         // The algorithm goes through every nogood explicitly
         // and computes from scratch.
         for nogood_id in self.nogood_predicates.nogoods_ids() {
-            self.debug_propagate_nogood_from_scratch(nogood_id, &mut context)?;
+            let info_id = self.nogood_predicates.get_nogood_index(&nogood_id);
+            if self.nogood_info[info_id].is_deleted {
+                // The nogood has already been deleted, meaning that it could be that the call to
+                // `propagate` would not find any propagations using it due to the watchers being
+                // deleted
+                continue;
+            }
+
+            self.debug_propagate_nogood_from_scratch(
+                self.nogood_predicates.get_nogood(nogood_id),
+                &self.inference_codes[info_id],
+                nogood_id,
+                &mut context,
+            )?;
+        }
+
+        // Binary nogoods are only stored in the watchers; each binary nogood has two watchers, we
+        // only process it from the watch list of the predicate with the lowest ID.
+        for predicate_id in self.watch_lists.keys() {
+            for watcher in self.watch_lists[predicate_id].iter() {
+                if watcher.nogood_id.is_binary() && predicate_id.id < watcher.cached_predicate.id {
+                    self.debug_propagate_nogood_from_scratch(
+                        &[predicate_id, watcher.cached_predicate],
+                        &self.inference_codes[watcher.nogood_id.binary_index()],
+                        watcher.nogood_id,
+                        &mut context,
+                    )?;
+                }
+            }
         }
         Ok(())
     }
@@ -537,6 +584,20 @@ impl Propagator for NogoodPropagator {
         let reason = LazyNogoodExplanation::from_bits(code);
         let id = reason.nogood_id();
         self.temp_nogood_reason.clear();
+
+        if id.is_binary() {
+            // The reason for a propagation by a binary nogood is the other predicate in the
+            // nogood; binary nogoods are permanent, so there is no LBD or activity to update.
+            let reason_predicate =
+                PredicateId::create_from_index(reason.unit_propagation_index() as usize);
+            self.temp_nogood_reason
+                .push(context.get_predicate(reason_predicate));
+
+            return LazyExplanation {
+                predicates: &self.temp_nogood_reason,
+                inference_code: self.inference_codes[id.binary_index()].clone(),
+            };
+        }
 
         let result = if reason.explains_extended_propagation() {
             // The lazy explanations explains a propagation using extended nogood propagation.
@@ -1090,6 +1151,31 @@ impl NogoodPropagator {
             return;
         }
 
+        // Binary nogoods are stored inline in the watchers and are kept permanently.
+        if nogood.len() == 2 {
+            let nogood = [context.get_id(nogood[0]), context.get_id(nogood[1])];
+            let nogood_id = NogoodPropagator::add_binary_nogood(
+                context,
+                nogood,
+                inference_code,
+                &mut self.nogood_predicates,
+                &mut self.nogood_info,
+                &mut self.inference_codes,
+                &mut self.watch_lists,
+            );
+
+            self.statistics.num_unit_propagations += 1;
+            let propagated_predicate = !context.get_predicate(nogood[0]);
+            context
+                .post(
+                    propagated_predicate,
+                    binary_nogood_reason(nogood_id, nogood[1]),
+                )
+                .expect("Asserting nogood cannot fail");
+
+            return;
+        }
+
         let lbd = self
             .propagation_mode
             .calculate_lbd(context, &nogood, &mut self.lbd_helper);
@@ -1389,6 +1475,62 @@ impl NogoodPropagator {
 
         watch_lists[predicate].push(watcher);
     }
+
+    /// Adds a binary nogood; rather than storing it in the [`ArenaAllocator`], it is stored inline
+    /// in its two watchers where the cached predicate of each watcher is the other predicate in the
+    /// nogood.
+    ///
+    /// The nogood is assigned a [`NogoodIndex`] which is used for storing its [`InferenceCode`]
+    /// (and its [`NogoodInfo`]).
+    pub(crate) fn add_binary_nogood(
+        context: &mut PropagationContext,
+        nogood: [PredicateId; 2],
+        inference_code: InferenceCode,
+        nogood_predicates: &mut ArenaAllocator,
+        nogood_info: &mut KeyedVec<NogoodIndex, NogoodInfo>,
+        inference_codes: &mut KeyedVec<NogoodIndex, InferenceCode>,
+        watch_lists: &mut KeyedVec<PredicateId, Vec<Watcher>>,
+    ) -> NogoodId {
+        let nogood_index = nogood_predicates.allocate_index_only();
+        let _ = nogood_info.push(NogoodInfo::new_permanent_nogood_info());
+        let _ = inference_codes.push(inference_code);
+        pumpkin_assert_eq_simple!(inference_codes.len(), nogood_index.index() + 1);
+
+        let nogood_id = NogoodId::binary(nogood_index);
+
+        NogoodPropagator::add_watcher(
+            context,
+            nogood[0],
+            Watcher {
+                nogood_id,
+                cached_predicate: nogood[1],
+            },
+            watch_lists,
+        );
+        NogoodPropagator::add_watcher(
+            context,
+            nogood[1],
+            Watcher {
+                nogood_id,
+                cached_predicate: nogood[0],
+            },
+            watch_lists,
+        );
+
+        nogood_id
+    }
+}
+
+/// Creates the (lazy) [`Reason`] for a propagation by the binary nogood with the provided
+/// [`NogoodId`], where `reason_predicate` is the satisfied predicate in the nogood.
+fn binary_nogood_reason(nogood_id: NogoodId, reason_predicate: PredicateId) -> Reason {
+    pumpkin_assert_simple!(nogood_id.is_binary());
+    Reason::DynamicLazy(
+        LazyNogoodExplanation::new()
+            .with_nogood_id(nogood_id)
+            .with_unit_propagation_index(reason_predicate.id)
+            .into(),
+    )
 }
 
 /// Nogood management
@@ -1581,6 +1723,11 @@ impl NogoodPropagator {
         for i in 0..self.watch_lists.len() {
             let index = PredicateId::create_from_index(i);
             self.watch_lists[index].retain(|watcher| {
+                // Binary nogoods are permanent
+                if watcher.nogood_id.is_binary() {
+                    return true;
+                }
+
                 let info_index = self.nogood_predicates.get_nogood_index(&watcher.nogood_id);
                 // If the nogood has been deleted, do not keep this watcher
                 if self.nogood_info[info_index].is_deleted {
@@ -1623,9 +1770,12 @@ impl NogoodPropagator {
             for i in 0..self.watch_lists.len() {
                 let index = PredicateId::create_from_index(i);
                 self.watch_lists[index].retain(|watcher| {
-                    let info_index = self.nogood_predicates.get_nogood_index(&watcher.nogood_id);
-                    // If the nogood has been deleted, do not keep this watcher
-                    !self.nogood_info[info_index].is_deleted
+                    // Binary nogoods are permanent; otherwise, if the nogood has been deleted, do
+                    // not keep this watcher
+                    watcher.nogood_id.is_binary()
+                        || !self.nogood_info
+                            [self.nogood_predicates.get_nogood_index(&watcher.nogood_id)]
+                        .is_deleted
                 });
             }
         }
@@ -1871,21 +2021,12 @@ impl NogoodPropagator {
 impl NogoodPropagator {
     fn debug_propagate_nogood_from_scratch(
         &self,
+        nogood: &[PredicateId],
+        inference_code: &InferenceCode,
         nogood_id: NogoodId,
         context: &mut PropagationContext,
     ) -> Result<(), Conflict> {
         // This is an inefficient implementation for testing purposes
-        let nogood = &self.nogood_predicates.get_nogood(nogood_id);
-        let info_id = self.nogood_predicates.get_nogood_index(&nogood_id);
-        let inference_code = &self.inference_codes[info_id];
-
-        if self.nogood_info[info_id].is_deleted {
-            // The nogood has already been deleted, meaning that it could be that the call to
-            // `propagate` would not find any propagations using it due to the watchers being
-            // deleted
-            return Ok(());
-        }
-
         // First we get the number of falsified predicates
         let has_falsified_predicate = nogood.iter().any(|predicate| {
             let predicate = context.get_predicate(*predicate);
@@ -2021,7 +2162,7 @@ impl NogoodPropagator {
             if !(is_watching(nogood_predicates[0], nogood_id)
                 && is_watching(nogood_predicates[1], nogood_id))
             {
-                eprintln!("Nogood id: {}", nogood_id.id);
+                eprintln!("Nogood id: {nogood_id:?}");
                 eprintln!("Nogood: {nogood_predicates:?}");
                 eprintln!(
                     "watching 0: {}",
@@ -2038,6 +2179,22 @@ impl NogoodPropagator {
                     && is_watching(nogood_predicates[1], nogood_id)
             );
         }
+
+        // Each watcher of a binary nogood should have a mirrored watcher for the other predicate
+        for predicate_id in self.watch_lists.keys() {
+            for watcher in self.watch_lists[predicate_id].iter() {
+                if watcher.nogood_id.is_binary() {
+                    assert!(
+                        self.watch_lists[watcher.cached_predicate]
+                            .iter()
+                            .any(|other_watcher| other_watcher.nogood_id == watcher.nogood_id
+                                && other_watcher.cached_predicate == predicate_id),
+                        "Binary nogood {:?} is not watched by {predicate_id:?}",
+                        watcher.nogood_id
+                    );
+                }
+            }
+        }
         true
     }
 }
@@ -2046,6 +2203,7 @@ impl NogoodPropagator {
 #[cfg(test)]
 mod tests {
     use super::NogoodPropagator;
+    use crate::basic_types::PropositionalConjunction;
     use crate::conjunction;
     use crate::containers::StorageKey;
     use crate::engine::test_solver::TestSolver;
@@ -2089,6 +2247,76 @@ mod tests {
 
         let reason_lb = solver.get_reason_int(predicate!(b <= 0));
         assert_eq!(conjunction!([a >= 2] & [c >= 10]), reason_lb);
+    }
+
+    fn add_nogood(solver: &mut TestSolver, nogood: PropositionalConjunction) {
+        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
+        let (nogood_propagator, mut context) = solver
+            .state
+            .get_propagator_mut_with_context(solver.nogood_handle);
+        let nogood_propagator: &mut NogoodPropagator = nogood_propagator.unwrap();
+
+        nogood_propagator.add_nogood(nogood.into(), inference_code, &mut context);
+    }
+
+    #[test]
+    fn binary_nogood_propagates_both_directions() {
+        for first_is_satisfied in [true, false] {
+            let mut solver = TestSolver::default();
+            let a = solver.new_variable(1, 3);
+            let b = solver.new_variable(-4, 4);
+            let id = solver.nogood_handle.propagator_id();
+
+            add_nogood(&mut solver, conjunction!([a >= 2] & [b >= 1]));
+
+            if first_is_satisfied {
+                let _ = solver.increase_lower_bound_and_notify(id, a.id(), a, 2);
+                solver.propagate(id).expect("");
+
+                assert_eq!(solver.upper_bound(b), 0);
+                let reason = solver.get_reason_int(predicate!(b <= 0));
+                assert_eq!(conjunction!([a >= 2]), reason);
+            } else {
+                let _ = solver.increase_lower_bound_and_notify(id, b.id(), b, 1);
+                solver.propagate(id).expect("");
+
+                assert_eq!(solver.upper_bound(a), 1);
+                let reason = solver.get_reason_int(predicate!(a <= 1));
+                assert_eq!(conjunction!([b >= 1]), reason);
+            }
+        }
+    }
+
+    #[test]
+    fn binary_nogood_conflict() {
+        let mut solver = TestSolver::default();
+        let a = solver.new_variable(1, 3);
+        let b = solver.new_variable(-4, 4);
+        let id = solver.nogood_handle.propagator_id();
+
+        add_nogood(&mut solver, conjunction!([a >= 2] & [b >= 1]));
+
+        let _ = solver.increase_lower_bound_and_notify(id, a.id(), a, 2);
+        let _ = solver.increase_lower_bound_and_notify(id, b.id(), b, 1);
+
+        assert!(solver.propagate(id).is_err());
+    }
+
+    #[test]
+    fn binary_nogood_with_falsified_predicate_does_not_propagate() {
+        let mut solver = TestSolver::default();
+        let a = solver.new_variable(1, 3);
+        let b = solver.new_variable(-4, 4);
+        let id = solver.nogood_handle.propagator_id();
+
+        add_nogood(&mut solver, conjunction!([a >= 2] & [b >= 1]));
+
+        let _ = solver.decrease_upper_bound_and_notify(id, b.id(), b, 0);
+        let _ = solver.increase_lower_bound_and_notify(id, a.id(), a, 2);
+        solver.propagate(id).expect("");
+
+        solver.assert_bounds(a, 2, 3);
+        solver.assert_bounds(b, -4, 0);
     }
 
     #[test]
