@@ -136,26 +136,33 @@ impl TrailView for State {
             .get_trail_position(&pivot)
             .expect("pivot must be on trail");
 
-        let reason_ref = self
-            .assignments
-            .get_trail_entry(trail_position)
-            .reason
-            .expect("pivot is propagated");
+        let trail_entry = self.assignments.get_trail_entry(trail_position);
 
-        if let Some(code) = self.reason_store.get_lazy_code(reason_ref) {
-            let propagator_id = self.reason_store.get_propagator(reason_ref);
+        // The hypercube linear of the propagator explains the trail entry, so it only explains the
+        // pivot if the entry implies the pivot. When holes make the pivot stronger than the entry,
+        // e.g. [x <= -1] from the entry [x <= 0] and the hole [x != 0], the clausal reason below
+        // decomposes the pivot into the entry and the holes.
+        if trail_entry.predicate.implies(pivot) {
+            let reason_ref = trail_entry.reason.expect("pivot is propagated");
 
-            if let Some((hypercube, linear, _)) = self.propagators[propagator_id]
-                .explain_as_hypercube_linear(
-                    code,
-                    ExplanationContext::without_working_nogood(
-                        &self.assignments,
-                        trail_position,
-                        &mut self.notification_engine,
-                    ),
-                )
-            {
-                return HypercubeLinearExplanation::Proper(HypercubeLinear { hypercube, linear });
+            if let Some(code) = self.reason_store.get_lazy_code(reason_ref) {
+                let propagator_id = self.reason_store.get_propagator(reason_ref);
+
+                if let Some((hypercube, linear, _)) = self.propagators[propagator_id]
+                    .explain_as_hypercube_linear(
+                        code,
+                        ExplanationContext::without_working_nogood(
+                            &self.assignments,
+                            trail_position,
+                            &mut self.notification_engine,
+                        ),
+                    )
+                {
+                    return HypercubeLinearExplanation::Proper(HypercubeLinear {
+                        hypercube,
+                        linear,
+                    });
+                }
             }
         }
 
