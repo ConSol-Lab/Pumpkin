@@ -1,0 +1,4 @@
+var 1..3: x :: output_var;
+var 1..3: y :: output_var;
+constraint int_lin_le([1, 1], [x, y], 4);
+solve maximize x;

@@ -1,0 +1,6 @@
+var 0..1: x1 :: output_var;
+var 0..1: x2 :: output_var;
+var 0..10: profit :: output_var;
+constraint int_lin_le([5, 5], [x1, x2], 5);
+constraint int_lin_eq([3, 3, -1], [x1, x2, profit], 0);
+solve maximize profit;

@@ -76,6 +76,14 @@ pub(crate) struct FlatZincOptions {
 
     /// Indicates that the solver should perform verbose logging
     pub(crate) verbose: bool,
+
+    /// Detect interchangeable variables and post lex-leader constraints to break the
+    /// symmetry. Refused under proof logging and when enumerating all solutions.
+    pub(crate) symmetry_breaking: bool,
+
+    /// Detect dominated variables in linear models and post dominance-breaking constraints.
+    /// Refused under proof logging, when enumerating all solutions, and with symmetry breaking.
+    pub(crate) dominance_breaking: bool,
 }
 
 fn log_statistics(

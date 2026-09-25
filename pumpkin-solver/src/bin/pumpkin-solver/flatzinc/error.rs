@@ -34,4 +34,10 @@ pub(crate) enum FlatZincError {
 
     #[error("missing solve item")]
     MissingSolveItem,
+
+    #[error("symmetry breaking cannot be combined with {0}")]
+    SymmetryBreakingUnsupported(&'static str),
+
+    #[error("dominance breaking cannot be combined with {0}")]
+    DominanceBreakingUnsupported(&'static str),
 }

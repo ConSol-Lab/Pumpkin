@@ -334,6 +334,22 @@ struct Args {
     #[arg(short = 'a', long = "all-solutions", verbatim_doc_comment)]
     all_solutions: bool,
 
+    /// Detect interchangeable variables in a FlatZinc model and post lex-leader constraints
+    /// to break the symmetry. This removes solutions, so it is refused together with `-a` on a
+    /// satisfaction problem, and it is refused under proof logging.
+    ///
+    /// Possible values: bool
+    #[arg(long = "symmetry-breaking", verbatim_doc_comment)]
+    symmetry_breaking: bool,
+
+    /// Detect dominated variables in a FlatZinc model with linear constraints and post
+    /// dominance-breaking constraints. This removes solutions, so it is refused together with
+    /// `-a` on a satisfaction problem, under proof logging, and with `--symmetry-breaking`.
+    ///
+    /// Possible values: bool
+    #[arg(long = "dominance-breaking", verbatim_doc_comment)]
+    dominance_breaking: bool,
+
     /// If `--verbose` is enabled then this option removes the timestamp information from the log
     /// messages. Note that this option will only take affect in the case of a (W)CNF instance.
     ///
@@ -625,6 +641,8 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
+                    symmetry_breaking: args.symmetry_breaking,
+                    dominance_breaking: args.dominance_breaking,
                 },
                 NoLearningResolver,
             )?,
@@ -645,6 +663,8 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
+                    symmetry_breaking: args.symmetry_breaking,
+                    dominance_breaking: args.dominance_breaking,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::OneUIP,
@@ -669,6 +689,8 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
+                    symmetry_breaking: args.symmetry_breaking,
+                    dominance_breaking: args.dominance_breaking,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::CPIP,
@@ -693,6 +715,8 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
+                    symmetry_breaking: args.symmetry_breaking,
+                    dominance_breaking: args.dominance_breaking,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::BoundsCPIP,
@@ -717,6 +741,8 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
+                    symmetry_breaking: args.symmetry_breaking,
+                    dominance_breaking: args.dominance_breaking,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::AllDecision,
