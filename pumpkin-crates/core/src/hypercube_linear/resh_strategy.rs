@@ -8,6 +8,7 @@ use crate::hypercube_linear::conflict_state::ConflictState;
 use crate::hypercube_linear::explanation::HypercubeLinearExplanation;
 use crate::hypercube_linear::trail_view::TrailView;
 use crate::hypercube_linear::trail_view::affine_lower_bound_at;
+use crate::predicate;
 use crate::predicates::Predicate;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
@@ -69,15 +70,7 @@ impl ResHStrategy for StandardResH {
             );
 
             for predicate in explanation.iter_predicates() {
-                let truth_value = trail
-                    .truth_value_at(predicate, trail_position)
-                    .expect("all predicates in explanation hypercube are assigned");
-
-                if !truth_value {
-                    continue;
-                }
-
-                state.add_hypercube_predicate(trail, predicate);
+                add_true_part_of_predicate(state, trail, trail_position, predicate);
             }
 
             let linear = explanation.take_linear();
@@ -94,21 +87,45 @@ impl ResHStrategy for StandardResH {
                 clausal_explanation.iter().format(" & ")
             );
             for predicate in clausal_explanation {
-                let truth_value = trail
-                    .truth_value_at(predicate, trail_position)
-                    .expect("all predicates in explanation hypercube are assigned");
-
-                if !truth_value {
-                    continue;
-                }
-
-                state.add_hypercube_predicate(trail, predicate);
+                add_true_part_of_predicate(state, trail, trail_position, predicate);
             }
         }
     }
 
     fn log_statistics(&self, logger: StatisticLogger) {
         self.statistics.log(logger);
+    }
+}
+
+/// Adds `predicate` from the explanation to the hypercube of the conflict if it is true at
+/// `trail_position`.
+///
+/// A predicate that is false contains the negation of the pivot, which propositional resolution
+/// removes. An equality `[x == v]` can be false while one of its bounds is true, e.g. when
+/// weakening on the negation `[x >= v]` of the pivot `[x <= v - 1]` merged `[x >= v]` with `[x <=
+/// v]`. That true bound restricts the values of `x` for which the explanation holds, so it is
+/// added. Without it, the resolvent would not be implied.
+fn add_true_part_of_predicate(
+    state: &mut ConflictState,
+    trail: &dyn TrailView,
+    trail_position: usize,
+    predicate: Predicate,
+) {
+    let truth_value = trail
+        .truth_value_at(predicate, trail_position)
+        .expect("all predicates in explanation hypercube are assigned");
+
+    if truth_value {
+        state.add_hypercube_predicate(trail, predicate);
+    } else if predicate.is_equality_predicate() {
+        let domain = predicate.get_domain();
+        let value = predicate.get_right_hand_side();
+
+        for bound in [predicate![domain >= value], predicate![domain <= value]] {
+            if trail.truth_value_at(bound, trail_position) == Some(true) {
+                state.add_hypercube_predicate(trail, bound);
+            }
+        }
     }
 }
 

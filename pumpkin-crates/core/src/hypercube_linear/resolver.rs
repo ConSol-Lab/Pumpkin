@@ -1550,6 +1550,46 @@ mod tests {
         assert!(result.linear.is_trivially_false());
     }
 
+    /// The explanation `[x <= 3] /\ [z >= 1] -> x + z <= 3` propagates `[x <= 2]`. Weakening it on
+    /// `[x >= 3]` gives the hypercube `[x == 3] /\ [z >= 1]`, which is false at the pivot. Its
+    /// bound `[x <= 3]` is still true and must be kept, because the explanation does not apply
+    /// for `x >= 4`.
+    #[test_log::test]
+    fn propositional_resolution_keeps_the_true_bound_of_a_false_equality() {
+        let mut trail_builder = FakeTrail::builder();
+
+        let x = trail_builder.domain(0, 10);
+        let w = trail_builder.domain(0, 10);
+        let z = trail_builder.domain(0, 10);
+
+        let mut trail = trail_builder
+            .decide(predicate![z >= 1])
+            .decide(predicate![x <= 3])
+            .propagate(predicate![w >= 2], conjunction!([x <= 3] & [w <= 1]))
+            .propagate(
+                predicate![x <= 2],
+                HypercubeLinear {
+                    hypercube: Hypercube::new([predicate![x <= 3], predicate![z >= 1]])
+                        .expect("not inconsistent"),
+                    linear: linear_inequality!(1 x + 1 z <= 3),
+                },
+            )
+            .build();
+
+        let mut resolver = HypercubeLinearResolver::default();
+        let result = resolver.run_resolution(
+            &mut trail,
+            [predicate![w >= 2], predicate![x <= 2]],
+            LinearInequality::trivially_false(),
+        );
+
+        let expected_hypercube =
+            Hypercube::new([predicate![z >= 1], predicate![x <= 3]]).expect("not inconsistent");
+
+        assert_eq!(result.hypercube, expected_hypercube);
+        assert!(result.linear.is_trivially_false());
+    }
+
     /// `2 * (x + y <= 5) + 1 * (-2x + z <= -7)` is `2y + z <= 3`; both bounds are scaled.
     #[test]
     fn fourier_combination_scales_both_bounds() {

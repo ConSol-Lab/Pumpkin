@@ -131,7 +131,7 @@ impl TrailView for FakeTrail {
             } else if predicate.is_not_equal_predicate() {
                 rhs < lb || rhs > ub
             } else {
-                false
+                lb == rhs && ub == rhs
             };
             if satisfied {
                 return Some(assignment.checkpoint);
@@ -200,6 +200,10 @@ impl TrailView for FakeTrail {
             } else {
                 None
             }
+        } else if lb == rhs && ub == rhs {
+            Some(true)
+        } else if rhs < lb || rhs > ub {
+            Some(false)
         } else {
             None
         }
