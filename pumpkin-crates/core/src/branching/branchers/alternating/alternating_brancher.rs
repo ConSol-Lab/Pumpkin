@@ -48,7 +48,7 @@ impl<Strategy: AlternatingStrategy, OtherBrancher: Brancher>
     }
 }
 
-impl<Strategy: AlternatingStrategy, OtherBrancher: Brancher> Brancher
+impl<Strategy: AlternatingStrategy + std::fmt::Debug, OtherBrancher: Brancher> Brancher
     for AlternatingBrancher<OtherBrancher, Strategy>
 {
     fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {

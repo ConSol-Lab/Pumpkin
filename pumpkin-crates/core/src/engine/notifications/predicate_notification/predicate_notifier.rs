@@ -114,10 +114,8 @@ impl PredicateNotifier {
         let predicate = self.predicate_to_id.get_predicate(id);
 
         // First, we resize the number of DomainIds for which we store predicate trackers
-        if self.domain_id_to_predicate_tracker.len() <= predicate.get_domain().index() {
-            self.domain_id_to_predicate_tracker
-                .resize(predicate.get_domain().index() + 1, PredicateTracker::new());
-        }
+        self.domain_id_to_predicate_tracker
+            .accomodate(predicate.get_domain(), PredicateTracker::new());
 
         // Now we initialise the predicate tracker; this does not add it to the scope yet but it
         // initialises the structures

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use log::trace;
 use pumpkin_checking::BoxedChecker;
 use pumpkin_checking::InferenceChecker;
 #[cfg(feature = "check-propagations")]
@@ -630,6 +631,7 @@ impl State {
 
         let propagation_status = {
             let propagator = &mut self.propagators[propagator_id];
+            trace!("propagating {propagator_id:?} ({})", propagator.name());
             let context = PropagationContext::new(
                 &mut self.trailed_values,
                 &mut self.assignments,
@@ -663,7 +665,8 @@ impl State {
                         &mut self.propagators,
                         &self.notification_engine
                     ),
-                    "Checking the propagations performed by the propagator led to inconsistencies!"
+                    "Checking the propagations performed by the propagator led to
+                inconsistencies!"
                 );
             }
             Err(conflict) => {
@@ -672,6 +675,11 @@ impl State {
 
                 self.statistics.num_conflicts += 1;
                 if let Conflict::Propagator(inner) = &conflict {
+                    trace!(
+                        "propagated conflict by {propagator_id} @ {dl}",
+                        dl = self.get_checkpoint()
+                    );
+
                     pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
                         &self.trailed_values,
                         &self.assignments,
@@ -733,6 +741,7 @@ impl State {
                 ),
                 &mut self.propagators,
                 &mut reason_buffer,
+                entry.predicate,
             );
 
             self.run_checker(
@@ -757,6 +766,8 @@ impl State {
     /// Once the [`State`] is conflicting, then the only operation that is defined is
     /// [`State::restore_to`]. All other operations and queries on the state are unspecified.
     pub fn propagate_to_fixed_point(&mut self) -> Result<(), Conflict> {
+        trace!("Propagation to fixedpoint @ {}", self.get_checkpoint());
+
         // The initial domain events are due to the decision predicate.
         self.notification_engine
             .notify_propagators_about_domain_events(
@@ -852,8 +863,10 @@ impl State {
             ),
             &mut self.propagators,
             reason_buffer,
+            entry.predicate,
         )
     }
+
     /// Get the reason for a predicate being true and store it in `reason_buffer`.
     ///
     /// If the provided [`Predicate`] is propagated by a propagator, then the [`InferenceCode`]
@@ -915,6 +928,7 @@ impl State {
                 explanation_context,
                 &mut self.propagators,
                 reason_buffer,
+                trail_entry.predicate,
             );
 
             Some(inference_code)

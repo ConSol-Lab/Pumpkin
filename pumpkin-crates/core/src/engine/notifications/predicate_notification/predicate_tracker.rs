@@ -265,10 +265,12 @@ impl PredicateTracker {
     ///
     /// If the index is out of bounds, this method will panic.
     fn get_value_at_index(&self, index: usize) -> TrackedValue {
-        *self
-            .values
-            .get_index(index)
-            .expect("Expected provided index to exist")
+        self.values.get_index(index).copied().unwrap_or_else(|| {
+            panic!(
+                "index out of bounds: len is {} and index is {index}",
+                self.values.len()
+            );
+        })
     }
 
     /// Returns all of the values currently present.

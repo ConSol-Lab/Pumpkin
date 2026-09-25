@@ -15,6 +15,8 @@ use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::PropagationStatusCP;
 use crate::engine::PropagatorConflict;
 use crate::engine::notifications::OpaqueDomainEvent;
+use crate::hypercube_linear::Hypercube;
+use crate::hypercube_linear::LinearInequality;
 use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
 #[cfg(doc)]
@@ -218,6 +220,14 @@ pub trait Propagator: Downcast + DynClone {
                 self.name()
             )
         );
+    }
+
+    fn explain_as_hypercube_linear(
+        &mut self,
+        _code: u64,
+        _context: ExplanationContext,
+    ) -> Option<(Hypercube, LinearInequality, InferenceCode)> {
+        None
     }
 
     /// Logs statistics of the propagator using the provided [`StatisticLogger`].

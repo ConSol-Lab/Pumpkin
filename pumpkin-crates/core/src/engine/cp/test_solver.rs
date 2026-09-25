@@ -308,6 +308,7 @@ impl TestSolver {
             ),
             &mut self.state.propagators,
             &mut predicates,
+            predicate,
         );
 
         PropositionalConjunction::from(predicates)

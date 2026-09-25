@@ -15,6 +15,7 @@ pub mod branching;
 pub mod checkers;
 pub mod conflict_resolving;
 pub mod constraints;
+pub mod hypercube_linear;
 pub mod optimisation;
 pub mod proof;
 pub mod propagation;

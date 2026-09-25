@@ -23,6 +23,12 @@ impl<Var: Copy> InputOrder<Var> {
         }
     }
 
+    pub fn new2(variables: impl IntoIterator<Item = Var>) -> Self {
+        InputOrder {
+            variables: variables.into_iter().collect(),
+        }
+    }
+
     pub fn add_domain(&mut self, var: Var) {
         self.variables.push(var)
     }

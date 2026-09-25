@@ -1,4 +1,5 @@
 use enumset::EnumSet;
+use log::trace;
 
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
@@ -138,8 +139,11 @@ impl<'a> PropagationContext<'a> {
 
     /// Stop being enqueued for the given predicate.
     pub fn unregister_predicate(&mut self, predicate_id: PredicateId) {
-        self.notification_engine
-            .unwatch_predicate(predicate_id, self.propagator_id);
+        self.notification_engine.unwatch_predicate(
+            predicate_id,
+            self.propagator_id,
+            self.assignments,
+        );
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`].
@@ -256,6 +260,14 @@ impl PropagationContext<'_> {
             Some(slot.reason_ref()),
             self.notification_engine,
         );
+
+        if !matches!(modification_result, Ok(false)) {
+            trace!(
+                "propagated {predicate} @ {dl} by {propagator:?} with result {modification_result:?}",
+                dl = self.assignments.get_checkpoint(),
+                propagator = self.propagator_id,
+            );
+        }
 
         match modification_result {
             Ok(false) => Ok(()),

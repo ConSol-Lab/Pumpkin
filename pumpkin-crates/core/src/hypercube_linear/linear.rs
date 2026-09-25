@@ -1,15 +1,27 @@
+use std::fmt::Display;
 use std::num::NonZero;
 
+use itertools::Itertools;
+
 use crate::containers::HashMap;
+use crate::hypercube_linear::BoundComparator;
+use crate::hypercube_linear::BoundPredicate;
+use crate::math::num_ext::NumExt;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
 use crate::variables::TransformableVariable;
 
 /// The linear inequality part of a hypercube linear constraint.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LinearInequality {
-    terms: Box<[AffineView<DomainId>]>,
+    terms: Vec<AffineView<DomainId>>,
     bound: i32,
+}
+
+impl Default for LinearInequality {
+    fn default() -> Self {
+        LinearInequality::trivially_false()
+    }
 }
 
 impl LinearInequality {
@@ -37,21 +49,23 @@ impl LinearInequality {
             *existing_weight += weight.get();
         }
 
-        let terms = domain_to_weight
+        let mut terms = domain_to_weight
             .into_iter()
             .filter(|&(_, weight)| weight != 0)
             .map(|(domain, weight)| domain.scaled(weight))
-            .collect::<Box<[_]>>();
+            .collect::<Vec<_>>();
 
         if terms.is_empty() && bound >= 0 {
             return None;
         }
 
+        terms.sort_by_key(|t| t.inner);
+
         Some(LinearInequality { terms, bound })
     }
 
     /// Iterate over the terms in the linear inequality.
-    pub fn terms(&self) -> impl Iterator<Item = AffineView<DomainId>> + '_ {
+    pub fn terms(&self) -> impl ExactSizeIterator<Item = AffineView<DomainId>> + '_ {
         self.terms.iter().copied()
     }
 
@@ -69,6 +83,110 @@ impl LinearInequality {
     pub fn term_for_domain(&self, domain: DomainId) -> Option<AffineView<DomainId>> {
         self.terms().find(|view| view.inner == domain)
     }
+
+    /// Divide the linear inequality and round the bound down.
+    ///
+    /// The divisor _must_ divide all term weights, otherwise this function panics.
+    pub fn divide(&mut self, divisor: i32) {
+        for term in self.terms.iter_mut() {
+            assert_eq!(term.scale % divisor, 0);
+            term.scale /= divisor;
+        }
+
+        self.bound = <i32 as NumExt>::div_floor(self.bound, divisor);
+    }
+
+    /// Weakens the linear inequality on the given bound.
+    ///
+    /// Does nothing if the bound does not contribute to the slack of the linear.
+    pub fn weaken(mut self, bound: BoundPredicate, count: i32) -> Option<Self> {
+        let Some(term_idx) = self
+            .terms
+            .iter()
+            .position(|term| term.inner == bound.domain)
+        else {
+            return Some(self);
+        };
+
+        let term = &mut self.terms[term_idx];
+        let contributes_to_slack = (term.scale.is_positive()
+            && bound.comparator == BoundComparator::LowerBound)
+            || (term.scale.is_negative() && bound.comparator == BoundComparator::UpperBound);
+
+        if !contributes_to_slack {
+            return Some(self);
+        }
+
+        let signed_diff = match bound.comparator {
+            BoundComparator::LowerBound => -count,
+            BoundComparator::UpperBound => count,
+        };
+
+        term.scale += signed_diff;
+        self.bound += signed_diff * bound.value;
+
+        if term.scale == 0 {
+            let _ = self.terms.remove(term_idx);
+        }
+
+        if self.terms.is_empty() && self.bound >= 0 {
+            None
+        } else {
+            Some(self)
+        }
+    }
+
+    /// Weakens the linear inequality on the given bound and ensures the weight of the domain
+    /// of the bound is 0.
+    ///
+    /// Does nothing if the bound does not contribute to the slack of the linear.
+    pub fn weaken_to_zero(self, bound: BoundPredicate) -> Option<Self> {
+        let Some(term) = self.term_for_domain(bound.domain) else {
+            return Some(self);
+        };
+
+        self.weaken(bound, term.scale.abs())
+    }
+
+    /// Get a term with the given index.
+    ///
+    /// Panics if the index is larger than the number of terms in the linear.
+    pub fn term_by_index(&self, idx: usize) -> AffineView<DomainId> {
+        self.terms[idx]
+    }
+}
+
+impl Display for LinearInequality {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} <= {}",
+            self.terms().format_with(" ", |elt, f| f(&format_args!(
+                "{} {}",
+                elt.scale, elt.inner
+            ))),
+            self.bound(),
+        )
+    }
+}
+
+/// A convenient helper to construct linear inequalities.
+///
+/// ## Examples
+/// In the following, variable bindings are [`DomainId`]s.
+/// ```ignore
+/// linear_inequality(2 x + 3 y <= 4);
+/// linear_inequality(-1 x + 5 y <= -3);
+/// ```
+#[macro_export]
+macro_rules! linear_inequality {
+    ($($weight:literal $var:ident $(+)?)* <= $bound:expr) => {{
+        let terms = [$((
+            std::num::NonZero::new($weight).unwrap(),
+            $var,
+        ),)*];
+        LinearInequality::new(terms, $bound).unwrap()
+    }};
 }
 
 #[cfg(test)]
@@ -156,5 +274,23 @@ mod tests {
             Vec::<AffineView<DomainId>>::new(),
             linear.terms().collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn macro_handles_linears() {
+        let x = DomainId::new(0);
+        let y = DomainId::new(1);
+
+        let actual = linear_inequality!(2 x + -3 y <= 5);
+        let expected = LinearInequality::new(
+            [
+                (NonZero::new(2).unwrap(), x),
+                (NonZero::new(-3).unwrap(), y),
+            ],
+            5,
+        )
+        .expect("not trivially satisfiable");
+
+        assert_eq!(actual, expected);
     }
 }

@@ -1,0 +1,366 @@
+use std::num::NonZero;
+
+use crate::Solver;
+use crate::constraints::Constraint;
+use crate::constraints::NegatableConstraint;
+use crate::hypercube_linear::Hypercube;
+use crate::hypercube_linear::HypercubeLinearConstructor;
+use crate::hypercube_linear::LinearInequality;
+use crate::predicates::Predicate;
+use crate::proof::ConstraintTag;
+use crate::variables::DomainId;
+use crate::variables::Literal;
+
+pub fn hypercube_linear_le<Predicates, LinearTerms>(
+    hypercube: Predicates,
+    linear_terms: LinearTerms,
+    linear_rhs: i32,
+    constraint_tag: ConstraintTag,
+) -> impl NegatableConstraint
+where
+    Predicates: IntoIterator<Item = Predicate> + Clone + 'static,
+    Predicates::IntoIter: Clone,
+    LinearTerms: IntoIterator<Item = (NonZero<i32>, DomainId)> + Clone + 'static,
+{
+    HLLeConstraint {
+        hypercube,
+        linear_terms,
+        linear_rhs,
+        constraint_tag,
+    }
+}
+
+pub fn hypercube_linear_eq<Predicates, LinearTerms>(
+    hypercube: Predicates,
+    linear_terms: LinearTerms,
+    linear_rhs: i32,
+    constraint_tag: ConstraintTag,
+) -> impl NegatableConstraint
+where
+    Predicates: IntoIterator<Item = Predicate> + Clone + 'static,
+    Predicates::IntoIter: Clone,
+    LinearTerms: IntoIterator<Item = (NonZero<i32>, DomainId)> + Clone + 'static,
+    LinearTerms::IntoIter: Clone,
+{
+    HLEqConstraint {
+        hypercube,
+        linear_terms,
+        linear_rhs,
+        constraint_tag,
+    }
+}
+
+struct HLLeConstraint<Predicates, LinearTerms> {
+    hypercube: Predicates,
+    linear_terms: LinearTerms,
+    linear_rhs: i32,
+    constraint_tag: ConstraintTag,
+}
+
+impl<Predicates, LinearTerms> Constraint for HLLeConstraint<Predicates, LinearTerms>
+where
+    Predicates: IntoIterator<Item = Predicate> + Clone + 'static,
+    Predicates::IntoIter: Clone,
+    LinearTerms: IntoIterator<Item = (NonZero<i32>, DomainId)> + Clone + 'static,
+{
+    fn post(self, solver: &mut Solver) {
+        let Ok(hypercube) = Hypercube::new(self.hypercube) else {
+            // If the hypercube is inconsistent, then the constraint simplifies to
+            // `false implies linear`, which is trivially true.
+            return;
+        };
+
+        let Some(linear) = LinearInequality::new(self.linear_terms, self.linear_rhs) else {
+            // If the linear is trivially satisfied, then there is no point in posting
+            // a constraint.
+            return;
+        };
+
+        let _ = solver.add_propagator(HypercubeLinearConstructor {
+            hypercube,
+            linear,
+            constraint_tag: self.constraint_tag,
+        });
+    }
+
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
+        hypercube_linear_le(
+            self.hypercube
+                .into_iter()
+                .chain(std::iter::once(reification_literal.get_true_predicate())),
+            self.linear_terms,
+            self.linear_rhs,
+            self.constraint_tag,
+        )
+        .post(solver)
+    }
+}
+
+impl<Predicates, LinearTerms> NegatableConstraint for HLLeConstraint<Predicates, LinearTerms>
+where
+    Predicates: IntoIterator<Item = Predicate> + Clone + 'static,
+    Predicates::IntoIter: Clone,
+    LinearTerms: IntoIterator<Item = (NonZero<i32>, DomainId)> + Clone + 'static,
+{
+    type NegatedConstraint = NotHLLeConstraint<Predicates, LinearTerms>;
+
+    fn negation(&self) -> Self::NegatedConstraint {
+        NotHLLeConstraint {
+            hypercube: self.hypercube.clone(),
+            linear_terms: self.linear_terms.clone(),
+            linear_rhs: self.linear_rhs,
+            constraint_tag: self.constraint_tag,
+        }
+    }
+}
+
+struct NotHLLeConstraint<Predicates, LinearTerms> {
+    hypercube: Predicates,
+    linear_terms: LinearTerms,
+    linear_rhs: i32,
+    constraint_tag: ConstraintTag,
+}
+
+impl<Predicates, LinearTerms> Constraint for NotHLLeConstraint<Predicates, LinearTerms>
+where
+    Predicates: IntoIterator<Item = Predicate> + Clone + 'static,
+    Predicates::IntoIter: Clone,
+    LinearTerms: IntoIterator<Item = (NonZero<i32>, DomainId)> + Clone + 'static,
+{
+    fn post(self, solver: &mut Solver) {
+        for predicate in self.hypercube {
+            solver.add_clause([predicate], self.constraint_tag);
+        }
+
+        let not_linear_terms = self
+            .linear_terms
+            .into_iter()
+            .map(|(weight, domain)| (-weight, domain));
+        let not_linear_rhs = -self.linear_rhs - 1;
+
+        if let Some(not_linear) = LinearInequality::new(not_linear_terms, not_linear_rhs) {
+            let _ = solver.add_propagator(HypercubeLinearConstructor {
+                hypercube: Hypercube::default(),
+                linear: not_linear,
+                constraint_tag: self.constraint_tag,
+            });
+        }
+    }
+
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
+        for predicate in self.hypercube {
+            solver.add_clause(
+                [reification_literal.get_false_predicate(), predicate],
+                self.constraint_tag,
+            );
+        }
+
+        let not_linear_terms = self
+            .linear_terms
+            .into_iter()
+            .map(|(weight, domain)| (-weight, domain));
+        let not_linear_rhs = -self.linear_rhs - 1;
+
+        if let Some(not_linear) = LinearInequality::new(not_linear_terms, not_linear_rhs) {
+            let _ = solver.add_propagator(HypercubeLinearConstructor {
+                hypercube: Hypercube::new([reification_literal.get_true_predicate()])
+                    .expect("single predicate hypercube cannot be inconsistent"),
+                linear: not_linear,
+                constraint_tag: self.constraint_tag,
+            });
+        }
+    }
+}
+
+impl<Predicates, LinearTerms> NegatableConstraint for NotHLLeConstraint<Predicates, LinearTerms>
+where
+    Predicates: IntoIterator<Item = Predicate> + Clone + 'static,
+    Predicates::IntoIter: Clone,
+    LinearTerms: IntoIterator<Item = (NonZero<i32>, DomainId)> + Clone + 'static,
+{
+    type NegatedConstraint = HLLeConstraint<Predicates, LinearTerms>;
+
+    fn negation(&self) -> Self::NegatedConstraint {
+        HLLeConstraint {
+            hypercube: self.hypercube.clone(),
+            linear_terms: self.linear_terms.clone(),
+            linear_rhs: self.linear_rhs,
+            constraint_tag: self.constraint_tag,
+        }
+    }
+}
+
+struct HLEqConstraint<Predicates, LinearTerms> {
+    hypercube: Predicates,
+    linear_terms: LinearTerms,
+    linear_rhs: i32,
+    constraint_tag: ConstraintTag,
+}
+
+impl<Predicates, LinearTerms> Constraint for HLEqConstraint<Predicates, LinearTerms>
+where
+    Predicates: IntoIterator<Item = Predicate> + Clone + 'static,
+    Predicates::IntoIter: Clone,
+    LinearTerms: IntoIterator<Item = (NonZero<i32>, DomainId)> + Clone + 'static,
+    LinearTerms::IntoIter: Clone,
+{
+    fn post(self, solver: &mut Solver) {
+        hypercube_linear_le(
+            self.hypercube.clone(),
+            self.linear_terms.clone(),
+            self.linear_rhs,
+            self.constraint_tag,
+        )
+        .post(solver);
+
+        let negated_terms = self
+            .linear_terms
+            .into_iter()
+            .map(|(weight, domain)| (-weight, domain));
+
+        hypercube_linear_le(
+            self.hypercube.clone(),
+            negated_terms,
+            -self.linear_rhs,
+            self.constraint_tag,
+        )
+        .post(solver);
+    }
+
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
+        hypercube_linear_eq(
+            self.hypercube
+                .into_iter()
+                .chain(std::iter::once(reification_literal.get_true_predicate())),
+            self.linear_terms,
+            self.linear_rhs,
+            self.constraint_tag,
+        )
+        .post(solver)
+    }
+}
+
+impl<Predicates, LinearTerms> NegatableConstraint for HLEqConstraint<Predicates, LinearTerms>
+where
+    Predicates: IntoIterator<Item = Predicate> + Clone + 'static,
+    Predicates::IntoIter: Clone,
+    LinearTerms: IntoIterator<Item = (NonZero<i32>, DomainId)> + Clone + 'static,
+    LinearTerms::IntoIter: Clone,
+{
+    type NegatedConstraint = NotHLEqConstraint<Predicates, LinearTerms>;
+
+    fn negation(&self) -> Self::NegatedConstraint {
+        NotHLEqConstraint {
+            hypercube: self.hypercube.clone(),
+            linear_terms: self.linear_terms.clone(),
+            linear_rhs: self.linear_rhs,
+            constraint_tag: self.constraint_tag,
+        }
+    }
+}
+
+struct NotHLEqConstraint<Predicates, LinearTerms> {
+    hypercube: Predicates,
+    linear_terms: LinearTerms,
+    linear_rhs: i32,
+    constraint_tag: ConstraintTag,
+}
+
+impl<Predicates, LinearTerms> Constraint for NotHLEqConstraint<Predicates, LinearTerms>
+where
+    Predicates: IntoIterator<Item = Predicate> + Clone + 'static,
+    Predicates::IntoIter: Clone,
+    LinearTerms: IntoIterator<Item = (NonZero<i32>, DomainId)> + Clone + 'static,
+    LinearTerms::IntoIter: Clone,
+{
+    fn post(self, solver: &mut Solver) {
+        for predicate in self.hypercube {
+            solver.add_clause([predicate], self.constraint_tag);
+        }
+
+        // We model the Ax != b as follows (where l is a fresh 0-1 variable):
+        // l -> Ax < b
+        // !l -> Ax > b
+        let l = solver.new_literal();
+
+        hypercube_linear_le(
+            [l.get_true_predicate()],
+            self.linear_terms.clone(),
+            self.linear_rhs - 1,
+            self.constraint_tag,
+        )
+        .post(solver);
+
+        let not_linear_terms = self
+            .linear_terms
+            .into_iter()
+            .map(|(weight, domain)| (-weight, domain));
+        let not_linear_rhs = -self.linear_rhs - 1;
+
+        hypercube_linear_le(
+            [l.get_false_predicate()],
+            not_linear_terms,
+            not_linear_rhs,
+            self.constraint_tag,
+        )
+        .post(solver);
+    }
+
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
+        for predicate in self.hypercube {
+            solver.add_clause(
+                [reification_literal.get_false_predicate(), predicate],
+                self.constraint_tag,
+            );
+        }
+
+        let l = solver.new_literal();
+
+        hypercube_linear_le(
+            [
+                reification_literal.get_true_predicate(),
+                l.get_true_predicate(),
+            ],
+            self.linear_terms.clone(),
+            self.linear_rhs - 1,
+            self.constraint_tag,
+        )
+        .post(solver);
+
+        let not_linear_terms = self
+            .linear_terms
+            .into_iter()
+            .map(|(weight, domain)| (-weight, domain));
+        let not_linear_rhs = -self.linear_rhs - 1;
+
+        hypercube_linear_le(
+            [
+                reification_literal.get_true_predicate(),
+                l.get_false_predicate(),
+            ],
+            not_linear_terms,
+            not_linear_rhs,
+            self.constraint_tag,
+        )
+        .post(solver);
+    }
+}
+
+impl<Predicates, LinearTerms> NegatableConstraint for NotHLEqConstraint<Predicates, LinearTerms>
+where
+    Predicates: IntoIterator<Item = Predicate> + Clone + 'static,
+    Predicates::IntoIter: Clone,
+    LinearTerms: IntoIterator<Item = (NonZero<i32>, DomainId)> + Clone + 'static,
+    LinearTerms::IntoIter: Clone,
+{
+    type NegatedConstraint = HLEqConstraint<Predicates, LinearTerms>;
+
+    fn negation(&self) -> Self::NegatedConstraint {
+        HLEqConstraint {
+            hypercube: self.hypercube.clone(),
+            linear_terms: self.linear_terms.clone(),
+            linear_rhs: self.linear_rhs,
+            constraint_tag: self.constraint_tag,
+        }
+    }
+}

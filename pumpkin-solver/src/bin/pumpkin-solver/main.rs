@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use clap::Parser;
 use clap::ValueEnum;
+use clap_verbosity_flag::Verbosity;
 use file_format::FileFormat;
 use log::Level;
 use log::LevelFilter;
@@ -27,6 +28,9 @@ use parsers::dimacs::parse_cnf;
 use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
 use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
+use pumpkin_core::hypercube_linear::HypercubeLinearResolver;
+use pumpkin_core::hypercube_linear::Trace;
+use pumpkin_core::hypercube_linear::TraceOptions;
 use pumpkin_core::propagation::Priority;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_propagators::cumulative::options::CumulativePropagationMethod;
@@ -297,15 +301,9 @@ struct Args {
     )]
     random_seed: u64,
 
-    /// Enables log message output from the solver.
-    ///
-    /// For printing statistics see the option "--log-statistics", and for printing all solutions
-    /// (in case of a satisfaction problem) or printing solutions of increasing quality (in case of
-    /// an optimization problem) see the option "--all-solutions".
-    ///
-    /// Possible values: bool
-    #[arg(short = 'v', long = "verbose", verbatim_doc_comment)]
-    verbose: bool,
+    /// Set the verbosity of the solver logs.
+    #[command(flatten)]
+    verbose: Verbosity,
 
     /// Enables logging of statistics from the solver.
     ///
@@ -410,6 +408,11 @@ struct Args {
     #[arg(long = "memory-preallocated", default_value_t = 50)]
     memory_preallocated: usize,
 
+    /// Include intermediate steps in the hypercube linear proof.
+    ///
+    /// Ignored if not using hypercube linear resolver or not logging a proof.
+    #[arg(long = "hl-proof-with-intermediates", default_value_t)]
+    hl_proof_with_intermediates: bool,
     /// The priority of the nogood propagator.
     #[arg(long = "nogood-priority", value_enum, default_value_t)]
     nogood_propagator_priority: Priority,
@@ -417,16 +420,16 @@ struct Args {
 
 fn configure_logging(
     file_format: FileFormat,
-    verbose: bool,
+    verbosity: Verbosity,
     log_statistics: bool,
     omit_timestamp: bool,
     omit_call_site: bool,
 ) -> std::io::Result<()> {
     match file_format {
         FileFormat::CnfDimacsPLine | FileFormat::WcnfDimacsPLine => {
-            configure_logging_sat(verbose, log_statistics, omit_timestamp, omit_call_site)
+            configure_logging_sat(verbosity, log_statistics, omit_timestamp, omit_call_site)
         }
-        FileFormat::FlatZinc => configure_logging_minizinc(verbose, log_statistics),
+        FileFormat::FlatZinc => configure_logging_minizinc(verbosity, log_statistics),
     }
 }
 
@@ -439,7 +442,7 @@ fn configure_logging_unknown() -> std::io::Result<()> {
     Ok(())
 }
 
-fn configure_logging_minizinc(verbose: bool, log_statistics: bool) -> std::io::Result<()> {
+fn configure_logging_minizinc(verbosity: Verbosity, log_statistics: bool) -> std::io::Result<()> {
     if log_statistics {
         configure_statistic_logging(
             "%%%mzn-stat:",
@@ -448,11 +451,7 @@ fn configure_logging_minizinc(verbose: bool, log_statistics: bool) -> std::io::R
             None,
         );
     }
-    let level_filter = if verbose {
-        LevelFilter::Debug
-    } else {
-        LevelFilter::Warn
-    };
+    let level_filter = verbosity.log_level_filter();
 
     env_logger::Builder::new()
         .format(move |buf, record| {
@@ -468,7 +467,7 @@ fn configure_logging_minizinc(verbose: bool, log_statistics: bool) -> std::io::R
 }
 
 fn configure_logging_sat(
-    verbose: bool,
+    verbosity: Verbosity,
     log_statistics: bool,
     omit_timestamp: bool,
     omit_call_site: bool,
@@ -476,11 +475,7 @@ fn configure_logging_sat(
     if log_statistics {
         configure_statistic_logging("c STAT", None, None, None);
     }
-    let level_filter = if verbose {
-        LevelFilter::Debug
-    } else {
-        LevelFilter::Warn
-    };
+    let level_filter = verbosity.log_level_filter();
 
     env_logger::Builder::new()
         .format(move |buf, record| {
@@ -546,7 +541,9 @@ fn run() -> PumpkinResult<()> {
         );
     };
 
-    let proof_log = if let Some(path_buf) = args.proof_path.as_ref() {
+    let proof_log = if args.conflict_resolver == ConflictResolverType::OneUIP
+        && let Some(path_buf) = args.proof_path.as_ref()
+    {
         match file_format {
             FileFormat::CnfDimacsPLine => ProofLog::dimacs(path_buf)?,
             FileFormat::WcnfDimacsPLine => {
@@ -624,7 +621,8 @@ fn run() -> PumpkinResult<()> {
                     ),
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
-                    verbose: args.verbose,
+                    verbose: args.verbose.log_level_filter() >= LevelFilter::Info,
+                    use_hypercube_linear: false,
                 },
                 NoLearningResolver,
             )?,
@@ -644,7 +642,8 @@ fn run() -> PumpkinResult<()> {
                     ),
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
-                    verbose: args.verbose,
+                    verbose: args.verbose.log_level_filter() >= LevelFilter::Info,
+                    use_hypercube_linear: false,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::OneUIP,
@@ -668,7 +667,8 @@ fn run() -> PumpkinResult<()> {
                     ),
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
-                    verbose: args.verbose,
+                    verbose: args.verbose.log_level_filter() >= LevelFilter::Info,
+                    use_hypercube_linear: false,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::CPIP,
@@ -692,7 +692,8 @@ fn run() -> PumpkinResult<()> {
                     ),
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
-                    verbose: args.verbose,
+                    verbose: args.verbose.log_level_filter() >= LevelFilter::Info,
+                    use_hypercube_linear: false,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::BoundsCPIP,
@@ -716,7 +717,8 @@ fn run() -> PumpkinResult<()> {
                     ),
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
-                    verbose: args.verbose,
+                    verbose: args.verbose.log_level_filter() >= LevelFilter::Info,
+                    use_hypercube_linear: false,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::AllDecision,
@@ -724,6 +726,44 @@ fn run() -> PumpkinResult<()> {
                     iterative_minimisation,
                 ),
             )?,
+            ConflictResolverType::HypercubeLinear => {
+                let trace = args
+                    .proof_path
+                    .as_ref()
+                    .map(File::create)
+                    .transpose()?
+                    .map(|file| {
+                        Trace::to_file(
+                            file,
+                            TraceOptions {
+                                include_intermediate_steps: args.hl_proof_with_intermediates,
+                            },
+                        )
+                    })
+                    .unwrap_or(Trace::discard());
+
+                flatzinc::solve(
+                    Solver::with_options(solver_options),
+                    instance_path,
+                    time_limit,
+                    FlatZincOptions {
+                        free_search: args.free_search,
+                        all_solutions: args.all_solutions,
+                        cumulative_options: CumulativeOptions::new(
+                            args.cumulative_allow_holes,
+                            args.cumulative_explanation_type,
+                            !args.cumulative_single_profiles,
+                            args.cumulative_propagation_method,
+                            args.cumulative_incremental_backtracking,
+                        ),
+                        optimisation_strategy: args.optimisation_strategy,
+                        proof_type: args.proof_path.as_ref().map(|_| args.proof_type),
+                        verbose: args.verbose.log_level_filter() >= LevelFilter::Info,
+                        use_hypercube_linear: true,
+                    },
+                    HypercubeLinearResolver::new(trace),
+                )?
+            }
         },
     }
 

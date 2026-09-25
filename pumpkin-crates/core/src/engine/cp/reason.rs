@@ -4,10 +4,13 @@ use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Trail;
 #[cfg(doc)]
 use crate::containers::KeyedVec;
+use crate::predicate;
 use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
 use crate::propagation::ExplanationContext;
+use crate::propagation::Propagator;
 use crate::propagation::PropagatorId;
+use crate::propagation::ReadDomains;
 use crate::propagation::store::PropagatorStore;
 use crate::pumpkin_assert_simple;
 
@@ -45,23 +48,27 @@ impl ReasonStore {
         context: ExplanationContext<'_>,
         propagators: &mut PropagatorStore,
         destination_buffer: &mut impl Extend<Predicate>,
+        predicate_to_explain: Predicate,
     ) -> InferenceCode {
         let reason = self
             .trail
             .get(reference.0 as usize)
-            .expect("reason reference should not be stale");
+            .expect("cannot get reason for predicate");
 
-        reason
-            .1
-            .compute(context, reason.0, propagators, destination_buffer)
+        reason.1.compute(
+            context,
+            reason.0,
+            propagators,
+            destination_buffer,
+            predicate_to_explain,
+        )
     }
 
-    #[allow(unused, reason = "Will be reintroduced with database management")]
-    pub(crate) fn get_lazy_code(&self, reference: ReasonRef) -> Option<&u64> {
+    pub(crate) fn get_lazy_code(&self, reference: ReasonRef) -> Option<u64> {
         match self.trail.get(reference.0 as usize) {
             Some(reason) => match &reason.1 {
                 StoredReason::Eager(_, _) => None,
-                StoredReason::DynamicLazy(code) => Some(code),
+                StoredReason::DynamicLazy(code) => Some(*code),
             },
             None => None,
         }
@@ -131,21 +138,118 @@ impl StoredReason {
         propagator_id: PropagatorId,
         propagators: &mut PropagatorStore,
         destination_buffer: &mut impl Extend<Predicate>,
+        predicate_to_explain: Predicate,
     ) -> InferenceCode {
         match self {
             // We do not replace the reason with an eager explanation for dynamic lazy explanations.
             //
             // Benchmarking will have to show whether this should change or not.
-            StoredReason::DynamicLazy(code) => {
-                let expl = propagators[propagator_id].lazy_explanation(*code, context);
-                destination_buffer.extend(expl.predicates.iter().copied());
-                expl.inference_code
-            }
+            StoredReason::DynamicLazy(code) => self.compute_lazy_explanation(
+                context,
+                *code,
+                &mut propagators[propagator_id],
+                destination_buffer,
+                predicate_to_explain,
+            ),
+
             StoredReason::Eager(result, inference_code) => {
                 destination_buffer.extend(result.iter().copied());
                 inference_code.clone()
             }
         }
+    }
+
+    fn compute_lazy_explanation(
+        &self,
+        mut context: ExplanationContext<'_>,
+        code: u64,
+        propagator: &mut dyn Propagator,
+        destination_buffer: &mut impl Extend<Predicate>,
+        predicate_to_explain: Predicate,
+    ) -> InferenceCode {
+        if let Some((hypercube, linear, inference_code)) =
+            propagator.explain_as_hypercube_linear(code, context.reborrow())
+        {
+            convert_hl_to_clause(
+                context,
+                hypercube,
+                linear,
+                destination_buffer,
+                predicate_to_explain,
+            );
+            inference_code
+        } else {
+            let explanation = propagator.lazy_explanation(code, context);
+            destination_buffer.extend(explanation.predicates.iter().copied());
+            explanation.inference_code
+        }
+    }
+}
+
+fn convert_hl_to_clause(
+    context: ExplanationContext<'_>,
+    hypercube: crate::hypercube_linear::Hypercube,
+    linear: crate::hypercube_linear::LinearInequality,
+    destination_buffer: &mut impl Extend<Predicate>,
+    predicate_to_explain: Predicate,
+) {
+    let unsatisfied_hypercube_predicates = hypercube
+        .iter_predicates()
+        .filter(|&p| {
+            context.evaluate_predicate_at_trail_position(p, context.get_trail_position())
+                != Some(true)
+        })
+        .collect::<Vec<_>>();
+
+    if unsatisfied_hypercube_predicates.is_empty() {
+        // The propagation is part of the linear. The hypercube is entirely part of the
+        // reason.
+        destination_buffer.extend(hypercube.iter_predicates());
+
+        // Add all lower bounds, except for the domain that was propagated. The iterator is
+        // guaranteed to yield every domain at most once.
+        destination_buffer.extend(linear.terms().filter_map(|term| {
+            if term.inner == predicate_to_explain.get_domain() {
+                None
+            } else {
+                let lb = context.lower_bound_at_trail_position(&term, context.get_trail_position());
+                Some(predicate![term >= lb])
+            }
+        }));
+    } else {
+        assert_eq!(
+            unsatisfied_hypercube_predicates.len(),
+            1,
+            "cannot have more than one unassigned predicate when a hypercube linear propagates"
+        );
+
+        let unsatisfied_predicate = unsatisfied_hypercube_predicates[0];
+
+        // Add all true predicates in the hypercube.
+        destination_buffer.extend(
+            hypercube
+                .iter_predicates()
+                .filter(|&p| p != unsatisfied_predicate),
+        );
+
+        // Add all lower bounds that are true.
+        destination_buffer.extend(
+            linear
+                .terms()
+                .filter_map(|term| {
+                    if term.inner == predicate_to_explain.get_domain() {
+                        None
+                    } else {
+                        let lb = context
+                            .lower_bound_at_trail_position(&term, context.get_trail_position());
+                        Some(predicate![term >= lb])
+                    }
+                })
+                .filter(|&p| {
+                    context.evaluate_predicate_at_trail_position(p, context.get_trail_position())
+                        == Some(true)
+                }),
+        );
     }
 }
 
@@ -217,6 +321,7 @@ mod tests {
             PropagatorId(0),
             &mut PropagatorStore::default(),
             &mut out_reason,
+            predicate![x == 5],
         );
 
         assert_eq!(conjunction.as_slice(), &out_reason);
@@ -245,6 +350,7 @@ mod tests {
             ExplanationContext::test_new(&integers, &mut notification_engine),
             &mut PropagatorStore::default(),
             &mut out_reason,
+            predicate![x == 5],
         );
 
         assert_eq!(conjunction.as_slice(), &out_reason);

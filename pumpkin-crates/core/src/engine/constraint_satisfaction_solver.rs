@@ -5,6 +5,7 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use log::trace;
 #[allow(
     clippy::disallowed_types,
     reason = "any rand generator is a valid implementation of Random"
@@ -160,6 +161,8 @@ pub enum ConflictResolverType {
     /// at the first point where extended nogood propagation can take place, it stops when
     /// extended nogood propagation can adjust a bound upon learning.
     BoundsExtendedCPIP,
+    /// Conflict analysis by hypercube linear resolution.
+    HypercubeLinear,
 }
 
 /// Options for the [`Solver`] which determine how it behaves.
@@ -218,7 +221,9 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn complete_proof(&mut self) {
-        if !self.internal_parameters.proof_log.is_logging_proof() {
+        if !self.internal_parameters.proof_log.is_logging_proof()
+            || self.internal_parameters.analysis_mode == ConflictResolverType::HypercubeLinear
+        {
             return;
         }
 
@@ -280,6 +285,7 @@ impl ConstraintSatisfactionSolver {
                     PropagationMode::ExtendedNogoodPropagation
                 }
                 ConflictResolverType::NoLearning => PropagationMode::default(),
+                ConflictResolverType::HypercubeLinear => PropagationMode::UnitPropagation,
             },
             solver_options.learning_options.nogood_propagator_priority,
         ));
@@ -580,6 +586,7 @@ impl ConstraintSatisfactionSolver {
                     Ok(()) => {}
                 }
             } else {
+                trace!("Conflict detected @ {}", self.state.get_checkpoint());
                 if self.get_checkpoint() == 0 {
                     self.complete_proof();
                     self.solver_state.declare_infeasible();
@@ -639,6 +646,12 @@ impl ConstraintSatisfactionSolver {
         };
 
         self.new_checkpoint();
+
+        trace!(
+            "Branching {} @ {}",
+            decision_predicate,
+            self.state.get_checkpoint()
+        );
 
         // Note: This also checks that the decision predicate is not already true. That is a
         // stronger check than the `.expect(...)` used later on when handling the result of
