@@ -4,3 +4,13 @@ pub enum CSPSolverExecutionFlag {
     Infeasible,
     Timeout,
 }
+
+impl CSPSolverExecutionFlag {
+    pub fn is_feasible(&self) -> bool {
+        matches!(self, CSPSolverExecutionFlag::Feasible)
+    }
+
+    pub fn is_infeasible(&self) -> bool {
+        matches!(self, CSPSolverExecutionFlag::Infeasible)
+    }
+}

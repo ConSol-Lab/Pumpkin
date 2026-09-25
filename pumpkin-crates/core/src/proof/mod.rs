@@ -42,7 +42,7 @@ use crate::variables::Literal;
 #[derive(Debug, Default)]
 pub struct ProofLog {
     internal_proof: Option<ProofImpl>,
-    supporting_inferences: Vec<SupportingInference<Predicate>>,
+    pub(crate) supporting_inferences: Vec<SupportingInference<Predicate>>,
 }
 
 impl ProofLog {
@@ -117,9 +117,11 @@ impl ProofLog {
                 .filter(|&predicate| !is_likely_a_constant(predicate, variable_names, assignments))
                 .map(|premise| proof_atomics.map_predicate_to_proof_atomic(premise, variable_names))
                 .collect(),
-            consequent: propagated.map(|predicate| {
-                proof_atomics.map_predicate_to_proof_atomic(predicate, variable_names)
-            }),
+            consequent: propagated
+                .filter(|&predicate| !is_likely_a_constant(predicate, variable_names, assignments))
+                .map(|predicate| {
+                    proof_atomics.map_predicate_to_proof_atomic(predicate, variable_names)
+                }),
             generated_by: Some(inference_code.tag().into()),
             label: Some(inference_code.label()),
         };
@@ -284,7 +286,7 @@ impl ProofLog {
         match self.internal_proof {
             Some(ProofImpl::CpProof {
                 mut writer,
-                mut proof_atomics,
+                proof_atomics,
                 ..
             }) => {
                 let atomic =
@@ -377,7 +379,7 @@ fn is_likely_a_constant(
 
     let is_unnamed = variable_names.get_int_name(domain).is_none();
 
-    is_fixed && is_unnamed
+    is_fixed || is_unnamed
 }
 
 /// A wrapper around either a file or a gzipped file.

@@ -8,7 +8,7 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_propagators::arithmetic::AbsoluteValueArgs;
 use pumpkin_propagators::arithmetic::DivisionArgs;
-use pumpkin_propagators::arithmetic::IntegerMultiplicationArgs;
+use pumpkin_propagators::arithmetic::IntegerMultiplicationConstructor;
 use pumpkin_propagators::arithmetic::MaximumArgs;
 
 /// Creates the [`Constraint`] `a + b = c`.
@@ -28,7 +28,7 @@ pub fn times(
     c: impl IntegerVariable + 'static,
     constraint_tag: ConstraintTag,
 ) -> impl Constraint {
-    IntegerMultiplicationArgs {
+    IntegerMultiplicationConstructor {
         a,
         b,
         c,

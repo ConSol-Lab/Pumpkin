@@ -138,12 +138,15 @@ where
                 None => {}
             }
 
-            solver
-                .add_clause(
-                    [predicate![objective >= objective_lower_bound + 1]],
-                    ConstraintTag::from_non_zero(NonZero::<u32>::MAX),
-                )
-                .expect("this should always be valid given the previous solves");
+            solver.add_clause(
+                [predicate![objective >= objective_lower_bound + 1]],
+                ConstraintTag::from_non_zero(NonZero::<u32>::MAX),
+            );
+
+            // Next, we perform root-level propagation to ensure that the lower-bound is as tight
+            // as it could be.
+            let result = solver.propagate_to_fixpoint();
+            assert!(result.is_feasible());
 
             proven_lower_bound = objective_lower_bound + 1;
             objective_lower_bound = solver.lower_bound(&objective);

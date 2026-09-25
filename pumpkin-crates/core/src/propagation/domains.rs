@@ -59,7 +59,7 @@ pub trait ReadDomains {
     fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool>;
 
     /// Returns whether the provided [`Predicate`] is assigned (either true or false) or is
-    /// currently unassigned at the given trail position.
+    /// assigned at the provided trail position.
     fn evaluate_predicate_at_trail_position(
         &self,
         predicate: Predicate,

@@ -15,7 +15,7 @@ pub(crate) struct PredicateHeap {
 
 impl PredicateHeap {
     /// See [`BinaryHeap::is_empty`].
-    pub(crate) fn is_empty(&mut self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.heap.is_empty()
     }
 
@@ -197,7 +197,7 @@ mod tests {
 
     #[test]
     fn new_heap_is_empty() {
-        let mut heap = PredicateHeap::default();
+        let heap = PredicateHeap::default();
         assert!(heap.is_empty());
     }
 

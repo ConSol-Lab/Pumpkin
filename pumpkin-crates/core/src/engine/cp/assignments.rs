@@ -663,6 +663,84 @@ impl Assignments {
         }
     }
 
+    /// Determines whether the provided [`Predicate`] holds at the provided trail position. In case
+    /// the predicate is not assigned yet (neither true nor false), returns None.
+    pub(crate) fn evaluate_predicate_at_trail_position(
+        &self,
+        predicate: Predicate,
+        trail_position: usize,
+    ) -> Option<bool> {
+        let domain_id = predicate.get_domain();
+        let value = predicate.get_right_hand_side();
+
+        match predicate.get_predicate_type() {
+            PredicateType::LowerBound => {
+                if self.get_lower_bound_at_trail_position(domain_id, trail_position) >= value {
+                    Some(true)
+                } else if self.get_upper_bound_at_trail_position(domain_id, trail_position) < value
+                {
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            PredicateType::UpperBound => {
+                if self.get_upper_bound_at_trail_position(domain_id, trail_position) <= value {
+                    Some(true)
+                } else if self.get_lower_bound_at_trail_position(domain_id, trail_position) > value
+                {
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            PredicateType::NotEqual => {
+                if !self.is_value_in_domain_at_trail_position(domain_id, value, trail_position) {
+                    Some(true)
+                } else if let Some(assigned_value) =
+                    self.get_assigned_value_at_trail_position(&domain_id, trail_position)
+                {
+                    // Previous branch concluded the value is not in the domain, so if the variable
+                    // is assigned, then it is assigned to the not equals value.
+                    pumpkin_assert_simple!(assigned_value == value);
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            PredicateType::Equal => {
+                if !self.is_value_in_domain_at_trail_position(domain_id, value, trail_position) {
+                    Some(false)
+                } else if let Some(assigned_value) =
+                    self.get_assigned_value_at_trail_position(&domain_id, trail_position)
+                {
+                    pumpkin_assert_moderate!(assigned_value == value);
+                    Some(true)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    pub(crate) fn get_assigned_value_at_trail_position<Var: IntegerVariable>(
+        &self,
+        var: &Var,
+        trail_position: usize,
+    ) -> Option<i32> {
+        self.is_domain_assigned_at_trail_position(var, trail_position)
+            .then(|| var.lower_bound(self))
+    }
+
+    pub(crate) fn is_domain_assigned_at_trail_position<Var: IntegerVariable>(
+        &self,
+        var: &Var,
+        trail_position: usize,
+    ) -> bool {
+        var.lower_bound_at_trail_position(self, trail_position)
+            == var.upper_bound_at_trail_position(self, trail_position)
+    }
+
     pub(crate) fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
         self.evaluate_predicate(predicate)
             .is_some_and(|truth_value| truth_value)
@@ -787,62 +865,6 @@ impl Assignments {
     /// Get the last trail position that is on the given checkpoint.
     pub(crate) fn get_trail_position_at_checkpoint(&self, checkpoint: usize) -> usize {
         self.trail.get_trail_position_at_decision_level(checkpoint)
-    }
-
-    /// Same as [ Self::evaluate_predicate`] but at a given trail position.
-    pub(crate) fn evaluate_predicate_at_trail_position(
-        &self,
-        predicate: Predicate,
-        trail_position: usize,
-    ) -> Option<bool> {
-        let domain_id = predicate.get_domain();
-        let value = predicate.get_right_hand_side();
-
-        let lb = self.get_lower_bound_at_trail_position(domain_id, trail_position);
-        let ub = self.get_upper_bound_at_trail_position(domain_id, trail_position);
-
-        match predicate.get_predicate_type() {
-            PredicateType::LowerBound => {
-                if lb >= value {
-                    Some(true)
-                } else if ub < value {
-                    Some(false)
-                } else {
-                    None
-                }
-            }
-            PredicateType::UpperBound => {
-                if ub <= value {
-                    Some(true)
-                } else if lb > value {
-                    Some(false)
-                } else {
-                    None
-                }
-            }
-            PredicateType::NotEqual => {
-                if !self.is_value_in_domain_at_trail_position(domain_id, value, trail_position) {
-                    Some(true)
-                } else if lb == ub {
-                    // Previous branch concluded the value is not in the domain, so if the variable
-                    // is assigned, then it is assigned to the not equals value.
-                    pumpkin_assert_simple!(lb == value);
-                    Some(false)
-                } else {
-                    None
-                }
-            }
-            PredicateType::Equal => {
-                if !self.is_value_in_domain_at_trail_position(domain_id, value, trail_position) {
-                    Some(false)
-                } else if lb == ub {
-                    pumpkin_assert_moderate!(lb == value);
-                    Some(true)
-                } else {
-                    None
-                }
-            }
-        }
     }
 }
 

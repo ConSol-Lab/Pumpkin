@@ -26,21 +26,21 @@ macro_rules! python_constraint {
         }
 
         impl $name {
-            pub fn post(
+            pub(crate) fn post(
                 self,
                 solver: &mut pumpkin_solver::Solver,
-            ) -> Result<(), pumpkin_solver::core::ConstraintOperationError> {
+            ) {
                 pumpkin_constraints::$constraint_func(
                     $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field)),+ ,
                     self.constraint_tag.0,
                 ).post(solver)
             }
 
-            pub fn implied_by(
+            pub(crate) fn implied_by(
                 self,
                 solver: &mut pumpkin_solver::Solver,
                 reification_literal: pumpkin_solver::core::variables::Literal,
-            ) -> Result<(), pumpkin_solver::core::ConstraintOperationError> {
+            ) {
                 pumpkin_constraints::$constraint_func(
                     $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field)),+ ,
                     self.constraint_tag.0,

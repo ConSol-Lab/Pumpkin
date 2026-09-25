@@ -30,7 +30,7 @@ pub(crate) fn compile(
     reserve_constraint_tags::run(&ast, &mut context)?;
     remove_unused_variables::run(&mut ast, &mut context)?;
     prepare_variables::run(&ast, &mut context)?;
-    merge_equivalences::run(&mut ast, &mut context, &options)?;
+    merge_equivalences::run(&ast, &mut context, &options)?;
     handle_set_in::run(&mut context)?;
     collect_domains::run(&ast, &mut context)?;
     define_variable_arrays::run(&ast, &mut context)?;

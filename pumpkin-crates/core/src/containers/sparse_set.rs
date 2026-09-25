@@ -129,7 +129,7 @@ impl<T> SparseSet<T> {
     }
 
     pub fn set_to_empty(&mut self) {
-        self.indices = vec![usize::MAX; self.indices.len()];
+        self.indices.fill(usize::MAX);
         self.domain.clear();
         self.size = 0;
     }

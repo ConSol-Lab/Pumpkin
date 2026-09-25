@@ -24,17 +24,15 @@ fn proof_with_reified_literals() {
 
     solver
         .add_constraint(pumpkin_constraints::clause(vec![literal], constraint_tag))
-        .post()
-        .expect("no error");
+        .post();
 
-    let _ = solver
+    solver
         .add_constraint(pumpkin_constraints::not_equals(
             [variable],
             5,
             constraint_tag,
         ))
-        .post()
-        .expect_err("unsat");
+        .post();
 
     let mut brancher = solver.default_brancher();
     let mut resolver = ResolutionResolver::default();
@@ -61,17 +59,15 @@ fn proof_with_equality_unit_nogood_step() {
             x2,
             constraint_tag,
         ))
-        .post()
-        .expect("no conflict");
+        .post();
 
-    let _ = solver
+    solver
         .add_constraint(pumpkin_constraints::less_than_or_equals(
             [x1],
             1,
             constraint_tag,
         ))
-        .post()
-        .expect_err("conflict");
+        .post();
 
     let mut brancher = solver.default_brancher();
     let mut resolver = ResolutionResolver::default();

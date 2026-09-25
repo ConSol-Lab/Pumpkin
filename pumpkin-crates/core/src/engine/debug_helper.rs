@@ -152,7 +152,7 @@ impl DebugHelper {
         propagator_id: PropagatorId,
         trailed_values: &TrailedValues,
         assignments: &Assignments,
-        reason_store: &mut ReasonStore,
+        reason_store: &ReasonStore,
         propagators: &mut PropagatorStore,
         notification_engine: &NotificationEngine,
     ) -> bool {

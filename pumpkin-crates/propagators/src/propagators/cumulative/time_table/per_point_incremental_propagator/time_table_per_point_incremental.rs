@@ -11,7 +11,6 @@ use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
-use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
@@ -20,6 +19,8 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::propagator_conflict;
 use pumpkin_core::variables::IntegerVariable;
@@ -107,36 +108,43 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 {
     type PropagatorImpl = Self;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, TimeTable),
-            Box::new(TimeTableChecker {
-                tasks: self
-                    .parameters
-                    .tasks
-                    .iter()
-                    .map(|task| CheckerTask {
-                        start_time: task.start_variable.clone(),
-                        processing_time: task.processing_time,
-                        resource_usage: task.resource_usage,
-                    })
-                    .collect(),
-                capacity: self.parameters.capacity,
-            }),
-        );
-    }
-
-    fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        register_tasks(&self.parameters.tasks, context.reborrow(), true);
+    fn create(
+        mut self,
+        mut context: PropagatorConstructorContext,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
+        let registration = register_tasks(&self.parameters.tasks, context.reborrow(), true);
         self.updatable_structures
             .reset_all_bounds_and_remove_fixed(context.domains(), &self.parameters);
 
         // Then we do normal propagation
         self.is_time_table_outdated = true;
 
-        self.inference_code = Some(InferenceCode::new(self.constraint_tag, TimeTable));
+        let mut checkers = RuntimeCheckers::builder();
+        self.inference_code = Some(
+            checkers.add_inference_checker(
+                self.constraint_tag,
+                TimeTable,
+                TimeTableChecker {
+                    tasks: self
+                        .parameters
+                        .tasks
+                        .iter()
+                        .map(|task| CheckerTask {
+                            start_time: task.start_variable.clone(),
+                            processing_time: task.processing_time,
+                            resource_usage: task.resource_usage,
+                        })
+                        .collect(),
+                    capacity: self.parameters.capacity,
+                },
+            ),
+        );
 
-        self
+        PropagatorSpec {
+            registration,
+            checkers: checkers.build(),
+            propagator: self,
+        }
     }
 }
 
@@ -165,16 +173,17 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
 
     /// Adds the added parts in the provided [`MandatoryPartAdjustments`] to the time-table; note
     /// that all of the adjustments are applied even if a conflict is found.
-    fn add_to_time_table(
+    ///
+    /// Returns true if the addition of the mandatory parts caused an overflow.
+    fn conflicting_after_addition_to_time_table(
         &mut self,
-        mut context: Domains,
         mandatory_part_adjustments: &MandatoryPartAdjustments,
         task: &Rc<Task<Var>>,
-    ) -> PropagationStatusCP {
+    ) -> bool {
         // Go over all of the updated tasks and calculate the added mandatory part (we know
         // that for each of these tasks, a mandatory part exists, otherwise it would not
         // have been added (see [`should_propagate`]))
-        let mut conflict = None;
+        let mut conflict = false;
 
         for time_point in mandatory_part_adjustments.get_added_parts().flatten() {
             pumpkin_assert_extreme!(
@@ -200,25 +209,10 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
             current_profile.height += task.resource_usage;
             current_profile.profile_tasks.push(Rc::clone(task));
 
-            if current_profile.height > self.parameters.capacity && conflict.is_none() {
-                // The newly introduced mandatory part(s) caused an overflow of the resource
-                conflict = Some(Err(create_conflict_explanation(
-                    context.reborrow(),
-                    self.inference_code.as_ref().unwrap(),
-                    current_profile,
-                    self.parameters.options.explanation_type,
-                    self.parameters.capacity,
-                )
-                .into()));
-            }
+            conflict |= current_profile.height > self.parameters.capacity;
         }
 
-        // If we have found a conflict then we report it
-        if let Some(conflict) = conflict {
-            conflict
-        } else {
-            Ok(())
-        }
+        conflict
     }
 
     /// Removes the removed parts in the provided [`MandatoryPartAdjustments`] from the time-table
@@ -316,14 +310,13 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
             //
             // Note that the inconsistency returned here does not necessarily hold since other
             // updates could remove from the profile
-            let result = self.add_to_time_table(
-                context.domains(),
+            let conflicting = self.conflicting_after_addition_to_time_table(
                 &mandatory_part_adjustments,
                 &updated_task,
             );
 
             // If we have found an overflow then we mark that we need to check the profile
-            found_conflict |= result.is_err();
+            found_conflict |= conflicting;
 
             // Then we reset the update for the task since it has been processed
             self.updatable_structures
@@ -481,11 +474,10 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         // However, this could mean that we potentially enqueue even though the time-table is empty
         // after backtracking but has not been recalculated yet.
         let result = should_enqueue(
-            &self.parameters,
             &self.updatable_structures,
             &updated_task,
             context.domains(),
-            self.time_table.is_empty(),
+            &self.parameters,
         );
 
         // If there is a task which now has a mandatory part then we store it and process it when

@@ -507,7 +507,7 @@ impl HypercubeLinearResolver {
     /// linear term predicates are seeded into [`Self::predicates_to_explain`] by
     /// [`Self::run_resolution`] via [`Self::explain_linear`].
     fn collect_initial_conflict(
-        &mut self,
+        &self,
         state: &mut State,
         conflict: Conflict,
     ) -> (Vec<Predicate>, LinearInequality) {
@@ -534,7 +534,7 @@ impl HypercubeLinearResolver {
 
     /// See [`Self::collect_initial_conflict`].
     fn collect_initial_conflict_from_empty_domain(
-        &mut self,
+        &self,
         state: &mut State,
         empty_domain_conflict: EmptyDomainConflict,
     ) -> (Vec<Predicate>, LinearInequality) {
@@ -688,7 +688,7 @@ impl HypercubeLinearResolver {
 
     fn fourier_resolve(
         &mut self,
-        trail: &mut impl TrailView,
+        trail: &impl TrailView,
         trail_position: usize,
         pivot: Predicate,
         explanation: &HypercubeLinear,

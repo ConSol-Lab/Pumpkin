@@ -1,0 +1,207 @@
+use std::collections::hash_map::Entry;
+
+use itertools::Itertools;
+use pumpkin_core::asserts::pumpkin_assert_simple;
+use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
+use pumpkin_core::containers::HashMap;
+use pumpkin_core::predicates::Predicate;
+use pumpkin_core::predicates::PredicateIdGenerator;
+use pumpkin_core::predicates::PredicateType;
+use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::variables::DomainId;
+
+use crate::resolvers::WorkingNogood;
+
+/// Determines the different type of resolution-based analysis modes that are supported.
+#[derive(Debug, Clone, Copy)]
+pub enum AnalysisMode {
+    /// Standard conflict analysis which returns as soon as the first unit implication point is
+    /// found (i.e. when a nogood is created which only contains a single predicate from the
+    /// current decision level).
+    OneUIP,
+    /// An alternative to 1-UIP which stops as soon as the learned nogood only creates decision
+    /// predicates.
+    AllDecision,
+    /// Learns CPIP nogoods \[1\] (i.e., nogoods which only have predicates from the current
+    /// decision level which reason over a single variable when learning).
+    ///
+    /// # Bibliography
+    /// - \[1\] I. Marijnissen, M. Flippo, and E. Demirović, ‘From Literals to Atomic Constraints:
+    ///   Generalising Conflict-Driven Clause Learning for Constraint Programming’, in 32nd
+    ///   International Conference on Principles and Practice of Constraint Programming (CP 2026),
+    ///   2026, vol. 379, p. 42:1-42:21.
+    CPIP,
+    /// Learns CPIP nogoods \[1\] but rather than stopping at the first point where extended nogood
+    /// propagation can take place, it stops when extended nogood propagation can adjust a bound
+    /// upon learning.
+    ///
+    /// # Bibliography
+    /// - \[1\] I. Marijnissen, M. Flippo, and E. Demirović, ‘From Literals to Atomic Constraints:
+    ///   Generalising Conflict-Driven Clause Learning for Constraint Programming’, in 32nd
+    ///   International Conference on Principles and Practice of Constraint Programming (CP 2026),
+    ///   2026, vol. 379, p. 42:1-42:21.
+    BoundsCPIP,
+}
+
+impl AnalysisMode {
+    /// Returns whether the provided [`Predicate`] (which became true at `decision_level`) should
+    /// be processed further.
+    ///
+    /// If false is returned, then the provided [`Predicate`] is added directly to the nogood.
+    pub(crate) fn predicate_should_be_processed(
+        &self,
+        predicate: Predicate,
+        decision_level: usize,
+        context: &ConflictAnalysisContext,
+    ) -> bool {
+        match self {
+            AnalysisMode::OneUIP | AnalysisMode::CPIP | AnalysisMode::BoundsCPIP => {
+                // The predicate should be processed further if it is not from the current decision
+                // level
+                decision_level == context.get_checkpoint()
+            }
+            AnalysisMode::AllDecision => {
+                // The predicate should be processed further if it is not a decision
+                !context.is_decision_predicate(predicate)
+            }
+        }
+    }
+
+    /// Returns whether to continue resolving.
+    pub(crate) fn should_continue_resolving(
+        &self,
+        predicate_id_generator: &PredicateIdGenerator,
+        working_nogood: &WorkingNogood,
+    ) -> bool {
+        match self {
+            AnalysisMode::OneUIP => {
+                // We wait until there is only a single element from the current decision level
+                // left.
+                working_nogood.num_current_checkpoint() > 1
+            }
+            AnalysisMode::AllDecision => {
+                // We wait until there are only decisions left.
+                working_nogood.num_current_checkpoint() > 0
+            }
+            AnalysisMode::CPIP => {
+                // We wait until there are only elements over a single variable left.
+                working_nogood.num_unique_variables_current_checkpoint() > 1
+            }
+            AnalysisMode::BoundsCPIP => {
+                // We wait until extended nogood propagation can propagate a bound.
+                //
+                // Firstly, there should be only elements over a single element.
+                // Secondly, one of the following should hold:
+                // - There is a lower-bound present but no upper-bound OR there is an upper-bound
+                //   present but no lower-bound
+                // - There are only holes present
+                // - There is an equality present (would necessarily lead to a single predicate due
+                //   to semantic minimisation)
+                let present_domain_ids = working_nogood
+                    .predicate_ids_current_checkpoint()
+                    .map(|predicate_id| {
+                        predicate_id_generator
+                            .get_predicate(predicate_id)
+                            .get_domain()
+                    })
+                    .unique()
+                    .collect::<Vec<_>>();
+                if present_domain_ids.len() > 1 {
+                    true
+                } else {
+                    // We calculate the number of predicate types from the current decision
+                    // level (note that they are necessarily over a
+                    // single variable) to determine when bound
+                    // propagation can take place.
+                    let (mut lower_bounds, mut upper_bounds, mut _disequalities, mut equalities) =
+                        (0, 0, 0, 0);
+                    for predicate_id in working_nogood.predicate_ids_current_checkpoint() {
+                        let predicate = predicate_id_generator.get_predicate(predicate_id);
+                        match predicate.get_predicate_type() {
+                            PredicateType::LowerBound => lower_bounds += 1,
+                            PredicateType::NotEqual => _disequalities += 1,
+                            PredicateType::Equal => equalities += 1,
+                            PredicateType::UpperBound => upper_bounds += 1,
+                        }
+                    }
+                    // We return true if we cannot propagate any bounds
+                    //
+                    // We can propagate bounds in the following situations:
+                    // - There is a lower-bound present but no upper-bound OR there is an
+                    //   upper-bound present but no lower-bound
+                    // - There are only holes present
+                    // - There is an equality present (would necessarily lead to a single
+                    // predicate due to semantic minimisation)
+                    !((lower_bounds > 0 && upper_bounds == 0)
+                        || (lower_bounds == 0 && upper_bounds > 0)
+                        || (lower_bounds == 0 && upper_bounds == 0)
+                        || equalities > 0)
+                }
+            }
+        }
+    }
+
+    /// Whether the analysis mode learns CPIP nogoods.
+    pub(crate) fn uses_cpip(&self) -> bool {
+        matches!(self, AnalysisMode::CPIP | AnalysisMode::BoundsCPIP)
+    }
+
+    /// Called whenever a [`Predicate`] is added to the nogood by the resolution resolver.
+    ///
+    /// A helper is passed which contains how many times a [`DomainId`] appears in the current
+    /// nogood.
+    pub(crate) fn predicate_added_to_nogood(
+        &self,
+        predicate: Predicate,
+        unique_variable_helper: &mut HashMap<DomainId, u32>,
+    ) {
+        match self {
+            AnalysisMode::CPIP | AnalysisMode::BoundsCPIP => {
+                // We get the current count for the domain, or insert it if it does not exist
+                let entry = unique_variable_helper
+                    .entry(predicate.get_domain())
+                    .or_default();
+
+                *entry += 1
+            }
+            AnalysisMode::OneUIP | AnalysisMode::AllDecision => {}
+        }
+    }
+
+    /// Called whenever a [`Predicate`] is removed from the nogood by the resolution resolver.
+    ///
+    /// A helper is passed which contains how many times a [`DomainId`] appears in the current
+    /// nogood.
+    pub(crate) fn predicate_removed_from_nogood(
+        &self,
+        predicate: Predicate,
+        unique_variable_helper: &mut HashMap<DomainId, u32>,
+    ) {
+        match self {
+            AnalysisMode::CPIP | AnalysisMode::BoundsCPIP => {
+                // First, we find the entry
+                let entry = unique_variable_helper.entry(predicate.get_domain());
+
+                match entry {
+                    Entry::Occupied(mut occupied_entry) => {
+                        let value = occupied_entry.get_mut();
+
+                        pumpkin_assert_simple!(*value > 0);
+
+                        if *value == 1 {
+                            // We remove the entry in its entirety if the count ever reaches 0.
+                            let _ = occupied_entry.remove();
+                        } else {
+                            // Otherwise, we simply reduce the count by 1.
+                            *value -= 1;
+                        }
+                    }
+                    Entry::Vacant(_) => {
+                        panic!("When removing a predicate from a nogood, it should exist.")
+                    }
+                }
+            }
+            AnalysisMode::OneUIP | AnalysisMode::AllDecision => {}
+        }
+    }
+}

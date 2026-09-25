@@ -51,6 +51,7 @@ use crate::propagation::store::PropagatorHandle;
 use crate::propagators::nogoods::NogoodChecker;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
+use crate::propagators::nogoods::PropagationMode;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_ne_moderate;
@@ -144,8 +145,23 @@ pub enum CoreExtractionResult {
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum ConflictResolverType {
     NoLearning,
+    /// Standard conflict analysis which returns as soon as the first unit implication point is
+    /// found (i.e. when a nogood is created which only contains a single predicate from the
+    /// current decision level).
     #[default]
-    UIP,
+    OneUIP,
+    /// An alternative to 1-UIP which stops as soon as the learned nogood only creates decision
+    /// predicates.
+    AllDecision,
+    /// Learns CPIP nogoods (i.e., nogoods which only have predicates from the current decision
+    /// level which reason over a single variable when learning) in combination with extended nogood
+    /// propagation.
+    ExtendedCPIP,
+    /// Learns CPIP nogoods in combination with extended nogood propagation but rather than stopping
+    /// at the first point where extended nogood propagation can take place, it stops when
+    /// extended nogood propagation can adjust a bound upon learning.
+    BoundsExtendedCPIP,
+    /// Conflict analysis by hypercube linear resolution.
     HypercubeLinear,
 }
 
@@ -154,8 +170,6 @@ pub enum ConflictResolverType {
 pub struct SatisfactionSolverOptions {
     /// The options used by the restart strategy.
     pub restart_options: RestartOptions,
-    /// Whether learned clause minimisation should take place
-    pub should_minimise_nogoods: bool,
     /// A random number generator which is used by the [`Solver`] to determine randomised values.
     pub random_generator: SmallRng,
     /// The proof log for the solver.
@@ -164,20 +178,18 @@ pub struct SatisfactionSolverOptions {
     pub learning_options: LearningOptions,
     /// The number of MBs which are preallocated by the nogood propagator.
     pub memory_preallocated: usize,
-    /// The type of conflict resolver being used.
-    pub resolver_type: ConflictResolverType,
+    pub analysis_mode: ConflictResolverType,
 }
 
 impl Default for SatisfactionSolverOptions {
     fn default() -> Self {
         SatisfactionSolverOptions {
             restart_options: RestartOptions::default(),
-            should_minimise_nogoods: true,
             random_generator: SmallRng::seed_from_u64(42),
             proof_log: ProofLog::default(),
             learning_options: LearningOptions::default(),
             memory_preallocated: 50,
-            resolver_type: Default::default(),
+            analysis_mode: ConflictResolverType::default(),
         }
     }
 }
@@ -209,7 +221,9 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn complete_proof(&mut self) {
-        if self.internal_parameters.resolver_type != ConflictResolverType::UIP {
+        if !self.internal_parameters.proof_log.is_logging_proof()
+            || self.internal_parameters.analysis_mode == ConflictResolverType::HypercubeLinear
+        {
             return;
         }
 
@@ -263,6 +277,17 @@ impl ConstraintSatisfactionSolver {
         let handle = state.add_propagator(NogoodPropagatorConstructor::new(
             (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
             solver_options.learning_options,
+            match solver_options.analysis_mode {
+                ConflictResolverType::OneUIP | ConflictResolverType::AllDecision => {
+                    PropagationMode::UnitPropagation
+                }
+                ConflictResolverType::ExtendedCPIP | ConflictResolverType::BoundsExtendedCPIP => {
+                    PropagationMode::ExtendedNogoodPropagation
+                }
+                ConflictResolverType::NoLearning => PropagationMode::default(),
+                ConflictResolverType::HypercubeLinear => PropagationMode::UnitPropagation,
+            },
+            solver_options.learning_options.nogood_propagator_priority,
         ));
 
         ConstraintSatisfactionSolver {
@@ -352,13 +377,13 @@ impl ConstraintSatisfactionSolver {
             .reify_predicate(literal, predicate);
 
         // If literal --> predicate
-        let _ = self.add_clause(
+        self.add_clause(
             vec![!literal.get_true_predicate(), predicate],
             constraint_tag,
         );
 
         // If !literal --> !predicate
-        let _ = self.add_clause(
+        self.add_clause(
             vec![!literal.get_false_predicate(), !predicate],
             constraint_tag,
         );
@@ -863,29 +888,12 @@ impl ConstraintSatisfactionSolver {
     pub(crate) fn add_propagator<Constructor>(
         &mut self,
         constructor: Constructor,
-    ) -> Result<PropagatorHandle<Constructor::PropagatorImpl>, ConstraintOperationError>
+    ) -> PropagatorHandle<Constructor::PropagatorImpl>
     where
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
-        if self.solver_state.is_inconsistent() {
-            return Err(ConstraintOperationError::InfeasiblePropagator);
-        }
-
-        let handle = self.state.add_propagator(constructor);
-        let result = self.state.propagate_to_fixed_point();
-
-        if let Err(conflict) = result {
-            self.solver_state.declare_conflict(conflict.into());
-        }
-
-        if self.solver_state.no_conflict() {
-            Ok(handle)
-        } else {
-            self.complete_proof();
-            let _ = self.conclude_proof_unsat();
-            Err(ConstraintOperationError::InfeasiblePropagator)
-        }
+        self.state.add_propagator(constructor)
     }
 
     pub fn post_predicate(&mut self, predicate: Predicate) -> Result<(), ConstraintOperationError> {
@@ -904,19 +912,15 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
-    fn add_nogood(
-        &mut self,
-        nogood: Vec<Predicate>,
-        inference_code: InferenceCode,
-    ) -> Result<(), ConstraintOperationError> {
+    fn add_nogood(&mut self, nogood: Vec<Predicate>, constraint_tag: ConstraintTag) {
         pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
-        let num_trail_entries = self.state.trail_len();
 
-        self.state.add_inference_checker(
-            inference_code.clone(),
-            Box::new(NogoodChecker {
+        let inference_code = self.state.add_inference_checker(
+            constraint_tag,
+            NogoodLabel,
+            NogoodChecker {
                 nogood: nogood.clone().into(),
-            }),
+            },
         );
 
         let (nogood_propagator, mut context) = self
@@ -926,35 +930,10 @@ impl ConstraintSatisfactionSolver {
         let nogood_propagator =
             nogood_propagator.expect("Nogood propagator handle should refer to nogood propagator");
 
-        let addition_status = nogood_propagator.add_nogood(nogood, inference_code, &mut context);
-
-        if addition_status.is_err() || self.solver_state.is_conflicting() {
-            if let Err(conflict) = addition_status {
-                self.solver_state.declare_conflict(conflict.into());
-            }
-
-            self.handle_root_propagation(num_trail_entries);
-            self.complete_proof();
-            return Err(ConstraintOperationError::InfeasibleNogood);
-        }
-
-        self.handle_root_propagation(num_trail_entries);
+        nogood_propagator.add_nogood(nogood, inference_code, &mut context);
 
         #[allow(deprecated, reason = "Will be refactored")]
         self.state.enqueue_propagator(self.nogood_propagator_handle);
-        let result = self.state.propagate_to_fixed_point();
-        if let Err(conflict) = result {
-            self.solver_state.declare_conflict(conflict.into());
-        }
-
-        self.handle_root_propagation(num_trail_entries);
-
-        if self.solver_state.is_infeasible() {
-            self.complete_proof();
-            Err(ConstraintOperationError::InfeasibleState)
-        } else {
-            Ok(())
-        }
     }
 
     /// Creates a clause from `literals` and adds it to the current formula.
@@ -966,15 +945,11 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         predicates: impl IntoIterator<Item = Predicate>,
         constraint_tag: ConstraintTag,
-    ) -> Result<(), ConstraintOperationError> {
+    ) {
         pumpkin_assert_simple!(
             self.get_checkpoint() == 0,
             "Clauses can only be added in the root"
         );
-
-        if self.solver_state.is_inconsistent() {
-            return Err(ConstraintOperationError::InfeasiblePropagator);
-        }
 
         // We can simply negate the clause and retrieve a nogood, e.g. if we have the
         // clause `[x1 >= 5] \/ [x2 != 3] \/ [x3 <= 5]`, then it **cannot** be the case that `[x1 <
@@ -992,14 +967,10 @@ impl ConstraintSatisfactionSolver {
         if predicates.is_empty() {
             // This breaks the proof. If it occurs, we should fix up the proof logging.
             // The main issue is that nogoods are not tagged. In the proof that is problematic.
-            self.solver_state
-                .declare_conflict(StoredConflictInfo::RootLevelConflict(
-                    ConstraintOperationError::InfeasibleClause,
-                ));
-            return Err(ConstraintOperationError::InfeasibleClause);
+            self.solver_state.declare_infeasible();
+            return;
         }
 
-        let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
         if are_all_falsified_at_root {
             // Since the propagation is not actually performed, we log the inference
             // explicitly here for the proof.
@@ -1008,7 +979,7 @@ impl ConstraintSatisfactionSolver {
                 .proof_log
                 .log_inference(
                     &mut self.state.constraint_tags,
-                    inference_code,
+                    InferenceCode::new(constraint_tag, NogoodLabel),
                     predicates.iter().copied(),
                     None,
                     &self.state.variable_names,
@@ -1022,23 +993,10 @@ impl ConstraintSatisfactionSolver {
                 unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
                 state: &mut self.state,
             });
-            self.solver_state
-                .declare_conflict(StoredConflictInfo::RootLevelConflict(
-                    ConstraintOperationError::InfeasibleClause,
-                ));
-            return Err(ConstraintOperationError::InfeasibleClause);
+            self.solver_state.declare_infeasible();
+            return;
         }
-
-        if let Err(constraint_operation_error) = self.add_nogood(predicates, inference_code) {
-            let _ = self.conclude_proof_unsat();
-
-            self.solver_state
-                .declare_conflict(StoredConflictInfo::RootLevelConflict(
-                    constraint_operation_error,
-                ));
-            return Err(constraint_operation_error);
-        }
-        Ok(())
+        self.add_nogood(predicates, constraint_tag)
     }
 
     pub(crate) fn get_checkpoint(&self) -> usize {
@@ -1266,9 +1224,9 @@ mod tests {
         let lit1 = solver.create_new_literal(None).get_true_predicate();
         let lit2 = solver.create_new_literal(None).get_true_predicate();
 
-        let _ = solver.add_clause([lit1, lit2], c1);
-        let _ = solver.add_clause([lit1, !lit2], c2);
-        let _ = solver.add_clause([!lit1, lit2], c3);
+        solver.add_clause([lit1, lit2], c1);
+        solver.add_clause([lit1, !lit2], c2);
+        solver.add_clause([!lit1, lit2], c3);
         (solver, vec![lit1, lit2])
     }
 
@@ -1277,7 +1235,7 @@ mod tests {
         let mut solver = ConstraintSatisfactionSolver::default();
         let constraint_tag = solver.new_constraint_tag();
         let lit1 = solver.create_new_literal(None).get_true_predicate();
-        let _ = solver.add_clause(vec![lit1], constraint_tag);
+        solver.add_clause(vec![lit1], constraint_tag);
 
         run_test(
             solver,
@@ -1313,7 +1271,7 @@ mod tests {
     fn simple_core_extraction_1_infeasible() {
         let (mut solver, lits) = create_instance1();
         let constraint_tag = solver.new_constraint_tag();
-        let _ = solver.add_clause([!lits[0], !lits[1]], constraint_tag);
+        solver.add_clause([!lits[0], !lits[1]], constraint_tag);
         run_test(
             solver,
             vec![!lits[1], !lits[0]],
@@ -1340,8 +1298,8 @@ mod tests {
         let lit2 = solver.create_new_literal(None).get_true_predicate();
         let lit3 = solver.create_new_literal(None).get_true_predicate();
 
-        let _ = solver.add_clause([lit1, lit2, lit3], c1);
-        let _ = solver.add_clause([lit1, !lit2, lit3], c2);
+        solver.add_clause([lit1, lit2, lit3], c1);
+        solver.add_clause([lit1, !lit2, lit3], c2);
         (solver, vec![lit1, lit2, lit3])
     }
 
@@ -1385,7 +1343,7 @@ mod tests {
         let lit2 = solver.create_new_literal(None).get_true_predicate();
         let lit3 = solver.create_new_literal(None).get_true_predicate();
 
-        let _ = solver.add_clause([lit1, lit2, lit3], constraint_tag);
+        solver.add_clause([lit1, lit2, lit3], constraint_tag);
         (solver, vec![lit1, lit2, lit3])
     }
 

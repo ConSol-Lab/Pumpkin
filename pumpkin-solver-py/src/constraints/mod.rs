@@ -1,5 +1,5 @@
-pub mod arguments;
-pub mod globals;
+pub(crate) mod arguments;
+pub(crate) mod globals;
 
 use globals::*;
 use pyo3::prelude::*;
@@ -7,32 +7,32 @@ use pyo3::prelude::*;
 macro_rules! declare_constraints {
     ($name:ident { $($constraint:ident),+ $(,)? }) => {
         #[derive(Clone, FromPyObject)]
-        pub enum $name {
+        pub(crate) enum $name {
             $($constraint($constraint)),+
         }
 
         impl Constraint {
-            pub fn post(
+            pub(crate) fn post(
                 self,
                 solver: &mut pumpkin_solver::Solver,
-            ) -> Result<(), pumpkin_solver::core::ConstraintOperationError> {
+            ) {
                 match self {
                     $($name::$constraint(cns) => cns.post(solver)),+
                 }
             }
 
-            pub fn implied_by(
+            pub(crate) fn implied_by(
                 self,
                 solver: &mut pumpkin_solver::Solver,
                 reification_literal: pumpkin_solver::core::variables::Literal,
-            ) -> Result<(), pumpkin_solver::core::ConstraintOperationError> {
+            ) {
                 match self {
                     $($name::$constraint(cns) => cns.implied_by(solver, reification_literal)),+
                 }
             }
         }
 
-        pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+        pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
             $(m.add_class::<$constraint>()?;)+
             Ok(())
         }

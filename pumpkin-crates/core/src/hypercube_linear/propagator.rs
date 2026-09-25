@@ -12,13 +12,15 @@ use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::DomainEvents;
-use crate::propagation::InferenceCheckers;
+use crate::propagation::EventsToRegister;
 use crate::propagation::LocalId;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::PropagatorSpec;
 use crate::propagation::ReadDomains;
+use crate::propagation::RuntimeCheckers;
 use crate::pumpkin_assert_simple;
 use crate::state::PropagatorConflict;
 use crate::variables::AffineView;
@@ -35,18 +37,10 @@ pub struct HypercubeLinearConstructor {
 impl PropagatorConstructor for HypercubeLinearConstructor {
     type PropagatorImpl = HypercubeLinearPropagator;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
-        checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, HypercubeLinear),
-            Box::new(HypercubeLinearChecker {
-                hypercube: self.hypercube.iter_predicates().collect(),
-                terms: self.linear.terms().collect(),
-                bound: self.linear.bound(),
-            }),
-        );
-    }
-
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(
+        self,
+        mut context: PropagatorConstructorContext,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let HypercubeLinearConstructor {
             hypercube,
             linear,
@@ -82,7 +76,18 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
             ),
         ];
 
-        HypercubeLinearPropagator {
+        let mut checkers = RuntimeCheckers::builder();
+        let inference_code = checkers.add_inference_checker(
+            constraint_tag,
+            HypercubeLinear,
+            HypercubeLinearChecker {
+                hypercube: hypercube.iter_predicates().collect(),
+                terms: linear.terms().collect(),
+                bound: linear.bound(),
+            },
+        );
+
+        let propagator = HypercubeLinearPropagator {
             hypercube,
             linear,
 
@@ -90,7 +95,16 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
             watched_predicates,
             is_watching_linear: false,
 
-            inference_code: InferenceCode::new(constraint_tag, HypercubeLinear),
+            inference_code,
+        };
+
+        // TODO: This will be expanded with registration of predicates.
+        let registration = EventsToRegister::empty();
+
+        PropagatorSpec {
+            registration,
+            checkers: checkers.build(),
+            propagator,
         }
     }
 }

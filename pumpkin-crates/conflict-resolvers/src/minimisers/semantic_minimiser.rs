@@ -9,6 +9,7 @@ use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateType;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::results::ProblemSolution;
 use pumpkin_core::statistics::moving_averages::CumulativeMovingAverage;
 use pumpkin_core::statistics::moving_averages::MovingAverage;
 use pumpkin_core::variables::DomainId;
@@ -138,7 +139,7 @@ impl SemanticMinimiser {
     fn accommodate(&mut self, context: &ConflictAnalysisContext) {
         assert!(self.domains.len() == self.original_domains.len());
 
-        while (self.domains.len() as u32) < context.number_of_domains() {
+        while (self.domains.len() as u32) < context.num_domains() as u32 {
             let domain_id = DomainId::new(self.domains.len() as u32);
             let lower_bound = context.initial_lower_bound(domain_id);
             let upper_bound = context.initial_upper_bound(domain_id);

@@ -43,7 +43,7 @@ impl PredicateNotifier {
 
     pub(crate) fn debug_create_from_assignments(&mut self, assignments: &Assignments) {
         self.predicate_id_assignments
-            .debug_create_from_assignments(assignments, &mut self.predicate_to_id);
+            .debug_create_from_assignments(assignments, &self.predicate_to_id);
     }
 
     /// Returns the satisfied predicates; note that this structure will be cleared once it is

@@ -14,11 +14,11 @@ path = "src/lib.rs"
 proc-macro = true
 
 [dependencies]
-itertools = "0.14.0"
+itertools = "0.15.0"
 proc-macro2 = "1.0.89"
 quote = "1.0.37"
-stringcase = "0.4.0"
-syn = "2.0.85"
+stringcase = "1.0.0"
+syn = "3.0.3"
 
 [lints]
 workspace = true

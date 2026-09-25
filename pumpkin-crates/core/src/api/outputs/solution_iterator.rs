@@ -60,13 +60,8 @@ impl<
             // We do not care much about this tag, as the proof is nonsensical for
             // solution enumeration anyways.
             let constraint_tag = self.solver.new_constraint_tag();
-            if self
-                .solver
-                .add_clause(blocking_clause, constraint_tag)
-                .is_err()
-            {
-                return IteratedSolution::Finished;
-            }
+
+            self.solver.add_clause(blocking_clause, constraint_tag);
         }
 
         let result = match self

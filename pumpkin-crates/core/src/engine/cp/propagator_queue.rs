@@ -17,7 +17,7 @@ pub(crate) struct PropagatorQueue {
 
 impl Default for PropagatorQueue {
     fn default() -> Self {
-        Self::new(5)
+        Self::new(6)
     }
 }
 

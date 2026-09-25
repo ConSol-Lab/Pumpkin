@@ -1,6 +1,5 @@
 use std::num::NonZero;
 
-use crate::ConstraintOperationError;
 use crate::Solver;
 use crate::constraints::Constraint;
 use crate::constraints::NegatableConstraint;
@@ -64,33 +63,27 @@ where
     Predicates::IntoIter: Clone,
     LinearTerms: IntoIterator<Item = (NonZero<i32>, DomainId)> + Clone + 'static,
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) {
         let Ok(hypercube) = Hypercube::new(self.hypercube) else {
             // If the hypercube is inconsistent, then the constraint simplifies to
             // `false implies linear`, which is trivially true.
-            return Ok(());
+            return;
         };
 
         let Some(linear) = LinearInequality::new(self.linear_terms, self.linear_rhs) else {
             // If the linear is trivially satisfied, then there is no point in posting
             // a constraint.
-            return Ok(());
+            return;
         };
 
         let _ = solver.add_propagator(HypercubeLinearConstructor {
             hypercube,
             linear,
             constraint_tag: self.constraint_tag,
-        })?;
-
-        Ok(())
+        });
     }
 
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
         hypercube_linear_le(
             self.hypercube
                 .into_iter()
@@ -134,9 +127,9 @@ where
     Predicates::IntoIter: Clone,
     LinearTerms: IntoIterator<Item = (NonZero<i32>, DomainId)> + Clone + 'static,
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) {
         for predicate in self.hypercube {
-            solver.add_clause([predicate], self.constraint_tag)?;
+            solver.add_clause([predicate], self.constraint_tag);
         }
 
         let not_linear_terms = self
@@ -150,22 +143,16 @@ where
                 hypercube: Hypercube::default(),
                 linear: not_linear,
                 constraint_tag: self.constraint_tag,
-            })?;
+            });
         }
-
-        Ok(())
     }
 
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
         for predicate in self.hypercube {
             solver.add_clause(
                 [reification_literal.get_false_predicate(), predicate],
                 self.constraint_tag,
-            )?;
+            );
         }
 
         let not_linear_terms = self
@@ -180,10 +167,8 @@ where
                     .expect("single predicate hypercube cannot be inconsistent"),
                 linear: not_linear,
                 constraint_tag: self.constraint_tag,
-            })?;
+            });
         }
-
-        Ok(())
     }
 }
 
@@ -219,14 +204,14 @@ where
     LinearTerms: IntoIterator<Item = (NonZero<i32>, DomainId)> + Clone + 'static,
     LinearTerms::IntoIter: Clone,
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) {
         hypercube_linear_le(
             self.hypercube.clone(),
             self.linear_terms.clone(),
             self.linear_rhs,
             self.constraint_tag,
         )
-        .post(solver)?;
+        .post(solver);
 
         let negated_terms = self
             .linear_terms
@@ -239,16 +224,10 @@ where
             -self.linear_rhs,
             self.constraint_tag,
         )
-        .post(solver)?;
-
-        Ok(())
+        .post(solver);
     }
 
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
         hypercube_linear_eq(
             self.hypercube
                 .into_iter()
@@ -294,9 +273,9 @@ where
     LinearTerms: IntoIterator<Item = (NonZero<i32>, DomainId)> + Clone + 'static,
     LinearTerms::IntoIter: Clone,
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) {
         for predicate in self.hypercube {
-            solver.add_clause([predicate], self.constraint_tag)?;
+            solver.add_clause([predicate], self.constraint_tag);
         }
 
         // We model the Ax != b as follows (where l is a fresh 0-1 variable):
@@ -310,7 +289,7 @@ where
             self.linear_rhs - 1,
             self.constraint_tag,
         )
-        .post(solver)?;
+        .post(solver);
 
         let not_linear_terms = self
             .linear_terms
@@ -324,21 +303,15 @@ where
             not_linear_rhs,
             self.constraint_tag,
         )
-        .post(solver)?;
-
-        Ok(())
+        .post(solver);
     }
 
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
         for predicate in self.hypercube {
             solver.add_clause(
                 [reification_literal.get_false_predicate(), predicate],
                 self.constraint_tag,
-            )?;
+            );
         }
 
         let l = solver.new_literal();
@@ -352,7 +325,7 @@ where
             self.linear_rhs - 1,
             self.constraint_tag,
         )
-        .post(solver)?;
+        .post(solver);
 
         let not_linear_terms = self
             .linear_terms
@@ -369,9 +342,7 @@ where
             not_linear_rhs,
             self.constraint_tag,
         )
-        .post(solver)?;
-
-        Ok(())
+        .post(solver);
     }
 }
 

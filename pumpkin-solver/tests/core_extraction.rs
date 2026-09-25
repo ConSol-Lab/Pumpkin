@@ -20,7 +20,7 @@ fn basic_core_extraction() {
     let constraint_tag = solver.new_constraint_tag();
 
     // We create the all-different constraint
-    let _ = solver
+    solver
         .add_constraint(pumpkin_constraints::all_different(
             vec![x, y, z],
             constraint_tag,

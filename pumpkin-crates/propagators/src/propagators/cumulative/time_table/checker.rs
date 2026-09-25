@@ -44,12 +44,14 @@ where
         let mut profile = BTreeMap::new();
 
         for task in self.tasks.iter() {
+            if task.resource_usage > self.capacity {
+                return true;
+            }
             if task.start_time.induced_lower_bound(&state) == IntExt::NegativeInf
                 || task.start_time.induced_upper_bound(&state) == IntExt::PositiveInf
             {
                 continue;
             }
-
             let lst: i32 = task
                 .start_time
                 .induced_upper_bound(&state)
