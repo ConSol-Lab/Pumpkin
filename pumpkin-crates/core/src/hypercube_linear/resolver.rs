@@ -305,7 +305,7 @@ impl HypercubeLinearResolver {
             trace!("explanation = {explanation}");
 
             self.resolve(trail, trail_position, pivot, explanation);
-            self.simplify_conflict();
+            self.simplify_conflict(trail, trail_position);
         }
     }
 
@@ -339,9 +339,8 @@ impl HypercubeLinearResolver {
             .term_for_domain(pivot.get_domain())
             .is_some_and(|term| predicate_applies_to_term(pivot, term));
         if pivot_contributes_to_linear && let Some(bound) = BoundPredicate::new(pivot) {
-            self.state.conflicting_linear = std::mem::take(&mut self.state.conflicting_linear)
-                .weaken_to_zero(bound)
-                .expect("weakening the conflict does not make it trivially satisfiable");
+            self.state
+                .weaken_conflict_to_zero(trail, trail_position, bound);
         }
 
         self.state
@@ -356,7 +355,7 @@ impl HypercubeLinearResolver {
     }
 
     /// Simplify the conflicting hypercube linear given any equalities in the conflicting hypercube.
-    fn simplify_conflict(&mut self) {
+    fn simplify_conflict(&mut self, trail: &impl TrailView, trail_position: usize) {
         let equality_predicates = self
             .state
             .working_hypercube
@@ -381,13 +380,15 @@ impl HypercubeLinearResolver {
                 false => BoundComparator::UpperBound,
             };
 
-            self.state.conflicting_linear = std::mem::take(&mut self.state.conflicting_linear)
-                .weaken_to_zero(BoundPredicate {
+            self.state.weaken_conflict_to_zero(
+                trail,
+                trail_position,
+                BoundPredicate {
                     domain,
                     comparator,
                     value,
-                })
-                .expect("does not weaken to trivially satisfiable");
+                },
+            );
         }
     }
 
@@ -481,11 +482,8 @@ impl HypercubeLinearResolver {
             self.state
                 .hypercube_predicates_on_conflict_dl
                 .push(bound_predicate.into(), trail);
-            self.state.conflicting_linear = std::mem::take(&mut self.state.conflicting_linear)
-                .weaken_to_zero(bound_predicate)
-                .expect(
-                    "weakening the conflict will never result in a trivially satisfiable linear",
-                );
+            self.state
+                .weaken_conflict_to_zero(trail, trail_position, bound_predicate);
 
             trace!(
                 "weakened conflict constraint: {} -> {}",
@@ -497,9 +495,14 @@ impl HypercubeLinearResolver {
                 self.state.conflicting_linear,
             );
 
-            explanation = std::mem::take(&mut explanation)
-                .weaken_to_zero(!bound_predicate)
-                .expect("cannot weaken to trivially satisfiable");
+            explanation = match std::mem::take(&mut explanation).weaken_to_zero(!bound_predicate) {
+                Ok(Some(explanation)) => explanation,
+                Ok(None) => panic!("cannot weaken to trivially satisfiable"),
+                // If the weakened bound does not fit in an i32, the clausal explanation is used.
+                Err(explanation) => HypercubeLinearExplanation::Conjunction(
+                    explanation.into_clause(trail, pivot, trail_position),
+                ),
+            };
 
             trace!("weakened explanation: {explanation}");
         }
@@ -848,6 +851,7 @@ impl HypercubeLinearResolver {
                 reason_slack,
                 pivot.get_domain().scaled(weight_in_reason),
             )
+            .ok_or(FourierError::IntegerOverflow)?
         };
 
         trace!("  - tightly propagating: {tightly_propagating_reason}");
@@ -1181,18 +1185,20 @@ fn fourier_resolvent_is_conflicting(
 }
 
 /// Use weakening to obtain a hypercube linear that propagates the given term without any rounding.
+///
+/// Returns `None` if the bound of a weakened linear does not fit in an i32.
 fn compute_tightly_propagating_reason<'expl>(
     trail: &impl TrailView,
     trail_position: usize,
     original_reason: &'expl HypercubeLinear,
     reason_slack: i64,
     pivot_term: AffineView<DomainId>,
-) -> Cow<'expl, HypercubeLinear> {
+) -> Option<Cow<'expl, HypercubeLinear>> {
     let pivot_term_upper_bound =
         reason_slack + affine_lower_bound_at(trail, pivot_term, trail_position);
 
     if pivot_term_upper_bound % i64::from(pivot_term.scale) == 0 {
-        return Cow::Borrowed(original_reason);
+        return Some(Cow::Borrowed(original_reason));
     }
 
     let divisor = pivot_term.scale.abs();
@@ -1227,15 +1233,15 @@ fn compute_tightly_propagating_reason<'expl>(
 
         let num_weakenings = (term.scale % divisor).abs();
 
-        tightly_propagating_reason.linear = tightly_propagating_reason
-            .linear
+        tightly_propagating_reason.linear = std::mem::take(&mut tightly_propagating_reason.linear)
             .weaken(bound, num_weakenings)
+            .ok()?
             .expect("never becomes trivially satisfiable");
     }
 
     tightly_propagating_reason.linear.divide(divisor);
 
-    Cow::Owned(tightly_propagating_reason)
+    Some(Cow::Owned(tightly_propagating_reason))
 }
 
 fn compute_hl_slack_at_trail_position(
@@ -1397,6 +1403,36 @@ mod tests {
             resolver.run_resolution(&mut trail, [], linear_inequality!(1 y + 3 a + 2 b <= 4));
 
         assert_eq!(result.propagates_at, 1);
+    }
+
+    /// Weakening the conflict `2x + y ≤ 5` on the decision `x ≥ 1500000000` gives the bound
+    /// `5 - 3000000000`, which does not fit in an i32, so the conflict is weakened on `y ≥ 1` as
+    /// well and becomes the clause `[y ≥ 1] & [x ≥ 1500000000] → ⊥`.
+    #[test]
+    fn weakening_the_conflict_beyond_i32_turns_it_into_a_clause() {
+        let mut trail_builder = FakeTrail::builder();
+
+        let x = trail_builder.domain(0, 2_000_000_000);
+        let y = trail_builder.domain(0, 10);
+
+        let trail = trail_builder
+            .decide(predicate![y >= 1])
+            .decide(predicate![x >= 1_500_000_000])
+            .build();
+
+        let mut resolver = HypercubeLinearResolver::default();
+        resolver.state.conflicting_linear = linear_inequality!(2 x + 1 y <= 5);
+        resolver.state.weaken_conflict_to_zero(
+            &trail,
+            trail.current_trail_position(),
+            BoundPredicate::new(predicate![x >= 1_500_000_000]).expect("bound predicate"),
+        );
+
+        assert!(resolver.state.conflicting_linear.is_trivially_false());
+        assert_eq!(
+            resolver.state.working_hypercube,
+            Hypercube::from_single_predicate(predicate![y >= 1])
+        );
     }
 
     /// Propositional resolution on x ≥ 5 adds its reason predicate y ≥ 3 (DL 1) to the

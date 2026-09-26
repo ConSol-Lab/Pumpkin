@@ -103,23 +103,29 @@ impl LinearInequality {
 
     /// Weakens the linear inequality on the given bound.
     ///
-    /// Does nothing if the bound does not contribute to the slack of the linear.
-    pub fn weaken(mut self, bound: BoundPredicate, count: i32) -> Option<Self> {
+    /// Does nothing if the bound does not contribute to the slack of the linear. Returns `None` if
+    /// the weakened linear is trivially satisfiable, and gives back the unchanged linear if the
+    /// bound of the weakened linear does not fit in an i32.
+    pub fn weaken(
+        mut self,
+        bound: BoundPredicate,
+        count: i32,
+    ) -> Result<Option<Self>, WeakeningOverflow> {
         let Some(term_idx) = self
             .terms
             .iter()
             .position(|term| term.inner == bound.domain)
         else {
-            return Some(self);
+            return Ok(Some(self));
         };
 
-        let term = &mut self.terms[term_idx];
+        let term = self.terms[term_idx];
         let contributes_to_slack = (term.scale.is_positive()
             && bound.comparator == BoundComparator::LowerBound)
             || (term.scale.is_negative() && bound.comparator == BoundComparator::UpperBound);
 
         if !contributes_to_slack {
-            return Some(self);
+            return Ok(Some(self));
         }
 
         let signed_diff = match bound.comparator {
@@ -128,30 +134,35 @@ impl LinearInequality {
         };
 
         // Wrapping around would silently produce a constraint that is not implied.
-        term.scale += signed_diff;
-        self.bound = signed_diff
+        let Some(new_bound) = signed_diff
             .checked_mul(bound.value)
             .and_then(|difference| self.bound.checked_add(difference))
-            .expect("weakening a hypercube linear overflows its i32 bound");
+        else {
+            return Err(WeakeningOverflow(self));
+        };
 
-        if term.scale == 0 {
+        self.terms[term_idx].scale += signed_diff;
+        self.bound = new_bound;
+
+        if self.terms[term_idx].scale == 0 {
             let _ = self.terms.remove(term_idx);
         }
 
         if self.terms.is_empty() && self.bound >= 0 {
-            None
+            Ok(None)
         } else {
-            Some(self)
+            Ok(Some(self))
         }
     }
 
     /// Weakens the linear inequality on the given bound and ensures the weight of the domain
     /// of the bound is 0.
     ///
-    /// Does nothing if the bound does not contribute to the slack of the linear.
-    pub fn weaken_to_zero(self, bound: BoundPredicate) -> Option<Self> {
+    /// Does nothing if the bound does not contribute to the slack of the linear. See
+    /// [`LinearInequality::weaken`] for the result.
+    pub fn weaken_to_zero(self, bound: BoundPredicate) -> Result<Option<Self>, WeakeningOverflow> {
         let Some(term) = self.term_for_domain(bound.domain) else {
-            return Some(self);
+            return Ok(Some(self));
         };
 
         self.weaken(bound, term.scale.abs())
@@ -178,6 +189,11 @@ impl Display for LinearInequality {
         )
     }
 }
+
+/// The error of weakening a linear inequality whose weakened bound does not fit in an i32; it
+/// holds the unchanged linear inequality.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WeakeningOverflow(pub LinearInequality);
 
 /// The result of turning `term <= bound` into a predicate over the domain of the term.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -337,5 +353,22 @@ mod tests {
         .expect("not trivially satisfiable");
 
         assert_eq!(actual, expected);
+    }
+
+    /// Weakening `2x + y <= 5` on `[x >= 1500000000]` gives the bound `5 - 3000000000`, which
+    /// does not fit in an i32.
+    #[test]
+    fn weakening_beyond_i32_gives_back_the_unchanged_linear() {
+        let x = DomainId::new(0);
+        let y = DomainId::new(1);
+        let linear = linear_inequality!(2 x + 1 y <= 5);
+
+        let result = linear.clone().weaken_to_zero(BoundPredicate {
+            domain: x,
+            comparator: BoundComparator::LowerBound,
+            value: 1_500_000_000,
+        });
+
+        assert_eq!(result, Err(WeakeningOverflow(linear)));
     }
 }

@@ -6,6 +6,7 @@ use crate::hypercube_linear::BoundPredicate;
 use crate::hypercube_linear::Hypercube;
 use crate::hypercube_linear::InconsistentHypercube;
 use crate::hypercube_linear::LinearInequality;
+use crate::hypercube_linear::WeakeningOverflow;
 use crate::hypercube_linear::trail_view::TrailView;
 use crate::hypercube_linear::trail_view::affine_lower_bound_predicate_at;
 use crate::predicates::Predicate;
@@ -108,21 +109,32 @@ impl HypercubeLinearExplanation {
         clause
     }
 
-    pub(crate) fn weaken_to_zero(self, bound: BoundPredicate) -> Option<Self> {
+    /// Weakens the linear of the explanation on the given bound until the weight of its domain is
+    /// 0, and adds the bound to the hypercube.
+    ///
+    /// Returns `None` if the weakened explanation is trivially satisfiable, and gives back the
+    /// unchanged explanation if the bound of the weakened linear does not fit in an i32.
+    pub(crate) fn weaken_to_zero(self, bound: BoundPredicate) -> Result<Option<Self>, Self> {
         match self {
             HypercubeLinearExplanation::Proper(mut hypercube_linear) => {
-                hypercube_linear.linear =
-                    std::mem::take(&mut hypercube_linear.linear).weaken_to_zero(bound)?;
+                match std::mem::take(&mut hypercube_linear.linear).weaken_to_zero(bound) {
+                    Ok(Some(linear)) => hypercube_linear.linear = linear,
+                    Ok(None) => return Ok(None),
+                    Err(WeakeningOverflow(linear)) => {
+                        hypercube_linear.linear = linear;
+                        return Err(HypercubeLinearExplanation::Proper(hypercube_linear));
+                    }
+                }
 
                 hypercube_linear.hypercube = std::mem::take(&mut hypercube_linear.hypercube)
                     .with_predicate(bound.into())
                     .expect("should never construct inconsistent hypercube");
 
-                Some(HypercubeLinearExplanation::Proper(hypercube_linear))
+                Ok(Some(HypercubeLinearExplanation::Proper(hypercube_linear)))
             }
 
             HypercubeLinearExplanation::Conjunction(predicates) => {
-                Some(HypercubeLinearExplanation::Conjunction(predicates))
+                Ok(Some(HypercubeLinearExplanation::Conjunction(predicates)))
             }
         }
     }
@@ -188,7 +200,9 @@ mod tests {
         let bound = BoundPredicate::new(predicate![x >= 3]).expect("bound predicate");
         let result = explanation
             .weaken_to_zero(bound)
-            .expect("not trivially satisfiable");
+            .ok()
+            .flatten()
+            .expect("neither overflows nor is trivially satisfiable");
 
         let HypercubeLinearExplanation::Conjunction(result_predicates) = result else {
             panic!("expected Conjunction variant");
@@ -219,7 +233,9 @@ mod tests {
         let bound = BoundPredicate::new(predicate![x >= 3]).expect("bound predicate");
         let result = explanation
             .weaken_to_zero(bound)
-            .expect("not trivially satisfiable");
+            .ok()
+            .flatten()
+            .expect("neither overflows nor is trivially satisfiable");
 
         let HypercubeLinearExplanation::Proper(result_hl) = result else {
             panic!("expected Proper variant");
@@ -236,6 +252,36 @@ mod tests {
                 .hypercube
                 .iter_predicates()
                 .any(|p| p == predicate![x >= 3])
+        );
+    }
+
+    #[test]
+    fn weaken_to_zero_beyond_i32_gives_back_the_unchanged_explanation() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 2_000_000_000, Some("x".into()));
+        let y = state.new_interval_variable(0, 10, Some("y".into()));
+
+        // 2x + y <= 5; weakening on x >= 1500000000 gives the bound 5 - 3000000000.
+        let linear = LinearInequality::new(
+            [(NonZero::new(2).unwrap(), x), (NonZero::new(1).unwrap(), y)],
+            5,
+        )
+        .expect("not trivially satisfiable");
+        let explanation = HypercubeLinearExplanation::Proper(HypercubeLinear {
+            hypercube: Hypercube::new([]).expect("not inconsistent"),
+            linear: linear.clone(),
+        });
+
+        let bound = BoundPredicate::new(predicate![x >= 1_500_000_000]).expect("bound predicate");
+        let Err(HypercubeLinearExplanation::Proper(result_hl)) = explanation.weaken_to_zero(bound)
+        else {
+            panic!("expected the unchanged explanation");
+        };
+
+        assert_eq!(result_hl.linear, linear);
+        assert_eq!(
+            result_hl.hypercube,
+            Hypercube::new([]).expect("not inconsistent")
         );
     }
 
@@ -262,7 +308,9 @@ mod tests {
         let bound = BoundPredicate::new(predicate![x >= 3]).expect("bound predicate");
         let result = explanation
             .weaken_to_zero(bound)
-            .expect("not trivially satisfiable");
+            .ok()
+            .flatten()
+            .expect("neither overflows nor is trivially satisfiable");
 
         let HypercubeLinearExplanation::Proper(result_hl) = result else {
             panic!("expected Proper variant");

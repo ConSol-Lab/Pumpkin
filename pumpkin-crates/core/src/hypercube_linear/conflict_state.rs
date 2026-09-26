@@ -1,11 +1,14 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::hypercube_linear::BoundPredicate;
 use crate::hypercube_linear::Hypercube;
 use crate::hypercube_linear::LinearInequality;
 use crate::hypercube_linear::Trace;
+use crate::hypercube_linear::WeakeningOverflow;
 use crate::hypercube_linear::predicate_heap::PredicateHeap;
 use crate::hypercube_linear::trail_view::TrailView;
+use crate::hypercube_linear::trail_view::affine_lower_bound_at;
 use crate::hypercube_linear::trail_view::affine_lower_bound_predicate_at;
 use crate::predicates::Predicate;
 use crate::variables::AffineView;
@@ -77,6 +80,57 @@ impl ConflictState {
                 self.predicates_to_explain.push(predicate, trail);
             }
         }
+    }
+
+    /// Weakens the conflicting linear on `bound` until the weight of its domain is 0.
+    ///
+    /// The caller ensures that the hypercube of the conflict implies `bound`, and that the
+    /// conflict is conflicting at `trail_position`. If the bound of the weakened linear does not
+    /// fit in an i32, the other terms are weakened on their bounds at `trail_position` as well,
+    /// which turns the conflict into a clause.
+    pub(crate) fn weaken_conflict_to_zero(
+        &mut self,
+        trail: &dyn TrailView,
+        trail_position: usize,
+        bound: BoundPredicate,
+    ) {
+        match std::mem::take(&mut self.conflicting_linear).weaken_to_zero(bound) {
+            Ok(Some(linear)) => self.conflicting_linear = linear,
+            Ok(None) => panic!("weakening the conflict does not make it trivially satisfiable"),
+            Err(WeakeningOverflow(linear)) => {
+                self.weaken_conflict_to_clause(trail, trail_position, linear, bound);
+            }
+        }
+    }
+
+    /// Replaces the conflict by the clause obtained by weakening `linear` on `bound` and on the
+    /// bounds of its other terms at `trail_position`.
+    fn weaken_conflict_to_clause(
+        &mut self,
+        trail: &dyn TrailView,
+        trail_position: usize,
+        linear: LinearInequality,
+        bound: BoundPredicate,
+    ) {
+        // The bound of the fully weakened linear, which must be negative for the clause to be
+        // implied.
+        let mut weakened_bound = i64::from(linear.bound());
+
+        for term in linear.terms() {
+            if term.inner == bound.domain {
+                weakened_bound -= i64::from(term.scale) * i64::from(bound.value);
+            } else {
+                weakened_bound -= affine_lower_bound_at(trail, term, trail_position);
+                let predicate = affine_lower_bound_predicate_at(trail, term, trail_position);
+                self.add_hypercube_predicate(trail, predicate);
+            }
+        }
+
+        assert!(
+            weakened_bound < 0,
+            "the conflict is conflicting at trail position {trail_position}"
+        );
+        self.conflicting_linear = LinearInequality::trivially_false();
     }
 
     pub(crate) fn contributes_to_conflict(&self, pivot: Predicate) -> bool {
