@@ -105,6 +105,7 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
             is_watching_linear: false,
             in_store: false,
             propagation: context.hypercube_linear_propagation(),
+            are_extended_watchers_initialised: false,
             member_index: 0,
 
             inference_code,
@@ -159,6 +160,10 @@ pub struct HypercubeLinearPropagator {
 
     /// How the hypercube is propagated.
     propagation: HypercubeLinearPropagation,
+
+    /// True once the extended propagation chose its watched predicates; afterwards they only
+    /// change when they have to.
+    are_extended_watchers_initialised: bool,
 
     /// The index of this constraint in the [`HypercubeLinearStore`] that holds it, or 0 if it is
     /// a propagator on its own. It is the code of the lazy explanations and the local id of the
@@ -408,6 +413,10 @@ impl HypercubeLinearPropagator {
     /// predicate over another domain that became true last. Backtracking unassigns that predicate
     /// before the other predicates over other domains, so the watchers again concern two domains
     /// as soon as the predicates that are not true do.
+    ///
+    /// Only the first call searches for the predicate that became true last. Afterwards, as with
+    /// two watched literals, a watcher stays on a predicate that became true when no predicate
+    /// over another domain replaces it, which keeps it on the predicate that became true last.
     fn update_extended_watchers(
         &mut self,
         context: PropagationContext<'_>,
@@ -427,10 +436,43 @@ impl HypercubeLinearPropagator {
             return other_domain.is_some();
         }
 
+        let is_true = |index: usize| !unsatisfied.contains(&index);
+
         if let (Some(first), Some(second)) = (first, other_domain) {
+            self.are_extended_watchers_initialised = true;
+
+            // Keep the watchers if they are not true and concern different domains.
+            if !is_true(0) && !is_true(1) && domain_of(0) != domain_of(1) {
+                return true;
+            }
+
             self.watch(context, first, second);
             return true;
         }
+
+        if self.are_extended_watchers_initialised {
+            // One watcher that is not true suffices. If both are true, the one that became true
+            // last stays.
+            if let Some(first) = first
+                && is_true(0)
+                && is_true(1)
+            {
+                let trail_position = |index: usize| {
+                    context
+                        .assignments
+                        .get_trail_position(&self.hypercube_predicates[index])
+                };
+                let last = if trail_position(0) >= trail_position(1) {
+                    0
+                } else {
+                    1
+                };
+                self.watch(context, first, last);
+            }
+
+            return false;
+        }
+        self.are_extended_watchers_initialised = true;
 
         // The predicate that became true last among those that satisfy `condition`.
         let last_true = |condition: &dyn Fn(usize) -> bool| {
