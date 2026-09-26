@@ -891,7 +891,6 @@ impl HypercubeLinearResolver {
     fn will_propagate_on_previous_dl(&self, trail: &impl TrailView) -> Option<usize> {
         trace!("Testing propagation at previous dl");
         let current_dl = trail.current_checkpoint();
-        let decision_levels = (0..current_dl).rev();
 
         // Before we test whether we can backtrack, we test whether the predicates that are
         // true at the current decision level cover at most one domain. If not, then we for
@@ -907,41 +906,34 @@ impl HypercubeLinearResolver {
             }
         }
 
-        for decision_level in decision_levels {
+        let final_hypercube = self
+            .state
+            .working_hypercube
+            .clone()
+            .with_predicates(self.state.hypercube_predicates_on_conflict_dl.iter())
+            .expect("no inconsistent hypercube");
+
+        // We backjump to the lowest decision level at which the constraint propagates. Whether it
+        // propagates is not monotone in the decision level: a bound that it implies at a decision
+        // level may already be true at a later one, so it may propagate at a decision level while
+        // not propagating at a later one. If we backjumped higher, the constraint would miss its
+        // propagation at the lower decision level after a later backtrack, since the bounds that
+        // trigger it would not change again.
+        for decision_level in 0..current_dl {
             trace!("  => testing dl = {decision_level}");
             let trail_position = trail.trail_position_at_checkpoint(decision_level);
 
-            // TODO: Optimize this
-            let final_hypercube = self
-                .state
-                .working_hypercube
-                .clone()
-                .with_predicates(self.state.hypercube_predicates_on_conflict_dl.iter())
-                .expect("no inconsistent hypercube");
-            if !propagates_at(
+            if propagates_at(
                 trail,
                 trail_position,
                 &final_hypercube,
                 &self.state.conflicting_linear,
             ) {
-                trace!("    => does not propagate");
-                // The initial assumption is that the hypercube linear is conflicting, so it will be
-                // propagating at the current decision level. That means the first time it does not
-                // propagate is one decision level too far back.
-
-                let backjump_dl = decision_level + 1;
-
-                if backjump_dl < current_dl {
-                    return Some(decision_level + 1);
-                } else {
-                    return None;
-                }
+                return Some(decision_level);
             }
         }
 
-        // At this point the constraint is propagating at decision level 0, since that is the last
-        // decision level tested in the loop.
-        Some(0)
+        None
     }
 
     /// Assert loop invariants at the top of each resolution iteration.
@@ -1385,6 +1377,31 @@ mod tests {
 
         assert_eq!(result.hypercube, expected_hypercube);
         assert!(result.linear.is_trivially_false());
+    }
+
+    /// The conflict `y + 3a + 2b ≤ 4` propagates `a ≤ 0` at DL 1 and `b ≤ 0` at DL 3, but nothing
+    /// at DL 2, where `a ≤ 0` is decided. Backjumping to DL 3 would miss the propagation of
+    /// `a ≤ 0` after a later backtrack to DL 1, so we backjump to DL 1.
+    #[test_log::test]
+    fn backjump_to_the_lowest_decision_level_at_which_the_constraint_propagates() {
+        let mut trail_builder = FakeTrail::builder();
+
+        let y = trail_builder.domain(0, 3);
+        let a = trail_builder.domain(0, 1);
+        let b = trail_builder.domain(0, 1);
+
+        let mut trail = trail_builder
+            .decide(predicate![y >= 2])
+            .decide(predicate![a <= 0])
+            .decide(predicate![y >= 3])
+            .decide(predicate![b >= 1])
+            .build();
+
+        let mut resolver = HypercubeLinearResolver::default();
+        let result =
+            resolver.run_resolution(&mut trail, [], linear_inequality!(1 y + 3 a + 2 b <= 4));
+
+        assert_eq!(result.propagates_at, 1);
     }
 
     /// Propositional resolution on x ≥ 5 adds its reason predicate y ≥ 3 (DL 1) to the
