@@ -392,23 +392,6 @@ impl HypercubeLinearPropagator {
         let domain_lower_bound = context.lower_bound(&domain);
         let domain_upper_bound = context.upper_bound(&domain);
 
-        // The interval [region_lower, region_upper] and the exceptions describe `R`.
-        let mut region_lower = domain_lower_bound;
-        let mut region_upper = domain_upper_bound;
-        let mut exceptions = vec![];
-        for predicate in unsatisfied {
-            let value = predicate.get_right_hand_side();
-            match predicate.get_predicate_type() {
-                PredicateType::LowerBound => region_lower = region_lower.max(value),
-                PredicateType::UpperBound => region_upper = region_upper.min(value),
-                PredicateType::Equal => {
-                    region_lower = region_lower.max(value);
-                    region_upper = region_upper.min(value);
-                }
-                PredicateType::NotEqual => exceptions.push(value),
-            }
-        }
-
         let term = self.linear.term_for_domain(domain);
         pumpkin_assert_simple!(term.is_none_or(|term| term.offset == 0));
 
@@ -420,106 +403,58 @@ impl HypercubeLinearPropagator {
             .sum::<i64>();
         let rest = i64::from(self.linear.bound()) - other_terms_lower_bound;
 
-        // The forbidden values of `R` are those `v` with `w * v > rest`.
-        let (forbidden_lower, forbidden_upper) = match term.map(|term| term.scale) {
-            None if rest < 0 => (i64::from(region_lower), i64::from(region_upper)),
-            None => return Ok(()),
-            Some(weight) if weight > 0 => {
-                let weight = i64::from(weight);
-                (
-                    i64::from(region_lower).max(rest.div_euclid(weight) + 1),
-                    i64::from(region_upper),
-                )
-            }
-            Some(weight) => {
-                // `w * v > rest` with `w < 0` is `v < rest / w`, i.e. `v <= ceil(rest / w) - 1`.
-                let weight = i64::from(weight);
-                let ceil = -(rest.div_euclid(-weight));
-                (
-                    i64::from(region_lower),
-                    i64::from(region_upper).min(ceil - 1),
-                )
-            }
-        };
-
-        if forbidden_lower > forbidden_upper {
+        let Some(inferences) = extended_inferences(
+            unsatisfied,
+            domain_lower_bound,
+            domain_upper_bound,
+            |value| context.contains(&domain, value),
+            term.map(|term| term.scale),
+            rest,
+        ) else {
             return Ok(());
-        }
-
-        // Both are within the bounds of the domain, so they fit in an i32.
-        let forbidden_lower = forbidden_lower as i32;
-        let forbidden_upper = forbidden_upper as i32;
+        };
 
         // The reason consists of the true predicates of the hypercube and the lower bounds of the
         // other terms. A bound propagation additionally uses the bound of `x` that it moves.
-        let reason = || {
-            self.hypercube_predicates
-                .iter()
-                .copied()
-                .filter(|p| !unsatisfied.contains(p))
-                .chain(
-                    self.linear
-                        .terms()
-                        .filter(|t| t.inner != domain)
-                        .map(|t| term_lower_bound_predicate(&context, t)),
-                )
-                .collect::<Vec<_>>()
-        };
-        let base_reason = reason();
+        let base_reason = self
+            .hypercube_predicates
+            .iter()
+            .copied()
+            .filter(|p| !unsatisfied.contains(p))
+            .chain(
+                self.linear
+                    .terms()
+                    .filter(|t| t.inner != domain)
+                    .map(|t| term_lower_bound_predicate(&context, t)),
+            )
+            .collect::<Vec<_>>();
 
-        let mut new_lower_bound = domain_lower_bound;
-        let mut new_upper_bound = domain_upper_bound;
-
-        if forbidden_lower <= domain_lower_bound {
-            // The lower part of the domain is forbidden, up to the first exception.
-            new_lower_bound = exceptions
-                .iter()
-                .copied()
-                .filter(|&e| e >= domain_lower_bound && e <= forbidden_upper)
-                .min()
-                .unwrap_or(forbidden_upper + 1);
-
+        if inferences.lower_bound > domain_lower_bound {
             let mut reason = base_reason.clone();
             reason.push(predicate![domain >= domain_lower_bound]);
             context.post(
-                predicate![domain >= new_lower_bound],
+                predicate![domain >= inferences.lower_bound],
                 (PropositionalConjunction::from(reason), &self.inference_code),
             )?;
         }
 
-        if forbidden_upper >= domain_upper_bound {
-            // The upper part of the domain is forbidden, down to the last exception.
-            new_upper_bound = exceptions
-                .iter()
-                .copied()
-                .filter(|&e| e <= domain_upper_bound && e >= forbidden_lower)
-                .max()
-                .unwrap_or(forbidden_lower - 1);
-
+        if inferences.upper_bound < domain_upper_bound {
             let mut reason = base_reason.clone();
             reason.push(predicate![domain <= domain_upper_bound]);
             context.post(
-                predicate![domain <= new_upper_bound],
+                predicate![domain <= inferences.upper_bound],
                 (PropositionalConjunction::from(reason), &self.inference_code),
             )?;
         }
 
-        // The remaining forbidden values lie strictly inside the domain and are removed one by
-        // one. Removing a large interval value by value is expensive, so it is skipped then.
-        let interior_lower = forbidden_lower.max(new_lower_bound);
-        let interior_upper = forbidden_upper.min(new_upper_bound);
-        if i64::from(interior_upper) - i64::from(interior_lower) < MAX_INTERIOR_REMOVALS {
-            for value in interior_lower..=interior_upper {
-                if !exceptions.contains(&value) && context.contains(&domain, value) {
-                    context.post(
-                        predicate![domain != value],
-                        (
-                            PropositionalConjunction::from(base_reason.clone()),
-                            &self.inference_code,
-                        ),
-                    )?;
-                }
-            }
+        for value in inferences.removed_values {
+            context.post(
+                predicate![domain != value],
+                (
+                    PropositionalConjunction::from(base_reason.clone()),
+                    &self.inference_code,
+                ),
+            )?;
         }
 
         Ok(())
@@ -846,6 +781,126 @@ impl Propagator for HypercubeLinearPropagator {
             self.propagate_from_scratch_standard(context)
         }
     }
+}
+
+/// What the extended propagation infers for a domain `x`, see
+/// [`HypercubeLinearPropagator::propagate_single_unsatisfied_domain`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ExtendedInferences {
+    /// The lower bound of `x` after the propagation.
+    pub(crate) lower_bound: i32,
+    /// The upper bound of `x` after the propagation.
+    pub(crate) upper_bound: i32,
+    /// The values strictly between the new bounds that are removed from the domain of `x`.
+    pub(crate) removed_values: Vec<i32>,
+}
+
+/// Computes what the extended propagation infers for the domain `x` of the predicates in
+/// `unsatisfied`, which are all the predicates of the hypercube that are not true.
+///
+/// The domain of `x` has the given bounds and contains the values for which `contains` holds;
+/// `weight` is the weight of `x` in the linear, and `rest` is the bound of the linear minus the
+/// lower bounds of the other terms. Returns `None` if no value is forbidden. The new bounds may
+/// cross, in which case the propagation is a conflict.
+///
+/// This is shared by the propagator and by conflict analysis, which tests at which decision level
+/// a learned constraint propagates.
+pub(crate) fn extended_inferences(
+    unsatisfied: &[Predicate],
+    domain_lower_bound: i32,
+    domain_upper_bound: i32,
+    contains: impl Fn(i32) -> bool,
+    weight: Option<i32>,
+    rest: i64,
+) -> Option<ExtendedInferences> {
+    // The interval [region_lower, region_upper] and the exceptions describe `R`.
+    let mut region_lower = domain_lower_bound;
+    let mut region_upper = domain_upper_bound;
+    let mut exceptions = vec![];
+    for predicate in unsatisfied {
+        let value = predicate.get_right_hand_side();
+        match predicate.get_predicate_type() {
+            PredicateType::LowerBound => region_lower = region_lower.max(value),
+            PredicateType::UpperBound => region_upper = region_upper.min(value),
+            PredicateType::Equal => {
+                region_lower = region_lower.max(value);
+                region_upper = region_upper.min(value);
+            }
+            PredicateType::NotEqual => exceptions.push(value),
+        }
+    }
+
+    // The forbidden values of `R` are those `v` with `w * v > rest`.
+    let (forbidden_lower, forbidden_upper) = match weight {
+        None if rest < 0 => (i64::from(region_lower), i64::from(region_upper)),
+        None => return None,
+        Some(weight) if weight > 0 => {
+            let weight = i64::from(weight);
+            (
+                i64::from(region_lower).max(rest.div_euclid(weight) + 1),
+                i64::from(region_upper),
+            )
+        }
+        Some(weight) => {
+            // `w * v > rest` with `w < 0` is `v < rest / w`, i.e. `v <= ceil(rest / w) - 1`.
+            let weight = i64::from(weight);
+            let ceil = -(rest.div_euclid(-weight));
+            (
+                i64::from(region_lower),
+                i64::from(region_upper).min(ceil - 1),
+            )
+        }
+    };
+
+    if forbidden_lower > forbidden_upper {
+        return None;
+    }
+
+    // Both are within the bounds of the domain, so they fit in an i32.
+    let forbidden_lower = forbidden_lower as i32;
+    let forbidden_upper = forbidden_upper as i32;
+
+    let mut lower_bound = domain_lower_bound;
+    let mut upper_bound = domain_upper_bound;
+
+    if forbidden_lower <= domain_lower_bound {
+        // The lower part of the domain is forbidden, up to the first exception.
+        lower_bound = exceptions
+            .iter()
+            .copied()
+            .filter(|&e| e >= domain_lower_bound && e <= forbidden_upper)
+            .min()
+            .unwrap_or(forbidden_upper + 1);
+    }
+
+    if forbidden_upper >= domain_upper_bound {
+        // The upper part of the domain is forbidden, down to the last exception.
+        upper_bound = exceptions
+            .iter()
+            .copied()
+            .filter(|&e| e <= domain_upper_bound && e >= forbidden_lower)
+            .max()
+            .unwrap_or(forbidden_lower - 1);
+    }
+
+    // The remaining forbidden values lie strictly inside the domain and are removed one by one.
+    // Removing a large interval value by value is expensive, so it is skipped then.
+    let interior_lower = forbidden_lower.max(lower_bound);
+    let interior_upper = forbidden_upper.min(upper_bound);
+    let removed_values =
+        if i64::from(interior_upper) - i64::from(interior_lower) < MAX_INTERIOR_REMOVALS {
+            (interior_lower..=interior_upper)
+                .filter(|value| !exceptions.contains(value) && contains(*value))
+                .collect()
+        } else {
+            vec![]
+        };
+
+    Some(ExtendedInferences {
+        lower_bound,
+        upper_bound,
+        removed_values,
+    })
 }
 
 /// The lower bound of `term` in the domains, computed in i64, since the scaled bound of a domain

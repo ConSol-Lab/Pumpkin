@@ -16,6 +16,7 @@ use crate::hypercube_linear::BoundComparator;
 use crate::hypercube_linear::BoundPredicate;
 use crate::hypercube_linear::Hypercube;
 use crate::hypercube_linear::HypercubeLinearConstructor;
+use crate::hypercube_linear::HypercubeLinearPropagation;
 use crate::hypercube_linear::LinearInequality;
 use crate::hypercube_linear::Trace;
 use crate::hypercube_linear::conflict_state::ConflictState;
@@ -24,12 +25,14 @@ use crate::hypercube_linear::explanation::HypercubeLinear;
 use crate::hypercube_linear::explanation::HypercubeLinearExplanation;
 use crate::hypercube_linear::linear::TermUpperBound;
 use crate::hypercube_linear::linear::term_upper_bound;
+use crate::hypercube_linear::propagator::extended_inferences;
 use crate::hypercube_linear::resh_strategy::ResHStrategy;
 use crate::hypercube_linear::resh_strategy::StandardResH;
 use crate::hypercube_linear::trail_view::TrailView;
 use crate::hypercube_linear::trail_view::affine_lower_bound_at;
 use crate::hypercube_linear::trail_view::affine_lower_bound_predicate_at;
 use crate::hypercube_linear::trail_view::affine_upper_bound_at;
+use crate::predicate;
 use crate::predicates::Predicate;
 #[cfg(feature = "hl-checks")]
 use crate::proof::ConstraintTag;
@@ -70,6 +73,10 @@ pub struct HypercubeLinearResolver {
     /// yields a conflicting constraint; false if the reason is always tightened.
     skip_unneeded_weakening: bool,
 
+    /// How the learned constraints are propagated, which determines the decision level at which
+    /// they propagate.
+    propagation: HypercubeLinearPropagation,
+
     /// All learned constraints with their constraint tag.
     ///
     /// Used to detect when re-learning the same constraint again.
@@ -86,6 +93,7 @@ impl HypercubeLinearResolver {
             statistics: Default::default(),
             logged_variable_names: false,
             skip_unneeded_weakening: false,
+            propagation: HypercubeLinearPropagation::default(),
             #[cfg(feature = "hl-checks")]
             learned_constraints: Default::default(),
         }
@@ -143,6 +151,7 @@ pub(crate) struct LearnedHypercubeLinear {
 
 impl HypercubeLinearResolver {
     fn resolve_conflict_impl(&mut self, context: &mut ConflictAnalysisContext, conflict: Conflict) {
+        self.propagation = context.state.hypercube_linear_propagation;
         let learned_constraint = self.learn_hypercube_linear(context.state, conflict);
         let constraint_tag = context.state.new_constraint_tag();
 
@@ -930,6 +939,7 @@ impl HypercubeLinearResolver {
                 trail_position,
                 &final_hypercube,
                 &self.state.conflicting_linear,
+                self.propagation,
             ) {
                 return Some(decision_level);
             }
@@ -1028,12 +1038,24 @@ fn propagates_at(
     trail_position: usize,
     hypercube: &Hypercube,
     linear: &LinearInequality,
+    propagation: HypercubeLinearPropagation,
 ) -> bool {
     // Get the predicates that are not assigned to true.
     let unsatisfied_predicates_in_hypercube = hypercube
         .iter_predicates()
         .filter(|&predicate| trail.truth_value_at(predicate, trail_position) != Some(true))
         .collect::<Vec<_>>();
+
+    if propagation == HypercubeLinearPropagation::Extended
+        && extended_propagates_at(
+            trail,
+            trail_position,
+            linear,
+            &unsatisfied_predicates_in_hypercube,
+        )
+    {
+        return true;
+    }
 
     if unsatisfied_predicates_in_hypercube.len() > 1 {
         // If more than one predicate remains unassigned, we cannot do anything.
@@ -1073,6 +1095,51 @@ fn propagates_at(
     }
 
     false
+}
+
+/// Returns true if the extended propagation of the hypercube removes a value from a domain at the
+/// given trail position, where `unsatisfied` are the predicates of the hypercube that are not true.
+///
+/// The standard propagation, which the extended propagation also performs, is tested separately.
+fn extended_propagates_at(
+    trail: &impl TrailView,
+    trail_position: usize,
+    linear: &LinearInequality,
+    unsatisfied: &[Predicate],
+) -> bool {
+    // The extended propagation needs at least one predicate that is not true, and all of them
+    // concern one domain.
+    let Some(domain) = unsatisfied.first().map(|predicate| predicate.get_domain()) else {
+        return false;
+    };
+    if unsatisfied.iter().any(|p| p.get_domain() != domain) {
+        return false;
+    }
+
+    let domain_lower_bound = trail.lower_bound_at_trail_position(domain, trail_position);
+    let domain_upper_bound = trail.upper_bound_at_trail_position(domain, trail_position);
+
+    let other_terms_lower_bound = linear
+        .terms()
+        .filter(|term| term.inner != domain)
+        .map(|term| affine_lower_bound_at(trail, term, trail_position))
+        .sum::<i64>();
+    let rest = i64::from(linear.bound()) - other_terms_lower_bound;
+
+    let Some(inferences) = extended_inferences(
+        unsatisfied,
+        domain_lower_bound,
+        domain_upper_bound,
+        |value| trail.truth_value_at(predicate![domain != value], trail_position) != Some(true),
+        linear.term_for_domain(domain).map(|term| term.scale),
+        rest,
+    ) else {
+        return false;
+    };
+
+    inferences.lower_bound > domain_lower_bound
+        || inferences.upper_bound < domain_upper_bound
+        || !inferences.removed_values.is_empty()
 }
 
 /// Returns true if the given linear propagates at the given trail position.
@@ -1403,6 +1470,50 @@ mod tests {
             resolver.run_resolution(&mut trail, [], linear_inequality!(1 y + 3 a + 2 b <= 4));
 
         assert_eq!(result.propagates_at, 1);
+    }
+
+    /// The constraint `[x ≥ 2] & [x ≤ 5] → y ≤ 0` propagates nothing at DL 1 with the standard
+    /// propagation, since two predicates of the hypercube are unassigned, but the extended
+    /// propagation removes 2..=5 from the domain of x there. At DL 2 both propagate `x ≥ 6`.
+    fn backjump_level_for_propagation(propagation: HypercubeLinearPropagation) -> usize {
+        let mut trail_builder = FakeTrail::builder();
+
+        let x = trail_builder.domain(0, 10);
+        let y = trail_builder.domain(0, 10);
+
+        let mut trail = trail_builder
+            .decide(predicate![y >= 1])
+            .decide(predicate![x >= 2])
+            .decide(predicate![x <= 5])
+            .build();
+
+        let mut resolver = HypercubeLinearResolver {
+            propagation,
+            ..Default::default()
+        };
+        let result = resolver.run_resolution(
+            &mut trail,
+            [predicate![x >= 2], predicate![x <= 5]],
+            linear_inequality!(1 y <= 0),
+        );
+
+        result.propagates_at
+    }
+
+    #[test]
+    fn backjump_level_with_standard_propagation_ignores_the_extended_propagation() {
+        assert_eq!(
+            backjump_level_for_propagation(HypercubeLinearPropagation::Standard),
+            2
+        );
+    }
+
+    #[test]
+    fn backjump_level_with_extended_propagation_includes_the_extended_propagation() {
+        assert_eq!(
+            backjump_level_for_propagation(HypercubeLinearPropagation::Extended),
+            1
+        );
     }
 
     /// Weakening the conflict `2x + y ≤ 5` on the decision `x ≥ 1500000000` gives the bound
