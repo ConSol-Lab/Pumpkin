@@ -931,28 +931,118 @@ impl HypercubeLinearResolver {
             .with_predicates(self.state.hypercube_predicates_on_conflict_dl.iter())
             .expect("no inconsistent hypercube");
 
+        let propagates_at_decision_level = |decision_level: usize| {
+            trace!("  => testing dl = {decision_level}");
+            propagates_at(
+                trail,
+                trail.trail_position_at_checkpoint(decision_level),
+                &final_hypercube,
+                &self.state.conflicting_linear,
+                self.propagation,
+            )
+        };
+
+        // Conflict analysis stops when the constraint propagates at the previous decision level.
+        if current_dl == 0 || !propagates_at_decision_level(current_dl - 1) {
+            return None;
+        }
+
         // We backjump to the lowest decision level at which the constraint propagates. Whether it
         // propagates is not monotone in the decision level: a bound that it implies at a decision
         // level may already be true at a later one, so it may propagate at a decision level while
         // not propagating at a later one. If we backjumped higher, the constraint would miss its
         // propagation at the lower decision level after a later backtrack, since the bounds that
         // trigger it would not change again.
-        for decision_level in 0..current_dl {
-            trace!("  => testing dl = {decision_level}");
-            let trail_position = trail.trail_position_at_checkpoint(decision_level);
+        let lowest_candidate =
+            self.lowest_decision_level_that_can_propagate(trail, &final_hypercube, current_dl - 1);
+        (lowest_candidate..current_dl)
+            .find(|&decision_level| propagates_at_decision_level(decision_level))
+    }
 
-            if propagates_at(
+    /// A decision level below which the conflicting linear with the given hypercube cannot
+    /// propagate, given that it propagates at `propagating_level`.
+    ///
+    /// The standard propagation needs at most one predicate of the hypercube that is not true, and
+    /// the extended propagation needs the predicates that are not true to concern one domain.
+    /// Below the second highest decision level at which a predicate (or, for the extended
+    /// propagation, the predicates over a domain) became true, this does not hold.
+    ///
+    /// Moreover, every propagation needs the hypercube linear slack to be smaller than the width
+    /// of the domain of a term, which is at most its width at the root. The slack does not
+    /// increase with the decision level, so the first decision level at which it is smaller is
+    /// found by binary search.
+    fn lowest_decision_level_that_can_propagate(
+        &self,
+        trail: &impl TrailView,
+        hypercube: &Hypercube,
+        propagating_level: usize,
+    ) -> usize {
+        let hypercube_level = Self::lowest_level_by_hypercube(trail, hypercube, self.propagation);
+
+        let root = trail.trail_position_at_checkpoint(0);
+        let widest_term = self
+            .state
+            .conflicting_linear
+            .terms()
+            .map(|term| {
+                affine_upper_bound_at(trail, term, root) - affine_lower_bound_at(trail, term, root)
+            })
+            .max()
+            .unwrap_or(0);
+        let may_propagate = |decision_level: usize| {
+            let trail_position = trail.trail_position_at_checkpoint(decision_level);
+            compute_hl_slack_at_trail_position(
                 trail,
-                trail_position,
-                &final_hypercube,
+                hypercube,
                 &self.state.conflicting_linear,
-                self.propagation,
-            ) {
-                return Some(decision_level);
+                trail_position,
+            ) < widest_term
+        };
+
+        let mut low = hypercube_level.min(propagating_level);
+        let mut high = propagating_level;
+        while low < high {
+            let middle = low + (high - low) / 2;
+            if may_propagate(middle) {
+                high = middle;
+            } else {
+                low = middle + 1;
             }
         }
 
-        None
+        low
+    }
+
+    /// The level below which the hypercube has too many predicates that are not true for the
+    /// given propagation, see [`Self::lowest_decision_level_that_can_propagate`].
+    fn lowest_level_by_hypercube(
+        trail: &impl TrailView,
+        hypercube: &Hypercube,
+        propagation: HypercubeLinearPropagation,
+    ) -> usize {
+        let checkpoint_of = |predicate: Predicate| {
+            trail
+                .checkpoint_for_predicate(predicate)
+                .expect("the hypercube of the conflict is true")
+        };
+
+        let mut levels = match propagation {
+            HypercubeLinearPropagation::Standard => hypercube
+                .iter_predicates()
+                .map(checkpoint_of)
+                .collect::<Vec<_>>(),
+            HypercubeLinearPropagation::Extended => {
+                let mut domain_levels: HashMap<DomainId, usize> = HashMap::default();
+                for predicate in hypercube.iter_predicates() {
+                    let level = domain_levels.entry(predicate.get_domain()).or_default();
+                    *level = (*level).max(checkpoint_of(predicate));
+                }
+                domain_levels.into_values().collect::<Vec<_>>()
+            }
+        };
+
+        levels.sort_unstable_by(|a, b| b.cmp(a));
+        levels.get(1).copied().unwrap_or(0)
     }
 
     /// Assert loop invariants at the top of each resolution iteration.
