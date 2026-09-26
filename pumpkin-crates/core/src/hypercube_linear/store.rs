@@ -1,6 +1,7 @@
 use crate::basic_types::PredicateId;
-use crate::containers::HashMap;
+use crate::containers::KeyedVec;
 use crate::engine::PropagationStatusCP;
+use crate::engine::notifications::DomainEvents;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::hypercube_linear::Hypercube;
 use crate::hypercube_linear::HypercubeLinearPropagator;
@@ -19,6 +20,8 @@ use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorSpec;
 use crate::propagation::RuntimeCheckers;
+use crate::variables::AffineView;
+use crate::variables::DomainId;
 
 /// The [`PropagatorConstructor`] for the [`HypercubeLinearStore`], which starts without
 /// constraints.
@@ -44,17 +47,31 @@ impl PropagatorConstructor for HypercubeLinearStoreConstructor {
 /// A single propagator for all hypercube linear constraints, in the style of the nogood
 /// propagator.
 ///
-/// Every constraint is a [`HypercubeLinearPropagator`] whose member index identifies it: the store
-/// routes the notifications for the predicates it watches and the domain events of its terms to
-/// it, and propagates only the constraints that were notified.
+/// Every constraint is a [`HypercubeLinearPropagator`] whose member index identifies it. The store
+/// watches the predicates that its members watch, and it registers the domain events of the terms
+/// of their linears once per domain and direction. It routes the notifications to the members,
+/// and propagates only the members that were notified.
 #[derive(Clone, Debug, Default)]
 pub struct HypercubeLinearStore {
     members: Vec<HypercubeLinearPropagator>,
     /// For every watched predicate, the members that watch it.
-    watchers: HashMap<PredicateId, Vec<u32>>,
+    predicate_watchers: KeyedVec<PredicateId, Vec<u32>>,
+    /// For every domain event that the store is registered for, see [`event_key`], the members
+    /// with a term that the event concerns. A member is added when it first watches its linear
+    /// and is never removed; the notifications skip the members that do not watch their linear.
+    event_watchers: Vec<Vec<u32>>,
+    /// Whether a member was added to `event_watchers`.
+    is_in_event_watchers: Vec<bool>,
     /// The members that were notified since they were last propagated.
     to_propagate: Vec<u32>,
     is_to_propagate: Vec<bool>,
+}
+
+/// The key of the domain event that raises the lower bound of `term`: the lower bound of its
+/// domain for a positive weight and the upper bound for a negative weight. It is the local id with
+/// which the store registers for the event.
+fn event_key(term: AffineView<DomainId>) -> usize {
+    term.inner.id() as usize * 2 + usize::from(term.scale < 0)
 }
 
 impl HypercubeLinearStore {
@@ -69,12 +86,18 @@ impl HypercubeLinearStore {
         let index = self.next_member_index();
 
         for predicate_id in member.watched_predicate_ids() {
-            self.watchers.entry(predicate_id).or_default().push(index);
+            self.watch_predicate(predicate_id, index);
         }
 
         self.members.push(member);
         self.is_to_propagate.push(false);
+        self.is_in_event_watchers.push(false);
         let _ = self.schedule(index);
+    }
+
+    fn watch_predicate(&mut self, predicate_id: PredicateId, index: u32) {
+        self.predicate_watchers.accomodate(predicate_id, vec![]);
+        self.predicate_watchers[predicate_id].push(index);
     }
 
     fn schedule(&mut self, index: u32) -> bool {
@@ -90,11 +113,8 @@ impl HypercubeLinearStore {
 
     /// Updates the watch map after the watchers of `index` changed from `before` to `after`.
     fn update_watchers(&mut self, index: u32, before: &[PredicateId], after: &[PredicateId]) {
-        for predicate_id in before.iter().filter(|p| !after.contains(p)) {
-            let members = self
-                .watchers
-                .get_mut(predicate_id)
-                .expect("a watched predicate is in the watch map");
+        for &predicate_id in before.iter().filter(|p| !after.contains(p)) {
+            let members = &mut self.predicate_watchers[predicate_id];
             let position = members
                 .iter()
                 .position(|&member| member == index)
@@ -103,7 +123,49 @@ impl HypercubeLinearStore {
         }
 
         for &predicate_id in after.iter().filter(|p| !before.contains(p)) {
-            self.watchers.entry(predicate_id).or_default().push(index);
+            self.watch_predicate(predicate_id, index);
+        }
+    }
+
+    /// Adds the member at `index` to the watchers of the domain events of its terms, and registers
+    /// the store for the events that no member watched before.
+    fn add_to_event_watchers(&mut self, index: u32, context: &mut PropagationContext<'_>) {
+        self.is_in_event_watchers[index as usize] = true;
+
+        for term in self.members[index as usize].linear().terms() {
+            let key = event_key(term);
+            if key >= self.event_watchers.len() {
+                self.event_watchers.resize(key + 1, vec![]);
+            }
+
+            if self.event_watchers[key].is_empty() {
+                let events = if term.scale > 0 {
+                    DomainEvents::LOWER_BOUND
+                } else {
+                    DomainEvents::UPPER_BOUND
+                };
+                let local_id = LocalId::from(u32::try_from(key).expect("fewer than 2^31 domains"));
+                context.register_domain_event(term.inner, events, local_id);
+            }
+
+            self.event_watchers[key].push(index);
+        }
+    }
+
+    /// Schedules the members in `members` that watch their linear, if `only_watching_linear`, or
+    /// all of them otherwise.
+    fn schedule_all(&mut self, members: &[u32], only_watching_linear: bool) -> EnqueueDecision {
+        let mut scheduled = false;
+        for &member in members {
+            if !only_watching_linear || self.members[member as usize].is_watching_linear() {
+                scheduled |= self.schedule(member);
+            }
+        }
+
+        if scheduled || !self.to_propagate.is_empty() {
+            EnqueueDecision::Enqueue
+        } else {
+            EnqueueDecision::Skip
         }
     }
 }
@@ -119,9 +181,13 @@ impl Propagator for HypercubeLinearStore {
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
-        // The local id of a domain event is the member index.
-        let _ = self.schedule(local_id.unpack());
-        EnqueueDecision::Enqueue
+        // The local id of a domain event is its key. The list of members is taken out while they
+        // are scheduled, which does not change it.
+        let key = local_id.unpack() as usize;
+        let members = std::mem::take(&mut self.event_watchers[key]);
+        let decision = self.schedule_all(&members, true);
+        self.event_watchers[key] = members;
+        decision
     }
 
     fn notify_predicate_id_satisfied(
@@ -129,22 +195,14 @@ impl Propagator for HypercubeLinearStore {
         _context: NotificationContext,
         predicate_id: PredicateId,
     ) -> EnqueueDecision {
-        let members = self
-            .watchers
-            .get(&predicate_id)
-            .cloned()
-            .unwrap_or_default();
+        let Some(members) = self.predicate_watchers.get_mut(predicate_id) else {
+            return self.schedule_all(&[], false);
+        };
 
-        let mut scheduled = false;
-        for index in members {
-            scheduled |= self.schedule(index);
-        }
-
-        if scheduled || !self.to_propagate.is_empty() {
-            EnqueueDecision::Enqueue
-        } else {
-            EnqueueDecision::Skip
-        }
+        let members = std::mem::take(members);
+        let decision = self.schedule_all(&members, false);
+        self.predicate_watchers[predicate_id] = members;
+        decision
     }
 
     fn synchronise(&mut self, _context: NotificationContext<'_>) {
@@ -163,6 +221,12 @@ impl Propagator for HypercubeLinearStore {
 
             if before != after {
                 self.update_watchers(index, &before, &after);
+            }
+
+            if !self.is_in_event_watchers[index as usize]
+                && self.members[index as usize].is_watching_linear()
+            {
+                self.add_to_event_watchers(index, &mut context);
             }
 
             result?;

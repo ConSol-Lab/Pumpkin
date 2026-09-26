@@ -103,6 +103,7 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
             hypercube_predicates,
             watched_predicates,
             is_watching_linear: false,
+            registers_domain_events: true,
             propagation: context.hypercube_linear_propagation(),
             member_index: 0,
 
@@ -150,6 +151,10 @@ pub struct HypercubeLinearPropagator {
 
     /// True when we are watching the linear inequality.
     is_watching_linear: bool,
+
+    /// True if the propagator registers the domain events of the terms of its linear itself; false
+    /// if the [`HypercubeLinearStore`] that holds it registers them.
+    registers_domain_events: bool,
 
     /// How the hypercube is propagated.
     propagation: HypercubeLinearPropagation,
@@ -249,9 +254,22 @@ impl HypercubeLinearPropagator {
         Hypercube::new(predicates).expect("the predicates are consistent")
     }
 
-    /// Sets the index of this constraint in the [`HypercubeLinearStore`] that holds it.
+    /// Sets the index of this constraint in the [`HypercubeLinearStore`] that holds it, which
+    /// then registers the domain events of the terms of the linear.
     pub(crate) fn set_member_index(&mut self, member_index: u32) {
         self.member_index = member_index;
+        self.registers_domain_events = false;
+    }
+
+    /// True if the propagator needs the events that raise the lower bounds of the terms of its
+    /// linear.
+    pub(crate) fn is_watching_linear(&self) -> bool {
+        self.is_watching_linear
+    }
+
+    /// The linear inequality of the hypercube linear.
+    pub(crate) fn linear(&self) -> &LinearInequality {
+        &self.linear
     }
 
     /// The predicates that are watched in the hypercube.
@@ -602,6 +620,10 @@ impl HypercubeLinearPropagator {
 
     /// Register the bound events on the integer variables in the linear inequality.
     fn register_bound_events_on_linear(&self, mut context: PropagationContext<'_>) {
+        if !self.registers_domain_events {
+            return;
+        }
+
         for term in self.linear.terms() {
             // The implementation of register_domain_event already handles duplicate registration,
             // so we do not need to check whether we are already registered.
@@ -615,6 +637,10 @@ impl HypercubeLinearPropagator {
 
     /// Stop being enqueued for the bound events on the terms in the linear inequality.
     fn unregister_bound_events_on_linear(&self, mut context: PropagationContext<'_>) {
+        if !self.registers_domain_events {
+            return;
+        }
+
         for term in self.linear.terms() {
             // The implementation of register_domain_event already handles duplicate registration,
             // so we do not need to check whether we are already registered.
