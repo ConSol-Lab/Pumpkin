@@ -91,6 +91,20 @@ pub trait Propagator: Downcast + DynClone {
     /// the solver until no further propagations happen.
     fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP;
 
+    /// Propagates from scratch as [`Propagator::propagate_from_scratch`], restricted to the part
+    /// of the propagator that made a propagation with the given lazy code, if there is one.
+    ///
+    /// The debug checks of the reasons of propagations use it. A propagator that holds several
+    /// constraints can override it, so that only the constraint that made the propagation is
+    /// propagated; the others may report conflicts for the partial assignments of these checks.
+    fn propagate_from_scratch_for_code(
+        &self,
+        _code: Option<u64>,
+        context: PropagationContext,
+    ) -> PropagationStatusCP {
+        self.propagate_from_scratch(context)
+    }
+
     /// Performs propagation with state (i.e., with being able to mutate internal data structures,
     /// as opposed to [`Propagator::propagate_from_scratch`]).
     ///

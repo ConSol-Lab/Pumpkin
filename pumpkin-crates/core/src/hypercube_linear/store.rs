@@ -243,6 +243,19 @@ impl Propagator for HypercubeLinearStore {
         Ok(())
     }
 
+    fn propagate_from_scratch_for_code(
+        &self,
+        code: Option<u64>,
+        context: PropagationContext,
+    ) -> PropagationStatusCP {
+        match code {
+            Some(code) => {
+                self.members[member_index_of_lazy_code(code)].propagate_from_scratch(context)
+            }
+            None => self.propagate_from_scratch(context),
+        }
+    }
+
     fn explain_as_hypercube_linear(
         &mut self,
         code: u64,
