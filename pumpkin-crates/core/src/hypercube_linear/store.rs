@@ -5,6 +5,8 @@ use crate::engine::notifications::OpaqueDomainEvent;
 use crate::hypercube_linear::Hypercube;
 use crate::hypercube_linear::HypercubeLinearPropagator;
 use crate::hypercube_linear::LinearInequality;
+use crate::hypercube_linear::propagator::member_index_of_lazy_code;
+use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::EventsToRegister;
@@ -180,10 +182,11 @@ impl Propagator for HypercubeLinearStore {
     fn explain_as_hypercube_linear(
         &mut self,
         code: u64,
+        predicate: Predicate,
         context: ExplanationContext,
     ) -> Option<(Hypercube, LinearInequality, InferenceCode)> {
-        // The code of a lazy explanation is the member index.
-        self.members[code as usize].explain_as_hypercube_linear(code, context)
+        self.members[member_index_of_lazy_code(code)]
+            .explain_as_hypercube_linear(code, predicate, context)
     }
 }
 

@@ -222,9 +222,12 @@ pub trait Propagator: Downcast + DynClone {
         );
     }
 
+    /// Explains the propagation of `predicate` with the given lazy code as a hypercube linear,
+    /// if the propagator supports it.
     fn explain_as_hypercube_linear(
         &mut self,
         _code: u64,
+        _predicate: Predicate,
         _context: ExplanationContext,
     ) -> Option<(Hypercube, LinearInequality, InferenceCode)> {
         None

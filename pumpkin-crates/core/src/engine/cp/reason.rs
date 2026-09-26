@@ -170,7 +170,7 @@ impl StoredReason {
         predicate_to_explain: Predicate,
     ) -> InferenceCode {
         if let Some((hypercube, linear, inference_code)) =
-            propagator.explain_as_hypercube_linear(code, context.reborrow())
+            propagator.explain_as_hypercube_linear(code, predicate_to_explain, context.reborrow())
         {
             convert_hl_to_clause(
                 context,

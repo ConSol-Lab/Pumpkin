@@ -179,6 +179,7 @@ impl TrailView for State {
                 if let Some((hypercube, linear, _)) = self.propagators[propagator_id]
                     .explain_as_hypercube_linear(
                         code,
+                        trail_entry.predicate,
                         ExplanationContext::without_working_nogood(
                             &self.assignments,
                             trail_position,

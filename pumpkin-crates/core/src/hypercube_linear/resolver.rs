@@ -633,11 +633,14 @@ impl HypercubeLinearResolver {
         // it. Otherwise, fall back to the clausal explanation.
         if let Some(code) = state.reason_store.get_lazy_code(trigger_reason) {
             let propagator_id = state.reason_store.get_propagator(trigger_reason);
-            let trail_position = state.trail_len() - 1;
+            // The trigger predicate is not on the trail, so the propagation took place after the
+            // last trail entry.
+            let trail_position = state.trail_len();
 
             if let Some((hypercube, linear, _)) = state.propagators[propagator_id]
                 .explain_as_hypercube_linear(
                     code,
+                    trigger_predicate,
                     ExplanationContext::without_working_nogood(
                         &state.assignments,
                         trail_position,

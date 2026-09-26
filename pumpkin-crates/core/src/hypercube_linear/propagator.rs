@@ -3,6 +3,7 @@ use std::cmp::Reverse;
 use crate::basic_types::PredicateId;
 use crate::declare_inference_label;
 use crate::engine::PropagationStatusCP;
+use crate::engine::Reason;
 use crate::hypercube_linear::Hypercube;
 use crate::hypercube_linear::HypercubeLinearChecker;
 use crate::hypercube_linear::HypercubeLinearPropagation;
@@ -19,6 +20,7 @@ use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::DomainEvents;
 use crate::propagation::EventsToRegister;
+use crate::propagation::ExplanationContext;
 use crate::propagation::LocalId;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
@@ -122,6 +124,15 @@ declare_inference_label!(HypercubeLinear);
 
 pub(crate) const NUM_WATCHED_PREDICATES: usize = 2;
 
+/// The bit of a lazy code that marks a propagation by the extended propagation. The other bits
+/// hold the member index.
+const EXTENDED_PROPAGATION_CODE: u64 = 1 << 32;
+
+/// The member index that a lazy code of a hypercube linear refers to.
+pub(crate) fn member_index_of_lazy_code(code: u64) -> usize {
+    (code & !EXTENDED_PROPAGATION_CODE) as usize
+}
+
 /// The extended propagation removes at most this many values from the interior of a domain at
 /// once. Larger intervals are not removed, which only weakens the propagation.
 const MAX_INTERIOR_REMOVALS: i64 = 1000;
@@ -164,6 +175,78 @@ impl HypercubeLinearPropagator {
     /// The code with which propagations are explained lazily.
     fn lazy_code(&self) -> u64 {
         u64::from(self.member_index)
+    }
+
+    /// The code with which propagations of the extended propagation are explained lazily.
+    fn extended_lazy_code(&self) -> u64 {
+        u64::from(self.member_index) | EXTENDED_PROPAGATION_CODE
+    }
+
+    /// The hypercube linear that explains `propagated`, a propagation of the extended propagation
+    /// on the domain `x` of `propagated`.
+    ///
+    /// The hypercube linear itself does not explain it, since the predicates of the hypercube over
+    /// `x` were not true. It is strengthened with the bound of `x` that the propagation moves, if
+    /// any, and the negation of `propagated`: together they restrict `x` to forbidden values, which
+    /// satisfy the predicates over `x`, so these are left out. The result is implied by the
+    /// hypercube linear, its hypercube is true apart from the negation of `propagated`, and its
+    /// linear is violated, as for a predicate of the hypercube that is propagated to false.
+    fn extended_explanation(
+        &self,
+        propagated: Predicate,
+        context: &ExplanationContext<'_>,
+    ) -> Hypercube {
+        let domain = propagated.get_domain();
+        let trail_position = context.get_trail_position();
+
+        // The predicates over `x` that are added, and the values of `x` that they allow.
+        let (added, allowed_lower, allowed_upper) = match propagated.get_predicate_type() {
+            PredicateType::LowerBound => {
+                let lower_bound = context.lower_bound_at_trail_position(&domain, trail_position);
+                let upper = propagated.get_right_hand_side() - 1;
+                (
+                    vec![predicate![domain >= lower_bound], !propagated],
+                    lower_bound,
+                    upper,
+                )
+            }
+            PredicateType::UpperBound => {
+                let upper_bound = context.upper_bound_at_trail_position(&domain, trail_position);
+                let lower = propagated.get_right_hand_side() + 1;
+                (
+                    vec![!propagated, predicate![domain <= upper_bound]],
+                    lower,
+                    upper_bound,
+                )
+            }
+            PredicateType::NotEqual => {
+                let value = propagated.get_right_hand_side();
+                (vec![!propagated], value, value)
+            }
+            PredicateType::Equal => {
+                unreachable!("the extended propagation does not propagate equalities")
+            }
+        };
+
+        // Whether every value in [allowed_lower, allowed_upper] satisfies `predicate` over `x`.
+        let is_implied = |predicate: Predicate| {
+            let value = predicate.get_right_hand_side();
+            match predicate.get_predicate_type() {
+                PredicateType::LowerBound => allowed_lower >= value,
+                PredicateType::UpperBound => allowed_upper <= value,
+                PredicateType::NotEqual => value < allowed_lower || value > allowed_upper,
+                PredicateType::Equal => allowed_lower == value && allowed_upper == value,
+            }
+        };
+
+        let predicates = self
+            .hypercube_predicates
+            .iter()
+            .copied()
+            .filter(|&p| p.get_domain() != domain || !is_implied(p))
+            .chain(added);
+
+        Hypercube::new(predicates).expect("the predicates are consistent")
     }
 
     /// Sets the index of this constraint in the [`HypercubeLinearStore`] that holds it.
@@ -287,12 +370,12 @@ impl HypercubeLinearPropagator {
                 self.propagate_single_unsatisfied_predicate(context.reborrow(), predicate, slack)?;
 
                 if context.evaluate_predicate(predicate).is_none() {
-                    self.propagate_single_unsatisfied_domain(context, &[predicate])?;
+                    self.propagate_single_unsatisfied_domain(context, &[predicate], true)?;
                 }
 
                 Ok(())
             }
-            predicates => self.propagate_single_unsatisfied_domain(context, predicates),
+            predicates => self.propagate_single_unsatisfied_domain(context, predicates, true),
         }
     }
 
@@ -381,10 +464,14 @@ impl HypercubeLinearPropagator {
     /// constraint forbids exactly the values `v` in `R` with `w * v > S`, where `w` is the weight
     /// of `x` in the linear (0 if `x` does not appear in it). These values form an interval of `R`,
     /// which is removed from the domain of `x`.
+    ///
+    /// If `lazy` is true, the propagations are explained lazily, see
+    /// [`Self::extended_explanation`]; otherwise with clauses.
     fn propagate_single_unsatisfied_domain(
         &self,
         mut context: PropagationContext<'_>,
         unsatisfied: &[Predicate],
+        lazy: bool,
     ) -> PropagationStatusCP {
         let domain = unsatisfied[0].get_domain();
         pumpkin_assert_simple!(unsatisfied.iter().all(|p| p.get_domain() == domain));
@@ -414,47 +501,50 @@ impl HypercubeLinearPropagator {
             return Ok(());
         };
 
-        // The reason consists of the true predicates of the hypercube and the lower bounds of the
-        // other terms. A bound propagation additionally uses the bound of `x` that it moves.
-        let base_reason = self
-            .hypercube_predicates
-            .iter()
-            .copied()
-            .filter(|p| !unsatisfied.contains(p))
-            .chain(
-                self.linear
-                    .terms()
-                    .filter(|t| t.inner != domain)
-                    .map(|t| term_lower_bound_predicate(&context, t)),
-            )
-            .collect::<Vec<_>>();
+        // The clausal reason consists of the true predicates of the hypercube and the lower bounds
+        // of the other terms. A bound propagation additionally uses the bound of `x` that it
+        // moves.
+        let clausal_reason = (!lazy).then(|| {
+            self.hypercube_predicates
+                .iter()
+                .copied()
+                .filter(|p| !unsatisfied.contains(p))
+                .chain(
+                    self.linear
+                        .terms()
+                        .filter(|t| t.inner != domain)
+                        .map(|t| term_lower_bound_predicate(&context, t)),
+                )
+                .collect::<Vec<_>>()
+        });
+        let reason = |moved_bound: Option<Predicate>| match &clausal_reason {
+            None => Reason::from(self.extended_lazy_code()),
+            Some(clausal_reason) => {
+                let conjunction = clausal_reason
+                    .iter()
+                    .copied()
+                    .chain(moved_bound)
+                    .collect::<PropositionalConjunction>();
+                Reason::from((conjunction, &self.inference_code))
+            }
+        };
 
         if inferences.lower_bound > domain_lower_bound {
-            let mut reason = base_reason.clone();
-            reason.push(predicate![domain >= domain_lower_bound]);
             context.post(
                 predicate![domain >= inferences.lower_bound],
-                (PropositionalConjunction::from(reason), &self.inference_code),
+                reason(Some(predicate![domain >= domain_lower_bound])),
             )?;
         }
 
         if inferences.upper_bound < domain_upper_bound {
-            let mut reason = base_reason.clone();
-            reason.push(predicate![domain <= domain_upper_bound]);
             context.post(
                 predicate![domain <= inferences.upper_bound],
-                (PropositionalConjunction::from(reason), &self.inference_code),
+                reason(Some(predicate![domain <= domain_upper_bound])),
             )?;
         }
 
         for value in inferences.removed_values {
-            context.post(
-                predicate![domain != value],
-                (
-                    PropositionalConjunction::from(base_reason.clone()),
-                    &self.inference_code,
-                ),
-            )?;
+            context.post(predicate![domain != value], reason(None))?;
         }
 
         Ok(())
@@ -696,7 +786,7 @@ impl HypercubeLinearPropagator {
             }
         }
 
-        self.propagate_single_unsatisfied_domain(context, &unsatisfied)
+        self.propagate_single_unsatisfied_domain(context, &unsatisfied, false)
     }
 
     /// Update the watched predicates of the hypercube.
@@ -726,14 +816,17 @@ impl Propagator for HypercubeLinearPropagator {
 
     fn explain_as_hypercube_linear(
         &mut self,
-        _code: u64,
-        _context: crate::propagation::ExplanationContext,
+        code: u64,
+        predicate: Predicate,
+        context: ExplanationContext,
     ) -> Option<(Hypercube, LinearInequality, InferenceCode)> {
-        Some((
-            self.hypercube.clone(),
-            self.linear.clone(),
-            self.inference_code.clone(),
-        ))
+        let hypercube = if code & EXTENDED_PROPAGATION_CODE == 0 {
+            self.hypercube.clone()
+        } else {
+            self.extended_explanation(predicate, &context)
+        };
+
+        Some((hypercube, self.linear.clone(), self.inference_code.clone()))
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
@@ -1476,6 +1569,48 @@ mod tests {
             let _ = state.restore_to(0);
             assert!((3..=7).all(|value| state.contains(x, value)));
         }
+    }
+
+    /// `[x >= 3] /\ [x <= 7] /\ [y >= 2] -> x + y <= 6` with `x` in [0, 10] and `[y >= 2]` true
+    /// forbids x in [5, 7], which the extended propagation removes. `[x != 6]` is explained by
+    /// `[y >= 2] /\ [x == 6] -> x + y <= 6`: `[x == 6]` implies the predicates over x.
+    #[test]
+    fn extended_propagation_is_explained_by_a_hypercube_linear() {
+        use crate::hypercube_linear::HypercubeLinear;
+        use crate::hypercube_linear::HypercubeLinearExplanation;
+        use crate::hypercube_linear::trail_view::TrailView;
+
+        let mut state = extended_state();
+
+        let x = state.new_interval_variable(0, 10, None);
+        let y = state.new_interval_variable(2, 10, None);
+
+        let hypercube =
+            Hypercube::new([predicate![x >= 3], predicate![x <= 7], predicate![y >= 2]])
+                .expect("not inconsistent");
+        let linear = LinearInequality::new(
+            [(NonZero::new(1).unwrap(), x), (NonZero::new(1).unwrap(), y)],
+            6,
+        )
+        .expect("not trivially satisfiable");
+        add_hypercube_linear(&mut state, hypercube, linear.clone());
+
+        assert!(state.propagate_to_fixed_point().is_ok());
+        assert!((5..=7).all(|value| !state.contains(x, value)));
+
+        let HypercubeLinearExplanation::Proper(HypercubeLinear {
+            hypercube: explanation_hypercube,
+            linear: explanation_linear,
+        }) = state.reason_for(predicate![x != 6])
+        else {
+            panic!("expected a hypercube linear explanation");
+        };
+
+        assert_eq!(
+            explanation_hypercube,
+            Hypercube::new([predicate![y >= 2], predicate![x == 6]]).expect("not inconsistent")
+        );
+        assert_eq!(explanation_linear, linear);
     }
 
     #[test]
