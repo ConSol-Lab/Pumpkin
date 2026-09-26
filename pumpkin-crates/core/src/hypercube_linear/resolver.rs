@@ -875,6 +875,23 @@ impl HypercubeLinearResolver {
         );
         trace!("     - slack: {tp_slack}");
 
+        let scale_reason = weight_in_conflicting.abs();
+        let scale_conflict = tightly_propagating_reason
+            .linear
+            .term_for_domain(pivot.get_domain())
+            .unwrap()
+            .scale
+            .abs();
+
+        // The combination is computed before the conflict is changed, so that the conflict is
+        // unchanged if it fails.
+        let resolvent = fourier_combination(
+            &self.state.conflicting_linear,
+            scale_conflict,
+            &tightly_propagating_reason.linear,
+            scale_reason,
+        )?;
+
         // Extend the hypercube of the conflict with the predicates from the hypercube of
         // the explanation.
         for predicate in tightly_propagating_reason.hypercube.iter_predicates() {
@@ -884,20 +901,7 @@ impl HypercubeLinearResolver {
         self.state
             .explain_linear(trail, &tightly_propagating_reason.linear, trail_position);
 
-        let scale_reason = weight_in_conflicting.abs();
-        let scale_conflict = tightly_propagating_reason
-            .linear
-            .term_for_domain(pivot.get_domain())
-            .unwrap()
-            .scale
-            .abs();
-
-        self.state.conflicting_linear = fourier_combination(
-            &self.state.conflicting_linear,
-            scale_conflict,
-            &tightly_propagating_reason.linear,
-            scale_reason,
-        )?;
+        self.state.conflicting_linear = resolvent;
 
         Ok(())
     }
