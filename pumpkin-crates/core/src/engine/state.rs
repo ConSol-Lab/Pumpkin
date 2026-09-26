@@ -445,9 +445,17 @@ impl State {
             }
         }
 
-        self.get_propagator_mut(store)
+        let duplicate_registrations = self
+            .get_propagator_mut(store)
             .expect("the store is a hypercube linear store")
             .add_member(member);
+        for predicate_id in duplicate_registrations {
+            self.notification_engine.unwatch_predicate(
+                predicate_id,
+                store.propagator_id(),
+                &self.assignments,
+            );
+        }
 
         #[allow(deprecated, reason = "Will be refactored")]
         self.enqueue_propagator(store);

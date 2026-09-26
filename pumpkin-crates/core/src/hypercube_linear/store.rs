@@ -82,22 +82,36 @@ impl HypercubeLinearStore {
 
     /// Adds a member, whose member index must be [`Self::next_member_index`], and schedules it
     /// for propagation.
-    pub(crate) fn add_member(&mut self, member: HypercubeLinearPropagator) {
+    ///
+    /// The constructor of the member registered its watched predicates for the store. The store
+    /// registers every predicate once, so the returned registrations, of predicates that other
+    /// members already watch, have to be undone.
+    #[must_use]
+    pub(crate) fn add_member(&mut self, member: HypercubeLinearPropagator) -> Vec<PredicateId> {
         let index = self.next_member_index();
 
+        let mut duplicate_registrations = vec![];
         for predicate_id in member.watched_predicate_ids() {
-            self.watch_predicate(predicate_id, index);
+            if self.watch_predicate(predicate_id, index) {
+                duplicate_registrations.push(predicate_id);
+            }
         }
 
         self.members.push(member);
         self.is_to_propagate.push(false);
         self.is_in_event_watchers.push(false);
         let _ = self.schedule(index);
+
+        duplicate_registrations
     }
 
-    fn watch_predicate(&mut self, predicate_id: PredicateId, index: u32) {
+    /// Adds the member at `index` to the watchers of the predicate. Returns true if another
+    /// member already watched it, in which case the store is registered for it.
+    fn watch_predicate(&mut self, predicate_id: PredicateId, index: u32) -> bool {
         self.predicate_watchers.accomodate(predicate_id, vec![]);
-        self.predicate_watchers[predicate_id].push(index);
+        let members = &mut self.predicate_watchers[predicate_id];
+        members.push(index);
+        members.len() > 1
     }
 
     fn schedule(&mut self, index: u32) -> bool {
@@ -111,8 +125,15 @@ impl HypercubeLinearStore {
         true
     }
 
-    /// Updates the watch map after the watchers of `index` changed from `before` to `after`.
-    fn update_watchers(&mut self, index: u32, before: &[PredicateId], after: &[PredicateId]) {
+    /// Updates the watch map after the watchers of `index` changed from `before` to `after`. The
+    /// store is registered for a predicate as long as a member watches it.
+    fn update_watchers(
+        &mut self,
+        index: u32,
+        before: &[PredicateId],
+        after: &[PredicateId],
+        context: &mut PropagationContext<'_>,
+    ) {
         for &predicate_id in before.iter().filter(|p| !after.contains(p)) {
             let members = &mut self.predicate_watchers[predicate_id];
             let position = members
@@ -120,10 +141,17 @@ impl HypercubeLinearStore {
                 .position(|&member| member == index)
                 .expect("the member watches the predicate");
             let _ = members.swap_remove(position);
+
+            if members.is_empty() {
+                context.unregister_predicate(predicate_id);
+            }
         }
 
         for &predicate_id in after.iter().filter(|p| !before.contains(p)) {
-            self.watch_predicate(predicate_id, index);
+            if !self.watch_predicate(predicate_id, index) {
+                let predicate = context.get_predicate(predicate_id);
+                let _ = context.register_predicate(predicate);
+            }
         }
     }
 
@@ -220,7 +248,7 @@ impl Propagator for HypercubeLinearStore {
             let after = self.members[index as usize].watched_predicate_ids();
 
             if before != after {
-                self.update_watchers(index, &before, &after);
+                self.update_watchers(index, &before, &after, &mut context);
             }
 
             if !self.is_in_event_watchers[index as usize]

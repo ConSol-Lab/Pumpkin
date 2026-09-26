@@ -183,6 +183,25 @@ impl NotificationEngine {
             .track_predicate(predicate_id, trailed_values, assignments);
     }
 
+    /// Tracks the truth value of `predicate` without notifying any propagator about it, and
+    /// returns its [`PredicateId`].
+    pub(crate) fn track_predicate(
+        &mut self,
+        predicate: Predicate,
+        trailed_values: &mut TrailedValues,
+        assignments: &Assignments,
+    ) -> PredicateId {
+        let predicate_id = self.get_id(predicate);
+
+        // As in `watch_predicate_id`, the initial bounds are not tracked.
+        if !assignments.is_initial_bound(predicate) {
+            self.predicate_notifier
+                .track_predicate(predicate_id, trailed_values, assignments);
+        }
+
+        predicate_id
+    }
+
     pub(crate) fn unwatch_predicate(
         &mut self,
         predicate_id: PredicateId,

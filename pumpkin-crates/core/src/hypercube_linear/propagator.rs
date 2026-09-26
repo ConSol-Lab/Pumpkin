@@ -103,7 +103,7 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
             hypercube_predicates,
             watched_predicates,
             is_watching_linear: false,
-            registers_domain_events: true,
+            in_store: false,
             propagation: context.hypercube_linear_propagation(),
             member_index: 0,
 
@@ -152,9 +152,10 @@ pub struct HypercubeLinearPropagator {
     /// True when we are watching the linear inequality.
     is_watching_linear: bool,
 
-    /// True if the propagator registers the domain events of the terms of its linear itself; false
-    /// if the [`HypercubeLinearStore`] that holds it registers them.
-    registers_domain_events: bool,
+    /// True if the propagator is a member of a [`HypercubeLinearStore`], which then registers the
+    /// watched predicates and the domain events of the terms of the linear; false if the
+    /// propagator registers them itself.
+    in_store: bool,
 
     /// How the hypercube is propagated.
     propagation: HypercubeLinearPropagation,
@@ -258,7 +259,7 @@ impl HypercubeLinearPropagator {
     /// then registers the domain events of the terms of the linear.
     pub(crate) fn set_member_index(&mut self, member_index: u32) {
         self.member_index = member_index;
-        self.registers_domain_events = false;
+        self.in_store = true;
     }
 
     /// True if the propagator needs the events that raise the lower bounds of the terms of its
@@ -453,6 +454,23 @@ impl HypercubeLinearPropagator {
         false
     }
 
+    /// Stops watching the predicate with id `old_watcher` and starts watching `predicate`,
+    /// returning its id. A member of a [`HypercubeLinearStore`] only tracks the predicate; the
+    /// store registers it.
+    fn replace_watched_predicate(
+        &self,
+        mut context: PropagationContext<'_>,
+        old_watcher: PredicateId,
+        predicate: Predicate,
+    ) -> PredicateId {
+        if self.in_store {
+            context.track_predicate(predicate)
+        } else {
+            context.unregister_predicate(old_watcher);
+            context.register_predicate(predicate)
+        }
+    }
+
     /// Makes the predicates at `first` and `second` in the hypercube the watched predicates.
     fn watch(&mut self, mut context: PropagationContext<'_>, first: usize, second: usize) {
         pumpkin_assert_simple!(first != second);
@@ -468,8 +486,8 @@ impl HypercubeLinearPropagator {
             let old_watcher = self.watched_predicates[watcher_index];
 
             if context.get_predicate(old_watcher) != predicate {
-                context.unregister_predicate(old_watcher);
-                self.watched_predicates[watcher_index] = context.register_predicate(predicate);
+                self.watched_predicates[watcher_index] =
+                    self.replace_watched_predicate(context.reborrow(), old_watcher, predicate);
             }
         }
     }
@@ -620,7 +638,7 @@ impl HypercubeLinearPropagator {
 
     /// Register the bound events on the integer variables in the linear inequality.
     fn register_bound_events_on_linear(&self, mut context: PropagationContext<'_>) {
-        if !self.registers_domain_events {
+        if self.in_store {
             return;
         }
 
@@ -637,7 +655,7 @@ impl HypercubeLinearPropagator {
 
     /// Stop being enqueued for the bound events on the terms in the linear inequality.
     fn unregister_bound_events_on_linear(&self, mut context: PropagationContext<'_>) {
-        if !self.registers_domain_events {
+        if self.in_store {
             return;
         }
 
@@ -672,8 +690,11 @@ impl HypercubeLinearPropagator {
 
             let next_predicate_to_watch = self.hypercube_predicates[predicate_index];
 
-            context.unregister_predicate(old_watcher);
-            let new_predicate_id = context.register_predicate(next_predicate_to_watch);
+            let new_predicate_id = self.replace_watched_predicate(
+                context.reborrow(),
+                old_watcher,
+                next_predicate_to_watch,
+            );
 
             self.hypercube_predicates
                 .swap(watcher_index, predicate_index);

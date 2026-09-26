@@ -179,6 +179,13 @@ impl<'a> PropagationContext<'a> {
         self.notification_engine.get_predicate(predicate_id)
     }
 
+    /// Tracks the truth value of `predicate`, so that [`Self::is_predicate_id_satisfied`] can be
+    /// used for it, without the propagator being notified about it.
+    pub(crate) fn track_predicate(&mut self, predicate: Predicate) -> PredicateId {
+        self.notification_engine
+            .track_predicate(predicate, self.trailed_values, self.assignments)
+    }
+
     /// Get a [`PredicateId`] for the given [`Predicate`].
     ///
     /// If no ID exists, one will be created.
