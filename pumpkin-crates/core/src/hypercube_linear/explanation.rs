@@ -7,8 +7,7 @@ use crate::hypercube_linear::Hypercube;
 use crate::hypercube_linear::InconsistentHypercube;
 use crate::hypercube_linear::LinearInequality;
 use crate::hypercube_linear::trail_view::TrailView;
-use crate::hypercube_linear::trail_view::affine_lower_bound_at;
-use crate::predicate;
+use crate::hypercube_linear::trail_view::affine_lower_bound_predicate_at;
 use crate::predicates::Predicate;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -99,10 +98,12 @@ impl HypercubeLinearExplanation {
                 .filter(|&p| !(!pivot).implies(p)),
         );
 
-        clause.extend(hypercube_linear.linear.terms().map(|term| {
-            let term_bound = affine_lower_bound_at(trail, term, trail_position - 1);
-            predicate![term >= term_bound]
-        }));
+        clause.extend(
+            hypercube_linear
+                .linear
+                .terms()
+                .map(|term| affine_lower_bound_predicate_at(trail, term, trail_position - 1)),
+        );
 
         clause
     }
@@ -172,6 +173,7 @@ mod tests {
     use std::num::NonZero;
 
     use super::*;
+    use crate::predicate;
     use crate::state::State;
 
     #[test]

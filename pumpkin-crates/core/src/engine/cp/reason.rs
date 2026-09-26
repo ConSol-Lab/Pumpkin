@@ -13,6 +13,8 @@ use crate::propagation::PropagatorId;
 use crate::propagation::ReadDomains;
 use crate::propagation::store::PropagatorStore;
 use crate::pumpkin_assert_simple;
+use crate::variables::AffineView;
+use crate::variables::DomainId;
 
 /// The reason store holds a reason for each change made by a CP propagator on a trail.
 #[derive(Default, Debug, Clone)]
@@ -212,8 +214,7 @@ fn convert_hl_to_clause(
             if term.inner == predicate_to_explain.get_domain() {
                 None
             } else {
-                let lb = context.lower_bound_at_trail_position(&term, context.get_trail_position());
-                Some(predicate![term >= lb])
+                Some(term_lower_bound_predicate(&context, term))
             }
         }));
     } else {
@@ -259,9 +260,7 @@ fn convert_hl_to_clause(
                     if excluded {
                         None
                     } else {
-                        let lb = context
-                            .lower_bound_at_trail_position(&term, context.get_trail_position());
-                        Some(predicate![term >= lb])
+                        Some(term_lower_bound_predicate(&context, term))
                     }
                 })
                 .filter(|&p| {
@@ -269,6 +268,24 @@ fn convert_hl_to_clause(
                         == Some(true)
                 }),
         );
+    }
+}
+
+/// The predicate `[term >= lb(term)]` before the propagation that is being explained, expressed
+/// over the domain of the term, so that it can be represented even if the scaled bound does not fit
+/// in an i32.
+fn term_lower_bound_predicate(
+    context: &ExplanationContext<'_>,
+    term: AffineView<DomainId>,
+) -> Predicate {
+    let domain = term.inner;
+    let trail_position = context.get_trail_position();
+    if term.scale < 0 {
+        let bound = context.upper_bound_at_trail_position(&domain, trail_position);
+        predicate![domain <= bound]
+    } else {
+        let bound = context.lower_bound_at_trail_position(&domain, trail_position);
+        predicate![domain >= bound]
     }
 }
 

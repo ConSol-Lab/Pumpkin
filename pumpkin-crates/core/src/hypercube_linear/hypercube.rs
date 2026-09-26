@@ -2,12 +2,14 @@ use std::fmt::Display;
 use std::hash::Hash;
 
 use itertools::Itertools;
+use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
+use crate::variables::AffineView;
 use crate::variables::DomainId;
 use crate::variables::IntegerVariable;
 
@@ -127,6 +129,23 @@ impl Hypercube {
     /// Predicates are yielded in sorted order.
     pub fn iter_predicates(&self) -> impl Iterator<Item = Predicate> + '_ {
         self.predicates.iter().copied()
+    }
+
+    /// The lower bound of `term` implied by the hypercube, computed in i64, or `None` if the
+    /// hypercube does not bound the term from below.
+    pub(crate) fn term_lower_bound(&self, term: AffineView<DomainId>) -> Option<i64> {
+        let bound = if term.scale.is_positive() {
+            term.inner.induced_lower_bound(&self.state)
+        } else {
+            term.inner.induced_upper_bound(&self.state)
+        };
+
+        match bound {
+            IntExt::Int(value) => {
+                Some(i64::from(term.scale) * i64::from(value) + i64::from(term.offset))
+            }
+            IntExt::NegativeInf | IntExt::PositiveInf => None,
+        }
     }
 
     pub fn lower_bound(&self, term: &impl IntegerVariable) -> i32 {

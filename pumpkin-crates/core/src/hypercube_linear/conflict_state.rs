@@ -6,8 +6,7 @@ use crate::hypercube_linear::LinearInequality;
 use crate::hypercube_linear::Trace;
 use crate::hypercube_linear::predicate_heap::PredicateHeap;
 use crate::hypercube_linear::trail_view::TrailView;
-use crate::hypercube_linear::trail_view::affine_lower_bound_at;
-use crate::predicate;
+use crate::hypercube_linear::trail_view::affine_lower_bound_predicate_at;
 use crate::predicates::Predicate;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
@@ -68,8 +67,7 @@ impl ConflictState {
         trail_position: usize,
     ) {
         for term in linear.terms() {
-            let term_bound = affine_lower_bound_at(trail, term, trail_position);
-            let predicate = predicate![term >= term_bound];
+            let predicate = affine_lower_bound_predicate_at(trail, term, trail_position);
 
             let checkpoint = trail
                 .checkpoint_for_predicate(predicate)

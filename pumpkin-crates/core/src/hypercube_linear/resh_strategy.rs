@@ -136,7 +136,7 @@ fn compute_linear_slack_at_trail_position(
 ) -> i64 {
     let lower_bound_terms = linear
         .terms()
-        .map(|term| i64::from(affine_lower_bound_at(trail, term, trail_position)))
+        .map(|term| affine_lower_bound_at(trail, term, trail_position))
         .sum::<i64>();
 
     i64::from(linear.bound()) - lower_bound_terms

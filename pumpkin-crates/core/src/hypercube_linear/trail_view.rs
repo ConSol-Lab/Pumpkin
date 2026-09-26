@@ -1,4 +1,5 @@
 use crate::hypercube_linear::explanation::HypercubeLinearExplanation;
+use crate::predicate;
 use crate::predicates::Predicate;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
@@ -55,34 +56,51 @@ pub(crate) trait TrailView {
 
 /// Computes the lower bound of an [`AffineView`] at the given trail position.
 ///
-/// Mirrors [`crate::variables::AffineView::lower_bound_at_trail_position`].
+/// The bound is computed in i64, since the scaled bound of a domain need not fit in an i32.
 pub(super) fn affine_lower_bound_at<T: TrailView + ?Sized>(
     trail: &T,
     term: AffineView<DomainId>,
     trail_position: usize,
-) -> i32 {
+) -> i64 {
     let domain_bound = if term.scale < 0 {
         trail.upper_bound_at_trail_position(term.inner, trail_position)
     } else {
         trail.lower_bound_at_trail_position(term.inner, trail_position)
     };
-    term.scale * domain_bound + term.offset
+    i64::from(term.scale) * i64::from(domain_bound) + i64::from(term.offset)
 }
 
 /// Computes the upper bound of an [`AffineView`] at the given trail position.
 ///
-/// Mirrors [`crate::variables::AffineView::upper_bound_at_trail_position`].
+/// The bound is computed in i64, since the scaled bound of a domain need not fit in an i32.
 pub(super) fn affine_upper_bound_at<T: TrailView + ?Sized>(
     trail: &T,
     term: AffineView<DomainId>,
     trail_position: usize,
-) -> i32 {
+) -> i64 {
     let domain_bound = if term.scale < 0 {
         trail.lower_bound_at_trail_position(term.inner, trail_position)
     } else {
         trail.upper_bound_at_trail_position(term.inner, trail_position)
     };
-    term.scale * domain_bound + term.offset
+    i64::from(term.scale) * i64::from(domain_bound) + i64::from(term.offset)
+}
+
+/// The predicate `[term >= lb(term)]` at the given trail position, expressed over the domain of
+/// the term, so that it can be represented even if the scaled bound does not fit in an i32.
+pub(super) fn affine_lower_bound_predicate_at<T: TrailView + ?Sized>(
+    trail: &T,
+    term: AffineView<DomainId>,
+    trail_position: usize,
+) -> Predicate {
+    let domain = term.inner;
+    if term.scale < 0 {
+        let bound = trail.upper_bound_at_trail_position(domain, trail_position);
+        predicate![domain <= bound]
+    } else {
+        let bound = trail.lower_bound_at_trail_position(domain, trail_position);
+        predicate![domain >= bound]
+    }
 }
 
 // ======== impl TrailView for State ========

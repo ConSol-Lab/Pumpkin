@@ -7,6 +7,8 @@ use crate::containers::HashMap;
 use crate::hypercube_linear::BoundComparator;
 use crate::hypercube_linear::BoundPredicate;
 use crate::math::num_ext::NumExt;
+use crate::predicate;
+use crate::predicates::Predicate;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
 use crate::variables::TransformableVariable;
@@ -122,8 +124,12 @@ impl LinearInequality {
             BoundComparator::UpperBound => count,
         };
 
+        // Wrapping around would silently produce a constraint that is not implied.
         term.scale += signed_diff;
-        self.bound += signed_diff * bound.value;
+        self.bound = signed_diff
+            .checked_mul(bound.value)
+            .and_then(|difference| self.bound.checked_add(difference))
+            .expect("weakening a hypercube linear overflows its i32 bound");
 
         if term.scale == 0 {
             let _ = self.terms.remove(term_idx);
@@ -167,6 +173,42 @@ impl Display for LinearInequality {
             ))),
             self.bound(),
         )
+    }
+}
+
+/// The result of turning `term <= bound` into a predicate over the domain of the term.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TermUpperBound {
+    /// The predicate over the domain that is equivalent to `term <= bound`.
+    Predicate(Predicate),
+    /// Every value of the domain in the i32 range satisfies `term <= bound`.
+    AlwaysTrue,
+    /// No value of the domain in the i32 range satisfies `term <= bound`.
+    Infeasible,
+}
+
+/// Turns `term <= bound`, where the bound is an i64 since the scaled bounds of a domain need not
+/// fit in an i32, into a predicate over the domain of the term.
+pub(crate) fn term_upper_bound(term: AffineView<DomainId>, bound: i64) -> TermUpperBound {
+    let scale = i64::from(term.scale);
+    let bound = bound - i64::from(term.offset);
+
+    if scale > 0 {
+        // scale * x <= bound is x <= floor(bound / scale).
+        let value = bound.div_euclid(scale);
+        match i32::try_from(value) {
+            Ok(value) => TermUpperBound::Predicate(predicate![term.inner <= value]),
+            Err(_) if value > 0 => TermUpperBound::AlwaysTrue,
+            Err(_) => TermUpperBound::Infeasible,
+        }
+    } else {
+        // scale * x <= bound with scale < 0 is x >= ceil(bound / scale) = -floor(bound / -scale).
+        let value = -bound.div_euclid(-scale);
+        match i32::try_from(value) {
+            Ok(value) => TermUpperBound::Predicate(predicate![term.inner >= value]),
+            Err(_) if value < 0 => TermUpperBound::AlwaysTrue,
+            Err(_) => TermUpperBound::Infeasible,
+        }
     }
 }
 

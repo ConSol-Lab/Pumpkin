@@ -23,13 +23,15 @@ use crate::hypercube_linear::conflict_state::ConflictState;
 use crate::hypercube_linear::conflict_state::predicate_applies_to_term;
 use crate::hypercube_linear::explanation::HypercubeLinear;
 use crate::hypercube_linear::explanation::HypercubeLinearExplanation;
+use crate::hypercube_linear::linear::TermUpperBound;
+use crate::hypercube_linear::linear::term_upper_bound;
 use crate::hypercube_linear::resh_strategy::ResHStrategy;
 use crate::hypercube_linear::resh_strategy::StandardResH;
 use crate::hypercube_linear::trail_view::TrailView;
 use crate::hypercube_linear::trail_view::affine_lower_bound_at;
+use crate::hypercube_linear::trail_view::affine_lower_bound_predicate_at;
 use crate::hypercube_linear::trail_view::affine_upper_bound_at;
 use crate::math::num_ext::NumExt;
-use crate::predicate;
 use crate::predicates::Predicate;
 #[cfg(feature = "hl-checks")]
 use crate::proof::ConstraintTag;
@@ -716,12 +718,13 @@ impl HypercubeLinearResolver {
 
             // Make sure to add in the inferences to the proof.
             for term in self.state.conflicting_linear.terms() {
-                let term_lb = affine_lower_bound_at(trail, term, root_trail_position);
+                let term_lower_bound =
+                    affine_lower_bound_predicate_at(trail, term, root_trail_position);
 
                 self.state
                     .proof_file
                     .borrow_mut()
-                    .axiom([predicate![term <= term_lb - 1]], [], -1);
+                    .axiom([!term_lower_bound], [], -1);
             }
 
             LinearInequality::trivially_false()
@@ -998,7 +1001,11 @@ impl HypercubeLinearResolver {
                     term.scale,
                     term.inner,
                     lb,
-                    trail.trail_position_of_predicate(predicate![term >= lb])
+                    trail.trail_position_of_predicate(affine_lower_bound_predicate_at(
+                        trail,
+                        term,
+                        trail_position
+                    ))
                 );
             }
             panic!(
@@ -1049,15 +1056,17 @@ fn propagates_at(
             return true;
         } else if let Some(term) = linear.term_for_domain(domain_of_predicate) {
             let bound_in_state = affine_lower_bound_at(trail, term, trail_position);
-            let bound_in_hypercube = hypercube.lower_bound(&term);
-            let bound_i64 = i64::from(i32::max(bound_in_state, bound_in_hypercube));
+            let bound = hypercube
+                .term_lower_bound(term)
+                .map_or(bound_in_state, |bound_in_hypercube| {
+                    bound_in_hypercube.max(bound_in_state)
+                });
 
-            let new_upper_bound = match i32::try_from(slack + bound_i64) {
-                Ok(bound) => bound,
-                Err(_) => return false,
+            let predicate_to_propagate = match term_upper_bound(term, slack + bound) {
+                TermUpperBound::Predicate(predicate) => predicate,
+                TermUpperBound::AlwaysTrue => return false,
+                TermUpperBound::Infeasible => return true,
             };
-
-            let predicate_to_propagate = predicate![term <= new_upper_bound];
             let predicate_truth_value =
                 trail.truth_value_at(predicate_to_propagate, trail_position);
 
@@ -1085,17 +1094,9 @@ fn linear_propagates_at(
     let slack = compute_linear_slack_at_trail_position(trail, conflicting_linear, trail_position);
 
     for term in conflicting_linear.terms() {
-        let term_lower_bound = i64::from(affine_lower_bound_at(trail, term, trail_position));
-        let new_term_upper_bound_i64 = slack + term_lower_bound;
-        let new_term_upper_bound = match i32::try_from(new_term_upper_bound_i64) {
-            Ok(bound) => bound,
-            // The upper bound is smaller than i32::MIN, which means this would propagate (even
-            // if we cannot perform the propagation due to our domains being 32-bit).
-            Err(_) if new_term_upper_bound_i64.is_negative() => return true,
-            // If we want to set the upper bound to a value larger than i32::MAX,
-            // it can never tighten the existing bound of `term_to_propagate`.
-            Err(_) => continue,
-        };
+        // Both bounds are scaled bounds of the domain, so the domain is tightened exactly when the
+        // new scaled upper bound is smaller than the current one.
+        let new_term_upper_bound = slack + affine_lower_bound_at(trail, term, trail_position);
 
         if new_term_upper_bound < affine_upper_bound_at(trail, term, trail_position) {
             return true;
@@ -1180,10 +1181,10 @@ fn fourier_resolvent_is_conflicting(
     conflict_slack: i64,
     weight_in_reason: i32,
     reason_slack: i64,
-    reason_pivot_term_lower_bound: i32,
+    reason_pivot_term_lower_bound: i64,
     conflict_bound: i32,
 ) -> bool {
-    let reason_slack_at_conflict_bound = reason_slack + i64::from(reason_pivot_term_lower_bound)
+    let reason_slack_at_conflict_bound = reason_slack + reason_pivot_term_lower_bound
         - i64::from(weight_in_reason) * i64::from(conflict_bound);
 
     let resolvent_slack = i64::from(weight_in_reason.abs()) * conflict_slack
@@ -1201,7 +1202,7 @@ fn compute_tightly_propagating_reason<'expl>(
     pivot_term: AffineView<DomainId>,
 ) -> Cow<'expl, HypercubeLinear> {
     let pivot_term_upper_bound =
-        reason_slack + i64::from(affine_lower_bound_at(trail, pivot_term, trail_position));
+        reason_slack + affine_lower_bound_at(trail, pivot_term, trail_position);
 
     if pivot_term_upper_bound % i64::from(pivot_term.scale) == 0 {
         return Cow::Borrowed(original_reason);
@@ -1219,8 +1220,8 @@ fn compute_tightly_propagating_reason<'expl>(
                 return None;
             }
 
-            let bound = affine_lower_bound_at(trail, term, trail_position);
-            Some(BoundPredicate::new(predicate![term >= bound]).expect("only doing bounds"))
+            let bound = affine_lower_bound_predicate_at(trail, term, trail_position);
+            Some(BoundPredicate::new(bound).expect("only doing bounds"))
         })
         .collect();
 
@@ -1260,8 +1261,9 @@ fn compute_hl_slack_at_trail_position(
         .terms()
         .map(|term| {
             let state_lb = affine_lower_bound_at(trail, term, trail_position);
-            let hypercube_lb = hypercube.lower_bound(&term);
-            i64::from(i32::max(state_lb, hypercube_lb))
+            hypercube
+                .term_lower_bound(term)
+                .map_or(state_lb, |hypercube_lb| hypercube_lb.max(state_lb))
         })
         .sum::<i64>();
 
@@ -1275,7 +1277,7 @@ fn compute_linear_slack_at_trail_position(
 ) -> i64 {
     let lower_bound_terms = linear
         .terms()
-        .map(|term| i64::from(affine_lower_bound_at(trail, term, trail_position)))
+        .map(|term| affine_lower_bound_at(trail, term, trail_position))
         .sum::<i64>();
 
     i64::from(linear.bound()) - lower_bound_terms

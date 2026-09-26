@@ -9,6 +9,8 @@ use crate::hypercube_linear::HypercubeLinearPropagation;
 #[cfg(doc)]
 use crate::hypercube_linear::HypercubeLinearStore;
 use crate::hypercube_linear::LinearInequality;
+use crate::hypercube_linear::linear::TermUpperBound;
+use crate::hypercube_linear::linear::term_upper_bound;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
@@ -174,18 +176,27 @@ impl HypercubeLinearPropagator {
         self.watched_predicates
     }
 
+    /// The larger of the lower bounds of `term` in the domains and in the hypercube.
+    fn hypercube_linear_term_lower_bound(
+        &self,
+        domains: &impl ReadDomains,
+        term: AffineView<DomainId>,
+    ) -> i64 {
+        let bound_in_state = term_lower_bound(domains, term);
+        self.hypercube
+            .term_lower_bound(term)
+            .map_or(bound_in_state, |bound_in_hypercube| {
+                bound_in_hypercube.max(bound_in_state)
+            })
+    }
+
     /// The hypercube linear slack: the bound minus, for every term, the larger of its lower bound
     /// in the state and in the hypercube.
     fn hypercube_linear_slack(&self, context: &PropagationContext<'_>) -> i64 {
         let lower_bound_terms = self
             .linear
             .terms()
-            .map(|term| {
-                let bound_in_state = context.lower_bound(&term);
-                let bound_in_hypercube = self.hypercube.lower_bound(&term);
-
-                i64::from(i32::max(bound_in_state, bound_in_hypercube))
-            })
+            .map(|term| self.hypercube_linear_term_lower_bound(context, term))
             .sum::<i64>();
 
         i64::from(self.linear.bound()) - lower_bound_terms
@@ -214,19 +225,14 @@ impl HypercubeLinearPropagator {
                 return Ok(());
             }
 
-            let bound_in_state = context.lower_bound(&term_to_propagate);
-            let bound_in_hypercube = self.hypercube.lower_bound(&term_to_propagate);
-            let bound_i64 = slack + i64::from(i32::max(bound_in_state, bound_in_hypercube));
+            let bound = slack + self.hypercube_linear_term_lower_bound(&context, term_to_propagate);
 
-            // The slack is at least 0 and both bounds are at least i32::MIN, so the bound
-            // can only be out of range by exceeding i32::MAX. Then it can never tighten
-            // the existing bound of `term_to_propagate`.
-            let Ok(bound) = i32::try_from(bound_i64) else {
-                pumpkin_assert_simple!(bound_i64 > i64::from(i32::MAX));
-                return Ok(());
-            };
-
-            context.post(predicate![term_to_propagate <= bound], self.lazy_code())?;
+            // The slack is at least 0, so the bound is at least the lower bound of the term and
+            // the propagation is never infeasible.
+            if let TermUpperBound::Predicate(predicate) = term_upper_bound(term_to_propagate, bound)
+            {
+                context.post(predicate, self.lazy_code())?;
+            }
         }
 
         Ok(())
@@ -368,7 +374,7 @@ impl HypercubeLinearPropagator {
             .linear
             .terms()
             .filter(|t| t.inner != domain)
-            .map(|t| i64::from(context.lower_bound(&t)))
+            .map(|t| term_lower_bound(&context, t))
             .sum::<i64>();
         let rest = i64::from(self.linear.bound()) - other_terms_lower_bound;
 
@@ -413,7 +419,7 @@ impl HypercubeLinearPropagator {
                     self.linear
                         .terms()
                         .filter(|t| t.inner != domain)
-                        .map(|t| predicate![t >= context.lower_bound(&t)]),
+                        .map(|t| term_lower_bound_predicate(&context, t)),
                 )
                 .collect::<Vec<_>>()
         };
@@ -483,7 +489,7 @@ impl HypercubeLinearPropagator {
         let conjunction = self
             .linear
             .terms()
-            .map(|term| predicate![term >= context.lower_bound(&term)])
+            .map(|term| term_lower_bound_predicate(context, term))
             .chain(self.hypercube_predicates.iter().copied())
             .collect::<PropositionalConjunction>();
 
@@ -510,22 +516,18 @@ impl HypercubeLinearPropagator {
         }
 
         for term in self.linear.terms() {
-            let term_lower_bound = i64::from(context.lower_bound(&term));
-            let term_upper_bound_i64 = slack + term_lower_bound;
-            let term_upper_bound = match i32::try_from(term_upper_bound_i64) {
-                Ok(bound) => bound,
-                // The upper bound is smaller than i32::MIN, and therefore smaller than the lower
-                // bound of the term. So the lower bounds of the terms violate the linear
-                // inequality.
-                Err(_) if term_upper_bound_i64.is_negative() => {
-                    return Err(self.linear_conflict(&context));
-                }
-                // If we want to set the upper bound to a value larger than i32::MAX, it can never
-                // tighten the existing bound of this term. The other terms may still propagate.
-                Err(_) => continue,
-            };
+            let upper_bound = slack + term_lower_bound(&context, term);
 
-            context.post(predicate![term <= term_upper_bound], self.lazy_code())?;
+            match term_upper_bound(term, upper_bound) {
+                TermUpperBound::Predicate(predicate) => {
+                    context.post(predicate, self.lazy_code())?;
+                }
+                // The bound does not restrict the domain; the other terms may still propagate.
+                TermUpperBound::AlwaysTrue => continue,
+                // No value of the domain satisfies the bound, so the lower bounds of the terms
+                // violate the linear inequality.
+                TermUpperBound::Infeasible => return Err(self.linear_conflict(&context)),
+            }
         }
 
         Ok(())
@@ -692,12 +694,7 @@ impl Propagator for HypercubeLinearPropagator {
         let lower_bound_terms = self
             .linear
             .terms()
-            .map(|term| {
-                let bound_in_state = context.lower_bound(&term);
-                let bound_in_hypercube = self.hypercube.lower_bound(&term);
-
-                i64::from(i32::max(bound_in_state, bound_in_hypercube))
-            })
+            .map(|term| self.hypercube_linear_term_lower_bound(&context, term))
             .sum::<i64>();
 
         let slack = i64::from(self.linear.bound()) - lower_bound_terms;
@@ -709,7 +706,7 @@ impl Propagator for HypercubeLinearPropagator {
                 let reason = self
                     .linear
                     .terms()
-                    .map(|term| predicate![term >= context.lower_bound(&term)])
+                    .map(|term| term_lower_bound_predicate(&context, term))
                     .chain(
                         self.hypercube_predicates
                             .iter()
@@ -730,11 +727,9 @@ impl Propagator for HypercubeLinearPropagator {
                     return Ok(());
                 }
 
-                let bound_in_state = context.lower_bound(&term);
-                let bound_in_hypercube = self.hypercube.lower_bound(&term);
-                let bound_i64 = slack + i64::from(i32::max(bound_in_state, bound_in_hypercube));
-                let Ok(new_upper_bound) = i32::try_from(bound_i64) else {
-                    pumpkin_assert_simple!(bound_i64 > i64::from(i32::MAX));
+                let bound = slack + self.hypercube_linear_term_lower_bound(&context, term);
+                let TermUpperBound::Predicate(new_upper_bound) = term_upper_bound(term, bound)
+                else {
                     return Ok(());
                 };
 
@@ -744,7 +739,7 @@ impl Propagator for HypercubeLinearPropagator {
                     .linear
                     .terms()
                     .filter(|&t| t != term)
-                    .map(|term| predicate![term >= context.lower_bound(&term)])
+                    .map(|term| term_lower_bound_predicate(&context, term))
                     .chain(
                         self.hypercube_predicates
                             .iter()
@@ -753,10 +748,7 @@ impl Propagator for HypercubeLinearPropagator {
                     )
                     .collect::<PropositionalConjunction>();
 
-                context.post(
-                    predicate![term <= new_upper_bound],
-                    (reason, &self.inference_code),
-                )?;
+                context.post(new_upper_bound, (reason, &self.inference_code))?;
             }
         } else {
             pumpkin_assert_simple!(unsatisfied_predicates_in_hypercubes.is_empty());
@@ -764,6 +756,30 @@ impl Propagator for HypercubeLinearPropagator {
         }
 
         Ok(())
+    }
+}
+
+/// The lower bound of `term` in the domains, computed in i64, since the scaled bound of a domain
+/// need not fit in an i32.
+fn term_lower_bound(domains: &impl ReadDomains, term: AffineView<DomainId>) -> i64 {
+    let bound = if term.scale < 0 {
+        domains.upper_bound(&term.inner)
+    } else {
+        domains.lower_bound(&term.inner)
+    };
+    i64::from(term.scale) * i64::from(bound) + i64::from(term.offset)
+}
+
+/// The predicate `[term >= lb(term)]` expressed over the domain of the term, so that it can be
+/// represented even if the scaled bound does not fit in an i32.
+fn term_lower_bound_predicate(domains: &impl ReadDomains, term: AffineView<DomainId>) -> Predicate {
+    let domain = term.inner;
+    if term.scale < 0 {
+        let bound = domains.upper_bound(&domain);
+        predicate![domain <= bound]
+    } else {
+        let bound = domains.lower_bound(&domain);
+        predicate![domain >= bound]
     }
 }
 
@@ -1233,6 +1249,27 @@ mod tests {
         let mut expected = vec![predicate![x >= 3], predicate![y >= 2]];
         expected.sort();
         assert_eq!(reason, expected);
+    }
+
+    #[test]
+    fn scaled_bounds_beyond_i32_do_not_overflow() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(50_000, 100_000, None);
+
+        // The lower bound of 50000 * x is 2.5e9, which does not fit in an i32, and exceeds the
+        // bound 2e9, so the constraint is violated.
+        let linear = LinearInequality::new([(NonZero::new(50_000).unwrap(), x)], 2_000_000_000)
+            .expect("not trivially satisfiable");
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(HypercubeLinearConstructor {
+            hypercube: Hypercube::default(),
+            linear,
+            constraint_tag,
+        });
+
+        assert!(state.propagate_to_fixed_point().is_err());
     }
 
     fn extended_state() -> State {
