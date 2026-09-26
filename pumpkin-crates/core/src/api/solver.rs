@@ -25,6 +25,7 @@ use crate::engine::termination::TerminationCondition;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
+use crate::hypercube_linear::HypercubeLinearConstructor;
 use crate::optimisation::OptimisationProcedure;
 #[cfg(doc)]
 use crate::optimisation::linear_sat_unsat::LinearSatUnsat;
@@ -595,6 +596,12 @@ impl Solver {
         Constructor::PropagatorImpl: 'static,
     {
         self.satisfaction_solver.add_propagator(constructor)
+    }
+
+    /// Adds a hypercube linear constraint, as a propagator on its own or as a member of the
+    /// single store for hypercube linears, depending on the solver options.
+    pub(crate) fn add_hypercube_linear(&mut self, constructor: HypercubeLinearConstructor) {
+        self.satisfaction_solver.add_hypercube_linear(constructor)
     }
 }
 

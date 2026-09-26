@@ -428,6 +428,11 @@ struct Args {
     /// that are not true all concern one variable.
     #[arg(long = "hl-propagation", value_enum, default_value_t)]
     hl_propagation: HypercubeLinearPropagation,
+
+    /// Hold all hypercube linears in a single propagator, as is done for nogoods, instead of
+    /// one propagator per constraint.
+    #[arg(long = "hl-aggregate", default_value_t)]
+    hl_aggregate: bool,
     /// The priority of the nogood propagator.
     #[arg(long = "nogood-priority", value_enum, default_value_t)]
     nogood_propagator_priority: Priority,
@@ -601,6 +606,7 @@ fn run() -> PumpkinResult<()> {
         learning_options,
         analysis_mode: args.conflict_resolver,
         hypercube_linear_propagation: args.hl_propagation,
+        hypercube_linear_aggregate: args.hl_aggregate,
     };
 
     let time_limit = args.time_limit.map(Duration::from_millis);

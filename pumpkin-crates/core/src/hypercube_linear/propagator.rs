@@ -6,6 +6,8 @@ use crate::engine::PropagationStatusCP;
 use crate::hypercube_linear::Hypercube;
 use crate::hypercube_linear::HypercubeLinearChecker;
 use crate::hypercube_linear::HypercubeLinearPropagation;
+#[cfg(doc)]
+use crate::hypercube_linear::HypercubeLinearStore;
 use crate::hypercube_linear::LinearInequality;
 use crate::predicate;
 use crate::predicates::Predicate;
@@ -98,6 +100,7 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
             watched_predicates,
             is_watching_linear: false,
             propagation: context.hypercube_linear_propagation(),
+            member_index: 0,
 
             inference_code,
         };
@@ -115,7 +118,7 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
 
 declare_inference_label!(HypercubeLinear);
 
-const NUM_WATCHED_PREDICATES: usize = 2;
+pub(crate) const NUM_WATCHED_PREDICATES: usize = 2;
 
 /// The extended propagation removes at most this many values from the interior of a domain at
 /// once. Larger intervals are not removed, which only weakens the propagation.
@@ -138,6 +141,11 @@ pub struct HypercubeLinearPropagator {
     /// How the hypercube is propagated.
     propagation: HypercubeLinearPropagation,
 
+    /// The index of this constraint in the [`HypercubeLinearStore`] that holds it, or 0 if it is
+    /// a propagator on its own. It is the code of the lazy explanations and the local id of the
+    /// domain events, so that the store can tell its constraints apart.
+    member_index: u32,
+
     inference_code: InferenceCode,
 }
 
@@ -149,6 +157,21 @@ impl HypercubeLinearPropagator {
         self.watched_predicates
             .iter()
             .position(|&pid| !context.is_predicate_id_satisfied(pid))
+    }
+
+    /// The code with which propagations are explained lazily.
+    fn lazy_code(&self) -> u64 {
+        u64::from(self.member_index)
+    }
+
+    /// Sets the index of this constraint in the [`HypercubeLinearStore`] that holds it.
+    pub(crate) fn set_member_index(&mut self, member_index: u32) {
+        self.member_index = member_index;
+    }
+
+    /// The predicates that are watched in the hypercube.
+    pub(crate) fn watched_predicate_ids(&self) -> [PredicateId; NUM_WATCHED_PREDICATES] {
+        self.watched_predicates
     }
 
     /// The hypercube linear slack: the bound minus, for every term, the larger of its lower bound
@@ -182,7 +205,7 @@ impl HypercubeLinearPropagator {
         if slack < 0 {
             // Since the hypercube linear slack is negative, the constraint is violated if the
             // predicate becomes true, so it is propagated to false.
-            context.post(!predicate_in_hypercube, 0_u64)?;
+            context.post(!predicate_in_hypercube, self.lazy_code())?;
         } else if let Some(term_to_propagate) = maybe_term {
             // The slack is at least 0, but it may be that the linear could propagate
             // something weaker than `!predicate_in_hypercube`.
@@ -203,7 +226,7 @@ impl HypercubeLinearPropagator {
                 return Ok(());
             };
 
-            context.post(predicate![term_to_propagate <= bound], 0_u64)?;
+            context.post(predicate![term_to_propagate <= bound], self.lazy_code())?;
         }
 
         Ok(())
@@ -502,7 +525,7 @@ impl HypercubeLinearPropagator {
                 Err(_) => continue,
             };
 
-            context.post(predicate![term <= term_upper_bound], 0_u64)?;
+            context.post(predicate![term <= term_upper_bound], self.lazy_code())?;
         }
 
         Ok(())
@@ -510,23 +533,23 @@ impl HypercubeLinearPropagator {
 
     /// Register the bound events on the integer variables in the linear inequality.
     fn register_bound_events_on_linear(&self, mut context: PropagationContext<'_>) {
-        for (idx, term) in self.linear.terms().enumerate() {
+        for term in self.linear.terms() {
             // The implementation of register_domain_event already handles duplicate registration,
             // so we do not need to check whether we are already registered.
             context.register_domain_event(
                 term,
                 DomainEvents::LOWER_BOUND,
-                LocalId::from(idx as u32),
+                LocalId::from(self.member_index),
             );
         }
     }
 
     /// Stop being enqueued for the bound events on the terms in the linear inequality.
     fn unregister_bound_events_on_linear(&self, mut context: PropagationContext<'_>) {
-        for (idx, term) in self.linear.terms().enumerate() {
+        for term in self.linear.terms() {
             // The implementation of register_domain_event already handles duplicate registration,
             // so we do not need to check whether we are already registered.
-            context.unregister_domain_event(term, LocalId::from(idx as u32));
+            context.unregister_domain_event(term, LocalId::from(self.member_index));
         }
     }
 

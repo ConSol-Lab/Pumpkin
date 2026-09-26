@@ -165,15 +165,17 @@ impl HypercubeLinearResolver {
 
         context.restore_to(learned_constraint.propagates_at);
 
-        let handle = context.state.add_propagator(HypercubeLinearConstructor {
-            hypercube: learned_constraint.hypercube,
-            linear: learned_constraint.linear,
-            constraint_tag,
-        });
+        let propagator_id = context
+            .state
+            .add_hypercube_linear(HypercubeLinearConstructor {
+                hypercube: learned_constraint.hypercube,
+                linear: learned_constraint.linear,
+                constraint_tag,
+            });
 
         debug!(
             "  with ID = {:?} and tag = {constraint_tag:?}",
-            handle.propagator_id(),
+            propagator_id,
         );
     }
 

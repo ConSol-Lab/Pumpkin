@@ -38,6 +38,7 @@ use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::engine::State;
 use crate::engine::predicates::predicate::Predicate;
+use crate::hypercube_linear::HypercubeLinearConstructor;
 use crate::hypercube_linear::HypercubeLinearPropagation;
 use crate::options::LearningOptions;
 use crate::proof::ConstraintTag;
@@ -182,6 +183,8 @@ pub struct SatisfactionSolverOptions {
     pub analysis_mode: ConflictResolverType,
     /// How hypercube linear propagators propagate their hypercube.
     pub hypercube_linear_propagation: HypercubeLinearPropagation,
+    /// True if all hypercube linears are held by a single propagator.
+    pub hypercube_linear_aggregate: bool,
 }
 
 impl Default for SatisfactionSolverOptions {
@@ -194,6 +197,7 @@ impl Default for SatisfactionSolverOptions {
             memory_preallocated: 50,
             analysis_mode: ConflictResolverType::default(),
             hypercube_linear_propagation: HypercubeLinearPropagation::default(),
+            hypercube_linear_aggregate: false,
         }
     }
 }
@@ -279,6 +283,7 @@ impl ConstraintSatisfactionSolver {
     pub fn new(solver_options: SatisfactionSolverOptions) -> Self {
         let mut state = State::default();
         state.hypercube_linear_propagation = solver_options.hypercube_linear_propagation;
+        state.hypercube_linear_aggregate = solver_options.hypercube_linear_aggregate;
         let handle = state.add_propagator(NogoodPropagatorConstructor::new(
             (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
             solver_options.learning_options,
@@ -899,6 +904,10 @@ impl ConstraintSatisfactionSolver {
         Constructor::PropagatorImpl: 'static,
     {
         self.state.add_propagator(constructor)
+    }
+
+    pub(crate) fn add_hypercube_linear(&mut self, constructor: HypercubeLinearConstructor) {
+        let _ = self.state.add_hypercube_linear(constructor);
     }
 
     pub fn post_predicate(&mut self, predicate: Predicate) -> Result<(), ConstraintOperationError> {

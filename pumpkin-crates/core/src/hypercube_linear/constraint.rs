@@ -76,7 +76,7 @@ where
             return;
         };
 
-        let _ = solver.add_propagator(HypercubeLinearConstructor {
+        solver.add_hypercube_linear(HypercubeLinearConstructor {
             hypercube,
             linear,
             constraint_tag: self.constraint_tag,
@@ -139,7 +139,7 @@ where
         let not_linear_rhs = -self.linear_rhs - 1;
 
         if let Some(not_linear) = LinearInequality::new(not_linear_terms, not_linear_rhs) {
-            let _ = solver.add_propagator(HypercubeLinearConstructor {
+            solver.add_hypercube_linear(HypercubeLinearConstructor {
                 hypercube: Hypercube::default(),
                 linear: not_linear,
                 constraint_tag: self.constraint_tag,
@@ -162,7 +162,7 @@ where
         let not_linear_rhs = -self.linear_rhs - 1;
 
         if let Some(not_linear) = LinearInequality::new(not_linear_terms, not_linear_rhs) {
-            let _ = solver.add_propagator(HypercubeLinearConstructor {
+            solver.add_hypercube_linear(HypercubeLinearConstructor {
                 hypercube: Hypercube::new([reification_literal.get_true_predicate()])
                     .expect("single predicate hypercube cannot be inconsistent"),
                 linear: not_linear,

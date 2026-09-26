@@ -10,6 +10,7 @@ mod predicate_heap;
 mod propagator;
 mod resh_strategy;
 mod resolver;
+mod store;
 mod trace;
 mod trail_view;
 
@@ -25,4 +26,6 @@ pub use linear::*;
 pub use options::*;
 pub use propagator::*;
 pub use resolver::*;
+pub use store::HypercubeLinearStore;
+pub(crate) use store::HypercubeLinearStoreConstructor;
 pub use trace::*;

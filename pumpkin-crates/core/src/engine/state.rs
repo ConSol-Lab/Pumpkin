@@ -19,7 +19,10 @@ use crate::engine::VariableNames;
 use crate::engine::cp::reason::StoredReason;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::reason::ReasonStore;
+use crate::hypercube_linear::HypercubeLinearConstructor;
 use crate::hypercube_linear::HypercubeLinearPropagation;
+use crate::hypercube_linear::HypercubeLinearStore;
+use crate::hypercube_linear::HypercubeLinearStoreConstructor;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
@@ -88,6 +91,10 @@ pub struct State {
 
     /// How hypercube linear propagators propagate their hypercube.
     pub(crate) hypercube_linear_propagation: HypercubeLinearPropagation,
+    /// True if all hypercube linears are held by a single [`HypercubeLinearStore`].
+    pub(crate) hypercube_linear_aggregate: bool,
+    /// The store holding the hypercube linears, once the first one is added.
+    hypercube_linear_store: Option<PropagatorHandle<HypercubeLinearStore>>,
 }
 
 create_statistics_struct!(StateStatistics {
@@ -119,6 +126,8 @@ impl Default for State {
             constraint_tags: KeyGenerator::default(),
             checkers: CheckerStore::default(),
             hypercube_linear_propagation: HypercubeLinearPropagation::default(),
+            hypercube_linear_aggregate: false,
+            hypercube_linear_store: None,
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are
@@ -387,6 +396,63 @@ impl State {
         self.enqueue_propagator(handle);
 
         handle
+    }
+
+    /// Adds a hypercube linear constraint.
+    ///
+    /// Depending on [`State::hypercube_linear_aggregate`], it becomes a propagator on its own or
+    /// a member of the single [`HypercubeLinearStore`]. Returns the id of the propagator that
+    /// propagates it.
+    pub(crate) fn add_hypercube_linear(
+        &mut self,
+        constructor: HypercubeLinearConstructor,
+    ) -> PropagatorId {
+        if !self.hypercube_linear_aggregate {
+            return self.add_propagator(constructor).propagator_id();
+        }
+
+        let store = match self.hypercube_linear_store {
+            Some(store) => store,
+            None => {
+                let store = self.add_propagator(HypercubeLinearStoreConstructor);
+                self.hypercube_linear_store = Some(store);
+                store
+            }
+        };
+
+        let member_index = self
+            .get_propagator(store)
+            .expect("the store is a hypercube linear store")
+            .next_member_index();
+
+        let PropagatorSpec {
+            registration,
+            checkers,
+            propagator: mut member,
+        } = constructor.create(PropagatorConstructorContext::new(
+            store.propagator_id(),
+            self,
+        ));
+        pumpkin_assert_simple!(
+            registration.iter().next().is_none(),
+            "a hypercube linear registers its domain events while propagating"
+        );
+        member.set_member_index(member_index);
+
+        if cfg!(feature = "check-propagations") {
+            for (inference_code, checker) in checkers.into_iter() {
+                self.checkers.add_inference_checker(inference_code, checker);
+            }
+        }
+
+        self.get_propagator_mut(store)
+            .expect("the store is a hypercube linear store")
+            .add_member(member);
+
+        #[allow(deprecated, reason = "Will be refactored")]
+        self.enqueue_propagator(store);
+
+        store.propagator_id()
     }
 
     /// Add an inference checker to the state.
