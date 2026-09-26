@@ -10,7 +10,6 @@ use log::trace;
 use crate::basic_types::StoredConflictInfo;
 use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::conflict_resolving::ConflictResolver;
-#[cfg(feature = "hl-checks")]
 use crate::containers::HashMap;
 use crate::create_statistics_struct;
 use crate::hypercube_linear::BoundComparator;
@@ -31,7 +30,6 @@ use crate::hypercube_linear::trail_view::TrailView;
 use crate::hypercube_linear::trail_view::affine_lower_bound_at;
 use crate::hypercube_linear::trail_view::affine_lower_bound_predicate_at;
 use crate::hypercube_linear::trail_view::affine_upper_bound_at;
-use crate::math::num_ext::NumExt;
 use crate::predicates::Predicate;
 #[cfg(feature = "hl-checks")]
 use crate::proof::ConstraintTag;
@@ -1108,55 +1106,52 @@ fn fourier_combination(
     reason: &LinearInequality,
     scale_reason: i32,
 ) -> Result<LinearInequality, FourierError> {
-    let scale_terms = |linear: &LinearInequality, scale: i32| {
-        linear
-            .terms()
-            .map(move |term| {
-                term.scale
-                    .checked_mul(scale)
-                    .ok_or(FourierError::IntegerOverflow)
-                    .map(|scaled_weight| (scaled_weight, term.inner))
-            })
-            .collect::<Result<Vec<_>, _>>()
-    };
-
-    let mut linear_terms = scale_terms(conflict, scale_conflict)?;
-    linear_terms.extend(scale_terms(reason, scale_reason)?);
+    // The combination is computed in i64, and the weights of a domain are merged before
+    // normalizing, since the merged weights and the bound need to fit in an i32 only after
+    // normalizing.
+    let mut weights: HashMap<DomainId, i64> = HashMap::default();
+    for (linear, scale) in [(conflict, scale_conflict), (reason, scale_reason)] {
+        for term in linear.terms() {
+            let weight = weights.entry(term.inner).or_insert(0);
+            *weight = weight
+                .checked_add(i64::from(term.scale) * i64::from(scale))
+                .ok_or(FourierError::IntegerOverflow)?;
+        }
+    }
+    weights.retain(|_, weight| *weight != 0);
 
     // Both sides of both inequalities are scaled.
-    let mut linear_rhs = conflict
-        .bound()
-        .checked_mul(scale_conflict)
-        .ok_or(FourierError::IntegerOverflow)?
-        .checked_add(
-            reason
-                .bound()
-                .checked_mul(scale_reason)
-                .ok_or(FourierError::IntegerOverflow)?,
-        )
+    let linear_rhs = (i64::from(conflict.bound()) * i64::from(scale_conflict))
+        .checked_add(i64::from(reason.bound()) * i64::from(scale_reason))
         .ok_or(FourierError::IntegerOverflow)?;
 
     // Normalize the linear component of the hypercube linear to hopefully avoid overflows in
-    // the future.
-    let normalize_by = linear_terms
-        .iter()
-        .map(|(weight, _)| *weight)
+    // the future. The divisor divides every weight and the bound, so the divisions are exact.
+    let normalize_by = weights
+        .values()
+        .copied()
         .chain(std::iter::once(linear_rhs))
         .reduce(gcd)
-        .unwrap_or(linear_rhs);
+        .unwrap_or(linear_rhs)
+        .max(1);
 
-    linear_terms.iter_mut().for_each(|(weight, _)| {
-        *weight = <i32 as NumExt>::div_ceil(*weight, normalize_by);
-    });
-    linear_rhs = <i32 as NumExt>::div_ceil(linear_rhs, normalize_by);
+    let to_i32 = |value: i64| i32::try_from(value / normalize_by);
+    let linear_terms = weights
+        .into_iter()
+        .map(|(domain, weight)| {
+            to_i32(weight).map(|weight| {
+                (
+                    NonZero::new(weight).expect("zero weights are removed"),
+                    domain,
+                )
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| FourierError::IntegerOverflow)?;
+    let linear_rhs = to_i32(linear_rhs).map_err(|_| FourierError::IntegerOverflow)?;
 
-    LinearInequality::new(
-        linear_terms
-            .into_iter()
-            .map(|(weight, domain)| (NonZero::new(weight).unwrap(), domain)),
-        linear_rhs,
-    )
-    .ok_or(FourierError::ResultOfEliminationTriviallySatisfiable)
+    LinearInequality::new(linear_terms, linear_rhs)
+        .ok_or(FourierError::ResultOfEliminationTriviallySatisfiable)
 }
 
 /// Returns true if Fourier resolution of the conflict with the reason, without tightening the
@@ -1283,7 +1278,7 @@ enum FourierError {
 
 // Taken from https://docs.rs/num-integer/latest/src/num_integer/lib.rs.html#420-422
 #[allow(unused, reason = "experimentation")]
-fn gcd(a: i32, b: i32) -> i32 {
+fn gcd(a: i64, b: i64) -> i64 {
     let mut m = a;
     let mut n = b;
     if m == 0 || n == 0 {
@@ -1301,8 +1296,8 @@ fn gcd(a: i32, b: i32) -> i32 {
     // Assuming two's complement, the number created by the shift
     // is positive for all numbers except gcd = abs(min value)
     // The call to .abs() causes a panic in debug mode
-    if m == i32::MIN || n == i32::MIN {
-        let i: i32 = 1 << shift;
+    if m == i64::MIN || n == i64::MIN {
+        let i: i64 = 1 << shift;
         return i.abs();
     }
 
@@ -1644,5 +1639,39 @@ mod tests {
         );
 
         assert_eq!(result.ok(), Some(linear_inequality!(-1 y + 1 z <= -3)));
+    }
+
+    /// `(x + 2000000000 z <= 1) + (-x + 500000000 z <= 0)` merges the weights of `z` into
+    /// 2500000000, which does not fit in an i32, and the bound 1 prevents normalizing.
+    #[test]
+    fn fourier_combination_with_a_merged_weight_beyond_i32_is_an_overflow() {
+        let x = DomainId::new(0);
+        let z = DomainId::new(1);
+
+        let result = fourier_combination(
+            &linear_inequality!(1 x + 2000000000 z <= 1),
+            1,
+            &linear_inequality!(-1 x + 500000000 z <= 0),
+            1,
+        );
+
+        assert!(matches!(result, Err(FourierError::IntegerOverflow)));
+    }
+
+    /// `(2x + 2000000000 z <= 0) + (-2x + 2000000000 z <= 0)` merges the weights of `z` into
+    /// 4000000000, which does not fit in an i32, but normalizing gives `z <= 0`.
+    #[test]
+    fn fourier_combination_normalizes_merged_weights_beyond_i32() {
+        let x = DomainId::new(0);
+        let z = DomainId::new(1);
+
+        let result = fourier_combination(
+            &linear_inequality!(2 x + 2000000000 z <= 0),
+            1,
+            &linear_inequality!(-2 x + 2000000000 z <= 0),
+            1,
+        );
+
+        assert_eq!(result.ok(), Some(linear_inequality!(1 z <= 0)));
     }
 }

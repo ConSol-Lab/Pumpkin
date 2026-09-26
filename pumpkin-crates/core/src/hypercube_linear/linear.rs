@@ -47,8 +47,11 @@ impl LinearInequality {
         let mut domain_to_weight = HashMap::new();
 
         for (weight, domain_id) in terms {
-            let existing_weight = domain_to_weight.entry(domain_id).or_insert(0);
-            *existing_weight += weight.get();
+            let existing_weight: &mut i32 = domain_to_weight.entry(domain_id).or_insert(0);
+            // Wrapping around would silently produce a constraint that is not implied.
+            *existing_weight = existing_weight
+                .checked_add(weight.get())
+                .expect("merging the terms of a domain overflows its i32 weight");
         }
 
         let mut terms = domain_to_weight
