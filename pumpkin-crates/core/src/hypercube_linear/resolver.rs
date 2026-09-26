@@ -1227,7 +1227,6 @@ fn extended_propagates_at(
         unsatisfied,
         domain_lower_bound,
         domain_upper_bound,
-        |value| trail.truth_value_at(predicate![domain != value], trail_position) != Some(true),
         linear.term_for_domain(domain).map(|term| term.scale),
         rest,
     ) else {
@@ -1236,7 +1235,12 @@ fn extended_propagates_at(
 
     inferences.lower_bound > domain_lower_bound
         || inferences.upper_bound < domain_upper_bound
-        || !inferences.removed_values.is_empty()
+        || inferences
+            .removed_values(|value| {
+                trail.truth_value_at(predicate![domain != value], trail_position) != Some(true)
+            })
+            .next()
+            .is_some()
 }
 
 /// Returns true if the given linear propagates at the given trail position.

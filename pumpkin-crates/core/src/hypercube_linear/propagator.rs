@@ -572,12 +572,14 @@ impl HypercubeLinearPropagator {
             unsatisfied,
             domain_lower_bound,
             domain_upper_bound,
-            |value| context.contains(&domain, value),
             term.map(|term| term.scale),
             rest,
         ) else {
             return Ok(());
         };
+        let removed_values = inferences
+            .removed_values(|value| context.contains(&domain, value))
+            .collect::<Vec<_>>();
 
         // The clausal reason consists of the true predicates of the hypercube and the lower bounds
         // of the other terms. A bound propagation additionally uses the bound of `x` that it
@@ -621,7 +623,7 @@ impl HypercubeLinearPropagator {
             )?;
         }
 
-        for value in inferences.removed_values {
+        for value in removed_values {
             context.post(predicate![domain != value], reason(None))?;
         }
 
@@ -973,17 +975,32 @@ pub(crate) struct ExtendedInferences {
     pub(crate) lower_bound: i32,
     /// The upper bound of `x` after the propagation.
     pub(crate) upper_bound: i32,
-    /// The values strictly between the new bounds that are removed from the domain of `x`.
-    pub(crate) removed_values: Vec<i32>,
+    /// The forbidden values strictly between the new bounds, apart from the exceptions; empty if
+    /// there are too many to remove.
+    interior: std::ops::RangeInclusive<i32>,
+    /// The values that the predicates `[x != v]` among the predicates that are not true exclude.
+    exceptions: Vec<i32>,
+}
+
+impl ExtendedInferences {
+    /// The values strictly between the new bounds that are removed from the domain of `x`, which
+    /// contains the values for which `contains` holds.
+    pub(crate) fn removed_values<'a>(
+        &'a self,
+        contains: impl Fn(i32) -> bool + 'a,
+    ) -> impl Iterator<Item = i32> + 'a {
+        self.interior
+            .clone()
+            .filter(move |value| !self.exceptions.contains(value) && contains(*value))
+    }
 }
 
 /// Computes what the extended propagation infers for the domain `x` of the predicates in
 /// `unsatisfied`, which are all the predicates of the hypercube that are not true.
 ///
-/// The domain of `x` has the given bounds and contains the values for which `contains` holds;
-/// `weight` is the weight of `x` in the linear, and `rest` is the bound of the linear minus the
-/// lower bounds of the other terms. Returns `None` if no value is forbidden. The new bounds may
-/// cross, in which case the propagation is a conflict.
+/// The domain of `x` has the given bounds; `weight` is the weight of `x` in the linear, and `rest`
+/// is the bound of the linear minus the lower bounds of the other terms. Returns `None` if no value
+/// is forbidden. The new bounds may cross, in which case the propagation is a conflict.
 ///
 /// This is shared by the propagator and by conflict analysis, which tests at which decision level
 /// a learned constraint propagates.
@@ -991,7 +1008,6 @@ pub(crate) fn extended_inferences(
     unsatisfied: &[Predicate],
     domain_lower_bound: i32,
     domain_upper_bound: i32,
-    contains: impl Fn(i32) -> bool,
     weight: Option<i32>,
     rest: i64,
 ) -> Option<ExtendedInferences> {
@@ -1069,19 +1085,22 @@ pub(crate) fn extended_inferences(
     // Removing a large interval value by value is expensive, so it is skipped then.
     let interior_lower = forbidden_lower.max(lower_bound);
     let interior_upper = forbidden_upper.min(upper_bound);
-    let removed_values =
-        if i64::from(interior_upper) - i64::from(interior_lower) < MAX_INTERIOR_REMOVALS {
-            (interior_lower..=interior_upper)
-                .filter(|value| !exceptions.contains(value) && contains(*value))
-                .collect()
-        } else {
-            vec![]
-        };
+    #[allow(
+        clippy::reversed_empty_ranges,
+        reason = "an empty range of values to remove"
+    )]
+    let interior = if i64::from(interior_upper) - i64::from(interior_lower) < MAX_INTERIOR_REMOVALS
+    {
+        interior_lower..=interior_upper
+    } else {
+        1..=0
+    };
 
     Some(ExtendedInferences {
         lower_bound,
         upper_bound,
-        removed_values,
+        interior,
+        exceptions,
     })
 }
 
