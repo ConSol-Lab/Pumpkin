@@ -5,9 +5,11 @@ use crate::declare_inference_label;
 use crate::engine::PropagationStatusCP;
 use crate::hypercube_linear::Hypercube;
 use crate::hypercube_linear::HypercubeLinearChecker;
+use crate::hypercube_linear::HypercubeLinearPropagation;
 use crate::hypercube_linear::LinearInequality;
 use crate::predicate;
 use crate::predicates::Predicate;
+use crate::predicates::PredicateType;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
@@ -95,6 +97,7 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
             hypercube_predicates,
             watched_predicates,
             is_watching_linear: false,
+            propagation: context.hypercube_linear_propagation(),
 
             inference_code,
         };
@@ -114,6 +117,10 @@ declare_inference_label!(HypercubeLinear);
 
 const NUM_WATCHED_PREDICATES: usize = 2;
 
+/// The extended propagation removes at most this many values from the interior of a domain at
+/// once. Larger intervals are not removed, which only weakens the propagation.
+const MAX_INTERIOR_REMOVALS: i64 = 1000;
+
 /// A [`Propagator`] for the hypercube linear constraint.
 #[derive(Clone, Debug)]
 pub struct HypercubeLinearPropagator {
@@ -128,6 +135,9 @@ pub struct HypercubeLinearPropagator {
     /// True when we are watching the linear inequality.
     is_watching_linear: bool,
 
+    /// How the hypercube is propagated.
+    propagation: HypercubeLinearPropagation,
+
     inference_code: InferenceCode,
 }
 
@@ -139,6 +149,309 @@ impl HypercubeLinearPropagator {
         self.watched_predicates
             .iter()
             .position(|&pid| !context.is_predicate_id_satisfied(pid))
+    }
+
+    /// The hypercube linear slack: the bound minus, for every term, the larger of its lower bound
+    /// in the state and in the hypercube.
+    fn hypercube_linear_slack(&self, context: &PropagationContext<'_>) -> i64 {
+        let lower_bound_terms = self
+            .linear
+            .terms()
+            .map(|term| {
+                let bound_in_state = context.lower_bound(&term);
+                let bound_in_hypercube = self.hypercube.lower_bound(&term);
+
+                i64::from(i32::max(bound_in_state, bound_in_hypercube))
+            })
+            .sum::<i64>();
+
+        i64::from(self.linear.bound()) - lower_bound_terms
+    }
+
+    /// Propagates when all predicates of the hypercube except `predicate_in_hypercube` are true.
+    fn propagate_single_unsatisfied_predicate(
+        &self,
+        mut context: PropagationContext<'_>,
+        predicate_in_hypercube: Predicate,
+        slack: i64,
+    ) -> PropagationStatusCP {
+        let maybe_term = self
+            .linear
+            .term_for_domain(predicate_in_hypercube.get_domain());
+
+        if slack < 0 {
+            // Since the hypercube linear slack is negative, the constraint is violated if the
+            // predicate becomes true, so it is propagated to false.
+            context.post(!predicate_in_hypercube, 0_u64)?;
+        } else if let Some(term_to_propagate) = maybe_term {
+            // The slack is at least 0, but it may be that the linear could propagate
+            // something weaker than `!predicate_in_hypercube`.
+
+            if !could_propagate_weaker_predicate(predicate_in_hypercube, term_to_propagate) {
+                return Ok(());
+            }
+
+            let bound_in_state = context.lower_bound(&term_to_propagate);
+            let bound_in_hypercube = self.hypercube.lower_bound(&term_to_propagate);
+            let bound_i64 = slack + i64::from(i32::max(bound_in_state, bound_in_hypercube));
+
+            // The slack is at least 0 and both bounds are at least i32::MIN, so the bound
+            // can only be out of range by exceeding i32::MAX. Then it can never tighten
+            // the existing bound of `term_to_propagate`.
+            let Ok(bound) = i32::try_from(bound_i64) else {
+                pumpkin_assert_simple!(bound_i64 > i64::from(i32::MAX));
+                return Ok(());
+            };
+
+            context.post(predicate![term_to_propagate <= bound], 0_u64)?;
+        }
+
+        Ok(())
+    }
+
+    /// The propagation for [`HypercubeLinearPropagation::Extended`].
+    ///
+    /// The watchers are kept on predicates that are not true and, where possible, concern
+    /// different domains. Propagation happens when the predicates that are not true all concern
+    /// one domain.
+    fn propagate_extended(&mut self, mut context: PropagationContext<'_>) -> PropagationStatusCP {
+        let _ = self.update_watched_predicates(context.reborrow());
+
+        let mut unsatisfied = vec![];
+        for (index, &predicate) in self.hypercube_predicates.iter().enumerate() {
+            match context.evaluate_predicate(predicate) {
+                // A false predicate satisfies the constraint.
+                Some(false) => return Ok(()),
+                Some(true) => {}
+                None => unsatisfied.push(index),
+            }
+        }
+
+        if let Some(&first) = unsatisfied.first() {
+            let domain = self.hypercube_predicates[first].get_domain();
+            let other_domain = unsatisfied
+                .iter()
+                .copied()
+                .find(|&index| self.hypercube_predicates[index].get_domain() != domain);
+
+            if let Some(second) = other_domain {
+                // Two domains are unassigned, so nothing can be propagated. The watchers are set
+                // to predicates over these two domains.
+                self.watch(context.reborrow(), first, second);
+
+                if self.is_watching_linear {
+                    self.unregister_bound_events_on_linear(context.reborrow());
+                    self.is_watching_linear = false;
+                }
+
+                return Ok(());
+            }
+        }
+
+        if !self.is_watching_linear {
+            self.register_bound_events_on_linear(context.reborrow());
+            self.is_watching_linear = true;
+        }
+
+        let slack = self.hypercube_linear_slack(&context);
+
+        match unsatisfied.as_slice() {
+            [] => self.propagate_linear_inequality(context, slack),
+            &[index] => {
+                // The standard propagation explains its propagations lazily with the hypercube
+                // linear itself, which conflict analysis can use. It is followed by the extended
+                // propagation, which can additionally remove values from the interior of the
+                // domain.
+                let predicate = self.hypercube_predicates[index];
+                self.propagate_single_unsatisfied_predicate(context.reborrow(), predicate, slack)?;
+
+                if context.evaluate_predicate(predicate).is_none() {
+                    self.propagate_single_unsatisfied_domain(context, &[predicate])?;
+                }
+
+                Ok(())
+            }
+            indices => {
+                let predicates = indices
+                    .iter()
+                    .map(|&index| self.hypercube_predicates[index])
+                    .collect::<Vec<_>>();
+                self.propagate_single_unsatisfied_domain(context, &predicates)
+            }
+        }
+    }
+
+    /// Makes the predicates at `first` and `second` in the hypercube the watched predicates.
+    fn watch(&mut self, mut context: PropagationContext<'_>, first: usize, second: usize) {
+        pumpkin_assert_simple!(first != second);
+
+        // Move the predicates to the watched positions, keeping track of where the second one ends
+        // up if the first swap moves it.
+        self.hypercube_predicates.swap(0, first);
+        let second = if second == 0 { first } else { second };
+        self.hypercube_predicates.swap(1, second);
+
+        for watcher_index in 0..NUM_WATCHED_PREDICATES {
+            let predicate = self.hypercube_predicates[watcher_index];
+            let old_watcher = self.watched_predicates[watcher_index];
+
+            if context.get_predicate(old_watcher) != predicate {
+                context.unregister_predicate(old_watcher);
+                self.watched_predicates[watcher_index] = context.register_predicate(predicate);
+            }
+        }
+    }
+
+    /// Propagates when all predicates of the hypercube except `unsatisfied` are true, and the
+    /// predicates in `unsatisfied` all concern one domain `x`.
+    ///
+    /// Let `R` be the set of values of `x` for which all of `unsatisfied` hold, and let `S` be the
+    /// bound of the linear minus the lower bounds of the terms other than the one of `x`. The
+    /// constraint forbids exactly the values `v` in `R` with `w * v > S`, where `w` is the weight
+    /// of `x` in the linear (0 if `x` does not appear in it). These values form an interval of `R`,
+    /// which is removed from the domain of `x`.
+    fn propagate_single_unsatisfied_domain(
+        &self,
+        mut context: PropagationContext<'_>,
+        unsatisfied: &[Predicate],
+    ) -> PropagationStatusCP {
+        let domain = unsatisfied[0].get_domain();
+        pumpkin_assert_simple!(unsatisfied.iter().all(|p| p.get_domain() == domain));
+
+        let domain_lower_bound = context.lower_bound(&domain);
+        let domain_upper_bound = context.upper_bound(&domain);
+
+        // The interval [region_lower, region_upper] and the exceptions describe `R`.
+        let mut region_lower = domain_lower_bound;
+        let mut region_upper = domain_upper_bound;
+        let mut exceptions = vec![];
+        for predicate in unsatisfied {
+            let value = predicate.get_right_hand_side();
+            match predicate.get_predicate_type() {
+                PredicateType::LowerBound => region_lower = region_lower.max(value),
+                PredicateType::UpperBound => region_upper = region_upper.min(value),
+                PredicateType::Equal => {
+                    region_lower = region_lower.max(value);
+                    region_upper = region_upper.min(value);
+                }
+                PredicateType::NotEqual => exceptions.push(value),
+            }
+        }
+
+        let term = self.linear.term_for_domain(domain);
+        pumpkin_assert_simple!(term.is_none_or(|term| term.offset == 0));
+
+        let other_terms_lower_bound = self
+            .linear
+            .terms()
+            .filter(|t| t.inner != domain)
+            .map(|t| i64::from(context.lower_bound(&t)))
+            .sum::<i64>();
+        let rest = i64::from(self.linear.bound()) - other_terms_lower_bound;
+
+        // The forbidden values of `R` are those `v` with `w * v > rest`.
+        let (forbidden_lower, forbidden_upper) = match term.map(|term| term.scale) {
+            None if rest < 0 => (i64::from(region_lower), i64::from(region_upper)),
+            None => return Ok(()),
+            Some(weight) if weight > 0 => {
+                let weight = i64::from(weight);
+                (
+                    i64::from(region_lower).max(rest.div_euclid(weight) + 1),
+                    i64::from(region_upper),
+                )
+            }
+            Some(weight) => {
+                // `w * v > rest` with `w < 0` is `v < rest / w`, i.e. `v <= ceil(rest / w) - 1`.
+                let weight = i64::from(weight);
+                let ceil = -(rest.div_euclid(-weight));
+                (
+                    i64::from(region_lower),
+                    i64::from(region_upper).min(ceil - 1),
+                )
+            }
+        };
+
+        if forbidden_lower > forbidden_upper {
+            return Ok(());
+        }
+
+        // Both are within the bounds of the domain, so they fit in an i32.
+        let forbidden_lower = forbidden_lower as i32;
+        let forbidden_upper = forbidden_upper as i32;
+
+        // The reason consists of the true predicates of the hypercube and the lower bounds of the
+        // other terms. A bound propagation additionally uses the bound of `x` that it moves.
+        let reason = || {
+            self.hypercube_predicates
+                .iter()
+                .copied()
+                .filter(|p| !unsatisfied.contains(p))
+                .chain(
+                    self.linear
+                        .terms()
+                        .filter(|t| t.inner != domain)
+                        .map(|t| predicate![t >= context.lower_bound(&t)]),
+                )
+                .collect::<Vec<_>>()
+        };
+        let base_reason = reason();
+
+        let mut new_lower_bound = domain_lower_bound;
+        let mut new_upper_bound = domain_upper_bound;
+
+        if forbidden_lower <= domain_lower_bound {
+            // The lower part of the domain is forbidden, up to the first exception.
+            new_lower_bound = exceptions
+                .iter()
+                .copied()
+                .filter(|&e| e >= domain_lower_bound && e <= forbidden_upper)
+                .min()
+                .unwrap_or(forbidden_upper + 1);
+
+            let mut reason = base_reason.clone();
+            reason.push(predicate![domain >= domain_lower_bound]);
+            context.post(
+                predicate![domain >= new_lower_bound],
+                (PropositionalConjunction::from(reason), &self.inference_code),
+            )?;
+        }
+
+        if forbidden_upper >= domain_upper_bound {
+            // The upper part of the domain is forbidden, down to the last exception.
+            new_upper_bound = exceptions
+                .iter()
+                .copied()
+                .filter(|&e| e <= domain_upper_bound && e >= forbidden_lower)
+                .max()
+                .unwrap_or(forbidden_lower - 1);
+
+            let mut reason = base_reason.clone();
+            reason.push(predicate![domain <= domain_upper_bound]);
+            context.post(
+                predicate![domain <= new_upper_bound],
+                (PropositionalConjunction::from(reason), &self.inference_code),
+            )?;
+        }
+
+        // The remaining forbidden values lie strictly inside the domain and are removed one by
+        // one. Removing a large interval value by value is expensive, so it is skipped then.
+        let interior_lower = forbidden_lower.max(new_lower_bound);
+        let interior_upper = forbidden_upper.min(new_upper_bound);
+        if i64::from(interior_upper) - i64::from(interior_lower) < MAX_INTERIOR_REMOVALS {
+            for value in interior_lower..=interior_upper {
+                if !exceptions.contains(&value) && context.contains(&domain, value) {
+                    context.post(
+                        predicate![domain != value],
+                        (
+                            PropositionalConjunction::from(base_reason.clone()),
+                            &self.inference_code,
+                        ),
+                    )?;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// The conflict when the hypercube is satisfied and the lower bounds of the terms violate the
@@ -292,6 +605,10 @@ impl Propagator for HypercubeLinearPropagator {
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        if self.propagation == HypercubeLinearPropagation::Extended {
+            return self.propagate_extended(context);
+        }
+
         let satisfied_watchers = self.update_watched_predicates(context.reborrow());
 
         if satisfied_watchers < NUM_WATCHED_PREDICATES - 1 {
@@ -312,67 +629,17 @@ impl Propagator for HypercubeLinearPropagator {
         }
 
         let unassigned_watcher_index = self.unassigned_watcher_index(context.reborrow());
-
-        let lower_bound_terms = self
-            .linear
-            .terms()
-            .map(|term| {
-                let bound_in_state = context.lower_bound(&term);
-                let bound_in_hypercube = self.hypercube.lower_bound(&term);
-
-                i64::from(i32::max(bound_in_state, bound_in_hypercube))
-            })
-            .sum::<i64>();
-
-        let slack = i64::from(self.linear.bound()) - lower_bound_terms;
+        let slack = self.hypercube_linear_slack(&context);
 
         match unassigned_watcher_index {
             Some(index) => {
                 let predicate_in_hypercube = self.hypercube_predicates[index];
-
-                let maybe_term = self
-                    .linear
-                    .term_for_domain(self.hypercube_predicates[index].get_domain());
-
-                if slack < 0 {
-                    // We have one unassigned predicate in the hypercube over a variable that
-                    // does not appear in the linear inequality. Since the slack is negative, we
-                    // can propagate that predicate to false.
-
-                    context.post(!predicate_in_hypercube, 0_u64)?;
-                } else if let Some(term_to_propagate) = maybe_term {
-                    // The slack is at least 0, but it may be that the linear could propagate
-                    // something weaker than `!predicate_in_hypercube`.
-
-                    if !could_propagate_weaker_predicate(predicate_in_hypercube, term_to_propagate)
-                    {
-                        return Ok(());
-                    }
-
-                    let bound_in_state = context.lower_bound(&term_to_propagate);
-                    let bound_in_hypercube = self.hypercube.lower_bound(&term_to_propagate);
-                    let bound_i64 = slack + i64::from(i32::max(bound_in_state, bound_in_hypercube));
-
-                    // The slack is at least 0 and both bounds are at least i32::MIN, so the bound
-                    // can only be out of range by exceeding i32::MAX. Then it can never tighten
-                    // the existing bound of `term_to_propagate`.
-                    let Ok(bound) = i32::try_from(bound_i64) else {
-                        pumpkin_assert_simple!(bound_i64 > i64::from(i32::MAX));
-                        return Ok(());
-                    };
-
-                    context.post(predicate![term_to_propagate <= bound], 0_u64)?;
-                }
+                self.propagate_single_unsatisfied_predicate(context, predicate_in_hypercube, slack)
             }
 
-            None => {
-                // All watchers are true. Propagate the linear inequality.
-
-                self.propagate_linear_inequality(context, slack)?;
-            }
+            // All watchers are true. Propagate the linear inequality.
+            None => self.propagate_linear_inequality(context, slack),
         }
-
-        Ok(())
     }
 
     fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
@@ -943,5 +1210,119 @@ mod tests {
         let mut expected = vec![predicate![x >= 3], predicate![y >= 2]];
         expected.sort();
         assert_eq!(reason, expected);
+    }
+
+    fn extended_state() -> State {
+        let mut state = State::default();
+        state.hypercube_linear_propagation = HypercubeLinearPropagation::Extended;
+        state
+    }
+
+    fn add_hypercube_linear(state: &mut State, hypercube: Hypercube, linear: LinearInequality) {
+        let constraint_tag = state.new_constraint_tag();
+        let _ = state.add_propagator(HypercubeLinearConstructor {
+            hypercube,
+            linear,
+            constraint_tag,
+        });
+    }
+
+    #[test]
+    fn extended_propagation_removes_region_of_single_unassigned_domain() {
+        let mut state = extended_state();
+
+        let x = state.new_interval_variable(0, 10, None);
+        let y = state.new_interval_variable(2, 10, None);
+
+        // [x >= 3] /\ [x <= 7] /\ [y >= 2] -> false, where [y >= 2] is true.
+        let hypercube =
+            Hypercube::new([predicate![x >= 3], predicate![x <= 7], predicate![y >= 2]])
+                .expect("not inconsistent");
+        add_hypercube_linear(&mut state, hypercube, LinearInequality::trivially_false());
+
+        assert!(state.propagate_to_fixed_point().is_ok());
+        assert!((3..=7).all(|value| !state.contains(x, value)));
+        assert!(state.contains(x, 2));
+        assert!(state.contains(x, 8));
+    }
+
+    #[test]
+    fn extended_propagation_removes_values_violating_the_linear() {
+        let mut state = extended_state();
+
+        let x = state.new_interval_variable(0, 10, None);
+        let y = state.new_interval_variable(2, 10, None);
+
+        // [x <= 5] /\ [y >= 2] -> x + y <= 4 forbids x in {3, 4, 5}: those values satisfy the
+        // hypercube, but then x + y >= x + 2 > 4.
+        let hypercube =
+            Hypercube::new([predicate![x <= 5], predicate![y >= 2]]).expect("not inconsistent");
+        let linear = LinearInequality::new(
+            [(NonZero::new(1).unwrap(), x), (NonZero::new(1).unwrap(), y)],
+            4,
+        )
+        .expect("not trivially satisfiable");
+        add_hypercube_linear(&mut state, hypercube, linear);
+
+        assert!(state.propagate_to_fixed_point().is_ok());
+        assert!((3..=5).all(|value| !state.contains(x, value)));
+        assert!((0..=2).all(|value| state.contains(x, value)));
+        assert!((6..=10).all(|value| state.contains(x, value)));
+    }
+
+    #[test]
+    fn extended_propagation_with_a_negative_weight() {
+        let mut state = extended_state();
+
+        let x = state.new_interval_variable(0, 10, None);
+        let y = state.new_interval_variable(2, 10, None);
+
+        // [x >= 3] /\ [y >= 2] -> y - x <= -3 forbids x in {3, 4}: then y - x >= 2 - 4 > -3.
+        let hypercube =
+            Hypercube::new([predicate![x >= 3], predicate![y >= 2]]).expect("not inconsistent");
+        let linear = LinearInequality::new(
+            [
+                (NonZero::new(-1).unwrap(), x),
+                (NonZero::new(1).unwrap(), y),
+            ],
+            -3,
+        )
+        .expect("not trivially satisfiable");
+        add_hypercube_linear(&mut state, hypercube, linear);
+
+        assert!(state.propagate_to_fixed_point().is_ok());
+        assert!(!state.contains(x, 3));
+        assert!(!state.contains(x, 4));
+        assert!(state.contains(x, 2));
+        assert!(state.contains(x, 5));
+    }
+
+    #[test]
+    fn extended_propagation_raises_the_lower_bound() {
+        let mut state = extended_state();
+
+        let x = state.new_interval_variable(3, 10, None);
+
+        // [x >= 3] /\ [x <= 7] -> false with x >= 3 forbids the lower part of the domain.
+        let hypercube =
+            Hypercube::new([predicate![x >= 3], predicate![x <= 7]]).expect("not inconsistent");
+        add_hypercube_linear(&mut state, hypercube, LinearInequality::trivially_false());
+
+        assert!(state.propagate_to_fixed_point().is_ok());
+        assert_eq!(state.lower_bound(x), 8);
+    }
+
+    #[test]
+    fn standard_propagation_does_not_propagate_two_unassigned_predicates() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(0, 10, None);
+
+        let hypercube =
+            Hypercube::new([predicate![x >= 3], predicate![x <= 7]]).expect("not inconsistent");
+        add_hypercube_linear(&mut state, hypercube, LinearInequality::trivially_false());
+
+        assert!(state.propagate_to_fixed_point().is_ok());
+        assert!((0..=10).all(|value| state.contains(x, value)));
     }
 }

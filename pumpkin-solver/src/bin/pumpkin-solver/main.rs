@@ -28,6 +28,7 @@ use parsers::dimacs::parse_cnf;
 use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
 use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
+use pumpkin_core::hypercube_linear::HypercubeLinearPropagation;
 use pumpkin_core::hypercube_linear::HypercubeLinearResolver;
 use pumpkin_core::hypercube_linear::Trace;
 use pumpkin_core::hypercube_linear::TraceOptions;
@@ -420,6 +421,13 @@ struct Args {
     /// Ignored if not using hypercube linear resolver.
     #[arg(long = "hl-skip-unneeded-weakening", default_value_t)]
     hl_skip_unneeded_weakening: bool,
+
+    /// How hypercube linear propagators propagate their hypercube.
+    ///
+    /// With `extended`, a hypercube linear also propagates when the predicates of its hypercube
+    /// that are not true all concern one variable.
+    #[arg(long = "hl-propagation", value_enum, default_value_t)]
+    hl_propagation: HypercubeLinearPropagation,
     /// The priority of the nogood propagator.
     #[arg(long = "nogood-priority", value_enum, default_value_t)]
     nogood_propagator_priority: Priority,
@@ -592,6 +600,7 @@ fn run() -> PumpkinResult<()> {
         proof_log,
         learning_options,
         analysis_mode: args.conflict_resolver,
+        hypercube_linear_propagation: args.hl_propagation,
     };
 
     let time_limit = args.time_limit.map(Duration::from_millis);

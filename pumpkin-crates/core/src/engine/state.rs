@@ -19,6 +19,7 @@ use crate::engine::VariableNames;
 use crate::engine::cp::reason::StoredReason;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::reason::ReasonStore;
+use crate::hypercube_linear::HypercubeLinearPropagation;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
@@ -84,6 +85,9 @@ pub struct State {
 
     /// Runtime checkers to run in the propagation loop.
     checkers: CheckerStore,
+
+    /// How hypercube linear propagators propagate their hypercube.
+    pub(crate) hypercube_linear_propagation: HypercubeLinearPropagation,
 }
 
 create_statistics_struct!(StateStatistics {
@@ -114,6 +118,7 @@ impl Default for State {
             statistics: StateStatistics::default(),
             constraint_tags: KeyGenerator::default(),
             checkers: CheckerStore::default(),
+            hypercube_linear_propagation: HypercubeLinearPropagation::default(),
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are

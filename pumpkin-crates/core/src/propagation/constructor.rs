@@ -14,6 +14,7 @@ use crate::engine::notifications::Watchers;
 use crate::engine::variables::AffineView;
 #[cfg(doc)]
 use crate::engine::variables::DomainId;
+use crate::hypercube_linear::HypercubeLinearPropagation;
 use crate::predicates::Predicate;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
@@ -118,6 +119,11 @@ impl PropagatorConstructorContext<'_> {
 
         let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
         var.watch_all_backtrack(&mut watchers, domain_events.events());
+    }
+
+    /// How hypercube linear propagators propagate their hypercube.
+    pub(crate) fn hypercube_linear_propagation(&self) -> HypercubeLinearPropagation {
+        self.state.hypercube_linear_propagation
     }
 
     /// Reborrow the current context to a new value with a shorter lifetime. Should be used when
