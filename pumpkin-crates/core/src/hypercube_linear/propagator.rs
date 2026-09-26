@@ -244,8 +244,6 @@ impl HypercubeLinearPropagator {
     /// different domains. Propagation happens when the predicates that are not true all concern
     /// one domain.
     fn propagate_extended(&mut self, mut context: PropagationContext<'_>) -> PropagationStatusCP {
-        let _ = self.update_watched_predicates(context.reborrow());
-
         let mut unsatisfied = vec![];
         for (index, &predicate) in self.hypercube_predicates.iter().enumerate() {
             match context.evaluate_predicate(predicate) {
@@ -256,25 +254,20 @@ impl HypercubeLinearPropagator {
             }
         }
 
-        if let Some(&first) = unsatisfied.first() {
-            let domain = self.hypercube_predicates[first].get_domain();
-            let other_domain = unsatisfied
-                .iter()
-                .copied()
-                .find(|&index| self.hypercube_predicates[index].get_domain() != domain);
-
-            if let Some(second) = other_domain {
-                // Two domains are unassigned, so nothing can be propagated. The watchers are set
-                // to predicates over these two domains.
-                self.watch(context.reborrow(), first, second);
-
-                if self.is_watching_linear {
-                    self.unregister_bound_events_on_linear(context.reborrow());
-                    self.is_watching_linear = false;
-                }
-
-                return Ok(());
+        // Updating the watchers reorders the predicates of the hypercube.
+        let unsatisfied_predicates = unsatisfied
+            .iter()
+            .map(|&index| self.hypercube_predicates[index])
+            .collect::<Vec<_>>();
+        let spans_two_domains = self.update_extended_watchers(context.reborrow(), &unsatisfied);
+        if spans_two_domains {
+            // Two domains are unassigned, so nothing can be propagated.
+            if self.is_watching_linear {
+                self.unregister_bound_events_on_linear(context.reborrow());
+                self.is_watching_linear = false;
             }
+
+            return Ok(());
         }
 
         if !self.is_watching_linear {
@@ -284,14 +277,13 @@ impl HypercubeLinearPropagator {
 
         let slack = self.hypercube_linear_slack(&context);
 
-        match unsatisfied.as_slice() {
+        match unsatisfied_predicates.as_slice() {
             [] => self.propagate_linear_inequality(context, slack),
-            &[index] => {
+            &[predicate] => {
                 // The standard propagation explains its propagations lazily with the hypercube
                 // linear itself, which conflict analysis can use. It is followed by the extended
                 // propagation, which can additionally remove values from the interior of the
                 // domain.
-                let predicate = self.hypercube_predicates[index];
                 self.propagate_single_unsatisfied_predicate(context.reborrow(), predicate, slack)?;
 
                 if context.evaluate_predicate(predicate).is_none() {
@@ -300,14 +292,64 @@ impl HypercubeLinearPropagator {
 
                 Ok(())
             }
-            indices => {
-                let predicates = indices
-                    .iter()
-                    .map(|&index| self.hypercube_predicates[index])
-                    .collect::<Vec<_>>();
-                self.propagate_single_unsatisfied_domain(context, &predicates)
-            }
+            predicates => self.propagate_single_unsatisfied_domain(context, predicates),
         }
+    }
+
+    /// Updates the watched predicates for the extended propagation, where `unsatisfied` are the
+    /// indices of the predicates of the hypercube that are not true. Returns true if these concern
+    /// at least two domains.
+    ///
+    /// If the predicates that are not true concern two domains, two of them over different
+    /// domains are watched, so that the constraint is notified before they concern one domain.
+    /// Otherwise, one watcher is on a predicate that is not true, if any, and the other on the
+    /// predicate over another domain that became true last. Backtracking unassigns that predicate
+    /// before the other predicates over other domains, so the watchers again concern two domains
+    /// as soon as the predicates that are not true do.
+    fn update_extended_watchers(
+        &mut self,
+        context: PropagationContext<'_>,
+        unsatisfied: &[usize],
+    ) -> bool {
+        let domain_of = |index: usize| self.hypercube_predicates[index].get_domain();
+
+        let first = unsatisfied.first().copied();
+        let other_domain = first.and_then(|first| {
+            unsatisfied
+                .iter()
+                .copied()
+                .find(|&index| domain_of(index) != domain_of(first))
+        });
+
+        if self.hypercube_predicates.len() < NUM_WATCHED_PREDICATES {
+            return other_domain.is_some();
+        }
+
+        if let (Some(first), Some(second)) = (first, other_domain) {
+            self.watch(context, first, second);
+            return true;
+        }
+
+        // The predicate that became true last among those that satisfy `condition`.
+        let last_true = |condition: &dyn Fn(usize) -> bool| {
+            (0..self.hypercube_predicates.len())
+                .filter(|&index| !unsatisfied.contains(&index) && condition(index))
+                .max_by_key(|&index| {
+                    context
+                        .assignments
+                        .get_trail_position(&self.hypercube_predicates[index])
+                })
+        };
+
+        let first = first
+            .or_else(|| last_true(&|_| true))
+            .expect("the hypercube has at least two predicates");
+        let second = last_true(&|index| domain_of(index) != domain_of(first))
+            .or_else(|| (0..self.hypercube_predicates.len()).find(|&index| index != first))
+            .expect("the hypercube has at least two predicates");
+
+        self.watch(context, first, second);
+        false
     }
 
     /// Makes the predicates at `first` and `second` in the hypercube the watched predicates.
@@ -592,82 +634,11 @@ impl HypercubeLinearPropagator {
         }
     }
 
-    /// Update the watched predicates of the hypercube.
-    ///
-    /// Returns the number of satisfied watchers, having tried replacing them with unassigned
-    /// predicates.
-    fn update_watched_predicates(&mut self, mut context: PropagationContext<'_>) -> usize {
-        let mut satisfied_watchers = 0;
-
-        for watcher_index in 0..self.watched_predicates.len() {
-            let watched_predicate = self.watched_predicates[watcher_index];
-
-            if context.is_predicate_id_satisfied(watched_predicate) {
-                satisfied_watchers +=
-                    usize::from(!self.find_new_watcher(context.reborrow(), watcher_index));
-            }
-        }
-
-        satisfied_watchers
-    }
-}
-
-impl Propagator for HypercubeLinearPropagator {
-    fn name(&self) -> &str {
-        "HypercubeLinear"
-    }
-
-    fn explain_as_hypercube_linear(
-        &mut self,
-        _code: u64,
-        _context: crate::propagation::ExplanationContext,
-    ) -> Option<(Hypercube, LinearInequality, InferenceCode)> {
-        Some((
-            self.hypercube.clone(),
-            self.linear.clone(),
-            self.inference_code.clone(),
-        ))
-    }
-
-    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
-        if self.propagation == HypercubeLinearPropagation::Extended {
-            return self.propagate_extended(context);
-        }
-
-        let satisfied_watchers = self.update_watched_predicates(context.reborrow());
-
-        if satisfied_watchers < NUM_WATCHED_PREDICATES - 1 {
-            if self.is_watching_linear {
-                self.unregister_bound_events_on_linear(context.reborrow());
-                self.is_watching_linear = false;
-            }
-
-            // More than one watcher is unassigned, so we do not need to propagate anything.
-            return Ok(());
-        } else {
-            // The hypercube is satisfied, so we should be registered to bound events on the terms
-            // of the linear inequality.
-            if !self.is_watching_linear {
-                self.register_bound_events_on_linear(context.reborrow());
-                self.is_watching_linear = true;
-            }
-        }
-
-        let unassigned_watcher_index = self.unassigned_watcher_index(context.reborrow());
-        let slack = self.hypercube_linear_slack(&context);
-
-        match unassigned_watcher_index {
-            Some(index) => {
-                let predicate_in_hypercube = self.hypercube_predicates[index];
-                self.propagate_single_unsatisfied_predicate(context, predicate_in_hypercube, slack)
-            }
-
-            // All watchers are true. Propagate the linear inequality.
-            None => self.propagate_linear_inequality(context, slack),
-        }
-    }
-
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+    /// Propagation from scratch for [`HypercubeLinearPropagation::Standard`].
+    fn propagate_from_scratch_standard(
+        &self,
+        mut context: PropagationContext<'_>,
+    ) -> PropagationStatusCP {
         if self
             .hypercube_predicates
             .iter()
@@ -756,6 +727,124 @@ impl Propagator for HypercubeLinearPropagator {
         }
 
         Ok(())
+    }
+
+    /// Propagation from scratch for [`HypercubeLinearPropagation::Extended`]: the standard
+    /// propagation, followed by the extended propagation when the predicates of the hypercube that
+    /// are not true all concern one domain.
+    fn propagate_from_scratch_extended(
+        &self,
+        mut context: PropagationContext<'_>,
+    ) -> PropagationStatusCP {
+        let mut unsatisfied = vec![];
+        for &predicate in self.hypercube_predicates.iter() {
+            match context.evaluate_predicate(predicate) {
+                // A false predicate satisfies the constraint.
+                Some(false) => return Ok(()),
+                Some(true) => {}
+                None => unsatisfied.push(predicate),
+            }
+        }
+
+        let Some(domain) = unsatisfied.first().map(|p| p.get_domain()) else {
+            return self.propagate_from_scratch_standard(context);
+        };
+        if unsatisfied.iter().any(|p| p.get_domain() != domain) {
+            return Ok(());
+        }
+
+        if let &[predicate] = unsatisfied.as_slice() {
+            self.propagate_from_scratch_standard(context.reborrow())?;
+
+            if context.evaluate_predicate(predicate).is_some() {
+                return Ok(());
+            }
+        }
+
+        self.propagate_single_unsatisfied_domain(context, &unsatisfied)
+    }
+
+    /// Update the watched predicates of the hypercube.
+    ///
+    /// Returns the number of satisfied watchers, having tried replacing them with unassigned
+    /// predicates.
+    fn update_watched_predicates(&mut self, mut context: PropagationContext<'_>) -> usize {
+        let mut satisfied_watchers = 0;
+
+        for watcher_index in 0..self.watched_predicates.len() {
+            let watched_predicate = self.watched_predicates[watcher_index];
+
+            if context.is_predicate_id_satisfied(watched_predicate) {
+                satisfied_watchers +=
+                    usize::from(!self.find_new_watcher(context.reborrow(), watcher_index));
+            }
+        }
+
+        satisfied_watchers
+    }
+}
+
+impl Propagator for HypercubeLinearPropagator {
+    fn name(&self) -> &str {
+        "HypercubeLinear"
+    }
+
+    fn explain_as_hypercube_linear(
+        &mut self,
+        _code: u64,
+        _context: crate::propagation::ExplanationContext,
+    ) -> Option<(Hypercube, LinearInequality, InferenceCode)> {
+        Some((
+            self.hypercube.clone(),
+            self.linear.clone(),
+            self.inference_code.clone(),
+        ))
+    }
+
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        if self.propagation == HypercubeLinearPropagation::Extended {
+            return self.propagate_extended(context);
+        }
+
+        let satisfied_watchers = self.update_watched_predicates(context.reborrow());
+
+        if satisfied_watchers < NUM_WATCHED_PREDICATES - 1 {
+            if self.is_watching_linear {
+                self.unregister_bound_events_on_linear(context.reborrow());
+                self.is_watching_linear = false;
+            }
+
+            // More than one watcher is unassigned, so we do not need to propagate anything.
+            return Ok(());
+        } else {
+            // The hypercube is satisfied, so we should be registered to bound events on the terms
+            // of the linear inequality.
+            if !self.is_watching_linear {
+                self.register_bound_events_on_linear(context.reborrow());
+                self.is_watching_linear = true;
+            }
+        }
+
+        let unassigned_watcher_index = self.unassigned_watcher_index(context.reborrow());
+        let slack = self.hypercube_linear_slack(&context);
+
+        match unassigned_watcher_index {
+            Some(index) => {
+                let predicate_in_hypercube = self.hypercube_predicates[index];
+                self.propagate_single_unsatisfied_predicate(context, predicate_in_hypercube, slack)
+            }
+
+            // All watchers are true. Propagate the linear inequality.
+            None => self.propagate_linear_inequality(context, slack),
+        }
+    }
+
+    fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
+        if self.propagation == HypercubeLinearPropagation::Extended {
+            self.propagate_from_scratch_extended(context)
+        } else {
+            self.propagate_from_scratch_standard(context)
+        }
     }
 }
 
@@ -1304,6 +1393,34 @@ mod tests {
         assert!((3..=7).all(|value| !state.contains(x, value)));
         assert!(state.contains(x, 2));
         assert!(state.contains(x, 8));
+    }
+
+    /// When `[y >= 2]` becomes true, the watcher on it cannot move to a predicate over another
+    /// domain. It stays on `[y >= 2]`, so the constraint is notified again when `[y >= 2]` becomes
+    /// true after backtracking.
+    #[test]
+    fn extended_propagation_propagates_again_after_backtracking() {
+        let mut state = extended_state();
+
+        let x = state.new_interval_variable(0, 10, None);
+        let y = state.new_interval_variable(0, 10, None);
+
+        // [x >= 3] /\ [x <= 7] /\ [y >= 2] -> false.
+        let hypercube =
+            Hypercube::new([predicate![x >= 3], predicate![x <= 7], predicate![y >= 2]])
+                .expect("not inconsistent");
+        add_hypercube_linear(&mut state, hypercube, LinearInequality::trivially_false());
+        assert!(state.propagate_to_fixed_point().is_ok());
+
+        for _ in 0..2 {
+            state.new_checkpoint();
+            assert!(state.post(predicate![y >= 2]).expect("not empty domain"));
+            assert!(state.propagate_to_fixed_point().is_ok());
+            assert!((3..=7).all(|value| !state.contains(x, value)));
+
+            let _ = state.restore_to(0);
+            assert!((3..=7).all(|value| state.contains(x, value)));
+        }
     }
 
     #[test]
