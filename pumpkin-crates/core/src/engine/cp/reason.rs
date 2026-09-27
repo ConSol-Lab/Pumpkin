@@ -172,7 +172,7 @@ impl StoredReason {
         if let Some((hypercube, linear, inference_code)) =
             propagator.explain_as_hypercube_linear(code, predicate_to_explain, context.reborrow())
         {
-            convert_hl_to_clause(
+            convert_hl_to_reason(
                 context,
                 hypercube,
                 linear,
@@ -188,7 +188,7 @@ impl StoredReason {
     }
 }
 
-fn convert_hl_to_clause(
+fn convert_hl_to_reason(
     context: ExplanationContext<'_>,
     hypercube: crate::hypercube_linear::Hypercube,
     linear: crate::hypercube_linear::LinearInequality,

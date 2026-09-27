@@ -51,7 +51,7 @@ create_statistics_struct!(ResolverStatistics {
     num_successful_fourier_resolutions: usize,
     num_integer_overflow_errors: usize,
     num_conflicts: usize,
-    num_learned_clauses: usize,
+    num_learned_nogoods: usize,
     num_learned_hls: usize,
     num_propositional_resolutions: usize,
     num_skipped_propositional_resolutions: usize,
@@ -221,7 +221,7 @@ impl HypercubeLinearResolver {
         // Seed predicates_to_explain with linear term predicates at the conflict DL.
         // For hypercube-linear empty-domain conflicts this replaces the manual loop that
         // was previously in collect_initial_conflict_from_empty_domain. For trivially-false
-        // linears (propagator / clausal conflicts) this is a no-op.
+        // linears (propagator / nogood conflicts) this is a no-op.
         let conflict_tp = trail.current_trail_position();
         let linear_for_explain = self.state.conflicting_linear.clone();
         self.state
@@ -326,7 +326,7 @@ impl HypercubeLinearResolver {
     /// predicates at the conflict checkpoint that the decision implies are replaced by the
     /// decision itself. The resulting hypercube implies the old one, so the constraint is
     /// weaker and still implied. The decision is then the only predicate over its domain at the
-    /// conflict checkpoint, as in a clause that has the decision as its unique implication
+    /// conflict checkpoint, as in a nogood that has the decision as its unique implication
     /// point.
     fn resolve_on_decision(
         &mut self,
@@ -507,9 +507,9 @@ impl HypercubeLinearResolver {
             explanation = match std::mem::take(&mut explanation).weaken_to_zero(!bound_predicate) {
                 Ok(Some(explanation)) => explanation,
                 Ok(None) => panic!("cannot weaken to trivially satisfiable"),
-                // If the weakened bound does not fit in an i32, the clausal explanation is used.
+                // If the weakened bound does not fit in an i32, the nogood explanation is used.
                 Err(explanation) => HypercubeLinearExplanation::Conjunction(
-                    explanation.into_clause(trail, pivot, trail_position),
+                    explanation.into_nogood(trail, pivot, trail_position),
                 ),
             };
 
@@ -551,7 +551,7 @@ impl HypercubeLinearResolver {
                 );
             }
             HypercubeLinearExplanation::Conjunction(predicates) => {
-                trace!("explaining with clause");
+                trace!("explaining with nogood");
 
                 // Add reason predicates (all except !pivot) to the hypercube.
                 for &predicate in predicates.iter().filter(|&&p| p != !pivot) {
@@ -630,7 +630,7 @@ impl HypercubeLinearResolver {
         trace!("{trigger_predicate:?} caused an empty domain, computing conflict constraint");
 
         // Check whether we can explain using a hypercube linear. If that is possible, use
-        // it. Otherwise, fall back to the clausal explanation.
+        // it. Otherwise, fall back to the nogood explanation.
         if let Some(code) = state.reason_store.get_lazy_code(trigger_reason) {
             let propagator_id = state.reason_store.get_propagator(trigger_reason);
             // The trigger predicate is not on the trail, so the propagation took place after the
@@ -662,8 +662,8 @@ impl HypercubeLinearResolver {
             }
         }
 
-        trace!("constructing conflict from clause");
-        let mut clausal_conflict = vec![];
+        trace!("constructing conflict from nogood");
+        let mut conflict_nogood = vec![];
         let _ = state.reason_store.get_or_compute(
             trigger_reason,
             ExplanationContext::without_working_nogood(
@@ -673,20 +673,20 @@ impl HypercubeLinearResolver {
                 &mut state.notification_engine,
             ),
             &mut state.propagators,
-            &mut clausal_conflict,
+            &mut conflict_nogood,
             trigger_predicate,
         );
-        clausal_conflict.push(!trigger_predicate);
+        conflict_nogood.push(!trigger_predicate);
 
         self.state
             .proof_file
             .borrow_mut()
-            .axiom(clausal_conflict.iter().copied(), [], -1);
+            .axiom(conflict_nogood.iter().copied(), [], -1);
 
         trace!("conflicting predicate = {trigger_predicate:?}");
 
         if cfg!(feature = "hl-checks") {
-            let unsatisfied_predicates = clausal_conflict
+            let unsatisfied_predicates = conflict_nogood
                 .iter()
                 .copied()
                 .filter(|&predicate| state.truth_value(predicate) != Some(true))
@@ -700,7 +700,7 @@ impl HypercubeLinearResolver {
             }
         }
 
-        (clausal_conflict, LinearInequality::trivially_false())
+        (conflict_nogood, LinearInequality::trivially_false())
     }
 
     /// Build the learned hypercube linear from the current state of the resolver.
@@ -727,7 +727,7 @@ impl HypercubeLinearResolver {
         );
 
         let linear = if hl_slack_at_root < 0 {
-            self.statistics.num_learned_clauses += 1;
+            self.statistics.num_learned_nogoods += 1;
 
             // Make sure to add in the inferences to the proof.
             for term in self.state.conflicting_linear.terms() {
@@ -1619,9 +1619,9 @@ mod tests {
 
     /// Weakening the conflict `2x + y ≤ 5` on the decision `x ≥ 1500000000` gives the bound
     /// `5 - 3000000000`, which does not fit in an i32, so the conflict is weakened on `y ≥ 1` as
-    /// well and becomes the clause `[y ≥ 1] & [x ≥ 1500000000] → ⊥`.
+    /// well and becomes the nogood `[y ≥ 1] & [x ≥ 1500000000] → ⊥`.
     #[test]
-    fn weakening_the_conflict_beyond_i32_turns_it_into_a_clause() {
+    fn weakening_the_conflict_beyond_i32_turns_it_into_a_nogood() {
         let mut trail_builder = FakeTrail::builder();
 
         let x = trail_builder.domain(0, 2_000_000_000);
@@ -1787,7 +1787,7 @@ mod tests {
 
     /// The conflict holds `[x != 3]` and `[x <= 7]`, which are both implied by the decision
     /// `[x <= 2]` and together do not propagate at DL 1. They are replaced by the decision, so the
-    /// learned clause `[y >= 1] /\ [x <= 2] -> false` propagates `[x >= 3]` at DL 1.
+    /// learned nogood `[y >= 1] /\ [x <= 2] -> false` propagates `[x >= 3]` at DL 1.
     #[test_log::test]
     fn predicates_implied_by_a_decision_are_replaced_by_the_decision() {
         let mut trail_builder = FakeTrail::builder();

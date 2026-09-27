@@ -168,8 +168,8 @@ impl TrailView for State {
 
         // The hypercube linear of the propagator explains the trail entry, so it only explains the
         // pivot if the entry implies the pivot. When holes make the pivot stronger than the entry,
-        // e.g. [x <= -1] from the entry [x <= 0] and the hole [x != 0], the clausal reason below
-        // decomposes the pivot into the entry and the holes.
+        // e.g. [x <= -1] from the entry [x <= 0] and the hole [x != 0], the propositional reason
+        // below decomposes the pivot into the entry and the holes.
         if trail_entry.predicate.implies(pivot) {
             let reason_ref = trail_entry.reason.expect("pivot is propagated");
 
@@ -195,9 +195,9 @@ impl TrailView for State {
             }
         }
 
-        let mut clause = vec![];
-        let _ = self.get_propagation_reason(pivot, &mut clause, CurrentNogood::empty());
-        clause.push(!pivot);
-        HypercubeLinearExplanation::Conjunction(clause)
+        let mut nogood = vec![];
+        let _ = self.get_propagation_reason(pivot, &mut nogood, CurrentNogood::empty());
+        nogood.push(!pivot);
+        HypercubeLinearExplanation::Conjunction(nogood)
     }
 }

@@ -60,8 +60,8 @@ impl ResHStrategy for StandardResH {
             linear_propagated_pivot_to_false && linear_slack_is_negative;
 
         if state.conflicting_linear.is_trivially_false() && can_substitute_with_explanation_linear {
-            // If the conflicting linear is a clause, then we do not need to clausify
-            // the explanation. Instead, the linear of the conflicting constraint
+            // If the conflicting constraint is a nogood, then we do not need to turn the
+            // explanation into a nogood. Instead, the linear of the conflicting constraint
             // becomes the linear of the explanation and the hypercube of the conflict
             // is extended with the hypercube of the conflict.
 
@@ -80,13 +80,13 @@ impl ResHStrategy for StandardResH {
             self.statistics
                 .num_propositional_resolutions_use_explanation_linear += 1;
         } else {
-            let clausal_explanation = explanation.into_clause(trail, pivot, trail_position);
+            let nogood_explanation = explanation.into_nogood(trail, pivot, trail_position);
 
             trace!(
-                "clausal explanation: {}",
-                clausal_explanation.iter().format(" & ")
+                "nogood explanation: {}",
+                nogood_explanation.iter().format(" & ")
             );
-            for predicate in clausal_explanation {
+            for predicate in nogood_explanation {
                 add_true_part_of_predicate(state, trail, trail_position, predicate);
             }
         }

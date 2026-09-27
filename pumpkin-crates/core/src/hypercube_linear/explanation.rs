@@ -33,7 +33,7 @@ impl Display for HypercubeLinear {
 }
 
 impl HypercubeLinear {
-    pub fn from_clause(
+    pub fn from_nogood(
         predicates: impl IntoIterator<Item = Predicate>,
     ) -> Result<Self, InconsistentHypercube> {
         let hypercube = Hypercube::new(predicates)?;
@@ -76,7 +76,7 @@ impl Default for HypercubeLinearExplanation {
 }
 
 impl HypercubeLinearExplanation {
-    pub(crate) fn into_clause<T: TrailView + ?Sized>(
+    pub(crate) fn into_nogood<T: TrailView + ?Sized>(
         self,
         trail: &T,
         pivot: Predicate,
@@ -87,9 +87,9 @@ impl HypercubeLinearExplanation {
             HypercubeLinearExplanation::Conjunction(predicates) => return predicates,
         };
 
-        let mut clause = vec![!pivot];
+        let mut nogood = vec![!pivot];
 
-        clause.extend(
+        nogood.extend(
             hypercube_linear
                 .hypercube
                 .iter_predicates()
@@ -99,14 +99,14 @@ impl HypercubeLinearExplanation {
                 .filter(|&p| !(!pivot).implies(p)),
         );
 
-        clause.extend(
+        nogood.extend(
             hypercube_linear
                 .linear
                 .terms()
                 .map(|term| affine_lower_bound_predicate_at(trail, term, trail_position - 1)),
         );
 
-        clause
+        nogood
     }
 
     /// Weakens the linear of the explanation on the given bound until the weight of its domain is

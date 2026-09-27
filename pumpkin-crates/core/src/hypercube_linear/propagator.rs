@@ -544,7 +544,7 @@ impl HypercubeLinearPropagator {
     /// which is removed from the domain of `x`.
     ///
     /// If `lazy` is true, the propagations are explained lazily, see
-    /// [`Self::extended_explanation`]; otherwise with clauses.
+    /// [`Self::extended_explanation`]; otherwise eagerly.
     fn propagate_single_unsatisfied_domain(
         &self,
         mut context: PropagationContext<'_>,
@@ -581,10 +581,10 @@ impl HypercubeLinearPropagator {
             .removed_values(|value| context.contains(&domain, value))
             .collect::<Vec<_>>();
 
-        // The clausal reason consists of the true predicates of the hypercube and the lower bounds
+        // The eager reason consists of the true predicates of the hypercube and the lower bounds
         // of the other terms. A bound propagation additionally uses the bound of `x` that it
         // moves.
-        let clausal_reason = (!lazy).then(|| {
+        let eager_reason = (!lazy).then(|| {
             self.hypercube_predicates
                 .iter()
                 .copied()
@@ -597,10 +597,10 @@ impl HypercubeLinearPropagator {
                 )
                 .collect::<Vec<_>>()
         });
-        let reason = |moved_bound: Option<Predicate>| match &clausal_reason {
+        let reason = |moved_bound: Option<Predicate>| match &eager_reason {
             None => Reason::from(self.extended_lazy_code()),
-            Some(clausal_reason) => {
-                let conjunction = clausal_reason
+            Some(eager_reason) => {
+                let conjunction = eager_reason
                     .iter()
                     .copied()
                     .chain(moved_bound)

@@ -87,7 +87,7 @@ impl ConflictState {
     /// The caller ensures that the hypercube of the conflict implies `bound`, and that the
     /// conflict is conflicting at `trail_position`. If the bound of the weakened linear does not
     /// fit in an i32, the other terms are weakened on their bounds at `trail_position` as well,
-    /// which turns the conflict into a clause.
+    /// which turns the conflict into a nogood.
     pub(crate) fn weaken_conflict_to_zero(
         &mut self,
         trail: &dyn TrailView,
@@ -98,21 +98,21 @@ impl ConflictState {
             Ok(Some(linear)) => self.conflicting_linear = linear,
             Ok(None) => panic!("weakening the conflict does not make it trivially satisfiable"),
             Err(WeakeningOverflow(linear)) => {
-                self.weaken_conflict_to_clause(trail, trail_position, linear, bound);
+                self.weaken_conflict_to_nogood(trail, trail_position, linear, bound);
             }
         }
     }
 
-    /// Replaces the conflict by the clause obtained by weakening `linear` on `bound` and on the
+    /// Replaces the conflict by the nogood obtained by weakening `linear` on `bound` and on the
     /// bounds of its other terms at `trail_position`.
-    fn weaken_conflict_to_clause(
+    fn weaken_conflict_to_nogood(
         &mut self,
         trail: &dyn TrailView,
         trail_position: usize,
         linear: LinearInequality,
         bound: BoundPredicate,
     ) {
-        // The bound of the fully weakened linear, which must be negative for the clause to be
+        // The bound of the fully weakened linear, which must be negative for the nogood to be
         // implied.
         let mut weakened_bound = i64::from(linear.bound());
 
