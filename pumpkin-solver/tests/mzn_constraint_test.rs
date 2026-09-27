@@ -12,18 +12,43 @@ macro_rules! mzn_test {
         mzn_test!($name, stringify!($name), vec![]);
     };
 
+    // Each constraint test runs once per conflict resolver, as `<name>::one_uip` and
+    // `<name>::hypercube_linear`. A module is used because `macro_rules!` cannot form new
+    // identifiers, so the resolver name cannot be appended to `$name` itself.
     ($name:ident, $file:expr, $options:expr) => {
-        #[test]
-        fn $name() {
-            let output = run_mzn_test_with_options::<false>(
-                $file,
-                "mzn_constraints",
-                false,
-                TestType::SolutionEnumeration,
-                $options,
-                stringify!($name),
-            );
-            assert!(output.ends_with("==========\n"));
+        mod $name {
+            use super::*;
+
+            // The variant is part of the prefix of the log files, so that the two variants, which
+            // may run concurrently, do not write to the same files.
+            fn run(variant: &str, resolver_options: &[&str]) {
+                let mut actual_options: Vec<String> = vec![];
+                actual_options.extend($options);
+                actual_options.extend(resolver_options.iter().map(|option| option.to_string()));
+
+                let output = run_mzn_test_with_options::<false>(
+                    $file,
+                    "mzn_constraints",
+                    false,
+                    TestType::SolutionEnumeration,
+                    actual_options,
+                    &format!("{}_{variant}", stringify!($name)),
+                );
+                assert!(output.ends_with("==========\n"));
+            }
+
+            #[test]
+            fn one_uip() {
+                run("one_uip", &[]);
+            }
+
+            #[test]
+            fn hypercube_linear() {
+                run(
+                    "hypercube_linear",
+                    &["--conflict-resolver", "hypercube-linear"],
+                );
+            }
         }
     };
 }

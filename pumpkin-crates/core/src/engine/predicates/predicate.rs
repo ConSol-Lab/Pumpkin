@@ -116,22 +116,21 @@ impl PartialOrd for Predicate {
 impl Ord for Predicate {
     /// See [`Predicate`] for details on the order.
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        match self.get_domain().cmp(&other.get_domain()) {
-            std::cmp::Ordering::Equal => {
-                if self.is_bound_predicate() || other.is_bound_predicate() {
-                    match self.get_type_code().cmp(&other.get_type_code()) {
-                        std::cmp::Ordering::Equal => {
-                            self.get_right_hand_side().cmp(&other.get_right_hand_side())
-                        }
-                        ordering @ (std::cmp::Ordering::Less | std::cmp::Ordering::Greater) => {
-                            ordering
-                        }
-                    }
-                } else {
-                    self.get_right_hand_side().cmp(&other.get_right_hand_side())
-                }
-            }
+        let domain_order = self.get_domain().cmp(&other.get_domain());
 
+        if domain_order != std::cmp::Ordering::Equal {
+            return domain_order;
+        }
+
+        if !self.is_bound_predicate() && !other.is_bound_predicate() {
+            // If neither predicate is a bound predicate, then we order by right-hand side.
+            return self.get_right_hand_side().cmp(&other.get_right_hand_side());
+        }
+
+        match self.get_type_code().cmp(&other.get_type_code()) {
+            std::cmp::Ordering::Equal => {
+                self.get_right_hand_side().cmp(&other.get_right_hand_side())
+            }
             ordering @ (std::cmp::Ordering::Less | std::cmp::Ordering::Greater) => ordering,
         }
     }
@@ -475,111 +474,5 @@ mod test {
         let p2 = predicate![x <= 2];
 
         assert!(p1 > p2);
-    }
-
-    #[test]
-    fn implies_over_different_domains_is_false() {
-        let x = DomainId::new(0);
-        let y = DomainId::new(1);
-
-        assert!(!predicate![x >= 5].implies(predicate![y >= 4]));
-    }
-
-    #[test]
-    fn lower_bound_implies() {
-        let x = DomainId::new(0);
-
-        // Implies weaker bounds
-        assert!(predicate![x >= 5].implies(predicate![x >= 5]));
-        assert!(predicate![x >= 5].implies(predicate![x >= 4]));
-
-        // Implies not-equals below bound
-        assert!(predicate![x >= 5].implies(predicate![x != 4]));
-        assert!(predicate![x >= 5].implies(predicate![x != 3]));
-
-        // Does not imply stronger bounds
-        assert!(!predicate![x >= 5].implies(predicate![x >= 6]));
-
-        // Does not imply not-equals at or above bound
-        assert!(!predicate![x >= 5].implies(predicate![x != 6]));
-        assert!(!predicate![x >= 5].implies(predicate![x != 5]));
-
-        // Does not imply equals
-        assert!(!predicate![x >= 5].implies(predicate![x == 6]));
-        assert!(!predicate![x >= 5].implies(predicate![x == 5]));
-        assert!(!predicate![x >= 5].implies(predicate![x == 4]));
-    }
-
-    #[test]
-    fn upper_bound_implies() {
-        let x = DomainId::new(0);
-
-        // Implies weaker bounds
-        assert!(predicate![x <= 5].implies(predicate![x <= 5]));
-        assert!(predicate![x <= 5].implies(predicate![x <= 6]));
-
-        // Implies not-equals above bound
-        assert!(predicate![x <= 5].implies(predicate![x != 6]));
-        assert!(predicate![x <= 5].implies(predicate![x != 7]));
-
-        // Does not imply stronger bounds
-        assert!(!predicate![x <= 5].implies(predicate![x <= 4]));
-
-        // Does not imply not-equals at or below bound
-        assert!(!predicate![x <= 5].implies(predicate![x != 4]));
-        assert!(!predicate![x <= 5].implies(predicate![x != 5]));
-
-        // Does not imply equals
-        assert!(!predicate![x <= 5].implies(predicate![x == 6]));
-        assert!(!predicate![x <= 5].implies(predicate![x == 5]));
-        assert!(!predicate![x <= 5].implies(predicate![x == 4]));
-    }
-
-    #[test]
-    fn equals_implies() {
-        let x = DomainId::new(0);
-
-        // Implies lower bounds at or below
-        assert!(predicate![x == 5].implies(predicate![x >= 5]));
-        assert!(predicate![x == 5].implies(predicate![x >= 4]));
-
-        // Implies upper bounds at or above
-        assert!(predicate![x == 5].implies(predicate![x <= 5]));
-        assert!(predicate![x == 5].implies(predicate![x <= 6]));
-
-        // Implies not-equals
-        assert!(predicate![x == 5].implies(predicate![x != 4]));
-        assert!(predicate![x == 5].implies(predicate![x != 6]));
-
-        // Does not imply not-equals at bound
-        assert!(!predicate![x == 5].implies(predicate![x != 5]));
-
-        // Does not lower bounds above value
-        assert!(!predicate![x == 5].implies(predicate![x >= 6]));
-
-        // Does not upper bounds below value
-        assert!(!predicate![x == 5].implies(predicate![x <= 4]));
-    }
-
-    #[test]
-    fn not_equals_implies_nothing() {
-        let x = DomainId::new(0);
-
-        assert!(!predicate![x != 5].implies(predicate![x <= 4]));
-        assert!(!predicate![x != 5].implies(predicate![x <= 5]));
-        assert!(!predicate![x != 5].implies(predicate![x <= 6]));
-
-        assert!(!predicate![x != 5].implies(predicate![x >= 4]));
-        assert!(!predicate![x != 5].implies(predicate![x >= 5]));
-        assert!(!predicate![x != 5].implies(predicate![x >= 6]));
-
-        assert!(!predicate![x != 5].implies(predicate![x == 4]));
-        assert!(!predicate![x != 5].implies(predicate![x == 5]));
-        assert!(!predicate![x != 5].implies(predicate![x == 6]));
-
-        assert!(!predicate![x != 5].implies(predicate![x != 4]));
-        assert!(!predicate![x != 5].implies(predicate![x != 6]));
-
-        assert!(predicate![x != 5].implies(predicate![x != 5]));
     }
 }

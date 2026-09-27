@@ -2118,4 +2118,43 @@ mod tests {
         let result = solver.propagate_until_fixed_point(id);
         assert!(result.is_err());
     }
+    #[test]
+    fn nogood_with_root_satisfied_predicates_propagates() {
+        let mut solver = TestSolver::default();
+        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
+        let x1 = solver.new_variable(1, 4);
+        let x2 = solver.new_variable(1, 4);
+        let x3 = solver.new_variable(1, 4);
+        let x4 = solver.new_variable(1, 4);
+
+        let id = solver.nogood_handle.propagator_id();
+
+        // The first two predicates of the nogood are true at the root.
+        let _ = solver.increase_lower_bound_and_notify(id, x1.id(), x1, 4);
+        let _ = solver.increase_lower_bound_and_notify(id, x2.id(), x2, 3);
+        let _ = solver.decrease_upper_bound_and_notify(id, x2.id(), x2, 3);
+
+        // A `Vec` rather than `conjunction!`, which reverses the order of its predicates; the
+        // predicates that are true at the root must come first.
+        let nogood = vec![
+            predicate!(x1 == 4),
+            predicate!(x2 == 3),
+            predicate!(x3 == 1),
+            predicate!(x4 == 2),
+        ];
+        {
+            let (nogood_propagator, mut context) = solver
+                .state
+                .get_propagator_mut_with_context(solver.nogood_handle);
+            let nogood_propagator: &mut NogoodPropagator = nogood_propagator.unwrap();
+
+            nogood_propagator.add_nogood(nogood, inference_code, &mut context);
+        }
+
+        let _ = solver.decrease_upper_bound_and_notify(id, x3.id(), x3, 1);
+
+        solver.propagate_until_fixed_point(id).expect("no conflict");
+
+        assert!(!solver.contains(x4, 2));
+    }
 }

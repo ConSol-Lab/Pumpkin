@@ -19,4 +19,11 @@ impl VariableNames {
     pub(crate) fn add_integer(&mut self, integer: DomainId, name: Arc<str>) {
         let _ = self.integers.insert(integer, name);
     }
+
+    /// Get the named domain IDs in the solver.
+    pub(crate) fn named_domains(&self) -> impl Iterator<Item = (DomainId, &str)> {
+        self.integers
+            .iter()
+            .map(|(domain_id, name)| (*domain_id, name.as_ref()))
+    }
 }

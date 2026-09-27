@@ -40,4 +40,8 @@ wasm-bindgen-test = "0.3"
 check-propagations = []
 check-deductions = []
 debug-checks = []
+hl-checks = []
 clap = ["dep:clap"]
+
+[dev-dependencies]
+test-log = "0.2.20"

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use log::trace;
 use pumpkin_checking::BoxedChecker;
 use pumpkin_checking::InferenceChecker;
 #[cfg(feature = "check-propagations")]
@@ -18,6 +19,10 @@ use crate::engine::VariableNames;
 use crate::engine::cp::reason::StoredReason;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::reason::ReasonStore;
+use crate::hypercube_linear::HypercubeLinearConstructor;
+use crate::hypercube_linear::HypercubeLinearPropagation;
+use crate::hypercube_linear::HypercubeLinearStore;
+use crate::hypercube_linear::HypercubeLinearStoreConstructor;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
@@ -83,6 +88,13 @@ pub struct State {
 
     /// Runtime checkers to run in the propagation loop.
     checkers: CheckerStore,
+
+    /// How hypercube linear propagators propagate their hypercube.
+    pub(crate) hypercube_linear_propagation: HypercubeLinearPropagation,
+    /// True if all hypercube linears are held by a single [`HypercubeLinearStore`].
+    pub(crate) hypercube_linear_aggregate: bool,
+    /// The store holding the hypercube linears, once the first one is added.
+    hypercube_linear_store: Option<PropagatorHandle<HypercubeLinearStore>>,
 }
 
 create_statistics_struct!(StateStatistics {
@@ -113,6 +125,9 @@ impl Default for State {
             statistics: StateStatistics::default(),
             constraint_tags: KeyGenerator::default(),
             checkers: CheckerStore::default(),
+            hypercube_linear_propagation: HypercubeLinearPropagation::default(),
+            hypercube_linear_aggregate: false,
+            hypercube_linear_store: None,
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are
@@ -383,6 +398,71 @@ impl State {
         handle
     }
 
+    /// Adds a hypercube linear constraint.
+    ///
+    /// Depending on [`State::hypercube_linear_aggregate`], it becomes a propagator on its own or
+    /// a member of the single [`HypercubeLinearStore`]. Returns the id of the propagator that
+    /// propagates it.
+    pub(crate) fn add_hypercube_linear(
+        &mut self,
+        constructor: HypercubeLinearConstructor,
+    ) -> PropagatorId {
+        if !self.hypercube_linear_aggregate {
+            return self.add_propagator(constructor).propagator_id();
+        }
+
+        let store = match self.hypercube_linear_store {
+            Some(store) => store,
+            None => {
+                let store = self.add_propagator(HypercubeLinearStoreConstructor);
+                self.hypercube_linear_store = Some(store);
+                store
+            }
+        };
+
+        let member_index = self
+            .get_propagator(store)
+            .expect("the store is a hypercube linear store")
+            .next_member_index();
+
+        let PropagatorSpec {
+            registration,
+            checkers,
+            propagator: mut member,
+        } = constructor.create(PropagatorConstructorContext::new(
+            store.propagator_id(),
+            self,
+        ));
+        pumpkin_assert_simple!(
+            registration.iter().next().is_none(),
+            "a hypercube linear registers its domain events while propagating"
+        );
+        member.set_member_index(member_index);
+
+        if cfg!(feature = "check-propagations") {
+            for (inference_code, checker) in checkers.into_iter() {
+                self.checkers.add_inference_checker(inference_code, checker);
+            }
+        }
+
+        let duplicate_registrations = self
+            .get_propagator_mut(store)
+            .expect("the store is a hypercube linear store")
+            .add_member(member);
+        for predicate_id in duplicate_registrations {
+            self.notification_engine.unwatch_predicate(
+                predicate_id,
+                store.propagator_id(),
+                &self.assignments,
+            );
+        }
+
+        #[allow(deprecated, reason = "Will be refactored")]
+        self.enqueue_propagator(store);
+
+        store.propagator_id()
+    }
+
     /// Add an inference checker to the state.
     ///
     /// The inference checker will be used to check propagations performed during
@@ -630,6 +710,7 @@ impl State {
 
         let propagation_status = {
             let propagator = &mut self.propagators[propagator_id];
+            trace!("propagating {propagator_id:?} ({})", propagator.name());
             let context = PropagationContext::new(
                 &mut self.trailed_values,
                 &mut self.assignments,
@@ -663,7 +744,8 @@ impl State {
                         &mut self.propagators,
                         &self.notification_engine
                     ),
-                    "Checking the propagations performed by the propagator led to inconsistencies!"
+                    "Checking the propagations performed by the propagator led to
+                inconsistencies!"
                 );
             }
             Err(conflict) => {
@@ -672,6 +754,11 @@ impl State {
 
                 self.statistics.num_conflicts += 1;
                 if let Conflict::Propagator(inner) = &conflict {
+                    trace!(
+                        "propagated conflict by {propagator_id} @ {dl}",
+                        dl = self.get_checkpoint()
+                    );
+
                     pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
                         &self.trailed_values,
                         &self.assignments,
@@ -733,6 +820,7 @@ impl State {
                 ),
                 &mut self.propagators,
                 &mut reason_buffer,
+                entry.predicate,
             );
 
             self.run_checker(
@@ -757,6 +845,8 @@ impl State {
     /// Once the [`State`] is conflicting, then the only operation that is defined is
     /// [`State::restore_to`]. All other operations and queries on the state are unspecified.
     pub fn propagate_to_fixed_point(&mut self) -> Result<(), Conflict> {
+        trace!("Propagation to fixedpoint @ {}", self.get_checkpoint());
+
         // The initial domain events are due to the decision predicate.
         self.notification_engine
             .notify_propagators_about_domain_events(
@@ -852,8 +942,10 @@ impl State {
             ),
             &mut self.propagators,
             reason_buffer,
+            entry.predicate,
         )
     }
+
     /// Get the reason for a predicate being true and store it in `reason_buffer`.
     ///
     /// If the provided [`Predicate`] is propagated by a propagator, then the [`InferenceCode`]
@@ -915,6 +1007,7 @@ impl State {
                 explanation_context,
                 &mut self.propagators,
                 reason_buffer,
+                trail_entry.predicate,
             );
 
             Some(inference_code)

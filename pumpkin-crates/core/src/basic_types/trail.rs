@@ -73,6 +73,11 @@ impl<T> Trail<T> {
     pub(crate) fn pop(&mut self) -> Option<T> {
         self.trail.pop()
     }
+
+    /// Get the trail position of the last predicate assigned at the given decision level.
+    pub(crate) fn get_trail_position_at_decision_level(&self, decision_level: usize) -> usize {
+        self.trail_delimiter[decision_level] - 1
+    }
 }
 
 impl<T> Deref for Trail<T> {

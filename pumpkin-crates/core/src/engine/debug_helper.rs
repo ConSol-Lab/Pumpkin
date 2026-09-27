@@ -3,6 +3,7 @@ use std::fmt::Formatter;
 use std::iter::once;
 
 use log::debug;
+use log::trace;
 
 use super::TrailedValues;
 use super::notifications::NotificationEngine;
@@ -53,6 +54,7 @@ impl DebugHelper {
         propagators: &PropagatorStore,
         notification_engine: &NotificationEngine,
     ) -> bool {
+        trace!("---------- starting fixed point check");
         let mut assignments_clone = assignments.clone();
         let mut trailed_values_clone = trailed_values.clone();
         let mut notification_engine_clone =
@@ -114,6 +116,9 @@ impl DebugHelper {
                 panic!("missed propagations");
             }
         }
+
+        trace!("---------- end fixed point check");
+
         true
     }
 
@@ -151,6 +156,7 @@ impl DebugHelper {
         propagators: &mut PropagatorStore,
         notification_engine: &NotificationEngine,
     ) -> bool {
+        trace!("---------- start propagation check");
         if propagators
             .as_propagator_handle::<NogoodPropagator>(propagator_id)
             .is_some()
@@ -165,11 +171,13 @@ impl DebugHelper {
         for trail_index in num_trail_entries_before..assignments.num_trail_entries() {
             let trail_entry = assignments.get_trail_entry(trail_index);
 
+            let reason_ref = trail_entry
+                .reason
+                .expect("Expected checked propagation to have a reason");
+
             let mut reason = vec![];
             let _ = reason_store.get_or_compute(
-                trail_entry
-                    .reason
-                    .expect("Expected checked propagation to have a reason"),
+                reason_ref,
                 ExplanationContext::without_working_nogood(
                     assignments,
                     trail_index,
@@ -177,11 +185,13 @@ impl DebugHelper {
                 ),
                 propagators,
                 &mut reason,
+                trail_entry.predicate,
             );
 
             result &= Self::debug_propagator_reason(
                 trail_entry.predicate,
                 &reason,
+                reason_store.get_lazy_code(reason_ref),
                 trailed_values,
                 assignments,
                 &propagators[propagator_id],
@@ -189,12 +199,15 @@ impl DebugHelper {
                 notification_engine,
             );
         }
+        trace!("---------- end propagation check");
         result
     }
 
+    #[allow(clippy::too_many_arguments, reason = "Should be refactored")]
     fn debug_propagator_reason(
         propagated_predicate: Predicate,
         reason: &[Predicate],
+        code: Option<u64>,
         trailed_values: &TrailedValues,
         assignments: &Assignments,
         propagator: &dyn Propagator,
@@ -261,7 +274,8 @@ impl DebugHelper {
                     &mut notification_engine_clone,
                     propagator_id,
                 );
-                let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
+                let debug_propagation_status_cp =
+                    propagator.propagate_from_scratch_for_code(code, context);
 
                 // Note that it could be the case that the propagation leads to conflict, in this
                 // case it should be the result of a propagation (i.e. an EmptyDomain)
@@ -376,7 +390,8 @@ impl DebugHelper {
                         &mut notification_engine_clone,
                         propagator_id,
                     );
-                    let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
+                    let debug_propagation_status_cp =
+                        propagator.propagate_from_scratch_for_code(code, context);
 
                     // We break if an error was found or if there were no more propagations (i.e.
                     // fixpoint was reached)

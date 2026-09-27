@@ -174,6 +174,15 @@ impl<T: HasAssignments> ReadDomains for T {
         self.assignments().evaluate_predicate(predicate)
     }
 
+    fn evaluate_predicate_at_trail_position(
+        &self,
+        predicate: Predicate,
+        trail_position: usize,
+    ) -> Option<bool> {
+        self.assignments()
+            .evaluate_predicate_at_trail_position(predicate, trail_position)
+    }
+
     fn evaluate_literal(&self, literal: Literal) -> Option<bool> {
         self.evaluate_predicate(literal.get_true_predicate())
     }
@@ -281,14 +290,5 @@ impl<T: HasAssignments> ReadDomains for T {
 
     fn number_of_domains(&self) -> u32 {
         self.assignments().num_domains()
-    }
-
-    fn evaluate_predicate_at_trail_position(
-        &self,
-        predicate: Predicate,
-        trail_position: usize,
-    ) -> Option<bool> {
-        self.assignments()
-            .evaluate_predicate_at_trail_position(predicate, trail_position)
     }
 }

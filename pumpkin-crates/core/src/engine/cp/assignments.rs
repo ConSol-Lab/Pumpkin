@@ -861,6 +861,11 @@ impl Assignments {
             })
             .unwrap_or_else(|| panic!("could not find a reason for predicate {predicate}"))
     }
+
+    /// Get the last trail position that is on the given checkpoint.
+    pub(crate) fn get_trail_position_at_checkpoint(&self, checkpoint: usize) -> usize {
+        self.trail.get_trail_position_at_decision_level(checkpoint)
+    }
 }
 
 #[derive(Clone, Debug)]

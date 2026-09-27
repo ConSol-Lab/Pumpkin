@@ -169,6 +169,12 @@ impl NotificationEngine {
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
+        // If the predicate is trivially true, then the propagator will never be notified.
+        // Therefore, it makes no sense to track it.
+        if assignments.is_initial_bound(self.get_predicate(predicate_id)) {
+            return;
+        }
+
         self.watch_list_predicate_id
             .accomodate(predicate_id, vec![]);
         self.watch_list_predicate_id[predicate_id].push(propagator_id);
@@ -177,11 +183,36 @@ impl NotificationEngine {
             .track_predicate(predicate_id, trailed_values, assignments);
     }
 
+    /// Tracks the truth value of `predicate` without notifying any propagator about it, and
+    /// returns its [`PredicateId`].
+    pub(crate) fn track_predicate(
+        &mut self,
+        predicate: Predicate,
+        trailed_values: &mut TrailedValues,
+        assignments: &Assignments,
+    ) -> PredicateId {
+        let predicate_id = self.get_id(predicate);
+
+        // As in `watch_predicate_id`, the initial bounds are not tracked.
+        if !assignments.is_initial_bound(predicate) {
+            self.predicate_notifier
+                .track_predicate(predicate_id, trailed_values, assignments);
+        }
+
+        predicate_id
+    }
+
     pub(crate) fn unwatch_predicate(
         &mut self,
         predicate_id: PredicateId,
         propagator_to_unwatch: PropagatorId,
+        assignments: &Assignments,
     ) {
+        // If the predicate is an initial bound, then it was never watched to begin with.
+        if assignments.is_initial_bound(self.get_predicate(predicate_id)) {
+            return;
+        }
+
         let watch_list = &mut self.watch_list_predicate_id[predicate_id];
 
         let index = watch_list
@@ -401,6 +432,8 @@ impl NotificationEngine {
                     let enqueue_decision =
                         propagator.notify_predicate_id_satisfied(context.reborrow(), predicate_id);
 
+                    // trace!("notifying {propagator_id:?}");
+
                     if enqueue_decision == EnqueueDecision::Enqueue {
                         propagator_queue.enqueue_propagator(propagator_id, propagator.priority());
                     }
@@ -420,6 +453,8 @@ impl NotificationEngine {
         trailed_values: &mut TrailedValues,
     ) {
         let context = NotificationContext::new(trailed_values, assignments);
+
+        // trace!("notifying {propagator_id:?}");
 
         let enqueue_decision = propagators[propagator_id].notify(context, local_id, event.into());
 

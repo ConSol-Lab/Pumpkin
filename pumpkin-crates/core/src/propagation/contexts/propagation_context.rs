@@ -1,4 +1,5 @@
 use enumset::EnumSet;
+use log::trace;
 
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
@@ -138,8 +139,11 @@ impl<'a> PropagationContext<'a> {
 
     /// Stop being enqueued for the given predicate.
     pub fn unregister_predicate(&mut self, predicate_id: PredicateId) {
-        self.notification_engine
-            .unwatch_predicate(predicate_id, self.propagator_id);
+        self.notification_engine.unwatch_predicate(
+            predicate_id,
+            self.propagator_id,
+            self.assignments,
+        );
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`].
@@ -173,6 +177,13 @@ impl<'a> PropagationContext<'a> {
     /// Get the [`Predicate`] for a given [`PredicateId`].
     pub fn get_predicate(&mut self, predicate_id: PredicateId) -> Predicate {
         self.notification_engine.get_predicate(predicate_id)
+    }
+
+    /// Tracks the truth value of `predicate`, so that [`Self::is_predicate_id_satisfied`] can be
+    /// used for it, without the propagator being notified about it.
+    pub(crate) fn track_predicate(&mut self, predicate: Predicate) -> PredicateId {
+        self.notification_engine
+            .track_predicate(predicate, self.trailed_values, self.assignments)
     }
 
     /// Get a [`PredicateId`] for the given [`Predicate`].
@@ -256,6 +267,14 @@ impl PropagationContext<'_> {
             Some(slot.reason_ref()),
             self.notification_engine,
         );
+
+        if !matches!(modification_result, Ok(false)) {
+            trace!(
+                "propagated {predicate} @ {dl} by {propagator:?} with result {modification_result:?}",
+                dl = self.assignments.get_checkpoint(),
+                propagator = self.propagator_id,
+            );
+        }
 
         match modification_result {
             Ok(false) => Ok(()),

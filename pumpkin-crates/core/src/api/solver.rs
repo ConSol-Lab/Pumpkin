@@ -25,6 +25,7 @@ use crate::engine::termination::TerminationCondition;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
+use crate::hypercube_linear::HypercubeLinearConstructor;
 use crate::optimisation::OptimisationProcedure;
 #[cfg(doc)]
 use crate::optimisation::linear_sat_unsat::LinearSatUnsat;
@@ -596,6 +597,12 @@ impl Solver {
     {
         self.satisfaction_solver.add_propagator(constructor)
     }
+
+    /// Adds a hypercube linear constraint, as a propagator on its own or as a member of the
+    /// single store for hypercube linears, depending on the solver options.
+    pub(crate) fn add_hypercube_linear(&mut self, constructor: HypercubeLinearConstructor) {
+        self.satisfaction_solver.add_hypercube_linear(constructor)
+    }
 }
 
 /// Default brancher implementation
@@ -603,6 +610,16 @@ impl Solver {
     /// Creates an instance of the [`DefaultBrancher`].
     pub fn default_brancher(&self) -> DefaultBrancher {
         DefaultBrancher::default_over_all_variables(self.satisfaction_solver.assignments())
+    }
+
+    pub fn backup_brancher(&self) -> impl Brancher + 'static {
+        use crate::branching::value_selection::InDomainMin;
+        use crate::branching::variable_selection::InputOrder;
+
+        IndependentVariableValueBrancher::new(
+            InputOrder::new2(self.satisfaction_solver.assignments().get_domains()),
+            InDomainMin,
+        )
     }
 }
 

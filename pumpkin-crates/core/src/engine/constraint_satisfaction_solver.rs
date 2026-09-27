@@ -5,6 +5,7 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use log::trace;
 #[allow(
     clippy::disallowed_types,
     reason = "any rand generator is a valid implementation of Random"
@@ -37,6 +38,8 @@ use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::engine::State;
 use crate::engine::predicates::predicate::Predicate;
+use crate::hypercube_linear::HypercubeLinearConstructor;
+use crate::hypercube_linear::HypercubeLinearPropagation;
 use crate::options::LearningOptions;
 use crate::proof::ConstraintTag;
 use crate::proof::FinalizingContext;
@@ -160,6 +163,8 @@ pub enum ConflictResolverType {
     /// at the first point where extended nogood propagation can take place, it stops when
     /// extended nogood propagation can adjust a bound upon learning.
     BoundsExtendedCPIP,
+    /// Conflict analysis by hypercube linear resolution.
+    HypercubeLinear,
 }
 
 /// Options for the [`Solver`] which determine how it behaves.
@@ -176,6 +181,10 @@ pub struct SatisfactionSolverOptions {
     /// The number of MBs which are preallocated by the nogood propagator.
     pub memory_preallocated: usize,
     pub analysis_mode: ConflictResolverType,
+    /// How hypercube linear propagators propagate their hypercube.
+    pub hypercube_linear_propagation: HypercubeLinearPropagation,
+    /// True if all hypercube linears are held by a single propagator.
+    pub hypercube_linear_aggregate: bool,
 }
 
 impl Default for SatisfactionSolverOptions {
@@ -187,6 +196,8 @@ impl Default for SatisfactionSolverOptions {
             learning_options: LearningOptions::default(),
             memory_preallocated: 50,
             analysis_mode: ConflictResolverType::default(),
+            hypercube_linear_propagation: HypercubeLinearPropagation::default(),
+            hypercube_linear_aggregate: false,
         }
     }
 }
@@ -218,7 +229,9 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn complete_proof(&mut self) {
-        if !self.internal_parameters.proof_log.is_logging_proof() {
+        if !self.internal_parameters.proof_log.is_logging_proof()
+            || self.internal_parameters.analysis_mode == ConflictResolverType::HypercubeLinear
+        {
             return;
         }
 
@@ -269,6 +282,8 @@ impl ConstraintSatisfactionSolver {
 impl ConstraintSatisfactionSolver {
     pub fn new(solver_options: SatisfactionSolverOptions) -> Self {
         let mut state = State::default();
+        state.hypercube_linear_propagation = solver_options.hypercube_linear_propagation;
+        state.hypercube_linear_aggregate = solver_options.hypercube_linear_aggregate;
         let handle = state.add_propagator(NogoodPropagatorConstructor::new(
             (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
             solver_options.learning_options,
@@ -280,6 +295,7 @@ impl ConstraintSatisfactionSolver {
                     PropagationMode::ExtendedNogoodPropagation
                 }
                 ConflictResolverType::NoLearning => PropagationMode::default(),
+                ConflictResolverType::HypercubeLinear => PropagationMode::UnitPropagation,
             },
             solver_options.learning_options.nogood_propagator_priority,
         ));
@@ -580,6 +596,7 @@ impl ConstraintSatisfactionSolver {
                     Ok(()) => {}
                 }
             } else {
+                trace!("Conflict detected @ {}", self.state.get_checkpoint());
                 if self.get_checkpoint() == 0 {
                     self.complete_proof();
                     self.solver_state.declare_infeasible();
@@ -639,6 +656,12 @@ impl ConstraintSatisfactionSolver {
         };
 
         self.new_checkpoint();
+
+        trace!(
+            "Branching {} @ {}",
+            decision_predicate,
+            self.state.get_checkpoint()
+        );
 
         // Note: This also checks that the decision predicate is not already true. That is a
         // stronger check than the `.expect(...)` used later on when handling the result of
@@ -881,6 +904,10 @@ impl ConstraintSatisfactionSolver {
         Constructor::PropagatorImpl: 'static,
     {
         self.state.add_propagator(constructor)
+    }
+
+    pub(crate) fn add_hypercube_linear(&mut self, constructor: HypercubeLinearConstructor) {
+        let _ = self.state.add_hypercube_linear(constructor);
     }
 
     pub fn post_predicate(&mut self, predicate: Predicate) -> Result<(), ConstraintOperationError> {

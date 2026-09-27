@@ -1,5 +1,6 @@
 //! Compile constraints into CP propagators
 
+use std::num::NonZero;
 use std::rc::Rc;
 
 use pumpkin_propagators::disjunctive::ArgDisjunctiveTask;
@@ -17,6 +18,18 @@ use crate::flatzinc::FlatZincError;
 use crate::flatzinc::FlatZincOptions;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::compiler::context::Set;
+
+macro_rules! check_parameters {
+    ($exprs:ident, $num_parameters:expr, $name:expr) => {
+        if $exprs.len() != $num_parameters {
+            return Err(FlatZincError::IncorrectNumberOfArguments {
+                constraint_id: $name.into(),
+                expected: $num_parameters,
+                actual: $exprs.len(),
+            });
+        }
+    };
+}
 
 pub(crate) fn run(
     _: &FlatZincAst,
@@ -104,46 +117,6 @@ pub(crate) fn run(
                 pumpkin_constraints::binary_not_equals,
             )?,
 
-            "int_lin_eq_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_eq_imp",
-                constraint_tag,
-                pumpkin_constraints::equals,
-            )?,
-            "int_lin_ge_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_ge_imp",
-                constraint_tag,
-                pumpkin_constraints::greater_than_or_equals,
-            )?,
-            "int_lin_gt_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_gt_imp",
-                constraint_tag,
-                pumpkin_constraints::greater_than,
-            )?,
-            "int_lin_le_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_le_imp",
-                constraint_tag,
-                pumpkin_constraints::less_than_or_equals,
-            )?,
-            "int_lin_lt_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_lt_imp",
-                constraint_tag,
-                pumpkin_constraints::less_than,
-            )?,
             "int_lin_ne_imp" => compile_int_lin_imp_predicate(
                 context,
                 exprs,
@@ -169,38 +142,132 @@ pub(crate) fn run(
                 constraint_tag,
                 pumpkin_constraints::not_equals,
             )?,
-            "int_lin_le" => compile_int_lin_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_le",
-                constraint_tag,
-                pumpkin_constraints::less_than_or_equals,
-            )?,
-            "int_lin_le_reif" => compile_reified_int_lin_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_le_reif",
-                constraint_tag,
-                pumpkin_constraints::less_than_or_equals,
-            )?,
-            "int_lin_eq" => compile_int_lin_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_eq",
-                constraint_tag,
-                pumpkin_constraints::equals,
-            )?,
-            "int_lin_eq_reif" => compile_reified_int_lin_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_eq_reif",
-                constraint_tag,
-                pumpkin_constraints::equals,
-            )?,
+            "int_lin_le" => {
+                if !options.use_hypercube_linear {
+                    compile_int_lin_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_le",
+                        constraint_tag,
+                        pumpkin_constraints::less_than_or_equals,
+                    )?
+                } else {
+                    compile_int_lin_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_le",
+                        constraint_tag,
+                        hl_for_lin_le,
+                    )?
+                }
+            }
+            "int_lin_le_imp" => {
+                if !options.use_hypercube_linear {
+                    compile_int_lin_imp_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_le_imp",
+                        constraint_tag,
+                        pumpkin_constraints::less_than_or_equals,
+                    )?
+                } else {
+                    compile_int_lin_imp_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_le_imp",
+                        constraint_tag,
+                        hl_for_lin_le,
+                    )?
+                }
+            }
+            "int_lin_le_reif" => {
+                if !options.use_hypercube_linear {
+                    compile_reified_int_lin_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_le_reif",
+                        constraint_tag,
+                        pumpkin_constraints::less_than_or_equals,
+                    )?
+                } else {
+                    compile_reified_int_lin_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_le_reif",
+                        constraint_tag,
+                        hl_for_lin_le,
+                    )?
+                }
+            }
+            "int_lin_eq" => {
+                if !options.use_hypercube_linear {
+                    compile_int_lin_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_eq",
+                        constraint_tag,
+                        pumpkin_constraints::equals,
+                    )?
+                } else {
+                    compile_int_lin_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_eq",
+                        constraint_tag,
+                        hl_for_lin_eq,
+                    )?
+                }
+            }
+            "int_lin_eq_imp" => {
+                if !options.use_hypercube_linear {
+                    compile_int_lin_imp_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_eq_imp",
+                        constraint_tag,
+                        pumpkin_constraints::equals,
+                    )?
+                } else {
+                    compile_int_lin_imp_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_eq_imp",
+                        constraint_tag,
+                        hl_for_lin_eq,
+                    )?
+                }
+            }
+            "int_lin_eq_reif" => {
+                if !options.use_hypercube_linear {
+                    compile_reified_int_lin_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_eq_reif",
+                        constraint_tag,
+                        pumpkin_constraints::equals,
+                    )?
+                } else {
+                    compile_reified_int_lin_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_eq_reif",
+                        constraint_tag,
+                        hl_for_lin_eq,
+                    )?
+                }
+            }
             "int_ne" => compile_binary_int_predicate(
                 context,
                 exprs,
@@ -349,18 +416,6 @@ pub(crate) fn run(
     }
 
     Ok(())
-}
-
-macro_rules! check_parameters {
-    ($exprs:ident, $num_parameters:expr, $name:expr) => {
-        if $exprs.len() != $num_parameters {
-            return Err(FlatZincError::IncorrectNumberOfArguments {
-                constraint_id: $name.into(),
-                expected: $num_parameters,
-                actual: $exprs.len(),
-            });
-        }
-    };
 }
 
 fn compile_disjunctive_strict(
@@ -997,4 +1052,42 @@ fn create_table(flat_table: Rc<[i32]>, num_variables: usize) -> Vec<Vec<i32>> {
     }
 
     table
+}
+
+fn hl_for_lin_le(
+    terms: Box<[AffineView<DomainId>]>,
+    rhs: i32,
+    constraint_tag: ConstraintTag,
+) -> impl NegatableConstraint {
+    pumpkin_core::hypercube_linear::hypercube_linear_le(
+        std::iter::empty(),
+        terms.into_iter().map(|view| {
+            assert_eq!(view.offset, 0);
+
+            let weight = NonZero::new(view.scale).expect("zero weight in int_lin_le_imp");
+
+            (weight, view.inner)
+        }),
+        rhs,
+        constraint_tag,
+    )
+}
+
+fn hl_for_lin_eq(
+    terms: Box<[AffineView<DomainId>]>,
+    rhs: i32,
+    constraint_tag: ConstraintTag,
+) -> impl NegatableConstraint {
+    pumpkin_core::hypercube_linear::hypercube_linear_eq(
+        std::iter::empty(),
+        terms.into_iter().map(|view| {
+            assert_eq!(view.offset, 0);
+
+            let weight = NonZero::new(view.scale).expect("zero weight in int_lin_le_imp");
+
+            (weight, view.inner)
+        }),
+        rhs,
+        constraint_tag,
+    )
 }

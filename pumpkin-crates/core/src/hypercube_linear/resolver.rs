@@ -1,0 +1,1925 @@
+use std::borrow::Cow;
+use std::cell::RefCell;
+use std::num::NonZero;
+use std::rc::Rc;
+
+use itertools::Itertools;
+use log::debug;
+use log::trace;
+
+use crate::basic_types::StoredConflictInfo;
+use crate::conflict_resolving::ConflictAnalysisContext;
+use crate::conflict_resolving::ConflictResolver;
+use crate::containers::HashMap;
+use crate::create_statistics_struct;
+use crate::hypercube_linear::BoundComparator;
+use crate::hypercube_linear::BoundPredicate;
+use crate::hypercube_linear::Hypercube;
+use crate::hypercube_linear::HypercubeLinearConstructor;
+use crate::hypercube_linear::HypercubeLinearPropagation;
+use crate::hypercube_linear::LinearInequality;
+use crate::hypercube_linear::Trace;
+use crate::hypercube_linear::conflict_state::ConflictState;
+use crate::hypercube_linear::conflict_state::predicate_applies_to_term;
+use crate::hypercube_linear::explanation::HypercubeLinear;
+use crate::hypercube_linear::explanation::HypercubeLinearExplanation;
+use crate::hypercube_linear::linear::TermUpperBound;
+use crate::hypercube_linear::linear::term_upper_bound;
+use crate::hypercube_linear::propagator::extended_inferences;
+use crate::hypercube_linear::resh_strategy::ResHStrategy;
+use crate::hypercube_linear::resh_strategy::StandardResH;
+use crate::hypercube_linear::trail_view::TrailView;
+use crate::hypercube_linear::trail_view::affine_lower_bound_at;
+use crate::hypercube_linear::trail_view::affine_lower_bound_predicate_at;
+use crate::hypercube_linear::trail_view::affine_upper_bound_at;
+use crate::predicate;
+use crate::predicates::Predicate;
+#[cfg(feature = "hl-checks")]
+use crate::proof::ConstraintTag;
+use crate::propagation::ExplanationContext;
+use crate::pumpkin_assert_simple;
+use crate::state::Conflict;
+use crate::state::EmptyDomainConflict;
+use crate::state::State;
+use crate::statistics::Statistic;
+use crate::statistics::StatisticLogger;
+use crate::variables::AffineView;
+use crate::variables::DomainId;
+use crate::variables::TransformableVariable;
+
+create_statistics_struct!(ResolverStatistics {
+    num_successful_fourier_resolutions: usize,
+    num_integer_overflow_errors: usize,
+    num_conflicts: usize,
+    num_learned_nogoods: usize,
+    num_learned_hls: usize,
+    num_propositional_resolutions: usize,
+    num_skipped_propositional_resolutions: usize,
+    num_resolutions_on_decisions: usize,
+});
+
+#[derive(Clone, Debug)]
+pub struct HypercubeLinearResolver {
+    state: ConflictState,
+    prop_resolver: Box<dyn ResHStrategy>,
+
+    /// The statistics gathered by the resolver.
+    statistics: ResolverStatistics,
+
+    /// True if the names are written to the trace, false if not.
+    logged_variable_names: bool,
+
+    /// True if the reason is used without tightening when Fourier resolution with it already
+    /// yields a conflicting constraint; false if the reason is always tightened.
+    skip_unneeded_weakening: bool,
+
+    /// How the learned constraints are propagated, which determines the decision level at which
+    /// they propagate.
+    propagation: HypercubeLinearPropagation,
+
+    /// All learned constraints with their constraint tag.
+    ///
+    /// Used to detect when re-learning the same constraint again.
+    #[cfg(feature = "hl-checks")]
+    learned_constraints: HashMap<(Hypercube, LinearInequality), ConstraintTag>,
+}
+
+impl HypercubeLinearResolver {
+    pub fn new(trace: Trace) -> Self {
+        let proof_file = Rc::new(RefCell::new(trace));
+        Self {
+            state: ConflictState::new(Rc::clone(&proof_file)),
+            prop_resolver: Box::new(StandardResH::default()),
+            statistics: Default::default(),
+            logged_variable_names: false,
+            skip_unneeded_weakening: false,
+            propagation: HypercubeLinearPropagation::default(),
+            #[cfg(feature = "hl-checks")]
+            learned_constraints: Default::default(),
+        }
+    }
+
+    /// Sets whether the reason is used without tightening when Fourier resolution with it
+    /// already yields a conflicting constraint. By default, the reason is always tightened.
+    pub fn with_skip_unneeded_weakening(mut self, skip_unneeded_weakening: bool) -> Self {
+        self.skip_unneeded_weakening = skip_unneeded_weakening;
+        self
+    }
+}
+
+impl Default for HypercubeLinearResolver {
+    fn default() -> Self {
+        HypercubeLinearResolver::new(Trace::discard())
+    }
+}
+
+impl ConflictResolver for HypercubeLinearResolver {
+    fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) {
+        if !self.logged_variable_names {
+            self.state
+                .proof_file
+                .borrow_mut()
+                .write_variables(context.state);
+            self.logged_variable_names = true;
+        }
+
+        debug!("Resolving conflict with hypercube linear resolution");
+
+        self.statistics.num_conflicts += 1;
+
+        let conflict = match context.solver_state.get_conflict_info() {
+            StoredConflictInfo::Propagator(conflict) => conflict.into(),
+            StoredConflictInfo::EmptyDomain(conflict) => conflict.into(),
+            _ => unreachable!("can only resolve empty domain or propagator conflicts"),
+        };
+
+        self.resolve_conflict_impl(context, conflict);
+    }
+
+    fn log_statistics(&self, logger: StatisticLogger) {
+        self.statistics.log(logger.clone());
+        self.prop_resolver.log_statistics(logger);
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct LearnedHypercubeLinear {
+    pub(crate) hypercube: Hypercube,
+    pub(crate) linear: LinearInequality,
+    propagates_at: usize,
+}
+
+impl HypercubeLinearResolver {
+    fn resolve_conflict_impl(&mut self, context: &mut ConflictAnalysisContext, conflict: Conflict) {
+        self.propagation = context.state.hypercube_linear_propagation;
+        let learned_constraint = self.learn_hypercube_linear(context.state, conflict);
+        let constraint_tag = context.state.new_constraint_tag();
+
+        #[cfg(feature = "hl-checks")]
+        self.assert_new_constraint(learned_constraint.clone(), constraint_tag);
+
+        debug!(
+            "Learned {} -> {}",
+            learned_constraint.hypercube, learned_constraint.linear,
+        );
+
+        self.state.proof_file.borrow_mut().deduction(
+            constraint_tag,
+            learned_constraint.hypercube.iter_predicates(),
+            learned_constraint.linear.terms(),
+            learned_constraint.linear.bound(),
+            context.state.get_checkpoint(),
+            learned_constraint.propagates_at,
+        );
+
+        context.restore_to(learned_constraint.propagates_at);
+
+        let propagator_id = context
+            .state
+            .add_hypercube_linear(HypercubeLinearConstructor {
+                hypercube: learned_constraint.hypercube,
+                linear: learned_constraint.linear,
+                constraint_tag,
+            });
+
+        debug!(
+            "  with ID = {:?} and tag = {constraint_tag:?}",
+            propagator_id,
+        );
+    }
+
+    /// Learns a conflicting hypercube linear that would have propagated at an earlier checkpoint.
+    fn learn_hypercube_linear(
+        &mut self,
+        state: &mut State,
+        conflict: Conflict,
+    ) -> LearnedHypercubeLinear {
+        let (initial_predicates, conflicting_linear) =
+            self.collect_initial_conflict(state, conflict);
+        self.run_resolution(state, initial_predicates, conflicting_linear)
+    }
+
+    /// Set up the initial conflict from `initial_predicates` and `conflicting_linear`, then run
+    /// the resolution loop.
+    ///
+    /// For empty-domain conflicts triggered by a hypercube linear, `conflicting_linear` contains
+    /// the linear part; [`Self::explain_linear`] seeds `predicates_to_explain` with the linear
+    /// term predicates at the conflict DL before the main loop starts.
+    ///
+    /// The returned [`LearnedHypercubeLinear`] contains the learned `(hypercube, linear)` pair.
+    pub(crate) fn run_resolution(
+        &mut self,
+        trail: &mut impl TrailView,
+        initial_predicates: impl IntoIterator<Item = Predicate>,
+        conflicting_linear: LinearInequality,
+    ) -> LearnedHypercubeLinear {
+        assert!(self.state.hypercube_predicates_on_conflict_dl.is_empty());
+        assert!(self.state.predicates_to_explain.is_empty());
+
+        self.state.conflicting_linear = conflicting_linear;
+
+        // Seed predicates_to_explain with linear term predicates at the conflict DL.
+        // For hypercube-linear empty-domain conflicts this replaces the manual loop that
+        // was previously in collect_initial_conflict_from_empty_domain. For trivially-false
+        // linears (propagator / nogood conflicts) this is a no-op.
+        let conflict_tp = trail.current_trail_position();
+        let linear_for_explain = self.state.conflicting_linear.clone();
+        self.state
+            .explain_linear(trail, &linear_for_explain, conflict_tp);
+
+        for predicate in initial_predicates {
+            self.state.add_hypercube_predicate(trail, predicate);
+        }
+
+        self.run_resolution_loop(trail)
+    }
+
+    fn run_resolution_loop(&mut self, trail: &mut impl TrailView) -> LearnedHypercubeLinear {
+        let mut trail_position = usize::MAX;
+
+        loop {
+            trace!("--------- new iteration in conflict analysis",);
+
+            trace!(
+                "conflict constraint: {} -> {}",
+                self.state
+                    .working_hypercube
+                    .iter_predicates()
+                    .chain(self.state.hypercube_predicates_on_conflict_dl.iter())
+                    .format(" & "),
+                self.state.conflicting_linear,
+            );
+
+            trace!(
+                "to explain: {}",
+                self.state
+                    .predicates_to_explain
+                    .iter()
+                    .map(|p| format!("{p} @ {}", trail.trail_position_of_predicate(p).unwrap()))
+                    .format(", "),
+            );
+
+            #[cfg(feature = "hl-checks")]
+            self.assert_loop_invariants(trail, trail_position);
+
+            if let Some(dl) = self.will_propagate_on_previous_dl(trail) {
+                return self.extract_learned_hypercube_linear(trail, dl);
+            }
+
+            let pivot = self
+                .state
+                .predicates_to_explain
+                .pop()
+                .expect("there are at least two predicates to explain");
+
+            trail_position = {
+                let tp = trail
+                    .trail_position_of_predicate(pivot)
+                    .expect("all predicates are true");
+
+                assert!(
+                    trail_position >= tp,
+                    "last_tp = {trail_position}, tp = {tp}"
+                );
+
+                tp
+            };
+
+            trace!("applying HL resolution on {pivot} @ {trail_position}");
+            trace!(
+                "  trail predicate @ {trail_position} = {}",
+                trail.predicate_at_trail_position(trail_position)
+            );
+
+            if !self.state.contributes_to_conflict(pivot) {
+                trace!("  => no longer contributes, skipping");
+                continue;
+            }
+
+            if trail.is_decision(trail_position) {
+                self.resolve_on_decision(trail, trail_position, pivot);
+                continue;
+            }
+
+            self.state.proof_file.borrow_mut().intermediate_deduction(
+                self.state
+                    .working_hypercube
+                    .iter_predicates()
+                    .chain(self.state.hypercube_predicates_on_conflict_dl.iter()),
+                self.state.conflicting_linear.terms(),
+                self.state.conflicting_linear.bound(),
+            );
+
+            let explanation = self.explain(trail, pivot);
+            trace!("explanation = {explanation}");
+
+            self.resolve(trail, trail_position, pivot, explanation);
+            self.simplify_conflict(trail, trail_position);
+        }
+    }
+
+    /// Handles a pivot that is implied by the decision at `trail_position`, which has no reason.
+    ///
+    /// This happens when the conflict holds several predicates over the decision variable that
+    /// together do not propagate at an earlier checkpoint, e.g. `[x != 3]` and `[x <= 7]` implied
+    /// by the decision `[x <= 2]`, or both bounds implied by the decision `[x == v]`. The
+    /// predicates at the conflict checkpoint that the decision implies are replaced by the
+    /// decision itself. The resulting hypercube implies the old one, so the constraint is
+    /// weaker and still implied. The decision is then the only predicate over its domain at the
+    /// conflict checkpoint, as in a nogood that has the decision as its unique implication
+    /// point.
+    fn resolve_on_decision(
+        &mut self,
+        trail: &impl TrailView,
+        trail_position: usize,
+        pivot: Predicate,
+    ) {
+        let decision = trail.predicate_at_trail_position(trail_position);
+        trace!("  => {pivot} is implied by the decision {decision}");
+        pumpkin_assert_simple!(decision.implies(pivot));
+
+        self.statistics.num_resolutions_on_decisions += 1;
+
+        // A pivot that contributes to the linear is first moved into the hypercube. The pivot is
+        // the current bound of its domain, so this does not change the slack.
+        let pivot_contributes_to_linear = self
+            .state
+            .conflicting_linear
+            .term_for_domain(pivot.get_domain())
+            .is_some_and(|term| predicate_applies_to_term(pivot, term));
+        if pivot_contributes_to_linear && let Some(bound) = BoundPredicate::new(pivot) {
+            self.state
+                .weaken_conflict_to_zero(trail, trail_position, bound);
+        }
+
+        self.state
+            .hypercube_predicates_on_conflict_dl
+            .retain(|p| !decision.implies(p));
+        self.state
+            .predicates_to_explain
+            .retain(|p| !decision.implies(p));
+        self.state
+            .hypercube_predicates_on_conflict_dl
+            .push(decision, trail);
+    }
+
+    /// Simplify the conflicting hypercube linear given any equalities in the conflicting hypercube.
+    fn simplify_conflict(&mut self, trail: &impl TrailView, trail_position: usize) {
+        let equality_predicates = self
+            .state
+            .working_hypercube
+            .iter_predicates()
+            .chain(self.state.hypercube_predicates_on_conflict_dl.iter())
+            .filter_map(|predicate| {
+                if predicate.is_equality_predicate() {
+                    Some((predicate.get_domain(), predicate.get_right_hand_side()))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        for (domain, value) in equality_predicates {
+            let Some(term) = self.state.conflicting_linear.term_for_domain(domain) else {
+                continue;
+            };
+
+            let comparator = match term.scale.is_positive() {
+                true => BoundComparator::LowerBound,
+                false => BoundComparator::UpperBound,
+            };
+
+            self.state.weaken_conflict_to_zero(
+                trail,
+                trail_position,
+                BoundPredicate {
+                    domain,
+                    comparator,
+                    value,
+                },
+            );
+        }
+    }
+
+    fn resolve(
+        &mut self,
+        trail: &mut impl TrailView,
+        trail_position: usize,
+        pivot: Predicate,
+        explanation: HypercubeLinearExplanation,
+    ) {
+        if let HypercubeLinearExplanation::Proper(hl) = &explanation {
+            match self.fourier_resolve(trail, trail_position, pivot, hl) {
+                Ok(()) => {
+                    self.statistics.num_successful_fourier_resolutions += 1;
+
+                    #[cfg(feature = "hl-checks")]
+                    assert!(
+                        self.state
+                            .conflicting_linear
+                            .term_for_domain(pivot.get_domain())
+                            .is_none(),
+                        "fourier resolve succeeded but pivot domain still in conflicting linear"
+                    );
+                }
+                Err(FourierError::NoVariableElimination) => {}
+                Err(FourierError::ResultOfEliminationTriviallySatisfiable) => {
+                    panic!("should this happen?")
+                }
+                Err(FourierError::IntegerOverflow) => {
+                    self.statistics.num_integer_overflow_errors += 1;
+                }
+            }
+        }
+
+        self.propositional_resolve(trail, trail_position, pivot, explanation);
+    }
+
+    fn propositional_resolve(
+        &mut self,
+        trail: &mut impl TrailView,
+        trail_position: usize,
+        pivot: Predicate,
+        mut explanation: HypercubeLinearExplanation,
+    ) {
+        trace!("applying propositional resolution on {pivot}");
+
+        // No propositional resolution happens when the following are true:
+        // - the pivot does not imply a predicate in the current conflict hypercube,
+        // - the pivot does not contribute to the negative slack of the linear.
+
+        let pivot_implies_predicate_in_conflict = self
+            .state
+            .hypercube_predicates_on_conflict_dl
+            .iter()
+            .any(|p| {
+                let p_tp = trail
+                    .trail_position_of_predicate(p)
+                    .expect("all hypercube is satisfied");
+
+                pivot.implies(p) && p_tp == trail_position
+            });
+
+        let pivot_relevant_for_linear_slack = self
+            .state
+            .conflicting_linear
+            .terms()
+            .any(|t| predicate_applies_to_term(pivot, t));
+
+        if !pivot_implies_predicate_in_conflict && !pivot_relevant_for_linear_slack {
+            trace!("  => skipping propositional resolution");
+            self.statistics.num_skipped_propositional_resolutions += 1;
+
+            #[cfg(feature = "hl-checks")]
+            assert!(
+                !self
+                    .state
+                    .hypercube_predicates_on_conflict_dl
+                    .contains(pivot),
+                "skipped propositional resolution but pivot still in conflict DL heap"
+            );
+
+            return;
+        }
+
+        let pivot_as_bound = BoundPredicate::new(pivot);
+
+        // Both the conflict and the explanation are weakened on the pivot. This ensures
+        // the propositional resolution removes all contribution of the pivot to the
+        // conflict in the linear inequalities.
+        if let Some(bound_predicate) = pivot_as_bound {
+            self.state
+                .hypercube_predicates_on_conflict_dl
+                .push(bound_predicate.into(), trail);
+            self.state
+                .weaken_conflict_to_zero(trail, trail_position, bound_predicate);
+
+            trace!(
+                "weakened conflict constraint: {} -> {}",
+                self.state
+                    .working_hypercube
+                    .iter_predicates()
+                    .chain(self.state.hypercube_predicates_on_conflict_dl.iter())
+                    .format(" & "),
+                self.state.conflicting_linear,
+            );
+
+            explanation = match std::mem::take(&mut explanation).weaken_to_zero(!bound_predicate) {
+                Ok(Some(explanation)) => explanation,
+                Ok(None) => panic!("cannot weaken to trivially satisfiable"),
+                // If the weakened bound does not fit in an i32, the nogood explanation is used.
+                Err(explanation) => HypercubeLinearExplanation::Conjunction(
+                    explanation.into_nogood(trail, pivot, trail_position),
+                ),
+            };
+
+            trace!("weakened explanation: {explanation}");
+        }
+
+        self.statistics.num_propositional_resolutions += 1;
+        self.state
+            .hypercube_predicates_on_conflict_dl
+            .retain(|p| !pivot.implies(p));
+
+        #[cfg(feature = "hl-checks")]
+        assert!(
+            !self
+                .state
+                .hypercube_predicates_on_conflict_dl
+                .contains(pivot),
+            "pivot still in conflict DL heap after propositional resolution"
+        );
+
+        self.prop_resolver
+            .apply(&mut self.state, trail, trail_position, pivot, explanation);
+    }
+
+    fn explain(
+        &mut self,
+        trail: &mut impl TrailView,
+        pivot: Predicate,
+    ) -> HypercubeLinearExplanation {
+        let explanation = trail.reason_for(pivot);
+
+        match &explanation {
+            HypercubeLinearExplanation::Proper(hl) => {
+                trace!("explaining with HL");
+                self.state.proof_file.borrow_mut().axiom(
+                    hl.hypercube.iter_predicates(),
+                    hl.linear.terms(),
+                    hl.linear.bound(),
+                );
+            }
+            HypercubeLinearExplanation::Conjunction(predicates) => {
+                trace!("explaining with nogood");
+
+                // Add reason predicates (all except !pivot) to the hypercube.
+                for &predicate in predicates.iter().filter(|&&p| p != !pivot) {
+                    self.state.add_hypercube_predicate(trail, predicate);
+
+                    #[cfg(feature = "hl-checks")]
+                    {
+                        let pivot_tp = trail
+                            .trail_position_of_predicate(pivot)
+                            .expect("pivot is on trail");
+                        let tp = trail
+                            .trail_position_of_predicate(predicate)
+                            .expect("all predicates are true");
+                        assert!(pivot_tp >= tp, "pivot_tp = {pivot_tp}, tp = {tp}");
+                    }
+                }
+
+                self.state
+                    .proof_file
+                    .borrow_mut()
+                    .axiom(predicates.iter().copied(), [], -1);
+            }
+        }
+
+        explanation
+    }
+
+    /// Collects the initial conflict predicates and linear from the given [`Conflict`].
+    ///
+    /// Returns the hypercube predicates and the conflicting linear. For empty-domain conflicts
+    /// triggered by a hypercube linear, only the hypercube predicates are returned here; the
+    /// linear term predicates are seeded into [`Self::predicates_to_explain`] by
+    /// [`Self::run_resolution`] via [`Self::explain_linear`].
+    fn collect_initial_conflict(
+        &self,
+        state: &mut State,
+        conflict: Conflict,
+    ) -> (Vec<Predicate>, LinearInequality) {
+        match conflict {
+            Conflict::Propagator(propagator_conflict) => {
+                trace!("Converting propagator conflict to hypercube");
+
+                self.state.proof_file.borrow_mut().axiom(
+                    propagator_conflict.conjunction.iter().copied(),
+                    [],
+                    -1,
+                );
+
+                (
+                    propagator_conflict.conjunction.into_iter().collect(),
+                    LinearInequality::trivially_false(),
+                )
+            }
+            Conflict::EmptyDomain(empty_domain_conflict) => {
+                self.collect_initial_conflict_from_empty_domain(state, empty_domain_conflict)
+            }
+        }
+    }
+
+    /// See [`Self::collect_initial_conflict`].
+    fn collect_initial_conflict_from_empty_domain(
+        &self,
+        state: &mut State,
+        empty_domain_conflict: EmptyDomainConflict,
+    ) -> (Vec<Predicate>, LinearInequality) {
+        let EmptyDomainConflict {
+            trigger_reason,
+            trigger_predicate,
+        } = empty_domain_conflict;
+
+        assert_eq!(state.truth_value(trigger_predicate), Some(false));
+
+        let trigger_reason =
+            trigger_reason.expect("cannot resolve conflict that was triggered by an assumption");
+
+        trace!("{trigger_predicate:?} caused an empty domain, computing conflict constraint");
+
+        // Check whether we can explain using a hypercube linear. If that is possible, use
+        // it. Otherwise, fall back to the nogood explanation.
+        if let Some(code) = state.reason_store.get_lazy_code(trigger_reason) {
+            let propagator_id = state.reason_store.get_propagator(trigger_reason);
+            // The trigger predicate is not on the trail, so the propagation took place after the
+            // last trail entry.
+            let trail_position = state.trail_len();
+
+            if let Some((hypercube, linear, _)) = state.propagators[propagator_id]
+                .explain_as_hypercube_linear(
+                    code,
+                    trigger_predicate,
+                    ExplanationContext::without_working_nogood(
+                        &state.assignments,
+                        trail_position,
+                        &mut state.notification_engine,
+                    ),
+                )
+            {
+                trace!("constructing conflict from HL");
+                self.state.proof_file.borrow_mut().axiom(
+                    hypercube.iter_predicates(),
+                    linear.terms(),
+                    linear.bound(),
+                );
+
+                // Only the hypercube predicates are returned; the linear term predicates at
+                // the conflict DL are seeded by run_resolution via explain_linear.
+                let predicates = hypercube.iter_predicates().collect();
+                return (predicates, linear);
+            }
+        }
+
+        trace!("constructing conflict from nogood");
+        let mut conflict_nogood = vec![];
+        let _ = state.reason_store.get_or_compute(
+            trigger_reason,
+            ExplanationContext::without_working_nogood(
+                &state.assignments,
+                // -1 is not necessary, conflicting trail entry is undone
+                state.trail_len(),
+                &mut state.notification_engine,
+            ),
+            &mut state.propagators,
+            &mut conflict_nogood,
+            trigger_predicate,
+        );
+        conflict_nogood.push(!trigger_predicate);
+
+        self.state
+            .proof_file
+            .borrow_mut()
+            .axiom(conflict_nogood.iter().copied(), [], -1);
+
+        trace!("conflicting predicate = {trigger_predicate:?}");
+
+        if cfg!(feature = "hl-checks") {
+            let unsatisfied_predicates = conflict_nogood
+                .iter()
+                .copied()
+                .filter(|&predicate| state.truth_value(predicate) != Some(true))
+                .collect::<Vec<_>>();
+
+            if !unsatisfied_predicates.is_empty() {
+                for p in unsatisfied_predicates {
+                    eprintln!("  - {p} = {:?}", state.truth_value(p));
+                }
+                panic!("not all predicates in the conflict are satisfied");
+            }
+        }
+
+        (conflict_nogood, LinearInequality::trivially_false())
+    }
+
+    /// Build the learned hypercube linear from the current state of the resolver.
+    fn extract_learned_hypercube_linear(
+        &mut self,
+        trail: &impl TrailView,
+        propagates_at: usize,
+    ) -> LearnedHypercubeLinear {
+        let hypercube = std::mem::take(&mut self.state.working_hypercube)
+            .with_predicates(self.state.hypercube_predicates_on_conflict_dl.drain())
+            .expect("can never encounter inconsistent hypercube");
+
+        let _ = self.state.predicates_to_explain.drain();
+
+        // Determine whether the linear can propagate something at some point.
+        // If not, replace it with a trivially false linear to save memory and
+        // registrations for bound events.
+        let root_trail_position = trail.trail_position_at_checkpoint(0);
+        let hl_slack_at_root = compute_hl_slack_at_trail_position(
+            trail,
+            &hypercube,
+            &self.state.conflicting_linear,
+            root_trail_position,
+        );
+
+        let linear = if hl_slack_at_root < 0 {
+            self.statistics.num_learned_nogoods += 1;
+
+            // Make sure to add in the inferences to the proof.
+            for term in self.state.conflicting_linear.terms() {
+                let term_lower_bound =
+                    affine_lower_bound_predicate_at(trail, term, root_trail_position);
+
+                self.state
+                    .proof_file
+                    .borrow_mut()
+                    .axiom([!term_lower_bound], [], -1);
+            }
+
+            LinearInequality::trivially_false()
+        } else {
+            self.statistics.num_learned_hls += 1;
+            std::mem::take(&mut self.state.conflicting_linear)
+        };
+
+        LearnedHypercubeLinear {
+            hypercube,
+            linear,
+            propagates_at,
+        }
+    }
+
+    /// Ensures the learned constraint is a new constraint, rather than a previously learned
+    /// one.
+    #[cfg(feature = "hl-checks")]
+    fn assert_new_constraint(
+        &mut self,
+        constraint: LearnedHypercubeLinear,
+        constraint_tag: ConstraintTag,
+    ) {
+        assert_eq!(
+            self.learned_constraints
+                .insert((constraint.hypercube, constraint.linear), constraint_tag),
+            None,
+            "relearned the same constraint"
+        );
+    }
+
+    fn fourier_resolve(
+        &mut self,
+        trail: &impl TrailView,
+        trail_position: usize,
+        pivot: Predicate,
+        explanation: &HypercubeLinear,
+    ) -> Result<(), FourierError> {
+        let maybe_term_in_conflicting = self
+            .state
+            .conflicting_linear
+            .term_for_domain(pivot.get_domain());
+        let maybe_term_in_reason = explanation.linear.term_for_domain(pivot.get_domain());
+
+        let (weight_in_conflicting, weight_in_reason) =
+            match (maybe_term_in_conflicting, maybe_term_in_reason) {
+                (Some(term_in_conflicting), Some(term_in_reason))
+                    if term_in_conflicting.scale.is_positive()
+                        != term_in_reason.scale.is_positive() =>
+                {
+                    (term_in_conflicting.scale, term_in_reason.scale)
+                }
+
+                // Either the domain is not in one of the two constraints, or they don't have
+                // opposing signs. In both cases, we cannot perform fourier
+                // elimination on the specified domain.
+                _ => return Err(FourierError::NoVariableElimination),
+            };
+
+        let reason_hypercube_satisfied = explanation
+            .hypercube
+            .iter_predicates()
+            .all(|p| trail.truth_value_at(p, trail_position) == Some(true));
+
+        // This is important if the hypercube linear propagated when all but one hypercube bound
+        // was satisfied.
+        if !reason_hypercube_satisfied {
+            return Err(FourierError::NoVariableElimination);
+        }
+
+        let contributes_to_conflict_in_linear = (weight_in_conflicting.is_positive()
+            && pivot.is_lower_bound_predicate())
+            || (weight_in_conflicting.is_negative() && pivot.is_upper_bound_predicate());
+
+        // We should only do fourier elimination if the pivot predicate actually contributes to the
+        // conflict. Otherwise performing the combination will not remove any contribution to the
+        // conflict.
+        if !contributes_to_conflict_in_linear {
+            return Err(FourierError::NoVariableElimination);
+        }
+
+        let conflict_slack = compute_linear_slack_at_trail_position(
+            trail,
+            &self.state.conflicting_linear,
+            trail_position,
+        );
+        let reason_slack =
+            compute_linear_slack_at_trail_position(trail, &explanation.linear, trail_position);
+
+        trace!("applying fourier elimination on {pivot}");
+        trace!("  - slack conflict: {conflict_slack}");
+        trace!("  - slack b: {reason_slack}");
+
+        // The bound on the pivot domain that the conflict uses.
+        let conflict_bound = if weight_in_conflicting.is_positive() {
+            trail.lower_bound_at_trail_position(pivot.get_domain(), trail_position)
+        } else {
+            trail.upper_bound_at_trail_position(pivot.get_domain(), trail_position)
+        };
+        let reason_pivot_term_lower_bound = affine_lower_bound_at(
+            trail,
+            pivot.get_domain().scaled(weight_in_reason),
+            trail_position,
+        );
+
+        let skip_weakening = self.skip_unneeded_weakening
+            && fourier_resolvent_is_conflicting(
+                weight_in_conflicting,
+                conflict_slack,
+                weight_in_reason,
+                reason_slack,
+                reason_pivot_term_lower_bound,
+                conflict_bound,
+            );
+
+        let tightly_propagating_reason = if skip_weakening {
+            Cow::Borrowed(explanation)
+        } else {
+            compute_tightly_propagating_reason(
+                trail,
+                trail_position,
+                explanation,
+                reason_slack,
+                pivot.get_domain().scaled(weight_in_reason),
+            )
+            .ok_or(FourierError::IntegerOverflow)?
+        };
+
+        trace!("  - tightly propagating: {tightly_propagating_reason}");
+
+        let tp_slack = compute_linear_slack_at_trail_position(
+            trail,
+            &tightly_propagating_reason.linear,
+            trail_position,
+        );
+        trace!("     - slack: {tp_slack}");
+
+        let scale_reason = weight_in_conflicting.abs();
+        let scale_conflict = tightly_propagating_reason
+            .linear
+            .term_for_domain(pivot.get_domain())
+            .unwrap()
+            .scale
+            .abs();
+
+        // The combination is computed before the conflict is changed, so that the conflict is
+        // unchanged if it fails.
+        let resolvent = fourier_combination(
+            &self.state.conflicting_linear,
+            scale_conflict,
+            &tightly_propagating_reason.linear,
+            scale_reason,
+        )?;
+
+        // Extend the hypercube of the conflict with the predicates from the hypercube of
+        // the explanation.
+        for predicate in tightly_propagating_reason.hypercube.iter_predicates() {
+            self.state.add_hypercube_predicate(trail, predicate);
+        }
+
+        self.state
+            .explain_linear(trail, &tightly_propagating_reason.linear, trail_position);
+
+        self.state.conflicting_linear = resolvent;
+
+        Ok(())
+    }
+
+    fn will_propagate_on_previous_dl(&self, trail: &impl TrailView) -> Option<usize> {
+        trace!("Testing propagation at previous dl");
+        let current_dl = trail.current_checkpoint();
+
+        // Before we test whether we can backtrack, we test whether the predicates that are
+        // true at the current decision level cover at most one domain. If not, then we for
+        // sure cannot backtrack.
+        let mut d1 = None;
+        for p in self.state.hypercube_predicates_on_conflict_dl.iter() {
+            if d1.is_none() {
+                d1 = Some(p.get_domain());
+            } else if d1 != Some(p.get_domain()) {
+                // If there are two different domains in the predicates that the
+                // current decision level, then we know for sure we cannot backjump.
+                return None;
+            }
+        }
+
+        let final_hypercube = self
+            .state
+            .working_hypercube
+            .clone()
+            .with_predicates(self.state.hypercube_predicates_on_conflict_dl.iter())
+            .expect("no inconsistent hypercube");
+
+        let propagates_at_decision_level = |decision_level: usize| {
+            trace!("  => testing dl = {decision_level}");
+            propagates_at(
+                trail,
+                trail.trail_position_at_checkpoint(decision_level),
+                &final_hypercube,
+                &self.state.conflicting_linear,
+                self.propagation,
+            )
+        };
+
+        // Conflict analysis stops when the constraint propagates at the previous decision level.
+        if current_dl == 0 || !propagates_at_decision_level(current_dl - 1) {
+            return None;
+        }
+
+        // We backjump to the lowest decision level at which the constraint propagates. Whether it
+        // propagates is not monotone in the decision level: a bound that it implies at a decision
+        // level may already be true at a later one, so it may propagate at a decision level while
+        // not propagating at a later one. If we backjumped higher, the constraint would miss its
+        // propagation at the lower decision level after a later backtrack, since the bounds that
+        // trigger it would not change again.
+        let lowest_candidate =
+            self.lowest_decision_level_that_can_propagate(trail, &final_hypercube, current_dl - 1);
+        (lowest_candidate..current_dl)
+            .find(|&decision_level| propagates_at_decision_level(decision_level))
+    }
+
+    /// A decision level below which the conflicting linear with the given hypercube cannot
+    /// propagate, given that it propagates at `propagating_level`.
+    ///
+    /// The standard propagation needs at most one predicate of the hypercube that is not true, and
+    /// the extended propagation needs the predicates that are not true to concern one domain.
+    /// Below the second highest decision level at which a predicate (or, for the extended
+    /// propagation, the predicates over a domain) became true, this does not hold.
+    ///
+    /// Moreover, every propagation needs the hypercube linear slack to be smaller than the width
+    /// of the domain of a term, which is at most its width at the root. The slack does not
+    /// increase with the decision level, so the first decision level at which it is smaller is
+    /// found by binary search.
+    fn lowest_decision_level_that_can_propagate(
+        &self,
+        trail: &impl TrailView,
+        hypercube: &Hypercube,
+        propagating_level: usize,
+    ) -> usize {
+        let hypercube_level = Self::lowest_level_by_hypercube(trail, hypercube, self.propagation);
+
+        let root = trail.trail_position_at_checkpoint(0);
+        let widest_term = self
+            .state
+            .conflicting_linear
+            .terms()
+            .map(|term| {
+                affine_upper_bound_at(trail, term, root) - affine_lower_bound_at(trail, term, root)
+            })
+            .max()
+            .unwrap_or(0);
+        let may_propagate = |decision_level: usize| {
+            let trail_position = trail.trail_position_at_checkpoint(decision_level);
+            compute_hl_slack_at_trail_position(
+                trail,
+                hypercube,
+                &self.state.conflicting_linear,
+                trail_position,
+            ) < widest_term
+        };
+
+        let mut low = hypercube_level.min(propagating_level);
+        let mut high = propagating_level;
+        while low < high {
+            let middle = low + (high - low) / 2;
+            if may_propagate(middle) {
+                high = middle;
+            } else {
+                low = middle + 1;
+            }
+        }
+
+        low
+    }
+
+    /// The level below which the hypercube has too many predicates that are not true for the
+    /// given propagation, see [`Self::lowest_decision_level_that_can_propagate`].
+    fn lowest_level_by_hypercube(
+        trail: &impl TrailView,
+        hypercube: &Hypercube,
+        propagation: HypercubeLinearPropagation,
+    ) -> usize {
+        let checkpoint_of = |predicate: Predicate| {
+            trail
+                .checkpoint_for_predicate(predicate)
+                .expect("the hypercube of the conflict is true")
+        };
+
+        let mut levels = match propagation {
+            HypercubeLinearPropagation::Standard => hypercube
+                .iter_predicates()
+                .map(checkpoint_of)
+                .collect::<Vec<_>>(),
+            HypercubeLinearPropagation::Extended => {
+                let mut domain_levels: HashMap<DomainId, usize> = HashMap::default();
+                for predicate in hypercube.iter_predicates() {
+                    let level = domain_levels.entry(predicate.get_domain()).or_default();
+                    *level = (*level).max(checkpoint_of(predicate));
+                }
+                domain_levels.into_values().collect::<Vec<_>>()
+            }
+        };
+
+        levels.sort_unstable_by(|a, b| b.cmp(a));
+        levels.get(1).copied().unwrap_or(0)
+    }
+
+    /// Assert loop invariants at the top of each resolution iteration.
+    #[cfg(feature = "hl-checks")]
+    fn assert_loop_invariants(&self, trail: &impl TrailView, trail_position: usize) {
+        // All predicates at the conflict DL must have the current checkpoint.
+        let current_cp = trail.current_checkpoint();
+        for p in self.state.hypercube_predicates_on_conflict_dl.iter() {
+            assert_eq!(
+                trail.checkpoint_for_predicate(p),
+                Some(current_cp),
+                "predicate {p} in conflict DL heap has wrong checkpoint"
+            );
+        }
+        for p in self.state.predicates_to_explain.iter() {
+            assert_eq!(
+                trail.checkpoint_for_predicate(p),
+                Some(current_cp),
+                "predicate {p} in predicates_to_explain has wrong checkpoint"
+            );
+        }
+        // All predicates in the working hypercube must be at a strictly earlier checkpoint.
+        for p in self.state.working_hypercube.iter_predicates() {
+            let cp = trail
+                .checkpoint_for_predicate(p)
+                .expect("working hypercube predicate must be assigned");
+            assert!(
+                cp > 0 && cp < current_cp,
+                "predicate {p} in working_hypercube has checkpoint {cp}, expected 0 < cp < {current_cp}"
+            );
+        }
+
+        // The working conflict must be genuinely violated: all hypercube predicates satisfied and
+        // linear has negative slack.
+        if trail_position == usize::MAX {
+            return;
+        }
+
+        let last_tp_prev_cp = trail.trail_position_at_checkpoint(current_cp - 1);
+        assert!(
+            trail_position > last_tp_prev_cp,
+            "trail_position {trail_position} should be after previous checkpoint end {last_tp_prev_cp}"
+        );
+
+        let linear_slack = compute_linear_slack_at_trail_position(
+            trail,
+            &self.state.conflicting_linear,
+            trail_position,
+        );
+
+        if !linear_slack.is_negative() {
+            eprintln!("Bounds in conflicting linear:");
+            for term in self.state.conflicting_linear.terms() {
+                let lb = affine_lower_bound_at(trail, term, trail_position);
+                eprintln!(
+                    "  - {} {} >= {} @ {:?}",
+                    term.scale,
+                    term.inner,
+                    lb,
+                    trail.trail_position_of_predicate(affine_lower_bound_predicate_at(
+                        trail,
+                        term,
+                        trail_position
+                    ))
+                );
+            }
+            panic!(
+                "conflicting constraint linear is not conflicting at trail position {trail_position}"
+            );
+        }
+
+        let unsatisfied = self
+            .state
+            .hypercube_predicates_on_conflict_dl
+            .iter()
+            .chain(self.state.working_hypercube.iter_predicates())
+            .filter(|&p| trail.truth_value_at(p, trail_position) != Some(true))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            unsatisfied,
+            vec![],
+            "hypercube contains unsatisfied predicates at trail position {trail_position}"
+        );
+    }
+}
+
+/// Returns true if the given hypercube linear propagates at the given trail position.
+fn propagates_at(
+    trail: &impl TrailView,
+    trail_position: usize,
+    hypercube: &Hypercube,
+    linear: &LinearInequality,
+    propagation: HypercubeLinearPropagation,
+) -> bool {
+    // Get the predicates that are not assigned to true.
+    let unsatisfied_predicates_in_hypercube = hypercube
+        .iter_predicates()
+        .filter(|&predicate| trail.truth_value_at(predicate, trail_position) != Some(true))
+        .collect::<Vec<_>>();
+
+    if propagation == HypercubeLinearPropagation::Extended
+        && extended_propagates_at(
+            trail,
+            trail_position,
+            linear,
+            &unsatisfied_predicates_in_hypercube,
+        )
+    {
+        return true;
+    }
+
+    if unsatisfied_predicates_in_hypercube.len() > 1 {
+        // If more than one predicate remains unassigned, we cannot do anything.
+        return false;
+    }
+
+    let slack = compute_hl_slack_at_trail_position(trail, hypercube, linear, trail_position);
+
+    if unsatisfied_predicates_in_hypercube.len() == 1 {
+        let unassigned_predicate = unsatisfied_predicates_in_hypercube[0];
+        let domain_of_predicate = unassigned_predicate.get_domain();
+
+        if slack < 0 {
+            return true;
+        } else if let Some(term) = linear.term_for_domain(domain_of_predicate) {
+            let bound_in_state = affine_lower_bound_at(trail, term, trail_position);
+            let bound = hypercube
+                .term_lower_bound(term)
+                .map_or(bound_in_state, |bound_in_hypercube| {
+                    bound_in_hypercube.max(bound_in_state)
+                });
+
+            let predicate_to_propagate = match term_upper_bound(term, slack + bound) {
+                TermUpperBound::Predicate(predicate) => predicate,
+                TermUpperBound::AlwaysTrue => return false,
+                TermUpperBound::Infeasible => return true,
+            };
+            let predicate_truth_value =
+                trail.truth_value_at(predicate_to_propagate, trail_position);
+
+            return (!unassigned_predicate).implies(predicate_to_propagate)
+                && predicate_truth_value != Some(true);
+        }
+    } else {
+        assert!(unsatisfied_predicates_in_hypercube.is_empty());
+        return linear_propagates_at(trail, trail_position, linear);
+    }
+
+    false
+}
+
+/// Returns true if the extended propagation of the hypercube removes a value from a domain at the
+/// given trail position, where `unsatisfied` are the predicates of the hypercube that are not true.
+///
+/// The standard propagation, which the extended propagation also performs, is tested separately.
+fn extended_propagates_at(
+    trail: &impl TrailView,
+    trail_position: usize,
+    linear: &LinearInequality,
+    unsatisfied: &[Predicate],
+) -> bool {
+    // The extended propagation needs at least one predicate that is not true, and all of them
+    // concern one domain.
+    let Some(domain) = unsatisfied.first().map(|predicate| predicate.get_domain()) else {
+        return false;
+    };
+    if unsatisfied.iter().any(|p| p.get_domain() != domain) {
+        return false;
+    }
+
+    let domain_lower_bound = trail.lower_bound_at_trail_position(domain, trail_position);
+    let domain_upper_bound = trail.upper_bound_at_trail_position(domain, trail_position);
+
+    let other_terms_lower_bound = linear
+        .terms()
+        .filter(|term| term.inner != domain)
+        .map(|term| affine_lower_bound_at(trail, term, trail_position))
+        .sum::<i64>();
+    let rest = i64::from(linear.bound()) - other_terms_lower_bound;
+
+    let Some(inferences) = extended_inferences(
+        unsatisfied,
+        domain_lower_bound,
+        domain_upper_bound,
+        linear.term_for_domain(domain).map(|term| term.scale),
+        rest,
+    ) else {
+        return false;
+    };
+
+    inferences.lower_bound > domain_lower_bound
+        || inferences.upper_bound < domain_upper_bound
+        || inferences
+            .removed_values(|value| {
+                trail.truth_value_at(predicate![domain != value], trail_position) != Some(true)
+            })
+            .next()
+            .is_some()
+}
+
+/// Returns true if the given linear propagates at the given trail position.
+fn linear_propagates_at(
+    trail: &impl TrailView,
+    trail_position: usize,
+    conflicting_linear: &LinearInequality,
+) -> bool {
+    if conflicting_linear.is_trivially_false() {
+        return true;
+    }
+
+    let slack = compute_linear_slack_at_trail_position(trail, conflicting_linear, trail_position);
+
+    for term in conflicting_linear.terms() {
+        // Both bounds are scaled bounds of the domain, so the domain is tightened exactly when the
+        // new scaled upper bound is smaller than the current one.
+        let new_term_upper_bound = slack + affine_lower_bound_at(trail, term, trail_position);
+
+        if new_term_upper_bound < affine_upper_bound_at(trail, term, trail_position) {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Computes `scale_conflict * conflict + scale_reason * reason`, normalized by the greatest common
+/// divisor of its weights and bound.
+///
+/// Both scales are positive, and they are chosen such that the pivot domain is eliminated.
+fn fourier_combination(
+    conflict: &LinearInequality,
+    scale_conflict: i32,
+    reason: &LinearInequality,
+    scale_reason: i32,
+) -> Result<LinearInequality, FourierError> {
+    // The combination is computed in i64, and the weights of a domain are merged before
+    // normalizing, since the merged weights and the bound need to fit in an i32 only after
+    // normalizing.
+    let mut weights: HashMap<DomainId, i64> = HashMap::default();
+    for (linear, scale) in [(conflict, scale_conflict), (reason, scale_reason)] {
+        for term in linear.terms() {
+            let weight = weights.entry(term.inner).or_insert(0);
+            *weight = weight
+                .checked_add(i64::from(term.scale) * i64::from(scale))
+                .ok_or(FourierError::IntegerOverflow)?;
+        }
+    }
+    weights.retain(|_, weight| *weight != 0);
+
+    // Both sides of both inequalities are scaled.
+    let linear_rhs = (i64::from(conflict.bound()) * i64::from(scale_conflict))
+        .checked_add(i64::from(reason.bound()) * i64::from(scale_reason))
+        .ok_or(FourierError::IntegerOverflow)?;
+
+    // Normalize the linear component of the hypercube linear to hopefully avoid overflows in
+    // the future. The divisor divides every weight and the bound, so the divisions are exact.
+    let normalize_by = weights
+        .values()
+        .copied()
+        .chain(std::iter::once(linear_rhs))
+        .reduce(gcd)
+        .unwrap_or(linear_rhs)
+        .max(1);
+
+    let to_i32 = |value: i64| i32::try_from(value / normalize_by);
+    let linear_terms = weights
+        .into_iter()
+        .map(|(domain, weight)| {
+            to_i32(weight).map(|weight| {
+                (
+                    NonZero::new(weight).expect("zero weights are removed"),
+                    domain,
+                )
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| FourierError::IntegerOverflow)?;
+    let linear_rhs = to_i32(linear_rhs).map_err(|_| FourierError::IntegerOverflow)?;
+
+    LinearInequality::new(linear_terms, linear_rhs)
+        .ok_or(FourierError::ResultOfEliminationTriviallySatisfiable)
+}
+
+/// Returns true if Fourier resolution of the conflict with the reason, without tightening the
+/// reason first, yields a linear that is still conflicting.
+///
+/// The resolvent is `|w_r| * conflict + |w_c| * reason`, where `w_c` and `w_r` are the weights
+/// of the pivot domain `x` in the conflict and the reason. Its slack is
+/// `|w_r| * slack_c + |w_c| * (slack_r + lb(w_r * x) - w_r * d)`, where `d` is the bound on `x`
+/// that the conflict uses; the second term is the slack of the reason with `x` fixed at `d`.
+/// This accounts for rounding in the propagation of the reason and for holes that tightened the
+/// bound of `x` beyond the propagated bound.
+fn fourier_resolvent_is_conflicting(
+    weight_in_conflicting: i32,
+    conflict_slack: i64,
+    weight_in_reason: i32,
+    reason_slack: i64,
+    reason_pivot_term_lower_bound: i64,
+    conflict_bound: i32,
+) -> bool {
+    let reason_slack_at_conflict_bound = reason_slack + reason_pivot_term_lower_bound
+        - i64::from(weight_in_reason) * i64::from(conflict_bound);
+
+    let resolvent_slack = i64::from(weight_in_reason.abs()) * conflict_slack
+        + i64::from(weight_in_conflicting.abs()) * reason_slack_at_conflict_bound;
+
+    resolvent_slack < 0
+}
+
+/// Use weakening to obtain a hypercube linear that propagates the given term without any rounding.
+///
+/// Returns `None` if the bound of a weakened linear does not fit in an i32.
+fn compute_tightly_propagating_reason<'expl>(
+    trail: &impl TrailView,
+    trail_position: usize,
+    original_reason: &'expl HypercubeLinear,
+    reason_slack: i64,
+    pivot_term: AffineView<DomainId>,
+) -> Option<Cow<'expl, HypercubeLinear>> {
+    let pivot_term_upper_bound =
+        reason_slack + affine_lower_bound_at(trail, pivot_term, trail_position);
+
+    if pivot_term_upper_bound % i64::from(pivot_term.scale) == 0 {
+        return Some(Cow::Borrowed(original_reason));
+    }
+
+    let divisor = pivot_term.scale.abs();
+
+    let bounds_to_weaken: Vec<_> = original_reason
+        .linear
+        .terms()
+        .filter_map(|term| {
+            // If the weight of the term is divisible by the weight of the pivot term, then we
+            // keep it in the linear part. Otherwise, it is weakened on.
+            if term.scale % divisor == 0 {
+                return None;
+            }
+
+            let bound = affine_lower_bound_predicate_at(trail, term, trail_position);
+            Some(BoundPredicate::new(bound).expect("only doing bounds"))
+        })
+        .collect();
+
+    let mut tightly_propagating_reason = original_reason.clone();
+
+    for bound in bounds_to_weaken {
+        tightly_propagating_reason.hypercube =
+            std::mem::take(&mut tightly_propagating_reason.hypercube)
+                .with_predicate(bound.into())
+                .expect("bound is true and original is true so hypercube is not inconsistent");
+
+        let term = tightly_propagating_reason
+            .linear
+            .term_for_domain(bound.domain)
+            .expect("the bound is computed based on terms");
+
+        let num_weakenings = (term.scale % divisor).abs();
+
+        tightly_propagating_reason.linear = std::mem::take(&mut tightly_propagating_reason.linear)
+            .weaken(bound, num_weakenings)
+            .ok()?
+            .expect("never becomes trivially satisfiable");
+    }
+
+    tightly_propagating_reason.linear.divide(divisor);
+
+    Some(Cow::Owned(tightly_propagating_reason))
+}
+
+fn compute_hl_slack_at_trail_position(
+    trail: &impl TrailView,
+    hypercube: &Hypercube,
+    linear: &LinearInequality,
+    trail_position: usize,
+) -> i64 {
+    let lower_bound_terms = linear
+        .terms()
+        .map(|term| {
+            let state_lb = affine_lower_bound_at(trail, term, trail_position);
+            hypercube
+                .term_lower_bound(term)
+                .map_or(state_lb, |hypercube_lb| hypercube_lb.max(state_lb))
+        })
+        .sum::<i64>();
+
+    i64::from(linear.bound()) - lower_bound_terms
+}
+
+fn compute_linear_slack_at_trail_position(
+    trail: &impl TrailView,
+    linear: &LinearInequality,
+    trail_position: usize,
+) -> i64 {
+    let lower_bound_terms = linear
+        .terms()
+        .map(|term| affine_lower_bound_at(trail, term, trail_position))
+        .sum::<i64>();
+
+    i64::from(linear.bound()) - lower_bound_terms
+}
+
+enum FourierError {
+    NoVariableElimination,
+    ResultOfEliminationTriviallySatisfiable,
+    IntegerOverflow,
+}
+
+// Taken from https://docs.rs/num-integer/latest/src/num_integer/lib.rs.html#420-422
+#[allow(unused, reason = "experimentation")]
+fn gcd(a: i64, b: i64) -> i64 {
+    let mut m = a;
+    let mut n = b;
+    if m == 0 || n == 0 {
+        return (m | n).abs();
+    }
+
+    // find common factors of 2
+    let shift = (m | n).trailing_zeros();
+
+    // The algorithm needs positive numbers, but the minimum value
+    // can't be represented as a positive one.
+    // It's also a power of two, so the gcd can be
+    // calculated by bitshifting in that case
+
+    // Assuming two's complement, the number created by the shift
+    // is positive for all numbers except gcd = abs(min value)
+    // The call to .abs() causes a panic in debug mode
+    if m == i64::MIN || n == i64::MIN {
+        let i: i64 = 1 << shift;
+        return i.abs();
+    }
+
+    // guaranteed to be positive now, rest like unsigned algorithm
+    m = m.abs();
+    n = n.abs();
+
+    // divide n and m by 2 until odd
+    m >>= m.trailing_zeros();
+    n >>= n.trailing_zeros();
+
+    while m != n {
+        if m > n {
+            m -= n;
+            m >>= m.trailing_zeros();
+        } else {
+            n -= m;
+            n >>= n.trailing_zeros();
+        }
+    }
+    m << shift
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::conjunction;
+    use crate::hypercube_linear::explanation::HypercubeLinear;
+    use crate::hypercube_linear::fake_trail::FakeTrail;
+    use crate::linear_inequality;
+    use crate::predicate;
+
+    /// One Fourier elimination step (on x) produces y + z ≤ 7.
+    ///
+    /// Conflict: x + y ≤ 9,  with x ≥ 5 (at DL 2) and y ≥ 1 (at DL 2) both violated.
+    /// Reason for x ≥ 5: {} → −x + z ≤ −2  (z ≥ 3 at DL 1 implies z − x ≤ −2, i.e. x ≥ z+2 ≥ 5).
+    ///
+    /// Fourier combination: (x + y ≤ 9) + (−x + z ≤ −2) = y + z ≤ 7.
+    ///
+    /// After Fourier: only y ≥ 1 remains on the conflict DL; z ≥ 3 is at an earlier DL.
+    /// The constraint {z ≥ 3, y ≥ 1} → y + z ≤ 7 is unit-propagating at DL 1 (slack = −1),
+    /// so we backjump there and the learned constraint is ({z ≥ 3, y ≥ 1}, y + z ≤ 7).
+    #[test_log::test]
+    fn one_fourier_step_yields_y_plus_z_le_7() {
+        let mut trail_builder = FakeTrail::builder();
+
+        let x = trail_builder.domain(0, 10);
+        let y = trail_builder.domain(0, 10);
+        let z = trail_builder.domain(0, 10);
+
+        let mut trail = trail_builder
+            .decide(predicate![z >= 3])
+            .decide(predicate![y >= 1])
+            .propagate(
+                predicate![x >= 5],
+                HypercubeLinear::from(linear_inequality!(-1 x + 1 z <= -2)),
+            )
+            .build();
+
+        let mut resolver = HypercubeLinearResolver::default();
+        let result = resolver.run_resolution(
+            &mut trail,
+            [predicate![x >= 5], predicate![y >= 1]],
+            linear_inequality!(1 x + 1 y <= 5),
+        );
+
+        // The Fourier step eliminates x: conflict becomes y + z ≤ 3.
+        // HL-slack at DL0 (y≥1, z≥3 in hypercube, bound=3): 3−1−3 = −1 < 0 → trivially_false.
+        // Hypercube should contain z ≥ 3 (from DL 1) and y ≥ 1 (from DL 2).
+        let expected_hypercube =
+            Hypercube::new([predicate![y >= 1], predicate![z >= 3]]).expect("not inconsistent");
+
+        assert_eq!(result.hypercube, expected_hypercube);
+        assert!(result.linear.is_trivially_false());
+    }
+
+    /// The conflict `y + 3a + 2b ≤ 4` propagates `a ≤ 0` at DL 1 and `b ≤ 0` at DL 3, but nothing
+    /// at DL 2, where `a ≤ 0` is decided. Backjumping to DL 3 would miss the propagation of
+    /// `a ≤ 0` after a later backtrack to DL 1, so we backjump to DL 1.
+    #[test_log::test]
+    fn backjump_to_the_lowest_decision_level_at_which_the_constraint_propagates() {
+        let mut trail_builder = FakeTrail::builder();
+
+        let y = trail_builder.domain(0, 3);
+        let a = trail_builder.domain(0, 1);
+        let b = trail_builder.domain(0, 1);
+
+        let mut trail = trail_builder
+            .decide(predicate![y >= 2])
+            .decide(predicate![a <= 0])
+            .decide(predicate![y >= 3])
+            .decide(predicate![b >= 1])
+            .build();
+
+        let mut resolver = HypercubeLinearResolver::default();
+        let result =
+            resolver.run_resolution(&mut trail, [], linear_inequality!(1 y + 3 a + 2 b <= 4));
+
+        assert_eq!(result.propagates_at, 1);
+    }
+
+    /// The constraint `[x ≥ 2] & [x ≤ 5] → y ≤ 0` propagates nothing at DL 1 with the standard
+    /// propagation, since two predicates of the hypercube are unassigned, but the extended
+    /// propagation removes 2..=5 from the domain of x there. At DL 2 both propagate `x ≥ 6`.
+    fn backjump_level_for_propagation(propagation: HypercubeLinearPropagation) -> usize {
+        let mut trail_builder = FakeTrail::builder();
+
+        let x = trail_builder.domain(0, 10);
+        let y = trail_builder.domain(0, 10);
+
+        let mut trail = trail_builder
+            .decide(predicate![y >= 1])
+            .decide(predicate![x >= 2])
+            .decide(predicate![x <= 5])
+            .build();
+
+        let mut resolver = HypercubeLinearResolver {
+            propagation,
+            ..Default::default()
+        };
+        let result = resolver.run_resolution(
+            &mut trail,
+            [predicate![x >= 2], predicate![x <= 5]],
+            linear_inequality!(1 y <= 0),
+        );
+
+        result.propagates_at
+    }
+
+    #[test]
+    fn backjump_level_with_standard_propagation_ignores_the_extended_propagation() {
+        assert_eq!(
+            backjump_level_for_propagation(HypercubeLinearPropagation::Standard),
+            2
+        );
+    }
+
+    #[test]
+    fn backjump_level_with_extended_propagation_includes_the_extended_propagation() {
+        assert_eq!(
+            backjump_level_for_propagation(HypercubeLinearPropagation::Extended),
+            1
+        );
+    }
+
+    /// Weakening the conflict `2x + y ≤ 5` on the decision `x ≥ 1500000000` gives the bound
+    /// `5 - 3000000000`, which does not fit in an i32, so the conflict is weakened on `y ≥ 1` as
+    /// well and becomes the nogood `[y ≥ 1] & [x ≥ 1500000000] → ⊥`.
+    #[test]
+    fn weakening_the_conflict_beyond_i32_turns_it_into_a_nogood() {
+        let mut trail_builder = FakeTrail::builder();
+
+        let x = trail_builder.domain(0, 2_000_000_000);
+        let y = trail_builder.domain(0, 10);
+
+        let trail = trail_builder
+            .decide(predicate![y >= 1])
+            .decide(predicate![x >= 1_500_000_000])
+            .build();
+
+        let mut resolver = HypercubeLinearResolver::default();
+        resolver.state.conflicting_linear = linear_inequality!(2 x + 1 y <= 5);
+        resolver.state.weaken_conflict_to_zero(
+            &trail,
+            trail.current_trail_position(),
+            BoundPredicate::new(predicate![x >= 1_500_000_000]).expect("bound predicate"),
+        );
+
+        assert!(resolver.state.conflicting_linear.is_trivially_false());
+        assert_eq!(
+            resolver.state.working_hypercube,
+            Hypercube::from_single_predicate(predicate![y >= 1])
+        );
+    }
+
+    /// Propositional resolution on x ≥ 5 adds its reason predicate y ≥ 3 (DL 1) to the
+    /// working hypercube. A second conflict-DL predicate w ≥ 2 keeps two domains at the conflict
+    /// DL so that `will_propagate_on_previous_dl` cannot terminate early.
+    ///
+    /// After resolving x ≥ 5 (adding y ≥ 3 to the working hypercube), only w ≥ 2 remains on
+    /// the conflict DL. The constraint {y ≥ 3, w ≥ 2} → trivially_false propagates at DL 1
+    /// (HL-slack = −1 with one unsatisfied predicate), so we backjump there.
+    #[test_log::test]
+    fn propositional_resolution_adds_conjunction_reason_to_working_hypercube() {
+        let mut trail_builder = FakeTrail::builder();
+
+        let x = trail_builder.domain(0, 10);
+        let y = trail_builder.domain(0, 10);
+        let w = trail_builder.domain(0, 10);
+
+        let mut trail = trail_builder
+            .decide(predicate![y >= 3])
+            .decide(predicate![w >= 2])
+            .propagate(
+                predicate![x >= 5],
+                conjunction!([y >= 3] & [x <= 4]), // !pivot
+            )
+            .build();
+
+        // Conflict: trivially_false linear with two conflict-DL predicates.
+        // Two different domains → multi-domain check returns None → resolution proceeds.
+        let mut resolver = HypercubeLinearResolver::default();
+        let result = resolver.run_resolution(
+            &mut trail,
+            [predicate![x >= 5], predicate![w >= 2]],
+            LinearInequality::trivially_false(),
+        );
+
+        let expected_hypercube =
+            Hypercube::new([predicate![y >= 3], predicate![w >= 2]]).expect("not inconsistent");
+
+        assert_eq!(result.hypercube, expected_hypercube);
+        assert!(result.linear.is_trivially_false());
+    }
+
+    #[test_log::test]
+    fn do_not_resolve_on_too_strong_a_pivot_in_hypercube() {
+        let mut trail_builder = FakeTrail::builder();
+
+        let x = trail_builder.domain(0, 10);
+        let y = trail_builder.domain(0, 10);
+        let z = trail_builder.domain(0, 5);
+
+        let mut trail = trail_builder
+            .decide(predicate![x >= 2])
+            .decide(predicate![y >= 3])
+            .propagate(predicate![z >= 5], conjunction!([y >= 3] & [z <= 4]))
+            .propagate(predicate![x >= 4], conjunction!([y >= 3] & [x <= 3]))
+            .build();
+
+        let mut resolver = HypercubeLinearResolver::default();
+        let result = resolver.run_resolution(
+            &mut trail,
+            [predicate![x >= 2]],
+            linear_inequality!(1 y + 3 z <= 15),
+        );
+
+        assert_eq!(
+            result.hypercube,
+            Hypercube::new([predicate![x >= 2], predicate![y >= 3]]).expect("not inconsistent")
+        );
+        assert!(result.linear.is_trivially_false());
+    }
+
+    #[test_log::test]
+    fn do_not_resolve_on_too_strong_a_pivot_when_stronger_bound_used_in_linear() {
+        let mut trail_builder = FakeTrail::builder();
+
+        let x = trail_builder.domain(0, 10);
+        let y = trail_builder.domain(0, 10);
+        let z = trail_builder.domain(0, 5);
+
+        let mut trail = trail_builder
+            .decide(predicate![x >= 2])
+            .decide(predicate![y >= 3])
+            .propagate(predicate![z >= 5], conjunction!([y >= 3] & [z <= 4]))
+            .propagate(predicate![x >= 4], linear_inequality!(-1 x + 1 y <= -1))
+            .build();
+
+        let mut resolver = HypercubeLinearResolver::default();
+        let result = resolver.run_resolution(
+            &mut trail,
+            [predicate![x >= 2]],
+            linear_inequality!(1 x + 1 y + 3 z <= 19),
+        );
+
+        assert_eq!(
+            result.hypercube,
+            Hypercube::from_single_predicate(predicate![x >= 2]),
+        );
+        assert_eq!(result.linear, linear_inequality!(2 y + 3 z <= 18));
+    }
+
+    /// Reason `2x <= 1` with `x` in `[0, 5]` propagates `x <= 0` with rounding; conflict
+    /// `-3x <= -1` has slack -1. The resolvent `2 * (-3x <= -1) + 3 * (2x <= 1)` is `0 <= 1`, so
+    /// the reason has to be tightened.
+    #[test]
+    fn rounded_upper_bound_propagation_needs_weakening() {
+        assert!(!fourier_resolvent_is_conflicting(-3, -1, 2, 1, 0, 0));
+    }
+
+    /// Reason `x + y <= 10` with `x` in `[0, 20]` and `y >= 0` propagates `x <= 10` exactly, with
+    /// slack 10; conflict `-x <= -11` has slack -1. The resolvent is `y <= -1`, which is
+    /// conflicting, although the reason slack is large.
+    #[test]
+    fn exact_upper_bound_propagation_with_large_slack_does_not_need_weakening() {
+        assert!(fourier_resolvent_is_conflicting(-1, -1, 1, 10, 0, 10));
+    }
+
+    /// Reason `-x + y <= -10` with `x` in `[0, 20]` and `y >= 0` propagates `x >= 10` exactly,
+    /// with slack 10 and `lb(-x) = -20`; conflict `x <= 9` has slack -1. The resolvent is
+    /// `y <= -1`, which is conflicting.
+    #[test]
+    fn exact_lower_bound_propagation_does_not_need_weakening() {
+        assert!(fourier_resolvent_is_conflicting(1, -1, -1, 10, -20, 10));
+    }
+
+    /// Reason `-2x <= -1` with `x` in `[0, 5]` propagates `x >= 1` with rounding, with slack 9 and
+    /// `lb(-2x) = -10`; conflict `3x <= 2` has slack -1. The resolvent
+    /// `2 * (3x <= 2) + 3 * (-2x <= -1)` is `0 <= 1`, so the reason has to be tightened.
+    #[test]
+    fn rounded_lower_bound_propagation_needs_weakening() {
+        assert!(!fourier_resolvent_is_conflicting(3, -1, -2, 9, -10, 1));
+    }
+
+    /// Reason `-x1 + x3 + x5 <= 0` propagates `x3 <= 0` with slack 3 and `lb(x3) = -3`; a hole at 0
+    /// lowers the upper bound to -1, which the conflict `x1 - x3 - x5 <= 0` uses, with slack -1.
+    /// The resolvent is `0 <= 0`, so the reason cannot be used as is.
+    #[test]
+    fn bound_tightened_by_a_hole_needs_weakening() {
+        assert!(!fourier_resolvent_is_conflicting(-1, -1, 1, 3, -3, -1));
+    }
+
+    /// The conflict holds `[x != 3]` and `[x <= 7]`, which are both implied by the decision
+    /// `[x <= 2]` and together do not propagate at DL 1. They are replaced by the decision, so the
+    /// learned nogood `[y >= 1] /\ [x <= 2] -> false` propagates `[x >= 3]` at DL 1.
+    #[test_log::test]
+    fn predicates_implied_by_a_decision_are_replaced_by_the_decision() {
+        let mut trail_builder = FakeTrail::builder();
+
+        let x = trail_builder.domain(0, 10);
+        let y = trail_builder.domain(0, 10);
+
+        let mut trail = trail_builder
+            .decide(predicate![y >= 1])
+            .decide(predicate![x <= 2])
+            .build();
+
+        let mut resolver = HypercubeLinearResolver::default();
+        let result = resolver.run_resolution(
+            &mut trail,
+            [predicate![y >= 1], predicate![x != 3], predicate![x <= 7]],
+            LinearInequality::trivially_false(),
+        );
+
+        let expected_hypercube =
+            Hypercube::new([predicate![y >= 1], predicate![x <= 2]]).expect("not inconsistent");
+
+        assert_eq!(result.hypercube, expected_hypercube);
+        assert!(result.linear.is_trivially_false());
+    }
+
+    /// The explanation `[x <= 3] /\ [z >= 1] -> x + z <= 3` propagates `[x <= 2]`. Weakening it on
+    /// `[x >= 3]` gives the hypercube `[x == 3] /\ [z >= 1]`, which is false at the pivot. Its
+    /// bound `[x <= 3]` is still true and must be kept, because the explanation does not apply
+    /// for `x >= 4`.
+    #[test_log::test]
+    fn propositional_resolution_keeps_the_true_bound_of_a_false_equality() {
+        let mut trail_builder = FakeTrail::builder();
+
+        let x = trail_builder.domain(0, 10);
+        let w = trail_builder.domain(0, 10);
+        let z = trail_builder.domain(0, 10);
+
+        let mut trail = trail_builder
+            .decide(predicate![z >= 1])
+            .decide(predicate![x <= 3])
+            .propagate(predicate![w >= 2], conjunction!([x <= 3] & [w <= 1]))
+            .propagate(
+                predicate![x <= 2],
+                HypercubeLinear {
+                    hypercube: Hypercube::new([predicate![x <= 3], predicate![z >= 1]])
+                        .expect("not inconsistent"),
+                    linear: linear_inequality!(1 x + 1 z <= 3),
+                },
+            )
+            .build();
+
+        let mut resolver = HypercubeLinearResolver::default();
+        let result = resolver.run_resolution(
+            &mut trail,
+            [predicate![w >= 2], predicate![x <= 2]],
+            LinearInequality::trivially_false(),
+        );
+
+        let expected_hypercube =
+            Hypercube::new([predicate![z >= 1], predicate![x <= 3]]).expect("not inconsistent");
+
+        assert_eq!(result.hypercube, expected_hypercube);
+        assert!(result.linear.is_trivially_false());
+    }
+
+    /// `2 * (x + y <= 5) + 1 * (-2x + z <= -7)` is `2y + z <= 3`; both bounds are scaled.
+    #[test]
+    fn fourier_combination_scales_both_bounds() {
+        let x = DomainId::new(0);
+        let y = DomainId::new(1);
+        let z = DomainId::new(2);
+
+        let result = fourier_combination(
+            &linear_inequality!(1 x + 1 y <= 5),
+            2,
+            &linear_inequality!(-2 x + 1 z <= -7),
+            1,
+        );
+
+        assert_eq!(result.ok(), Some(linear_inequality!(2 y + 1 z <= 3)));
+    }
+
+    /// `4 * (2x - 2y <= -6) + 2 * (-4x + 4z <= 0)` is `-8y + 8z <= -24`, which normalizes to
+    /// `-y + z <= -3`.
+    #[test]
+    fn fourier_combination_normalizes_by_the_gcd() {
+        let x = DomainId::new(0);
+        let y = DomainId::new(1);
+        let z = DomainId::new(2);
+
+        let result = fourier_combination(
+            &linear_inequality!(2 x + -2 y <= -6),
+            4,
+            &linear_inequality!(-4 x + 4 z <= 0),
+            2,
+        );
+
+        assert_eq!(result.ok(), Some(linear_inequality!(-1 y + 1 z <= -3)));
+    }
+
+    /// `(x + 2000000000 z <= 1) + (-x + 500000000 z <= 0)` merges the weights of `z` into
+    /// 2500000000, which does not fit in an i32, and the bound 1 prevents normalizing.
+    #[test]
+    fn fourier_combination_with_a_merged_weight_beyond_i32_is_an_overflow() {
+        let x = DomainId::new(0);
+        let z = DomainId::new(1);
+
+        let result = fourier_combination(
+            &linear_inequality!(1 x + 2000000000 z <= 1),
+            1,
+            &linear_inequality!(-1 x + 500000000 z <= 0),
+            1,
+        );
+
+        assert!(matches!(result, Err(FourierError::IntegerOverflow)));
+    }
+
+    /// `(2x + 2000000000 z <= 0) + (-2x + 2000000000 z <= 0)` merges the weights of `z` into
+    /// 4000000000, which does not fit in an i32, but normalizing gives `z <= 0`.
+    #[test]
+    fn fourier_combination_normalizes_merged_weights_beyond_i32() {
+        let x = DomainId::new(0);
+        let z = DomainId::new(1);
+
+        let result = fourier_combination(
+            &linear_inequality!(2 x + 2000000000 z <= 0),
+            1,
+            &linear_inequality!(-2 x + 2000000000 z <= 0),
+            1,
+        );
+
+        assert_eq!(result.ok(), Some(linear_inequality!(1 z <= 0)));
+    }
+}
