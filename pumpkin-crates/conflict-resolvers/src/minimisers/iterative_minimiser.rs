@@ -1,10 +1,7 @@
-#[cfg(doc)]
-use std::collections::BTreeSet;
-
-use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::containers::HashMap;
+use pumpkin_core::containers::HashSet;
 use pumpkin_core::create_statistics_struct;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
@@ -47,130 +44,117 @@ pub(crate) struct IterativeMinimiser {
     statistics: IterativeMinimiserStatistics,
 }
 
-/// The predicates in the current nogood over a single [`DomainId`].
-#[derive(Clone, Debug, Default)]
+/// The domain induced by the predicates in the current nogood over a single [`DomainId`].
+#[derive(Clone, Debug)]
 struct DomainPredicates {
-    /// The initial domain tightened by the root-level predicates; it is never loosened during
-    /// conflict analysis.
-    root: Option<IterativeDomain>,
+    /// The lower-bound of the initial domain tightened by the root-level predicates.
+    root_lower_bound: i32,
+    /// The upper-bound of the initial domain tightened by the root-level predicates.
+    root_upper_bound: i32,
+    /// The holes of the initial domain and the root-level not-equals predicates.
+    root_holes: HashSet<i32>,
     /// Whether a root-level predicate has been applied.
-    ///
-    /// Note that [`DomainPredicates::root`] cannot be used for this since it is also initialised
-    /// when processing a predicate.
     has_root_predicate: bool,
-    /// The non-root lower-bound predicate (either a lower-bound or an equality predicate).
+    /// The non-root lower-bound (or equality) predicate.
     lower_bound: Option<Predicate>,
-    /// The non-root upper-bound predicate (either an upper-bound or an equality predicate).
+    /// The non-root upper-bound (or equality) predicate.
     upper_bound: Option<Predicate>,
-    /// The (distinct) non-root not-equals predicates.
-    not_equals: Vec<Predicate>,
+    /// The right-hand sides of the non-root not-equals predicates.
+    not_equals: HashSet<i32>,
 }
 
 impl DomainPredicates {
-    /// Returns whether the provided value is a hole in the domain.
-    fn is_hole(&self, root: &IterativeDomain, value: i32) -> bool {
-        root.holes.contains(&value)
-            || self
-                .not_equals
-                .iter()
-                .any(|predicate| predicate.get_right_hand_side() == value)
+    fn new(domain: DomainId, context: &ConflictAnalysisContext) -> Self {
+        Self {
+            root_lower_bound: context.initial_lower_bound(domain),
+            root_upper_bound: context.initial_upper_bound(domain),
+            root_holes: context.initial_holes(domain).into_iter().collect(),
+            has_root_predicate: false,
+            lower_bound: None,
+            upper_bound: None,
+            not_equals: HashSet::default(),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.lower_bound.is_none()
+            && self.upper_bound.is_none()
+            && self.not_equals.is_empty()
+            && !self.has_root_predicate
+    }
+
+    fn is_hole(&self, value: i32) -> bool {
+        self.root_holes.contains(&value) || self.not_equals.contains(&value)
+    }
+
+    /// Returns the lower-bound and upper-bound of the induced domain.
+    fn bounds(&self) -> (i32, i32) {
+        let mut lower_bound = self.lower_bound.map_or(self.root_lower_bound, |lb| {
+            lb.get_right_hand_side().max(self.root_lower_bound)
+        });
+        while self.is_hole(lower_bound) {
+            lower_bound += 1;
+        }
+
+        let mut upper_bound = self.upper_bound.map_or(self.root_upper_bound, |ub| {
+            ub.get_right_hand_side().min(self.root_upper_bound)
+        });
+        while self.is_hole(upper_bound) {
+            upper_bound -= 1;
+        }
+
+        assert!(lower_bound <= upper_bound);
+        (lower_bound, upper_bound)
     }
 
     /// Returns the non-root predicates.
-    fn non_root_predicates(&self) -> Vec<Predicate> {
-        // An equality predicate is stored in both slots, so we only return it once.
-        let upper_bound = self
-            .upper_bound
-            .filter(|&element| self.lower_bound != Some(element));
-
+    ///
+    /// Note that the domain is not fixed when this is called, so an equality predicate cannot be
+    /// present.
+    fn non_root_predicates(&self, domain: DomainId) -> Vec<Predicate> {
         self.lower_bound
             .into_iter()
-            .chain(upper_bound)
-            .chain(self.not_equals.iter().copied())
+            .chain(self.upper_bound)
+            .chain(
+                self.not_equals
+                    .iter()
+                    .map(|&hole| predicate!(domain != hole)),
+            )
             .collect()
     }
-}
 
-/// A simple representation of a domain.
-///
-/// Differs from `VariableState` by not allowing infinity as bounds, and using a [`Vec`] instead
-/// of a [`BTreeSet`] for storing the holes (to improve efficiency).
-#[derive(Clone, Debug)]
-struct IterativeDomain {
-    lb: i32,
-    ub: i32,
-    holes: Vec<i32>,
-}
-
-impl IterativeDomain {
-    /// Creates the [`IterativeDomain`] corresponding to the initial domain of `domain_id`.
-    fn initial(domain_id: DomainId, context: &ConflictAnalysisContext) -> Self {
-        Self {
-            lb: context.initial_lower_bound(domain_id),
-            ub: context.initial_upper_bound(domain_id),
-            holes: context.initial_holes(domain_id),
-        }
-    }
-
-    /// Tightens the lower-bound to `lb`.
+    /// Returns the non-root lower-bound predicate and the non-root not-equals predicates below
+    /// `value`.
     ///
-    /// Note that this can lead to a lower-bound which is larger than `lb` due to holes in the
-    /// domain.
-    fn tighten_lower_bound(&mut self, mut lb: i32) {
-        if self.lb >= lb {
-            return;
-        }
-
-        while self.holes.contains(&lb) {
-            lb += 1;
-        }
-
-        self.lb = lb;
+    /// Note that the domain is not fixed when this is called, so an equality predicate cannot be
+    /// present.
+    fn lower_bound_and_not_equals_below(&self, domain: DomainId, value: i32) -> Vec<Predicate> {
+        self.lower_bound
+            .into_iter()
+            .chain(
+                self.not_equals
+                    .iter()
+                    .filter(|&&hole| hole < value)
+                    .map(|&hole| predicate!(domain != hole)),
+            )
+            .collect()
     }
 
-    /// Tightens the upper-bound to `ub`.
+    /// Returns the non-root upper-bound predicate and the non-root not-equals predicates above
+    /// `value`.
     ///
-    /// Note that this can lead to a upper-bound which is smaller than `ub` due to holes in the
-    /// domain.
-    fn tighten_upper_bound(&mut self, mut ub: i32) {
-        if self.ub <= ub {
-            return;
-        }
-
-        while self.holes.contains(&ub) {
-            ub -= 1;
-        }
-
-        self.ub = ub;
-    }
-
-    /// Applies the provided [`Predicate`] to the [`IterativeDomain`].
-    fn apply(&mut self, predicate: &Predicate) -> bool {
-        match predicate.get_predicate_type() {
-            PredicateType::LowerBound => self.tighten_lower_bound(predicate.get_right_hand_side()),
-            PredicateType::UpperBound => self.tighten_upper_bound(predicate.get_right_hand_side()),
-            PredicateType::NotEqual => {
-                if predicate.get_right_hand_side() == self.lb {
-                    self.tighten_lower_bound(self.lb + 1);
-                }
-
-                if predicate.get_right_hand_side() == self.ub {
-                    self.tighten_upper_bound(self.ub - 1);
-                }
-
-                if predicate.get_right_hand_side() > self.lb
-                    && predicate.get_right_hand_side() < self.ub
-                {
-                    self.holes.push(predicate.get_right_hand_side());
-                }
-            }
-            PredicateType::Equal => {
-                self.tighten_lower_bound(predicate.get_right_hand_side());
-                self.tighten_upper_bound(predicate.get_right_hand_side());
-            }
-        }
-
-        self.lb <= self.ub
+    /// Note that the domain is not fixed when this is called, so an equality predicate cannot be
+    /// present.
+    fn upper_bound_and_not_equals_above(&self, domain: DomainId, value: i32) -> Vec<Predicate> {
+        self.upper_bound
+            .into_iter()
+            .chain(
+                self.not_equals
+                    .iter()
+                    .filter(|&&hole| hole > value)
+                    .map(|&hole| predicate!(domain != hole)),
+            )
+            .collect()
     }
 }
 
@@ -239,24 +223,30 @@ impl IterativeMinimiser {
             return;
         };
 
+        if predicate.is_not_equal_predicate() {
+            let _ = entry.not_equals.remove(&predicate.get_right_hand_side());
+            return;
+        }
+
         if entry.lower_bound == Some(predicate) {
             entry.lower_bound = None;
         }
         if entry.upper_bound == Some(predicate) {
             entry.upper_bound = None;
         }
-        if let Some(to_remove_position) = entry
-            .not_equals
-            .iter()
-            .position(|element| *element == predicate)
-        {
-            let _ = entry.not_equals.swap_remove(to_remove_position);
-        }
     }
 
     /// Applies the given (non-root) predicate from the nogood.
-    pub(crate) fn apply_predicate(&mut self, predicate: Predicate) {
-        let entry = self.domains.entry(predicate.get_domain()).or_default();
+    pub(crate) fn apply_predicate(
+        &mut self,
+        predicate: Predicate,
+        context: &ConflictAnalysisContext,
+    ) {
+        let domain = predicate.get_domain();
+        let entry = self
+            .domains
+            .entry(domain)
+            .or_insert_with(|| DomainPredicates::new(domain, context));
 
         match predicate.get_predicate_type() {
             PredicateType::LowerBound => {
@@ -268,8 +258,8 @@ impl IterativeMinimiser {
                 entry.upper_bound = Some(predicate);
             }
             PredicateType::NotEqual => {
-                pumpkin_assert_moderate!(!entry.not_equals.contains(&predicate));
-                entry.not_equals.push(predicate);
+                let newly_inserted = entry.not_equals.insert(predicate.get_right_hand_side());
+                pumpkin_assert_simple!(newly_inserted);
             }
             PredicateType::Equal => {
                 pumpkin_assert_simple!(entry.lower_bound.is_none() && entry.upper_bound.is_none());
@@ -280,20 +270,33 @@ impl IterativeMinimiser {
     }
 
     /// Applies the given root-level predicate from the nogood.
+    ///
+    /// Root-level predicates are never removed, and are not guaranteed to adhere to the invariant
+    /// described in [`IterativeMinimiser`]; they are therefore folded into the root domain.
     pub(crate) fn apply_root_predicate(
         &mut self,
         predicate: Predicate,
-        context: &mut ConflictAnalysisContext,
+        context: &ConflictAnalysisContext,
     ) {
         let domain = predicate.get_domain();
-        let entry = self.domains.entry(domain).or_default();
-
+        let entry = self
+            .domains
+            .entry(domain)
+            .or_insert_with(|| DomainPredicates::new(domain, context));
         entry.has_root_predicate = true;
-        let consistent = entry
-            .root
-            .get_or_insert_with(|| IterativeDomain::initial(domain, context))
-            .apply(&predicate);
-        assert!(consistent);
+
+        let value = predicate.get_right_hand_side();
+        match predicate.get_predicate_type() {
+            PredicateType::LowerBound => entry.root_lower_bound = entry.root_lower_bound.max(value),
+            PredicateType::UpperBound => entry.root_upper_bound = entry.root_upper_bound.min(value),
+            PredicateType::NotEqual => {
+                let _ = entry.root_holes.insert(value);
+            }
+            PredicateType::Equal => {
+                entry.root_lower_bound = entry.root_lower_bound.max(value);
+                entry.root_upper_bound = entry.root_upper_bound.min(value);
+            }
+        }
     }
 
     /// Processes the predicate, indicating via [`ProcessingResult`] what can happen to it.
@@ -303,31 +306,16 @@ impl IterativeMinimiser {
         context: &mut ConflictAnalysisContext,
     ) -> ProcessingResult {
         let domain = predicate.get_domain();
-        let Some(entry) = self.domains.get_mut(&domain) else {
+        let Some(entry) = self.domains.get(&domain).filter(|entry| !entry.is_empty()) else {
             return ProcessingResult::NotRedundant;
         };
-
-        if entry.lower_bound.is_none()
-            && entry.upper_bound.is_none()
-            && entry.not_equals.is_empty()
-            && !entry.has_root_predicate
-        {
-            return ProcessingResult::NotRedundant;
-        }
-
-        let _ = entry
-            .root
-            .get_or_insert_with(|| IterativeDomain::initial(domain, context));
 
         // Note that the initial domain needs to be explained each time since the deduction checker
         // requires the facts to be logged after the inferences which make use of them; this is a
         // no-op when not logging a proof.
         context.explain_initial_domain(domain);
 
-        let entry = &self.domains[&domain];
-        let root = entry.root.as_ref().unwrap();
-
-        let (lower_bound, upper_bound) = calculate_bounds(entry, root);
+        let (lower_bound, upper_bound) = entry.bounds();
 
         // If the domain is assigned, then the added predicate is redundant.
         //
@@ -346,7 +334,8 @@ impl IterativeMinimiser {
                 if predicate.get_right_hand_side() == upper_bound {
                     self.statistics.num_removed_by_creating_equality += 1;
                     // [x <= v], [x >= v] => [x = v]
-                    let to_remove = lower_bound_to_remove(entry, predicate);
+                    let to_remove = entry
+                        .lower_bound_and_not_equals_below(domain, predicate.get_right_hand_side());
 
                     if !to_remove.is_empty() {
                         self.statistics.num_removed_by_bound += 1;
@@ -358,10 +347,13 @@ impl IterativeMinimiser {
                         removed: to_remove,
                     }
                 } else if predicate.get_right_hand_side() > lower_bound {
-                    if entry.is_hole(root, predicate.get_right_hand_side()) {
+                    if entry.is_hole(predicate.get_right_hand_side()) {
                         // [x >= v], [x != v] => [x <= v + 1]
                         self.statistics.num_removed_by_bound += 1;
-                        let to_remove = lower_bound_to_remove(entry, predicate);
+                        let to_remove = entry.lower_bound_and_not_equals_below(
+                            domain,
+                            predicate.get_right_hand_side(),
+                        );
 
                         ProcessingResult::PossiblyReplacedWithNew {
                             potentially_removed: predicate!(
@@ -374,7 +366,10 @@ impl IterativeMinimiser {
                         }
                     } else {
                         // [x >= v], [x >= v'] => [x >= v'] if v' > v
-                        let to_remove = lower_bound_to_remove(entry, predicate);
+                        let to_remove = entry.lower_bound_and_not_equals_below(
+                            domain,
+                            predicate.get_right_hand_side(),
+                        );
 
                         if !to_remove.is_empty() {
                             self.statistics.num_removed_by_bound += 1;
@@ -395,7 +390,8 @@ impl IterativeMinimiser {
                 if predicate.get_right_hand_side() == lower_bound {
                     self.statistics.num_removed_by_creating_equality += 1;
 
-                    let to_remove = upper_bound_to_remove(entry, predicate);
+                    let to_remove = entry
+                        .upper_bound_and_not_equals_above(domain, predicate.get_right_hand_side());
 
                     if !to_remove.is_empty() {
                         self.statistics.num_removed_by_bound += 1;
@@ -407,10 +403,13 @@ impl IterativeMinimiser {
                         removed: to_remove,
                     }
                 } else if predicate.get_right_hand_side() < upper_bound {
-                    if entry.is_hole(root, predicate.get_right_hand_side()) {
+                    if entry.is_hole(predicate.get_right_hand_side()) {
                         // [x <= v], [x != v] => [x <= v - 1]
                         self.statistics.num_removed_by_bound += 1;
-                        let to_remove = upper_bound_to_remove(entry, predicate);
+                        let to_remove = entry.upper_bound_and_not_equals_above(
+                            domain,
+                            predicate.get_right_hand_side(),
+                        );
 
                         ProcessingResult::PossiblyReplacedWithNew {
                             potentially_removed: predicate!(
@@ -423,7 +422,10 @@ impl IterativeMinimiser {
                         }
                     } else {
                         // [x <= v], [x <= v'] => [x <= v'] if v' < v
-                        let to_remove = upper_bound_to_remove(entry, predicate);
+                        let to_remove = entry.upper_bound_and_not_equals_above(
+                            domain,
+                            predicate.get_right_hand_side(),
+                        );
                         if !to_remove.is_empty() {
                             self.statistics.num_removed_by_bound += 1;
                             ProcessingResult::ReplacedPresent { removed: to_remove }
@@ -463,7 +465,7 @@ impl IterativeMinimiser {
                     self.statistics.num_redundant += 1;
                     // [x >= v], [x != v'] => [x >= v] where v' < v
                     ProcessingResult::Redundant
-                } else if entry.is_hole(root, predicate.get_right_hand_side()) {
+                } else if entry.is_hole(predicate.get_right_hand_side()) {
                     self.statistics.num_redundant += 1;
                     ProcessingResult::Redundant
                 } else {
@@ -472,7 +474,7 @@ impl IterativeMinimiser {
                 }
             }
             PredicateType::Equal => {
-                let removed = entry.non_root_predicates();
+                let removed = entry.non_root_predicates(domain);
                 if removed.is_empty() {
                     self.statistics.num_non_redundant += 1;
                     ProcessingResult::NotRedundant
@@ -484,55 +486,4 @@ impl IterativeMinimiser {
             }
         }
     }
-}
-
-/// Calculates the upper-bound and lower-bound, based on the provided [`DomainPredicates`]
-fn calculate_bounds(entry: &DomainPredicates, root: &IterativeDomain) -> (i32, i32) {
-    let mut lower_bound = entry.lower_bound.map_or(root.lb, |element| {
-        root.lb.max(element.get_right_hand_side())
-    });
-    while entry.is_hole(root, lower_bound) {
-        lower_bound += 1;
-    }
-
-    let mut upper_bound = entry.upper_bound.map_or(root.ub, |element| {
-        root.ub.min(element.get_right_hand_side())
-    });
-    while entry.is_hole(root, upper_bound) {
-        upper_bound -= 1;
-    }
-
-    assert!(lower_bound <= upper_bound);
-
-    (lower_bound, upper_bound)
-}
-
-/// Returns the predicates which are removed when tightening the lower-bound using `predicate`.
-fn lower_bound_to_remove(entry: &DomainPredicates, predicate: Predicate) -> Vec<Predicate> {
-    entry
-        .lower_bound
-        .iter()
-        .chain(
-            entry
-                .not_equals
-                .iter()
-                .filter(|element| element.get_right_hand_side() < predicate.get_right_hand_side()),
-        )
-        .copied()
-        .collect()
-}
-
-/// Returns the predicates which are removed when tightening the upper-bound using `predicate`.
-fn upper_bound_to_remove(entry: &DomainPredicates, predicate: Predicate) -> Vec<Predicate> {
-    entry
-        .upper_bound
-        .iter()
-        .chain(
-            entry
-                .not_equals
-                .iter()
-                .filter(|element| element.get_right_hand_side() > predicate.get_right_hand_side()),
-        )
-        .copied()
-        .collect()
 }
