@@ -14,7 +14,7 @@ cargo build
 cargo build --release
 
 # Test (standard CI command)
-cargo test --release --no-fail-fast --features pumpkin-solver/check-propagations
+cargo test --release --no-fail-fast --features pumpkin-solver/check-propagations --features pumpkin-core/check-deductions
 
 # Run a single test
 cargo test --release --features pumpkin-solver/check-propagations <test_name>

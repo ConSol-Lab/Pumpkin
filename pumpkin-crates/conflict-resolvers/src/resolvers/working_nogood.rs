@@ -352,7 +352,8 @@ impl WorkingNogood {
             context.explain_root_assignment(predicate);
 
             if self.iterative_minimisation {
-                self.iterative_minimiser.apply_predicate(predicate);
+                self.iterative_minimiser
+                    .apply_root_predicate(predicate, context);
             }
         }
         // 1UIP
