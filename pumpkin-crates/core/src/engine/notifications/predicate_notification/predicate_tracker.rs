@@ -21,6 +21,10 @@ use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
 
+/// The [`PredicateId`] stored in [`PredicateTracker::ids`] for [`PredicateType`]s which are not
+/// tracked for a value.
+const PLACEHOLDER_PREDICATE_ID: PredicateId = PredicateId { id: u32::MAX };
+
 /// A generic structure for keeping track of the polarity of [`Predicate`]s.
 ///
 /// This structure keeps track of all different [`PredicateType`]s.
@@ -67,7 +71,10 @@ pub(crate) struct PredicateTracker {
     values: IndexSet<TrackedValue, FnvBuildHasher>,
     /// The [`PredicateId`]s corresponding to the predicates for each value in
     /// [`PredicateTracker::values`].
-    ids: Vec<Vec<PredicateId>>,
+    ///
+    /// The ids of a value are indexed by [`PredicateType`]; if a [`PredicateType`] is not tracked
+    /// for a value, then its entry is [`PLACEHOLDER_PREDICATE_ID`].
+    ids: Vec<[PredicateId; 4]>,
     /// The [`PredicateType`]s tracked by this [`PredicateTracker`].
     tracked: EnumSet<PredicateType>,
 }
@@ -188,8 +195,8 @@ impl PredicateTracker {
         let _ = self.insert_value(initial_upper_bound + 1);
 
         // These should never be queried so we provide a placeholder
-        self.ids.push(vec![]);
-        self.ids.push(vec![]);
+        self.ids.push([PLACEHOLDER_PREDICATE_ID; 4]);
+        self.ids.push([PLACEHOLDER_PREDICATE_ID; 4]);
 
         // Then we place the sentinels into the `smaller` structure
         //
@@ -285,11 +292,11 @@ impl PredicateTracker {
     fn predicate_has_been_satisfied(
         &self,
         index: usize,
-        predicate_index: usize,
+        predicate_type: PredicateType,
         predicate_id_assignments: &mut PredicateIdAssignments,
     ) {
-        let predicate_id = self.ids[index][predicate_index];
-        if predicate_id.id == u32::MAX {
+        let predicate_id = self.ids[index][predicate_type as usize];
+        if predicate_id == PLACEHOLDER_PREDICATE_ID {
             // If it is a placeholder then we ignore it
             return;
         }
@@ -300,11 +307,11 @@ impl PredicateTracker {
     fn predicate_has_been_falsified(
         &self,
         index: usize,
-        predicate_index: usize,
+        predicate_type: PredicateType,
         predicate_id_assignments: &mut PredicateIdAssignments,
     ) {
-        let predicate_id = self.ids[index][predicate_index];
-        if predicate_id.id == u32::MAX {
+        let predicate_id = self.ids[index][predicate_type as usize];
+        if predicate_id == PLACEHOLDER_PREDICATE_ID {
             return;
         }
         predicate_id_assignments.store_predicate(predicate_id, PredicateValue::AssignedFalse);
@@ -327,18 +334,7 @@ impl PredicateTracker {
         if let Some((index, tracked_value)) = self.values.get_full_mut2(&value) {
             // Then we check whether this particular predicate type has already been tracked
             if !tracked_value.does_track_predicate_type(predicate.get_predicate_type()) {
-                let current_mask = predicate.get_predicate_type() as u8;
-
-                // We keep the predicate ids in the same order as they are returned by the
-                // TrackedValue
-                if let Some(pos) = tracked_value
-                    .get_predicate_types()
-                    .position(|predicate_type| predicate_type as u8 > current_mask)
-                {
-                    self.ids[index].insert(pos, predicate_id);
-                } else {
-                    self.ids[index].push(predicate_id);
-                }
+                self.ids[index][predicate.get_predicate_type() as usize] = predicate_id;
 
                 tracked_value.track_predicate_type(predicate.get_predicate_type());
 
@@ -401,7 +397,9 @@ impl PredicateTracker {
         // Then we update the other structures
         self.smaller.push(index_largest_value_smaller_than);
         self.greater.push(index_smallest_value_larger_than);
-        self.ids.push(vec![predicate_id]);
+        let mut ids = [PLACEHOLDER_PREDICATE_ID; 4];
+        ids[predicate.get_predicate_type() as usize] = predicate_id;
+        self.ids.push(ids);
 
         true
     }
@@ -428,29 +426,26 @@ impl PredicateTracker {
         while greater_strict != u32::MAX && value > self.values[greater_strict as usize].get_value()
         {
             // Now we go over all tracked predicate types and update them
-            for (predicate_index, predicate_type) in self.values[greater_strict as usize]
-                .get_predicate_types()
-                .enumerate()
-            {
+            for predicate_type in self.values[greater_strict as usize].get_predicate_types() {
                 match predicate_type {
                     PredicateType::UpperBound | PredicateType::Equal => {
                         self.predicate_has_been_falsified(
                             greater_strict as usize,
-                            predicate_index,
+                            predicate_type,
                             predicate_id_assignments,
                         );
                     }
                     PredicateType::NotEqual => {
                         self.predicate_has_been_satisfied(
                             greater_strict as usize,
-                            predicate_index,
+                            predicate_type,
                             predicate_id_assignments,
                         );
                     }
                     PredicateType::LowerBound => {
                         self.predicate_has_been_satisfied(
                             greater_strict as usize,
-                            predicate_index,
+                            predicate_type,
                             predicate_id_assignments,
                         );
                     }
@@ -469,13 +464,10 @@ impl PredicateTracker {
         while greater != u32::MAX && value >= self.values[greater as usize].get_value() {
             // In this case, we can only have a lower-bound update, because all of the other
             // predicate types require a strictly larger value
-            if let Some(predicate_index) = self.values[greater as usize]
-                .get_predicate_types()
-                .position(|predicate_type| predicate_type == PredicateType::LowerBound)
-            {
+            if self.values[greater as usize].does_track_predicate_type(PredicateType::LowerBound) {
                 self.predicate_has_been_satisfied(
                     greater as usize,
-                    predicate_index,
+                    PredicateType::LowerBound,
                     predicate_id_assignments,
                 );
             }
@@ -509,29 +501,26 @@ impl PredicateTracker {
         while smaller_strict != u32::MAX && value < self.values[smaller_strict as usize].get_value()
         {
             // Now we go over all tracked predicate types and update them
-            for (predicate_index, predicate_type) in self.values[smaller_strict as usize]
-                .get_predicate_types()
-                .enumerate()
-            {
+            for predicate_type in self.values[smaller_strict as usize].get_predicate_types() {
                 match predicate_type {
                     PredicateType::LowerBound | PredicateType::Equal => {
                         self.predicate_has_been_falsified(
                             smaller_strict as usize,
-                            predicate_index,
+                            predicate_type,
                             predicate_id_assignments,
                         );
                     }
                     PredicateType::NotEqual => {
                         self.predicate_has_been_satisfied(
                             smaller_strict as usize,
-                            predicate_index,
+                            predicate_type,
                             predicate_id_assignments,
                         );
                     }
                     PredicateType::UpperBound => {
                         self.predicate_has_been_satisfied(
                             smaller_strict as usize,
-                            predicate_index,
+                            predicate_type,
                             predicate_id_assignments,
                         );
                     }
@@ -550,13 +539,10 @@ impl PredicateTracker {
         while smaller != u32::MAX && value <= self.values[smaller as usize].get_value() {
             // In this case, we can only have a upper-bound update, because all of the other
             // predicate types require a strictly smaller value
-            if let Some(predicate_index) = self.values[smaller as usize]
-                .get_predicate_types()
-                .position(|predicate_type| predicate_type == PredicateType::UpperBound)
-            {
+            if self.values[smaller as usize].does_track_predicate_type(PredicateType::UpperBound) {
                 self.predicate_has_been_satisfied(
                     smaller as usize,
-                    predicate_index,
+                    PredicateType::UpperBound,
                     predicate_id_assignments,
                 );
             }
@@ -612,18 +598,16 @@ impl PredicateTracker {
             // If it is, and a disequality or equality predicate type are tracked, then we can
             // update them accordingly
             if let Some(index) = self.get_index_of_value(value) {
-                for (predicate_index, predicate_type) in
-                    self.values[index].get_predicate_types().enumerate()
-                {
+                for predicate_type in self.values[index].get_predicate_types() {
                     match predicate_type {
                         PredicateType::NotEqual => self.predicate_has_been_satisfied(
                             index,
-                            predicate_index,
+                            predicate_type,
                             predicate_id_assignments,
                         ),
                         PredicateType::Equal => self.predicate_has_been_falsified(
                             index,
-                            predicate_index,
+                            predicate_type,
                             predicate_id_assignments,
                         ),
                         _ => {}
@@ -643,22 +627,19 @@ impl PredicateTracker {
             if greater == self.smaller[trailed_values.read(self.max_assigned_strict) as usize]
                 && self.values[greater as usize].get_value() == value
             {
-                for (predicate_index, predicate_type) in self.values[greater as usize]
-                    .get_predicate_types()
-                    .enumerate()
-                {
+                for predicate_type in self.values[greater as usize].get_predicate_types() {
                     match predicate_type {
                         PredicateType::NotEqual => {
                             self.predicate_has_been_falsified(
                                 greater as usize,
-                                predicate_index,
+                                predicate_type,
                                 predicate_id_assignments,
                             );
                         }
                         PredicateType::Equal => {
                             self.predicate_has_been_satisfied(
                                 greater as usize,
-                                predicate_index,
+                                predicate_type,
                                 predicate_id_assignments,
                             );
                         }
