@@ -56,6 +56,7 @@ struct IterativeDomain {
     not_equals: HashSet<i32>,
 }
 
+/// The induced domain of the root-level predicates of the working nogood.
 #[derive(Debug, Clone)]
 struct RootDomain {
     /// The lower-bound of the initial domain tightened by the root-level predicates.
