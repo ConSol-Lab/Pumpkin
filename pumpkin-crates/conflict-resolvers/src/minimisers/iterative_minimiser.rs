@@ -19,8 +19,7 @@ use pumpkin_core::variables::DomainId;
 /// The implementation is incremental; it relies on the invariant that the rewrite rules ensure that
 /// for each variable, the (non-root) nogood contains at most one lower-bound predicate, at most one
 /// upper-bound predicate (where an equality predicate counts as both), and distinct not-equals
-/// predicates. Root-level predicates are not guaranteed to adhere to this invariant, and they are
-/// never removed; they are therefore folded into a separate domain which is only tightened.
+/// predicates.
 ///
 /// ## Developer Notes
 /// - The predicates from the previous decision level should also be added to the
@@ -40,34 +39,39 @@ use pumpkin_core::variables::DomainId;
 #[derive(Debug, Clone, Default)]
 pub(crate) struct IterativeMinimiser {
     /// Keeps track of the predicates for each [`DomainId`] in the current nogood.
-    domains: HashMap<DomainId, DomainPredicates>,
+    domains: HashMap<DomainId, IterativeDomain>,
     statistics: IterativeMinimiserStatistics,
 }
 
 /// The domain induced by the predicates in the current nogood over a single [`DomainId`].
 #[derive(Clone, Debug)]
-struct DomainPredicates {
+struct IterativeDomain {
+    /// The induced domain of the root-level predicates of the working nogood.
+    root_domain: RootDomain,
+    /// The lower-bound (or equality) predicate.
+    lower_bound: Option<Predicate>,
+    /// The upper-bound (or equality) predicate.
+    upper_bound: Option<Predicate>,
+    /// The right-hand sides of the not-equals predicates.
+    not_equals: HashSet<i32>,
+}
+
+#[derive(Debug, Clone)]
+struct RootDomain {
     /// The lower-bound of the initial domain tightened by the root-level predicates.
     root_lower_bound: i32,
     /// The upper-bound of the initial domain tightened by the root-level predicates.
     root_upper_bound: i32,
     /// The holes of the initial domain and the root-level not-equals predicates.
     root_holes: HashSet<i32>,
-    /// The root-level predicates which have been applied.
-    ///
-    /// These are stored so that they can be explained again each time that they are used; see
-    /// [`IterativeMinimiser::process_predicate`].
+    /// The root-level predicates which have been applied; only stored when proof-logging is
+    /// enabled.
     root_predicates: Vec<Predicate>,
+    /// Whether any root-level predicates have been added to the nogood.
     has_root_predicates: bool,
-    /// The non-root lower-bound (or equality) predicate.
-    lower_bound: Option<Predicate>,
-    /// The non-root upper-bound (or equality) predicate.
-    upper_bound: Option<Predicate>,
-    /// The right-hand sides of the non-root not-equals predicates.
-    not_equals: HashSet<i32>,
 }
 
-impl DomainPredicates {
+impl RootDomain {
     fn new(domain: DomainId, context: &ConflictAnalysisContext) -> Self {
         Self {
             root_lower_bound: context.initial_lower_bound(domain),
@@ -75,35 +79,51 @@ impl DomainPredicates {
             root_holes: context.initial_holes(domain).into_iter().collect(),
             root_predicates: Vec::new(),
             has_root_predicates: false,
+        }
+    }
+}
+
+impl IterativeDomain {
+    fn new(domain: DomainId, context: &ConflictAnalysisContext) -> Self {
+        Self {
+            root_domain: RootDomain::new(domain, context),
             lower_bound: None,
             upper_bound: None,
             not_equals: HashSet::default(),
         }
     }
 
+    /// Returns whether no predicates have been applied to the induced domain thus far.
     fn is_empty(&self) -> bool {
         self.lower_bound.is_none()
             && self.upper_bound.is_none()
             && self.not_equals.is_empty()
-            && !self.has_root_predicates
+            && !self.root_domain.has_root_predicates
     }
 
+    /// Returns whether `value` is a hole in the induced domain.
     fn is_hole(&self, value: i32) -> bool {
-        self.root_holes.contains(&value) || self.not_equals.contains(&value)
+        self.root_domain.root_holes.contains(&value) || self.not_equals.contains(&value)
     }
 
     /// Returns the lower-bound and upper-bound of the induced domain.
     fn bounds(&self) -> (i32, i32) {
-        let mut lower_bound = self.lower_bound.map_or(self.root_lower_bound, |lb| {
-            lb.get_right_hand_side().max(self.root_lower_bound)
-        });
+        let mut lower_bound = self
+            .lower_bound
+            .map_or(self.root_domain.root_lower_bound, |lb| {
+                lb.get_right_hand_side()
+                    .max(self.root_domain.root_lower_bound)
+            });
         while self.is_hole(lower_bound) {
             lower_bound += 1;
         }
 
-        let mut upper_bound = self.upper_bound.map_or(self.root_upper_bound, |ub| {
-            ub.get_right_hand_side().min(self.root_upper_bound)
-        });
+        let mut upper_bound = self
+            .upper_bound
+            .map_or(self.root_domain.root_upper_bound, |ub| {
+                ub.get_right_hand_side()
+                    .min(self.root_domain.root_upper_bound)
+            });
         while self.is_hole(upper_bound) {
             upper_bound -= 1;
         }
@@ -251,7 +271,7 @@ impl IterativeMinimiser {
         let entry = self
             .domains
             .entry(domain)
-            .or_insert_with(|| DomainPredicates::new(domain, context));
+            .or_insert_with(|| IterativeDomain::new(domain, context));
 
         match predicate.get_predicate_type() {
             PredicateType::LowerBound => {
@@ -287,23 +307,27 @@ impl IterativeMinimiser {
         let entry = self
             .domains
             .entry(domain)
-            .or_insert_with(|| DomainPredicates::new(domain, context));
+            .or_insert_with(|| IterativeDomain::new(domain, context));
 
-        entry.has_root_predicates = true;
+        entry.root_domain.has_root_predicates = true;
         if context.is_proof_logging_inferences() {
-            entry.root_predicates.push(predicate);
+            entry.root_domain.root_predicates.push(predicate);
         }
 
         let value = predicate.get_right_hand_side();
         match predicate.get_predicate_type() {
-            PredicateType::LowerBound => entry.root_lower_bound = entry.root_lower_bound.max(value),
-            PredicateType::UpperBound => entry.root_upper_bound = entry.root_upper_bound.min(value),
+            PredicateType::LowerBound => {
+                entry.root_domain.root_lower_bound = entry.root_domain.root_lower_bound.max(value)
+            }
+            PredicateType::UpperBound => {
+                entry.root_domain.root_upper_bound = entry.root_domain.root_upper_bound.min(value)
+            }
             PredicateType::NotEqual => {
-                let _ = entry.root_holes.insert(value);
+                let _ = entry.root_domain.root_holes.insert(value);
             }
             PredicateType::Equal => {
-                entry.root_lower_bound = entry.root_lower_bound.max(value);
-                entry.root_upper_bound = entry.root_upper_bound.min(value);
+                entry.root_domain.root_lower_bound = entry.root_domain.root_lower_bound.max(value);
+                entry.root_domain.root_upper_bound = entry.root_domain.root_upper_bound.min(value);
             }
         }
     }
@@ -312,14 +336,14 @@ impl IterativeMinimiser {
     fn log_root_inferences(
         context: &mut ConflictAnalysisContext<'_>,
         domain: DomainId,
-        entry: &DomainPredicates,
+        entry: &IterativeDomain,
     ) {
         // Note that the initial domain and the root-level predicates need to be explained each time
         // since the deduction checker requires the facts to be logged after the inferences which
         // make use of them; this is a no-op when not logging a proof.
         if context.is_proof_logging_inferences() {
             context.explain_initial_domain(domain);
-            for &root_predicate in entry.root_predicates.iter() {
+            for &root_predicate in entry.root_domain.root_predicates.iter() {
                 context.explain_root_assignment(root_predicate);
             }
         }
