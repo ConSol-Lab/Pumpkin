@@ -53,8 +53,12 @@ struct DomainPredicates {
     root_upper_bound: i32,
     /// The holes of the initial domain and the root-level not-equals predicates.
     root_holes: HashSet<i32>,
-    /// Whether a root-level predicate has been applied.
-    has_root_predicate: bool,
+    /// The root-level predicates which have been applied.
+    ///
+    /// These are stored so that they can be explained again each time that they are used; see
+    /// [`IterativeMinimiser::process_predicate`].
+    root_predicates: Vec<Predicate>,
+    has_root_predicates: bool,
     /// The non-root lower-bound (or equality) predicate.
     lower_bound: Option<Predicate>,
     /// The non-root upper-bound (or equality) predicate.
@@ -69,7 +73,8 @@ impl DomainPredicates {
             root_lower_bound: context.initial_lower_bound(domain),
             root_upper_bound: context.initial_upper_bound(domain),
             root_holes: context.initial_holes(domain).into_iter().collect(),
-            has_root_predicate: false,
+            root_predicates: Vec::new(),
+            has_root_predicates: false,
             lower_bound: None,
             upper_bound: None,
             not_equals: HashSet::default(),
@@ -80,7 +85,7 @@ impl DomainPredicates {
         self.lower_bound.is_none()
             && self.upper_bound.is_none()
             && self.not_equals.is_empty()
-            && !self.has_root_predicate
+            && !self.has_root_predicates
     }
 
     fn is_hole(&self, value: i32) -> bool {
@@ -283,7 +288,11 @@ impl IterativeMinimiser {
             .domains
             .entry(domain)
             .or_insert_with(|| DomainPredicates::new(domain, context));
-        entry.has_root_predicate = true;
+
+        entry.has_root_predicates = true;
+        if context.is_proof_logging_inferences() {
+            entry.root_predicates.push(predicate);
+        }
 
         let value = predicate.get_right_hand_side();
         match predicate.get_predicate_type() {
@@ -299,6 +308,23 @@ impl IterativeMinimiser {
         }
     }
 
+    /// Logs the root-level inferences to the proof.
+    fn log_root_inferences(
+        context: &mut ConflictAnalysisContext<'_>,
+        domain: DomainId,
+        entry: &DomainPredicates,
+    ) {
+        // Note that the initial domain and the root-level predicates need to be explained each time
+        // since the deduction checker requires the facts to be logged after the inferences which
+        // make use of them; this is a no-op when not logging a proof.
+        if context.is_proof_logging_inferences() {
+            context.explain_initial_domain(domain);
+            for &root_predicate in entry.root_predicates.iter() {
+                context.explain_root_assignment(root_predicate);
+            }
+        }
+    }
+
     /// Processes the predicate, indicating via [`ProcessingResult`] what can happen to it.
     pub(crate) fn process_predicate(
         &mut self,
@@ -310,10 +336,7 @@ impl IterativeMinimiser {
             return ProcessingResult::NotRedundant;
         };
 
-        // Note that the initial domain needs to be explained each time since the deduction checker
-        // requires the facts to be logged after the inferences which make use of them; this is a
-        // no-op when not logging a proof.
-        context.explain_initial_domain(domain);
+        Self::log_root_inferences(context, domain, entry);
 
         let (lower_bound, upper_bound) = entry.bounds();
 
