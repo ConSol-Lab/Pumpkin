@@ -29,18 +29,9 @@ pub(crate) struct PredicateTracker {
     /// A [`TrailedInteger`] which contains the [`AssignedIndices`] (i.e., the indices of the nodes
     /// pointed to by `min_assigned`, `max_assigned`, `min_assigned_strict`, and
     /// `max_assigned_strict`) packed into a single value.
-    ///
-    /// Use [`PredicateTracker::read_assigned_indices`] and
-    /// [`PredicateTracker::write_assigned_indices`] to access it.
     assigned_indices: TrailedInteger,
     /// The values which are currently being tracked by this [`PredicateTracker`], each stored as
     /// a node of a doubly linked list which is ordered by value.
-    ///
-    /// The indices of the nodes remain consistent since they are, for example, stored in
-    /// [`TrackedValueNode::smaller`] and [`TrackedValueNode::greater`]. Membership queries are
-    /// answered by traversing the linked list (see [`PredicateTracker::track`]) or by looking up
-    /// the [`PredicateId`] of a [`Predicate`] in the [`PredicateIdGenerator`] and checking whether
-    /// it is tracked (see [`PredicateTracker::on_update`]).
     ///
     /// Note that the nodes are not stored in order of their values.
     nodes: Vec<TrackedValueNode>,
@@ -84,9 +75,6 @@ const MAX_NUMBER_OF_NODES: usize = u16::MAX as usize + 1;
 
 /// A value tracked by the [`PredicateTracker`], stored as a node of a doubly linked list which is
 /// ordered by value.
-///
-/// A node contains all of the information which is required when traversing the list; this
-/// ensures that each step of a traversal only accesses a single node (which takes 32 bytes).
 #[derive(Clone, Copy, Debug)]
 struct TrackedValueNode {
     /// The tracked value.

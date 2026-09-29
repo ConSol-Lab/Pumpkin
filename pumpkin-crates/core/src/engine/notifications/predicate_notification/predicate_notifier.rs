@@ -37,8 +37,10 @@ pub(crate) struct PredicateNotifier {
     ///
     /// Predicates are re-tracked frequently (e.g., when a watch list of the nogood propagator
     /// becomes non-empty again), and determining whether a [`Predicate`] is tracked by the
-    /// [`PredicateTracker`] itself requires traversing its values. It is also used by the
-    /// [`PredicateTracker`] to determine which predicates to update upon the removal of a value.
+    /// [`PredicateTracker`] itself requires traversing its values.
+    ///
+    /// It is also used by the [`PredicateTracker`] to determine which predicates to update when a
+    /// disequality [`Predicate`] has been posted.
     is_tracked: BitSet,
 }
 
