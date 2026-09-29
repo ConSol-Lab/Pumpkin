@@ -17,7 +17,7 @@ use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
 
-/// The [`PredicateId`] stored in [`PredicateTracker::ids`] for [`PredicateType`]s which are not
+/// The [`PredicateId`] stored in [`TrackedValueNode::ids`] for [`PredicateType`]s which are not
 /// tracked for a value.
 const PLACEHOLDER_PREDICATE_ID: PredicateId = PredicateId { id: u32::MAX };
 
@@ -28,12 +28,6 @@ const PLACEHOLDER_PREDICATE_ID: PredicateId = PredicateId { id: u32::MAX };
 pub(crate) struct PredicateTracker {
     /// The [`DomainId`] which the tracker is tracking the polarity for.
     domain_id: DomainId,
-    /// `smaller[i]` is the index of the element with the largest value such that it is smaller
-    /// than `values[i]`
-    smaller: Vec<u32>,
-    /// `greater[i]` is the index of the element with the smallest value such that it is larger
-    /// than `values[i]`
-    greater: Vec<u32>,
     /// A [`TrailedInteger`] which points to the largest lowest value which is assigned.
     ///
     /// For example, if we have the values `x in [1, 5, 7, 9]` and we know that `[x >= 6]` holds,
@@ -56,53 +50,69 @@ pub(crate) struct PredicateTracker {
     /// For example, if we have the values `x in [1, 5, 8, 9]` and we know that `[x <= 8]` holds,
     /// then [`PredicateTracker::min_assigned`] will point to index 3.
     max_assigned_strict: TrailedInteger,
-    /// The values which are currently being tracked by this [`PredicateTracker`].
+    /// The values which are currently being tracked by this [`PredicateTracker`], each stored as
+    /// a node of a doubly linked list which is ordered by value.
     ///
-    /// The indices of the values remain consistent since they are, for example, stored in
-    /// [`Self::smaller`] and [`Self::greater`]. Membership queries are answered by traversing the
-    /// linked list (see [`PredicateTracker::track`]) or by looking up the [`PredicateId`] of a
-    /// [`Predicate`] in the [`PredicateIdGenerator`] and checking whether it is tracked (see
-    /// [`PredicateTracker::on_update`]).
+    /// The indices of the nodes remain consistent since they are, for example, stored in
+    /// [`TrackedValueNode::smaller`] and [`TrackedValueNode::greater`]. Membership queries are
+    /// answered by traversing the linked list (see [`PredicateTracker::track`]) or by looking up
+    /// the [`PredicateId`] of a [`Predicate`] in the [`PredicateIdGenerator`] and checking whether
+    /// it is tracked (see [`PredicateTracker::on_update`]).
     ///
-    /// Note that these values are not sorted in any way.
-    values: Vec<TrackedValue>,
-    /// The [`PredicateId`]s corresponding to the predicates for each value in
-    /// [`PredicateTracker::values`].
-    ///
-    /// The ids of a value are indexed by [`PredicateType`]; if a [`PredicateType`] is not tracked
-    /// for a value, then its entry is [`PLACEHOLDER_PREDICATE_ID`].
-    ids: Vec<[PredicateId; 4]>,
+    /// Note that the nodes are not stored in order of their values.
+    nodes: Vec<TrackedValueNode>,
     /// The [`PredicateType`]s tracked by this [`PredicateTracker`].
     tracked: EnumSet<PredicateType>,
 }
 
-// A value tracked by the [`PredicateTracker`], keeps track of the values in the lowest 4 bits.
+/// A value tracked by the [`PredicateTracker`], stored as a node of a doubly linked list which is
+/// ordered by value.
+///
+/// A node contains all of the information which is required when traversing the list; this
+/// ensures that each step of a traversal only accesses a single node (which takes 32 bytes).
 #[derive(Clone, Copy, Debug)]
-struct TrackedValue {
+struct TrackedValueNode {
+    /// The tracked value.
     value: i32,
+    /// The index of the node with the largest value which is smaller than
+    /// [`TrackedValueNode::value`], or [`u32::MAX`] if there is no such node.
+    smaller: u32,
+    /// The index of the node with the smallest value which is larger than
+    /// [`TrackedValueNode::value`], or [`u32::MAX`] if there is no such node.
+    greater: u32,
+    /// The [`PredicateType`]s which are tracked for this value.
     flags: EnumSet<PredicateType>,
+    /// The [`PredicateId`]s of the tracked predicates for this value, indexed by
+    /// [`PredicateType`]; if a [`PredicateType`] is not tracked for this value, then its entry is
+    /// [`PLACEHOLDER_PREDICATE_ID`].
+    ids: [PredicateId; 4],
 }
 
-impl TrackedValue {
-    /// Creates a new [`TrackedValue`].
-    fn new(value: i32) -> Self {
+impl TrackedValueNode {
+    /// Creates a new [`TrackedValueNode`] which does not track any [`PredicateType`]s yet.
+    fn new(value: i32, smaller: u32, greater: u32) -> Self {
         Self {
             value,
+            smaller,
+            greater,
             flags: EnumSet::new(),
+            ids: [PLACEHOLDER_PREDICATE_ID; 4],
         }
     }
 
-    /// Store the provided [`PredicateType`] in the [`TrackedValue`].
-    fn track_predicate_type(&mut self, predicate_type: PredicateType) {
+    /// Store the provided [`PredicateType`] with its corresponding [`PredicateId`] in the
+    /// [`TrackedValueNode`].
+    fn track_predicate(&mut self, predicate_type: PredicateType, predicate_id: PredicateId) {
         self.flags |= predicate_type;
+        self.ids[predicate_type as usize] = predicate_id;
     }
 
-    /// Returns whether the provided [`PredicateType`] is tracked by this [`TrackedValue`].
+    /// Returns whether the provided [`PredicateType`] is tracked by this [`TrackedValueNode`].
     fn does_track_predicate_type(&self, predicate_type: PredicateType) -> bool {
         self.flags.contains(predicate_type)
     }
 
-    /// Return the [`PredicateType`]s which are stored in this [`TrackedValue`].
+    /// Return the [`PredicateType`]s which are stored in this [`TrackedValueNode`].
     ///
     /// These are always returned in a pre-defined order, not the order in which they were
     /// inserted.
@@ -110,27 +120,27 @@ impl TrackedValue {
         self.flags.iter()
     }
 
-    /// Returns the value which is stored in this [`TrackedValue`].
+    /// Returns the value which is stored in this [`TrackedValueNode`].
     fn get_value(&self) -> i32 {
         self.value
     }
 }
 
-impl PartialEq for TrackedValue {
+impl PartialEq for TrackedValueNode {
     fn eq(&self, other: &Self) -> bool {
         self.get_value().eq(&other.get_value())
     }
 }
 
-impl Eq for TrackedValue {}
+impl Eq for TrackedValueNode {}
 
-impl PartialOrd for TrackedValue {
+impl PartialOrd for TrackedValueNode {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for TrackedValue {
+impl Ord for TrackedValueNode {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.get_value().cmp(&other.get_value())
     }
@@ -145,10 +155,7 @@ impl PredicateTracker {
             max_assigned: TrailedInteger::create_from_index(0),
             min_assigned_strict: TrailedInteger::create_from_index(0),
             max_assigned_strict: TrailedInteger::create_from_index(0),
-            smaller: Vec::default(),
-            greater: Vec::default(),
-            values: Default::default(),
-            ids: Vec::default(),
+            nodes: Vec::default(),
             tracked: EnumSet::default(),
         }
     }
@@ -160,7 +167,7 @@ impl PredicateTracker {
         initial_upper_bound: i32,
         trailed_values: &mut TrailedValues,
     ) {
-        if !self.values.is_empty() {
+        if !self.nodes.is_empty() {
             // The structures has been initialised previously
             return;
         }
@@ -173,31 +180,17 @@ impl PredicateTracker {
         // We set the tracking domain id
         self.domain_id = domain_id;
 
-        // Then we place some sentinels for simplicity's sake which are always true
+        // Then we place some sentinels for simplicity's sake which are always true; these do not
+        // track any predicate types.
         //
         // It is _probably_ okay to note use the `-1` and `+1`
-        let _ = self.insert_value(initial_lower_bound - 1);
-        let _ = self.insert_value(initial_upper_bound + 1);
-
-        // These should never be queried so we provide a placeholder
-        self.ids.push([PLACEHOLDER_PREDICATE_ID; 4]);
-        self.ids.push([PLACEHOLDER_PREDICATE_ID; 4]);
-
-        // Then we place the sentinels into the `smaller` structure
         //
-        // For the first element (containing the lower-bound), there is no smaller element
-        self.smaller.push(u32::MAX);
+        // For the first element (containing the lower-bound), there is no smaller element and the
+        // greater element will currently point to the upper-bound element
+        let _ = self.insert_node(initial_lower_bound - 1, u32::MAX, 1);
         // For the second element (containing the upper-bound), the smaller element will currently
-        // point to the lower-bound element
-        self.smaller.push(0);
-
-        // Then we place the sentinels into the `greater` structure
-        //
-        // For the first element (containing the lower-bound), the greater element will currently
-        // point to the upper-bound element
-        self.greater.push(1);
-        // For the second element (containing the upper-bound), there is no greater element
-        self.greater.push(u32::MAX);
+        // point to the lower-bound element and there is no greater element
+        let _ = self.insert_node(initial_upper_bound + 1, 0, u32::MAX);
     }
 
     /// Returns whether any [`PredicateType::Equal`] or [`PredicateType::NotEqual`] types are being
@@ -233,35 +226,39 @@ impl PredicateTracker {
         // - The successor of `min_assigned` is equal to `max_assigned`
         // - The predecessor of `max_assigned` is equal to `min_assigned`
         let min_assigned_index = trailed_values.read(self.min_assigned) as usize;
-        let min_unassigned_index = self.greater[min_assigned_index] as usize;
-        pumpkin_assert_simple!(self.values[min_assigned_index] < self.values[min_unassigned_index]);
+        let min_unassigned_index = self.nodes[min_assigned_index].greater as usize;
+        pumpkin_assert_simple!(self.nodes[min_assigned_index] < self.nodes[min_unassigned_index]);
 
         let max_assigned_index = trailed_values.read(self.max_assigned) as usize;
-        let max_unassigned_index = self.smaller[max_assigned_index] as usize;
-        pumpkin_assert_simple!(self.values[max_assigned_index] > self.values[max_unassigned_index]);
+        let max_unassigned_index = self.nodes[max_assigned_index].smaller as usize;
+        pumpkin_assert_simple!(self.nodes[max_assigned_index] > self.nodes[max_unassigned_index]);
 
-        self.values[min_unassigned_index] >= self.values[max_assigned_index]
-            || self.values[max_unassigned_index] <= self.values[min_assigned_index]
+        self.nodes[min_unassigned_index] >= self.nodes[max_assigned_index]
+            || self.nodes[max_unassigned_index] <= self.nodes[min_assigned_index]
     }
 
-    /// Inserts the value into the internal structures.
-    fn insert_value(&mut self, value: i32) -> usize {
-        let index = self.values.len();
-        self.values.push(TrackedValue::new(value));
+    /// Inserts a node for the value with the provided neighbours into the internal structures,
+    /// and returns its index.
+    ///
+    /// Note that this does not update the neighbours to point to the new node.
+    fn insert_node(&mut self, value: i32, smaller: u32, greater: u32) -> usize {
+        let index = self.nodes.len();
+        self.nodes
+            .push(TrackedValueNode::new(value, smaller, greater));
 
         index
     }
 
-    /// Returns the value at the provided index.
+    /// Returns the node at the provided index.
     ///
     /// If the index is out of bounds, this method will panic.
-    fn get_value_at_index(&self, index: usize) -> TrackedValue {
-        self.values[index]
+    fn get_node_at_index(&self, index: usize) -> TrackedValueNode {
+        self.nodes[index]
     }
 
-    /// Returns all of the values currently present.
-    fn get_all_values(&self) -> impl Iterator<Item = TrackedValue> {
-        self.values.iter().copied()
+    /// Returns all of the nodes currently present.
+    fn get_all_nodes(&self) -> impl Iterator<Item = TrackedValueNode> {
+        self.nodes.iter().copied()
     }
 
     /// Allows the [`PredicateTracker`] to indicate that a tracked [`Predicate`] has been satisfied.
@@ -271,7 +268,7 @@ impl PredicateTracker {
         predicate_type: PredicateType,
         predicate_id_assignments: &mut PredicateIdAssignments,
     ) {
-        let predicate_id = self.ids[index][predicate_type as usize];
+        let predicate_id = self.nodes[index].ids[predicate_type as usize];
         if predicate_id == PLACEHOLDER_PREDICATE_ID {
             // If it is a placeholder then we ignore it
             return;
@@ -286,7 +283,7 @@ impl PredicateTracker {
         predicate_type: PredicateType,
         predicate_id_assignments: &mut PredicateIdAssignments,
     ) {
-        let predicate_id = self.ids[index][predicate_type as usize];
+        let predicate_id = self.nodes[index].ids[predicate_type as usize];
         if predicate_id == PLACEHOLDER_PREDICATE_ID {
             return;
         }
@@ -298,7 +295,7 @@ impl PredicateTracker {
     /// Returns true if it was not already tracked and false otherwise.
     pub(super) fn track(&mut self, predicate: Predicate, predicate_id: PredicateId) -> bool {
         pumpkin_assert_simple!(
-            !self.values.is_empty(),
+            !self.nodes.is_empty(),
             "Initialise should have been called previously"
         );
 
@@ -321,7 +318,7 @@ impl PredicateTracker {
         // Note that the element at the 1st index has the largest value
         let mut index = 1;
         loop {
-            let index_value = self.get_value_at_index(index);
+            let index_value = self.get_node_at_index(index);
 
             // If the value is already tracked, then we check whether this particular predicate
             // type has already been tracked
@@ -330,8 +327,7 @@ impl PredicateTracker {
                     return false;
                 }
 
-                self.ids[index][predicate_type as usize] = predicate_id;
-                self.values[index].track_predicate_type(predicate_type);
+                self.nodes[index].track_predicate(predicate_type, predicate_id);
 
                 return true;
             }
@@ -340,40 +336,38 @@ impl PredicateTracker {
             if index_value.get_value() < value {
                 index_largest_value_smaller_than = index as u32;
 
-                index_smallest_value_larger_than = self.greater[index];
+                index_smallest_value_larger_than = self.nodes[index].greater;
                 break;
             }
 
-            index = self.smaller[index] as usize;
+            index = self.nodes[index].smaller as usize;
         }
 
         pumpkin_assert_eq_simple!(
-            self.get_value_at_index(index_largest_value_smaller_than as usize),
-            self.get_all_values()
+            self.get_node_at_index(index_largest_value_smaller_than as usize),
+            self.get_all_nodes()
                 .filter(|&stored_value| stored_value.get_value() < value)
                 .max()
                 .unwrap(),
         );
         pumpkin_assert_eq_simple!(
-            self.get_value_at_index(index_smallest_value_larger_than as usize),
-            self.get_all_values()
+            self.get_node_at_index(index_smallest_value_larger_than as usize),
+            self.get_all_nodes()
                 .filter(|&stored_value| stored_value.get_value() > value)
                 .min()
                 .unwrap()
         );
 
-        let new_index = self.insert_value(value);
-        self.values[new_index].track_predicate_type(predicate_type);
+        let new_index = self.insert_node(
+            value,
+            index_largest_value_smaller_than,
+            index_smallest_value_larger_than,
+        );
+        self.nodes[new_index].track_predicate(predicate_type, predicate_id);
 
-        self.greater[index_largest_value_smaller_than as usize] = new_index as u32;
-        self.smaller[index_smallest_value_larger_than as usize] = new_index as u32;
-
-        // Then we update the other structures
-        self.smaller.push(index_largest_value_smaller_than);
-        self.greater.push(index_smallest_value_larger_than);
-        let mut ids = [PLACEHOLDER_PREDICATE_ID; 4];
-        ids[predicate_type as usize] = predicate_id;
-        self.ids.push(ids);
+        // Then we update the neighbours to point to the new node
+        self.nodes[index_largest_value_smaller_than as usize].greater = new_index as u32;
+        self.nodes[index_smallest_value_larger_than as usize].smaller = new_index as u32;
 
         true
     }
@@ -396,11 +390,11 @@ impl PredicateTracker {
 
         // First, we move `min_assigned_strict` by checking whether the greater predicate is
         // also satisfied
-        let mut greater_strict = self.greater[min_assigned_strict as usize];
-        while greater_strict != u32::MAX && value > self.values[greater_strict as usize].get_value()
+        let mut greater_strict = self.nodes[min_assigned_strict as usize].greater;
+        while greater_strict != u32::MAX && value > self.nodes[greater_strict as usize].get_value()
         {
             // Now we go over all tracked predicate types and update them
-            for predicate_type in self.values[greater_strict as usize].get_predicate_types() {
+            for predicate_type in self.nodes[greater_strict as usize].get_predicate_types() {
                 match predicate_type {
                     PredicateType::UpperBound | PredicateType::Equal => {
                         self.predicate_has_been_falsified(
@@ -430,15 +424,15 @@ impl PredicateTracker {
             min_assigned_strict = greater_strict;
             min_assigned = greater_strict;
 
-            greater_strict = self.greater[greater_strict as usize];
+            greater_strict = self.nodes[greater_strict as usize].greater;
         }
 
         // Now we move the `>=` index as well.
-        let mut greater = self.greater[min_assigned as usize];
-        while greater != u32::MAX && value >= self.values[greater as usize].get_value() {
+        let mut greater = self.nodes[min_assigned as usize].greater;
+        while greater != u32::MAX && value >= self.nodes[greater as usize].get_value() {
             // In this case, we can only have a lower-bound update, because all of the other
             // predicate types require a strictly larger value
-            if self.values[greater as usize].does_track_predicate_type(PredicateType::LowerBound) {
+            if self.nodes[greater as usize].does_track_predicate_type(PredicateType::LowerBound) {
                 self.predicate_has_been_satisfied(
                     greater as usize,
                     PredicateType::LowerBound,
@@ -446,7 +440,7 @@ impl PredicateTracker {
                 );
             }
             min_assigned = greater;
-            greater = self.greater[greater as usize];
+            greater = self.nodes[greater as usize].greater;
         }
 
         trailed_values.assign(self.min_assigned_strict, min_assigned_strict as i64);
@@ -471,11 +465,11 @@ impl PredicateTracker {
 
         // First, we move `max_assigned_strict` by checking whether the smaller predicate is
         // also satisfied
-        let mut smaller_strict = self.smaller[max_assigned_strict as usize];
-        while smaller_strict != u32::MAX && value < self.values[smaller_strict as usize].get_value()
+        let mut smaller_strict = self.nodes[max_assigned_strict as usize].smaller;
+        while smaller_strict != u32::MAX && value < self.nodes[smaller_strict as usize].get_value()
         {
             // Now we go over all tracked predicate types and update them
-            for predicate_type in self.values[smaller_strict as usize].get_predicate_types() {
+            for predicate_type in self.nodes[smaller_strict as usize].get_predicate_types() {
                 match predicate_type {
                     PredicateType::LowerBound | PredicateType::Equal => {
                         self.predicate_has_been_falsified(
@@ -505,15 +499,15 @@ impl PredicateTracker {
             max_assigned_strict = smaller_strict;
             max_assigned = smaller_strict;
 
-            smaller_strict = self.smaller[smaller_strict as usize];
+            smaller_strict = self.nodes[smaller_strict as usize].smaller;
         }
 
         // Now we move the `<=` index as well.
-        let mut smaller = self.smaller[max_assigned as usize];
-        while smaller != u32::MAX && value <= self.values[smaller as usize].get_value() {
+        let mut smaller = self.nodes[max_assigned as usize].smaller;
+        while smaller != u32::MAX && value <= self.nodes[smaller as usize].get_value() {
             // In this case, we can only have a upper-bound update, because all of the other
             // predicate types require a strictly smaller value
-            if self.values[smaller as usize].does_track_predicate_type(PredicateType::UpperBound) {
+            if self.nodes[smaller as usize].does_track_predicate_type(PredicateType::UpperBound) {
                 self.predicate_has_been_satisfied(
                     smaller as usize,
                     PredicateType::UpperBound,
@@ -521,7 +515,7 @@ impl PredicateTracker {
                 );
             }
             max_assigned = smaller;
-            smaller = self.smaller[smaller as usize];
+            smaller = self.nodes[smaller as usize].smaller;
         }
 
         trailed_values.assign(self.max_assigned_strict, max_assigned_strict as i64);
@@ -556,7 +550,7 @@ impl PredicateTracker {
             // If the right-hand side of the disequality predicate is smaller than the value
             // pointed to by `min_assigned_strict` then no updates can take place
             if value
-                <= self.values[trailed_values.read(self.min_assigned_strict) as usize].get_value()
+                <= self.nodes[trailed_values.read(self.min_assigned_strict) as usize].get_value()
             {
                 return;
             }
@@ -564,7 +558,7 @@ impl PredicateTracker {
             // If the right-hand side of the disequality predicate is larger than the value
             // pointed to by `max_assigned_strict` then no updates can take place
             if value
-                >= self.values[trailed_values.read(self.max_assigned_strict) as usize].get_value()
+                >= self.nodes[trailed_values.read(self.max_assigned_strict) as usize].get_value()
             {
                 return;
             }
@@ -592,11 +586,12 @@ impl PredicateTracker {
             //
             // We check whether min_assigned_strict and max_assigned_strict point to each other and
             // that the next value is equal to the value
-            let greater = self.greater[trailed_values.read(self.min_assigned_strict) as usize];
-            if greater == self.smaller[trailed_values.read(self.max_assigned_strict) as usize]
-                && self.values[greater as usize].get_value() == value
+            let greater =
+                self.nodes[trailed_values.read(self.min_assigned_strict) as usize].greater;
+            if greater == self.nodes[trailed_values.read(self.max_assigned_strict) as usize].smaller
+                && self.nodes[greater as usize].get_value() == value
             {
-                for predicate_type in self.values[greater as usize].get_predicate_types() {
+                for predicate_type in self.nodes[greater as usize].get_predicate_types() {
                     match predicate_type {
                         PredicateType::NotEqual => {
                             self.predicate_has_been_falsified(
@@ -616,7 +611,7 @@ impl PredicateTracker {
                     }
                 }
             } else {
-                pumpkin_assert_moderate!(self.values.iter().all(|tracked_value| {
+                pumpkin_assert_moderate!(self.nodes.iter().all(|tracked_value| {
                     tracked_value.get_value() != value
                         || (!tracked_value.does_track_predicate_type(PredicateType::NotEqual)
                             && !tracked_value.does_track_predicate_type(PredicateType::Equal))
@@ -630,11 +625,12 @@ impl PredicateTracker {
 mod tests {
     use bit_set::BitSet;
 
+    use crate::basic_types::PredicateId;
     use crate::engine::Assignments;
     use crate::engine::TrailedValues;
     use crate::engine::notifications::predicate_notification::PredicateIdAssignments;
     use crate::engine::notifications::predicate_notification::predicate_tracker::PredicateTracker;
-    use crate::engine::notifications::predicate_notification::predicate_tracker::TrackedValue;
+    use crate::engine::notifications::predicate_notification::predicate_tracker::TrackedValueNode;
     use crate::predicate;
     use crate::predicates::PredicateIdGenerator;
     use crate::predicates::PredicateType;
@@ -934,10 +930,15 @@ mod tests {
     }
 
     #[test]
+    fn tracked_value_node_fits_in_32_bytes() {
+        assert_eq!(size_of::<TrackedValueNode>(), 32);
+    }
+
+    #[test]
     fn pack_negative_value() {
         let x = -255;
 
-        let mut value = TrackedValue::new(x);
+        let mut value = TrackedValueNode::new(x, u32::MAX, u32::MAX);
 
         assert_eq!(value.get_value(), x);
         assert_eq!(
@@ -945,21 +946,36 @@ mod tests {
             Vec::<PredicateType>::new()
         );
 
-        value.track_predicate_type(PredicateType::Equal);
+        value.track_predicate(
+            PredicateType::Equal,
+            PredicateId {
+                id: PredicateType::Equal as u32,
+            },
+        );
         assert_eq!(
             value.get_predicate_types().collect::<Vec<_>>(),
             vec![PredicateType::Equal]
         );
         assert_eq!(value.get_value(), x);
 
-        value.track_predicate_type(PredicateType::LowerBound);
+        value.track_predicate(
+            PredicateType::LowerBound,
+            PredicateId {
+                id: PredicateType::LowerBound as u32,
+            },
+        );
         assert_eq!(
             value.get_predicate_types().collect::<Vec<_>>(),
             vec![PredicateType::LowerBound, PredicateType::Equal]
         );
         assert_eq!(value.get_value(), x);
 
-        value.track_predicate_type(PredicateType::NotEqual);
+        value.track_predicate(
+            PredicateType::NotEqual,
+            PredicateId {
+                id: PredicateType::NotEqual as u32,
+            },
+        );
         assert_eq!(
             value.get_predicate_types().collect::<Vec<_>>(),
             vec![
@@ -970,7 +986,12 @@ mod tests {
         );
         assert_eq!(value.get_value(), x);
 
-        value.track_predicate_type(PredicateType::UpperBound);
+        value.track_predicate(
+            PredicateType::UpperBound,
+            PredicateId {
+                id: PredicateType::UpperBound as u32,
+            },
+        );
         assert_eq!(
             value.get_predicate_types().collect::<Vec<_>>(),
             vec![
@@ -981,13 +1002,21 @@ mod tests {
             ]
         );
         assert_eq!(value.get_value(), x);
+        for predicate_type in value.get_predicate_types() {
+            assert_eq!(
+                value.ids[predicate_type as usize],
+                PredicateId {
+                    id: predicate_type as u32
+                }
+            );
+        }
     }
 
     #[test]
     fn pack_positive_value() {
         let x = 255;
 
-        let mut value = TrackedValue::new(x);
+        let mut value = TrackedValueNode::new(x, u32::MAX, u32::MAX);
 
         assert_eq!(value.get_value(), x);
         assert_eq!(
@@ -995,21 +1024,36 @@ mod tests {
             Vec::<PredicateType>::new()
         );
 
-        value.track_predicate_type(PredicateType::Equal);
+        value.track_predicate(
+            PredicateType::Equal,
+            PredicateId {
+                id: PredicateType::Equal as u32,
+            },
+        );
         assert_eq!(
             value.get_predicate_types().collect::<Vec<_>>(),
             vec![PredicateType::Equal]
         );
         assert_eq!(value.get_value(), x);
 
-        value.track_predicate_type(PredicateType::LowerBound);
+        value.track_predicate(
+            PredicateType::LowerBound,
+            PredicateId {
+                id: PredicateType::LowerBound as u32,
+            },
+        );
         assert_eq!(
             value.get_predicate_types().collect::<Vec<_>>(),
             vec![PredicateType::LowerBound, PredicateType::Equal]
         );
         assert_eq!(value.get_value(), x);
 
-        value.track_predicate_type(PredicateType::NotEqual);
+        value.track_predicate(
+            PredicateType::NotEqual,
+            PredicateId {
+                id: PredicateType::NotEqual as u32,
+            },
+        );
         assert_eq!(
             value.get_predicate_types().collect::<Vec<_>>(),
             vec![
@@ -1020,7 +1064,12 @@ mod tests {
         );
         assert_eq!(value.get_value(), x);
 
-        value.track_predicate_type(PredicateType::UpperBound);
+        value.track_predicate(
+            PredicateType::UpperBound,
+            PredicateId {
+                id: PredicateType::UpperBound as u32,
+            },
+        );
         assert_eq!(
             value.get_predicate_types().collect::<Vec<_>>(),
             vec![
@@ -1031,5 +1080,13 @@ mod tests {
             ]
         );
         assert_eq!(value.get_value(), x);
+        for predicate_type in value.get_predicate_types() {
+            assert_eq!(
+                value.ids[predicate_type as usize],
+                PredicateId {
+                    id: predicate_type as u32
+                }
+            );
+        }
     }
 }
