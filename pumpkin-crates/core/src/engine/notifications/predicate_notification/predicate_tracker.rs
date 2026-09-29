@@ -1,16 +1,12 @@
 use std::fmt::Debug;
-use std::hash::Hash;
-use std::hash::Hasher;
 
+use bit_set::BitSet;
 use enumset::EnumSet;
-use fnv::FnvBuildHasher;
-use indexmap::Equivalent;
-use indexmap::IndexSet;
-use indexmap::set::MutableValues;
 
 use super::PredicateIdAssignments;
 use super::PredicateValue;
 use crate::basic_types::PredicateId;
+use crate::basic_types::PredicateIdGenerator;
 use crate::containers::StorageKey;
 use crate::engine::TrailedInteger;
 use crate::engine::TrailedValues;
@@ -62,13 +58,14 @@ pub(crate) struct PredicateTracker {
     max_assigned_strict: TrailedInteger,
     /// The values which are currently being tracked by this [`PredicateTracker`].
     ///
-    /// We want quick membership queries but a hash-based set cannot be used since we require the
-    /// indices to remain consistent (since they are, for example, stored in [`Self::smaller`] and
-    /// [`Self::greater`]). Thus, we use an [`IndexSet`] which allows us to perform efficient
-    /// membership queries while also allowing us to index into the set.
+    /// The indices of the values remain consistent since they are, for example, stored in
+    /// [`Self::smaller`] and [`Self::greater`]. Membership queries are answered by traversing the
+    /// linked list (see [`PredicateTracker::track`]) or by looking up the [`PredicateId`] of a
+    /// [`Predicate`] in the [`PredicateIdGenerator`] and checking whether it is tracked (see
+    /// [`PredicateTracker::on_update`]).
     ///
     /// Note that these values are not sorted in any way.
-    values: IndexSet<TrackedValue, FnvBuildHasher>,
+    values: Vec<TrackedValue>,
     /// The [`PredicateId`]s corresponding to the predicates for each value in
     /// [`PredicateTracker::values`].
     ///
@@ -136,18 +133,6 @@ impl PartialOrd for TrackedValue {
 impl Ord for TrackedValue {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.get_value().cmp(&other.get_value())
-    }
-}
-
-impl Hash for TrackedValue {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.get_value().hash(state)
-    }
-}
-
-impl Equivalent<TrackedValue> for i32 {
-    fn equivalent(&self, key: &TrackedValue) -> bool {
-        *self == key.get_value()
     }
 }
 
@@ -262,8 +247,7 @@ impl PredicateTracker {
     /// Inserts the value into the internal structures.
     fn insert_value(&mut self, value: i32) -> usize {
         let index = self.values.len();
-        let result = self.values.insert(TrackedValue::new(value));
-        assert!(result);
+        self.values.push(TrackedValue::new(value));
 
         index
     }
@@ -272,20 +256,12 @@ impl PredicateTracker {
     ///
     /// If the index is out of bounds, this method will panic.
     fn get_value_at_index(&self, index: usize) -> TrackedValue {
-        *self
-            .values
-            .get_index(index)
-            .expect("Expected provided index to exist")
+        self.values[index]
     }
 
     /// Returns all of the values currently present.
     fn get_all_values(&self) -> impl Iterator<Item = TrackedValue> {
         self.values.iter().copied()
-    }
-
-    /// Returns the index of the provided value if it is present.
-    fn get_index_of_value(&self, value: i32) -> Option<usize> {
-        self.values.get_index_of(&value)
     }
 
     /// Allows the [`PredicateTracker`] to indicate that a tracked [`Predicate`] has been satisfied.
@@ -326,22 +302,10 @@ impl PredicateTracker {
             "Initialise should have been called previously"
         );
 
-        self.tracked |= predicate.get_predicate_type();
+        let predicate_type = predicate.get_predicate_type();
+        self.tracked |= predicate_type;
 
         let value = predicate.get_right_hand_side();
-
-        // We check whether it is already tracked
-        if let Some((index, tracked_value)) = self.values.get_full_mut2(&value) {
-            // Then we check whether this particular predicate type has already been tracked
-            if !tracked_value.does_track_predicate_type(predicate.get_predicate_type()) {
-                self.ids[index][predicate.get_predicate_type() as usize] = predicate_id;
-
-                tracked_value.track_predicate_type(predicate.get_predicate_type());
-
-                return true;
-            }
-            return false;
-        }
 
         // Then we track the information for updating `smaller`; recall that we place a sentinel
         // node with the smallest possible value at index 0
@@ -351,13 +315,26 @@ impl PredicateTracker {
         // node with the largest possible value at index 1
         let index_smallest_value_larger_than;
 
-        // Then we go over each value to determine where to place the element in the linked list.
+        // Then we go over each value (from largest to smallest) to determine whether the value is
+        // already tracked, and otherwise where to place the element in the linked list.
         //
         // Note that the element at the 1st index has the largest value
         let mut index = 1;
         loop {
             let index_value = self.get_value_at_index(index);
-            pumpkin_assert_simple!(index_value.get_value() != value,);
+
+            // If the value is already tracked, then we check whether this particular predicate
+            // type has already been tracked
+            if index_value.get_value() == value {
+                if index_value.does_track_predicate_type(predicate_type) {
+                    return false;
+                }
+
+                self.ids[index][predicate_type as usize] = predicate_id;
+                self.values[index].track_predicate_type(predicate_type);
+
+                return true;
+            }
 
             // As soon as we have found a value smaller than the to track value, we can stop
             if index_value.get_value() < value {
@@ -386,10 +363,7 @@ impl PredicateTracker {
         );
 
         let new_index = self.insert_value(value);
-        self.values
-            .get_index_mut2(new_index)
-            .unwrap()
-            .track_predicate_type(predicate.get_predicate_type());
+        self.values[new_index].track_predicate_type(predicate_type);
 
         self.greater[index_largest_value_smaller_than as usize] = new_index as u32;
         self.smaller[index_smallest_value_larger_than as usize] = new_index as u32;
@@ -398,7 +372,7 @@ impl PredicateTracker {
         self.smaller.push(index_largest_value_smaller_than);
         self.greater.push(index_smallest_value_larger_than);
         let mut ids = [PLACEHOLDER_PREDICATE_ID; 4];
-        ids[predicate.get_predicate_type() as usize] = predicate_id;
+        ids[predicate_type as usize] = predicate_id;
         self.ids.push(ids);
 
         true
@@ -558,6 +532,8 @@ impl PredicateTracker {
         &self,
         predicate: Predicate,
         trailed_values: &mut TrailedValues,
+        predicate_id_generator: &PredicateIdGenerator,
+        is_tracked: &BitSet,
         predicate_id_assignments: &mut PredicateIdAssignments,
     ) {
         // If there are no tracked predicate types, then we don't need to perform any updates
@@ -593,26 +569,19 @@ impl PredicateTracker {
                 return;
             }
 
-            // Now we check whether the value of the right-hand side of the disequality is tracked.
-            //
-            // If it is, and a disequality or equality predicate type are tracked, then we can
-            // update them accordingly
-            if let Some(index) = self.get_index_of_value(value) {
-                for predicate_type in self.values[index].get_predicate_types() {
-                    match predicate_type {
-                        PredicateType::NotEqual => self.predicate_has_been_satisfied(
-                            index,
-                            predicate_type,
-                            predicate_id_assignments,
-                        ),
-                        PredicateType::Equal => self.predicate_has_been_falsified(
-                            index,
-                            predicate_type,
-                            predicate_id_assignments,
-                        ),
-                        _ => {}
-                    }
-                }
+            // Now we check whether the disequality predicate and its negation (i.e., the equality
+            // predicate) are tracked; if so, then we update them accordingly.
+            if let Some(predicate_id) = predicate_id_generator.get_existing_id(predicate)
+                && is_tracked.contains(predicate_id.index())
+            {
+                predicate_id_assignments
+                    .store_predicate(predicate_id, PredicateValue::AssignedTrue);
+            }
+            if let Some(predicate_id) = predicate_id_generator.get_existing_id(!predicate)
+                && is_tracked.contains(predicate_id.index())
+            {
+                predicate_id_assignments
+                    .store_predicate(predicate_id, PredicateValue::AssignedFalse);
             }
         } else if predicate.is_equality_predicate() {
             // First update the lower-bound if necessary, and then the upper-bound
@@ -647,13 +616,11 @@ impl PredicateTracker {
                     }
                 }
             } else {
-                pumpkin_assert_moderate!(
-                    !self.values.contains(&value)
-                        || (!self.values[self.get_index_of_value(value).unwrap()]
-                            .does_track_predicate_type(PredicateType::NotEqual)
-                            && !self.values[self.get_index_of_value(value).unwrap()]
-                                .does_track_predicate_type(PredicateType::Equal))
-                );
+                pumpkin_assert_moderate!(self.values.iter().all(|tracked_value| {
+                    tracked_value.get_value() != value
+                        || (!tracked_value.does_track_predicate_type(PredicateType::NotEqual)
+                            && !tracked_value.does_track_predicate_type(PredicateType::Equal))
+                }));
             }
         }
     }
@@ -661,6 +628,8 @@ impl PredicateTracker {
 
 #[cfg(test)]
 mod tests {
+    use bit_set::BitSet;
+
     use crate::engine::Assignments;
     use crate::engine::TrailedValues;
     use crate::engine::notifications::predicate_notification::PredicateIdAssignments;
@@ -702,9 +671,13 @@ mod tests {
         let added = tracker.track(predicate, id_generator.get_id(predicate));
         assert!(added);
 
+        let is_tracked: BitSet = (0..id_generator.num_predicate_ids()).collect();
+
         tracker.on_update(
             predicate!(x >= 5),
             &mut trailed_values,
+            &id_generator,
+            &is_tracked,
             &mut predicate_id_assignments,
         );
         assert!(predicate_id_assignments.is_satisfied(
@@ -719,6 +692,8 @@ mod tests {
         tracker.on_update(
             predicate!(x >= 6),
             &mut trailed_values,
+            &id_generator,
+            &is_tracked,
             &mut predicate_id_assignments,
         );
         assert!(predicate_id_assignments.is_satisfied(
@@ -775,9 +750,13 @@ mod tests {
         let added = tracker.track(predicate, id_generator.get_id(predicate));
         assert!(added);
 
+        let is_tracked: BitSet = (0..id_generator.num_predicate_ids()).collect();
+
         tracker.on_update(
             predicate!(x <= 5),
             &mut trailed_values,
+            &id_generator,
+            &is_tracked,
             &mut predicate_id_assignments,
         );
         assert!(predicate_id_assignments.is_satisfied(
@@ -792,6 +771,8 @@ mod tests {
         tracker.on_update(
             predicate!(x <= 4),
             &mut trailed_values,
+            &id_generator,
+            &is_tracked,
             &mut predicate_id_assignments,
         );
         assert!(predicate_id_assignments.is_satisfied(
@@ -848,9 +829,13 @@ mod tests {
         let added = tracker.track(predicate, id_generator.get_id(predicate));
         assert!(added);
 
+        let is_tracked: BitSet = (0..id_generator.num_predicate_ids()).collect();
+
         tracker.on_update(
             predicate!(x != 5),
             &mut trailed_values,
+            &id_generator,
+            &is_tracked,
             &mut predicate_id_assignments,
         );
         assert!(predicate_id_assignments.is_satisfied(
@@ -907,9 +892,13 @@ mod tests {
         let added = tracker.track(predicate, id_generator.get_id(predicate));
         assert!(added);
 
+        let is_tracked: BitSet = (0..id_generator.num_predicate_ids()).collect();
+
         tracker.on_update(
             predicate!(x == 6),
             &mut trailed_values,
+            &id_generator,
+            &is_tracked,
             &mut predicate_id_assignments,
         );
         assert!(predicate_id_assignments.is_satisfied(
