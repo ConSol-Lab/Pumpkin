@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
 use bit_set::BitSet;
+use bitfield_struct::bitfield;
 use enumset::EnumSet;
 
 use super::PredicateIdAssignments;
@@ -15,7 +16,6 @@ use crate::predicates::PredicateType;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
-use crate::variables::DomainId;
 
 /// The [`PredicateId`] stored in [`TrackedValueNode::ids`] for [`PredicateType`]s which are not
 /// tracked for a value.
@@ -26,30 +26,13 @@ const PLACEHOLDER_PREDICATE_ID: PredicateId = PredicateId { id: u32::MAX };
 /// This structure keeps track of all different [`PredicateType`]s.
 #[derive(Debug, Clone)]
 pub(crate) struct PredicateTracker {
-    /// The [`DomainId`] which the tracker is tracking the polarity for.
-    domain_id: DomainId,
-    /// A [`TrailedInteger`] which points to the largest lowest value which is assigned.
+    /// A [`TrailedInteger`] which contains the [`AssignedIndices`] (i.e., the indices of the nodes
+    /// pointed to by `min_assigned`, `max_assigned`, `min_assigned_strict`, and
+    /// `max_assigned_strict`) packed into a single value.
     ///
-    /// For example, if we have the values `x in [1, 5, 7, 9]` and we know that `[x >= 6]` holds,
-    /// then [`PredicateTracker::min_assigned`] will point to index 1.
-    min_assigned: TrailedInteger,
-    /// A [`TrailedInteger`] which points to the smallest largest value which is assigned.
-    ///
-    /// For example, if we have the values `x in [1, 5, 7, 9]` and we know that `[x <= 8]` holds,
-    /// then [`PredicateTracker::min_assigned`] will point to index 3.
-    max_assigned: TrailedInteger,
-    /// A [`TrailedInteger`] which points to the largest lowest value which is assigned but not
-    /// equal to the value.
-    ///
-    /// For example, if we have the values `x in [1, 6, 7, 9]` and we know that `[x >= 6]` holds,
-    /// then [`PredicateTracker::min_assigned`] will point to index 1.
-    min_assigned_strict: TrailedInteger,
-    /// A [`TrailedInteger`] which points to the smallest largest value which is assigned but not
-    /// equal to the value.
-    ///
-    /// For example, if we have the values `x in [1, 5, 8, 9]` and we know that `[x <= 8]` holds,
-    /// then [`PredicateTracker::min_assigned`] will point to index 3.
-    max_assigned_strict: TrailedInteger,
+    /// Use [`PredicateTracker::read_assigned_indices`] and
+    /// [`PredicateTracker::write_assigned_indices`] to access it.
+    assigned_indices: TrailedInteger,
     /// The values which are currently being tracked by this [`PredicateTracker`], each stored as
     /// a node of a doubly linked list which is ordered by value.
     ///
@@ -64,6 +47,40 @@ pub(crate) struct PredicateTracker {
     /// The [`PredicateType`]s tracked by this [`PredicateTracker`].
     tracked: EnumSet<PredicateType>,
 }
+
+/// The indices of the nodes (see [`PredicateTracker::nodes`]) which indicate up to which values
+/// the tracked predicates of a [`PredicateTracker`] have been assigned.
+///
+/// These are packed into a single `u64` such that they can be stored in a single
+/// [`TrailedInteger`]; this limits the number of nodes of a [`PredicateTracker`] to
+/// [`MAX_NUMBER_OF_NODES`].
+#[bitfield(u64)]
+struct AssignedIndices {
+    /// Points to the largest lowest value which is assigned.
+    ///
+    /// For example, if we have the values `x in [1, 5, 7, 9]` and we know that `[x >= 6]` holds,
+    /// then `min_assigned` will point to index 1.
+    min_assigned: u16,
+    /// Points to the smallest largest value which is assigned.
+    ///
+    /// For example, if we have the values `x in [1, 5, 7, 9]` and we know that `[x <= 8]` holds,
+    /// then `max_assigned` will point to index 3.
+    max_assigned: u16,
+    /// Points to the largest lowest value which is assigned but not equal to the value.
+    ///
+    /// For example, if we have the values `x in [1, 6, 7, 9]` and we know that `[x >= 6]` holds,
+    /// then `min_assigned_strict` will point to index 1.
+    min_assigned_strict: u16,
+    /// Points to the smallest largest value which is assigned but not equal to the value.
+    ///
+    /// For example, if we have the values `x in [1, 5, 8, 9]` and we know that `[x <= 8]` holds,
+    /// then `max_assigned_strict` will point to index 3.
+    max_assigned_strict: u16,
+}
+
+/// The maximum number of nodes (including the two sentinels) which a [`PredicateTracker`] can
+/// contain, since the [`AssignedIndices`] store the indices of nodes using 16 bits.
+const MAX_NUMBER_OF_NODES: usize = u16::MAX as usize + 1;
 
 /// A value tracked by the [`PredicateTracker`], stored as a node of a doubly linked list which is
 /// ordered by value.
@@ -149,20 +166,29 @@ impl Ord for TrackedValueNode {
 impl PredicateTracker {
     pub(super) fn new() -> Self {
         Self {
-            domain_id: DomainId::new(0),
             // We do not want to create the trailed integers until necessary
-            min_assigned: TrailedInteger::create_from_index(0),
-            max_assigned: TrailedInteger::create_from_index(0),
-            min_assigned_strict: TrailedInteger::create_from_index(0),
-            max_assigned_strict: TrailedInteger::create_from_index(0),
+            assigned_indices: TrailedInteger::create_from_index(0),
             nodes: Vec::default(),
             tracked: EnumSet::default(),
         }
     }
 
+    /// Returns the [`AssignedIndices`] which are currently stored in the [`TrailedValues`].
+    fn read_assigned_indices(&self, trailed_values: &TrailedValues) -> AssignedIndices {
+        AssignedIndices::from_bits(trailed_values.read(self.assigned_indices) as u64)
+    }
+
+    /// Stores the provided [`AssignedIndices`] in the [`TrailedValues`].
+    fn write_assigned_indices(
+        &self,
+        trailed_values: &mut TrailedValues,
+        assigned_indices: AssignedIndices,
+    ) {
+        trailed_values.assign(self.assigned_indices, assigned_indices.into_bits() as i64);
+    }
+
     pub(super) fn initialise(
         &mut self,
-        domain_id: DomainId,
         initial_lower_bound: i32,
         initial_upper_bound: i32,
         trailed_values: &mut TrailedValues,
@@ -172,13 +198,14 @@ impl PredicateTracker {
             return;
         }
 
-        self.min_assigned = trailed_values.grow(0);
-        self.max_assigned = trailed_values.grow(1);
-        self.min_assigned_strict = trailed_values.grow(0);
-        self.max_assigned_strict = trailed_values.grow(1);
-
-        // We set the tracking domain id
-        self.domain_id = domain_id;
+        // Initially, the minimum indices point to the lower-bound sentinel (at index 0) and the
+        // maximum indices point to the upper-bound sentinel (at index 1)
+        let initial_assigned_indices = AssignedIndices::new()
+            .with_min_assigned(0)
+            .with_max_assigned(1)
+            .with_min_assigned_strict(0)
+            .with_max_assigned_strict(1);
+        self.assigned_indices = trailed_values.grow(initial_assigned_indices.into_bits() as i64);
 
         // Then we place some sentinels for simplicity's sake which are always true; these do not
         // track any predicate types.
@@ -225,11 +252,13 @@ impl PredicateTracker {
         // Thus, we simply need to check whether either:
         // - The successor of `min_assigned` is equal to `max_assigned`
         // - The predecessor of `max_assigned` is equal to `min_assigned`
-        let min_assigned_index = trailed_values.read(self.min_assigned) as usize;
+        let assigned_indices = self.read_assigned_indices(trailed_values);
+
+        let min_assigned_index = assigned_indices.min_assigned() as usize;
         let min_unassigned_index = self.nodes[min_assigned_index].greater as usize;
         pumpkin_assert_simple!(self.nodes[min_assigned_index] < self.nodes[min_unassigned_index]);
 
-        let max_assigned_index = trailed_values.read(self.max_assigned) as usize;
+        let max_assigned_index = assigned_indices.max_assigned() as usize;
         let max_unassigned_index = self.nodes[max_assigned_index].smaller as usize;
         pumpkin_assert_simple!(self.nodes[max_assigned_index] > self.nodes[max_unassigned_index]);
 
@@ -243,6 +272,10 @@ impl PredicateTracker {
     /// Note that this does not update the neighbours to point to the new node.
     fn insert_node(&mut self, value: i32, smaller: u32, greater: u32) -> usize {
         let index = self.nodes.len();
+        assert!(
+            index < MAX_NUMBER_OF_NODES,
+            "A predicate tracker supports at most {MAX_NUMBER_OF_NODES} nodes"
+        );
         self.nodes
             .push(TrackedValueNode::new(value, smaller, greater));
 
@@ -376,7 +409,7 @@ impl PredicateTracker {
     /// past all tracked values which are respectively `<` and `<=` the provided lower-bound
     /// `value`, and updates the tracked predicates of the passed values accordingly.
     ///
-    /// The cursors are kept in local variables during the traversal and are only written to the
+    /// The indices are kept in local variables during the traversal and are only written to the
     /// [`TrailedValues`] once afterwards; this prevents adding an entry to the trail for every
     /// traversed value.
     fn update_lower_bound(
@@ -385,8 +418,9 @@ impl PredicateTracker {
         trailed_values: &mut TrailedValues,
         predicate_id_assignments: &mut PredicateIdAssignments,
     ) {
-        let mut min_assigned_strict = trailed_values.read(self.min_assigned_strict) as u32;
-        let mut min_assigned = trailed_values.read(self.min_assigned) as u32;
+        let assigned_indices = self.read_assigned_indices(trailed_values);
+        let mut min_assigned_strict = assigned_indices.min_assigned_strict() as u32;
+        let mut min_assigned = assigned_indices.min_assigned() as u32;
 
         // First, we move `min_assigned_strict` by checking whether the greater predicate is
         // also satisfied
@@ -443,15 +477,19 @@ impl PredicateTracker {
             greater = self.nodes[greater as usize].greater;
         }
 
-        trailed_values.assign(self.min_assigned_strict, min_assigned_strict as i64);
-        trailed_values.assign(self.min_assigned, min_assigned as i64);
+        self.write_assigned_indices(
+            trailed_values,
+            assigned_indices
+                .with_min_assigned_strict(min_assigned_strict as u16)
+                .with_min_assigned(min_assigned as u16),
+        );
     }
 
     /// Moves [`PredicateTracker::max_assigned_strict`] and [`PredicateTracker::max_assigned`]
     /// past all tracked values which are respectively `>` and `>=` the provided upper-bound
     /// `value`, and updates the tracked predicates of the passed values accordingly.
     ///
-    /// The cursors are kept in local variables during the traversal and are only written to the
+    /// The indices are kept in local variables during the traversal and are only written to the
     /// [`TrailedValues`] once afterwards; this prevents adding an entry to the trail for every
     /// traversed value.
     fn update_upper_bound(
@@ -460,8 +498,9 @@ impl PredicateTracker {
         trailed_values: &mut TrailedValues,
         predicate_id_assignments: &mut PredicateIdAssignments,
     ) {
-        let mut max_assigned_strict = trailed_values.read(self.max_assigned_strict) as u32;
-        let mut max_assigned = trailed_values.read(self.max_assigned) as u32;
+        let assigned_indices = self.read_assigned_indices(trailed_values);
+        let mut max_assigned_strict = assigned_indices.max_assigned_strict() as u32;
+        let mut max_assigned = assigned_indices.max_assigned() as u32;
 
         // First, we move `max_assigned_strict` by checking whether the smaller predicate is
         // also satisfied
@@ -518,8 +557,12 @@ impl PredicateTracker {
             smaller = self.nodes[smaller as usize].smaller;
         }
 
-        trailed_values.assign(self.max_assigned_strict, max_assigned_strict as i64);
-        trailed_values.assign(self.max_assigned, max_assigned as i64);
+        self.write_assigned_indices(
+            trailed_values,
+            assigned_indices
+                .with_max_assigned_strict(max_assigned_strict as u16)
+                .with_max_assigned(max_assigned as u16),
+        );
     }
 
     pub(super) fn on_update(
@@ -547,19 +590,17 @@ impl PredicateTracker {
             // We have an upper-bound predicate, so we move our max indices
             self.update_upper_bound(value, trailed_values, predicate_id_assignments);
         } else if predicate.is_not_equal_predicate() {
+            let assigned_indices = self.read_assigned_indices(trailed_values);
+
             // If the right-hand side of the disequality predicate is smaller than the value
             // pointed to by `min_assigned_strict` then no updates can take place
-            if value
-                <= self.nodes[trailed_values.read(self.min_assigned_strict) as usize].get_value()
-            {
+            if value <= self.nodes[assigned_indices.min_assigned_strict() as usize].get_value() {
                 return;
             }
 
             // If the right-hand side of the disequality predicate is larger than the value
             // pointed to by `max_assigned_strict` then no updates can take place
-            if value
-                >= self.nodes[trailed_values.read(self.max_assigned_strict) as usize].get_value()
-            {
+            if value >= self.nodes[assigned_indices.max_assigned_strict() as usize].get_value() {
                 return;
             }
 
@@ -586,9 +627,9 @@ impl PredicateTracker {
             //
             // We check whether min_assigned_strict and max_assigned_strict point to each other and
             // that the next value is equal to the value
-            let greater =
-                self.nodes[trailed_values.read(self.min_assigned_strict) as usize].greater;
-            if greater == self.nodes[trailed_values.read(self.max_assigned_strict) as usize].smaller
+            let assigned_indices = self.read_assigned_indices(trailed_values);
+            let greater = self.nodes[assigned_indices.min_assigned_strict() as usize].greater;
+            if greater == self.nodes[assigned_indices.max_assigned_strict() as usize].smaller
                 && self.nodes[greater as usize].get_value() == value
             {
                 for predicate_type in self.nodes[greater as usize].get_predicate_types() {
@@ -629,6 +670,8 @@ mod tests {
     use crate::engine::Assignments;
     use crate::engine::TrailedValues;
     use crate::engine::notifications::predicate_notification::PredicateIdAssignments;
+    use crate::engine::notifications::predicate_notification::predicate_tracker::AssignedIndices;
+    use crate::engine::notifications::predicate_notification::predicate_tracker::MAX_NUMBER_OF_NODES;
     use crate::engine::notifications::predicate_notification::predicate_tracker::PredicateTracker;
     use crate::engine::notifications::predicate_notification::predicate_tracker::TrackedValueNode;
     use crate::predicate;
@@ -646,7 +689,7 @@ mod tests {
 
         let mut tracker = PredicateTracker::new();
 
-        tracker.initialise(x, 0, 10, &mut trailed_values);
+        tracker.initialise(0, 10, &mut trailed_values);
 
         let predicate = predicate!(x >= 5);
         let added = tracker.track(predicate, id_generator.get_id(predicate));
@@ -725,7 +768,7 @@ mod tests {
 
         let mut tracker = PredicateTracker::new();
 
-        tracker.initialise(x, 0, 10, &mut trailed_values);
+        tracker.initialise(0, 10, &mut trailed_values);
 
         let predicate = predicate!(x >= 5);
         let added = tracker.track(predicate, id_generator.get_id(predicate));
@@ -804,7 +847,7 @@ mod tests {
 
         let mut tracker = PredicateTracker::new();
 
-        tracker.initialise(x, 0, 10, &mut trailed_values);
+        tracker.initialise(0, 10, &mut trailed_values);
 
         let predicate = predicate!(x >= 5);
         let added = tracker.track(predicate, id_generator.get_id(predicate));
@@ -859,7 +902,7 @@ mod tests {
 
         let mut tracker = PredicateTracker::new();
 
-        tracker.initialise(x, 0, 10, &mut trailed_values);
+        tracker.initialise(0, 10, &mut trailed_values);
 
         let predicate = predicate!(x >= 5);
         let added = tracker.track(predicate, id_generator.get_id(predicate));
@@ -932,6 +975,45 @@ mod tests {
     #[test]
     fn tracked_value_node_fits_in_32_bytes() {
         assert_eq!(size_of::<TrackedValueNode>(), 32);
+    }
+
+    #[test]
+    fn predicate_tracker_fits_in_32_bytes() {
+        assert_eq!(size_of::<PredicateTracker>(), 32);
+    }
+
+    #[test]
+    fn assigned_indices_are_preserved_by_trailed_values() {
+        let mut trailed_values = TrailedValues::default();
+
+        let assigned_indices = AssignedIndices::new()
+            .with_min_assigned(1)
+            .with_max_assigned(2)
+            .with_min_assigned_strict(3)
+            .with_max_assigned_strict(u16::MAX);
+        let mut tracker = PredicateTracker::new();
+        tracker.initialise(0, 10, &mut trailed_values);
+
+        tracker.write_assigned_indices(&mut trailed_values, assigned_indices);
+        let read = tracker.read_assigned_indices(&trailed_values);
+        assert_eq!(read.min_assigned(), 1);
+        assert_eq!(read.max_assigned(), 2);
+        assert_eq!(read.min_assigned_strict(), 3);
+        assert_eq!(read.max_assigned_strict(), u16::MAX);
+    }
+
+    #[test]
+    #[should_panic(expected = "A predicate tracker supports at most 65536 nodes")]
+    fn inserting_too_many_nodes_panics() {
+        let mut trailed_values = TrailedValues::default();
+
+        let mut tracker = PredicateTracker::new();
+        tracker.initialise(0, 10, &mut trailed_values);
+
+        // The two sentinels are already present, so the last of these nodes exceeds the limit
+        for value in 0..(MAX_NUMBER_OF_NODES - 1) as i32 {
+            let _ = tracker.insert_node(value, 0, 1);
+        }
     }
 
     #[test]

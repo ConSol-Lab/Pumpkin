@@ -142,7 +142,6 @@ impl PredicateNotifier {
         // Now we initialise the predicate tracker; this does not add it to the scope yet but it
         // initialises the structures
         self.domain_id_to_predicate_tracker[predicate.get_domain()].initialise(
-            predicate.get_domain(),
             assignments.get_initial_lower_bound(predicate.get_domain()),
             assignments.get_initial_upper_bound(predicate.get_domain()),
             trailed_values,
