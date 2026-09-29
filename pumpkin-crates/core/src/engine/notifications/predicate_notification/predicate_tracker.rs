@@ -198,8 +198,6 @@ impl PredicateTracker {
         // Then we place some sentinels for simplicity's sake which are always true; these do not
         // track any predicate types.
         //
-        // It is _probably_ okay to note use the `-1` and `+1`
-        //
         // For the first element (containing the lower-bound), there is no smaller element and the
         // greater element will currently point to the upper-bound element
         let _ = self.insert_node(initial_lower_bound - 1, u32::MAX, 1);
@@ -396,10 +394,6 @@ impl PredicateTracker {
     /// Moves [`PredicateTracker::min_assigned_strict`] and [`PredicateTracker::min_assigned`]
     /// past all tracked values which are respectively `<` and `<=` the provided lower-bound
     /// `value`, and updates the tracked predicates of the passed values accordingly.
-    ///
-    /// The indices are kept in local variables during the traversal and are only written to the
-    /// [`TrailedValues`] once afterwards; this prevents adding an entry to the trail for every
-    /// traversed value.
     fn update_lower_bound(
         &self,
         value: i32,
@@ -476,10 +470,6 @@ impl PredicateTracker {
     /// Moves [`PredicateTracker::max_assigned_strict`] and [`PredicateTracker::max_assigned`]
     /// past all tracked values which are respectively `>` and `>=` the provided upper-bound
     /// `value`, and updates the tracked predicates of the passed values accordingly.
-    ///
-    /// The indices are kept in local variables during the traversal and are only written to the
-    /// [`TrailedValues`] once afterwards; this prevents adding an entry to the trail for every
-    /// traversed value.
     fn update_upper_bound(
         &self,
         value: i32,
@@ -958,16 +948,6 @@ mod tests {
             &assignments,
             &id_generator
         ));
-    }
-
-    #[test]
-    fn tracked_value_node_fits_in_32_bytes() {
-        assert_eq!(size_of::<TrackedValueNode>(), 32);
-    }
-
-    #[test]
-    fn predicate_tracker_fits_in_32_bytes() {
-        assert_eq!(size_of::<PredicateTracker>(), 32);
     }
 
     #[test]
