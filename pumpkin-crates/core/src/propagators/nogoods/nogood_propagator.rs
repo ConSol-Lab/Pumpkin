@@ -430,6 +430,8 @@ impl Propagator for NogoodPropagator {
                                 &mut self.watch_lists,
                             );
 
+                            *last_traversed_watcher = i as u32;
+
                             // No propagation is taking place, go to the next nogood.
                             break;
                         }
