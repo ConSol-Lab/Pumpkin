@@ -628,11 +628,11 @@ impl Propagator for NogoodPropagator {
         // Update the LBD and activity of the nogood, if appropriate.
         //
         // Note that low lbd nogoods are kept permanently, so these are not updated.
-        if !self.nogood_info[info_id].block_bumps
-            && self.nogood_info[info_id].is_learned
-            && self.nogood_info[info_id].lbd > self.parameters.lbd_threshold_low
+        if !self.nogood_info[info_id].block_bumps()
+            && self.nogood_info[info_id].is_learned()
+            && self.nogood_info[info_id].lbd() > self.parameters.lbd_threshold_low
         {
-            self.nogood_info[info_id].block_bumps = true;
+            self.nogood_info[info_id].set_block_bumps(true);
             self.bumped_nogoods.push(id);
             // Note that we do not need to take into account the propagated predicate (in
             // position zero), since it will share a decision level with one of
@@ -643,8 +643,8 @@ impl Propagator for NogoodPropagator {
                 .compute_lbd(&self.temp_nogood_reason, &context);
 
             // The nogood keeps track of the best lbd encountered.
-            if current_lbd < self.nogood_info[info_id].lbd {
-                self.nogood_info[info_id].lbd = current_lbd;
+            if current_lbd < self.nogood_info[info_id].lbd() {
+                self.nogood_info[info_id].set_lbd(current_lbd);
             }
 
             // Nogood activity update.
@@ -1581,7 +1581,7 @@ impl NogoodPropagator {
             self.watch_lists[index].retain(|watcher| {
                 let info_index = self.nogood_predicates.get_nogood_index(&watcher.nogood_id);
                 // If the nogood has been deleted, do not keep this watcher
-                if self.nogood_info[info_index].is_deleted {
+                if self.nogood_info[info_index].is_deleted() {
                     false
                 } else if NogoodPropagator::has_a_watched_predicate_falsified_at_root_level(
                     self.nogood_predicates.get_nogood(watcher.nogood_id),
@@ -1590,7 +1590,7 @@ impl NogoodPropagator {
                 ) {
                     // If the nogood is falsified at the root level, mark the nogood
                     // for deletion, and do not keep this watcher.
-                    self.nogood_info[info_index].is_deleted = true;
+                    self.nogood_info[info_index].mark_deleted();
                     trivial_nogood_deleted = true;
                     false
                 }
@@ -1607,7 +1607,7 @@ impl NogoodPropagator {
                     // Mark that a nogood has been deleted due to the cached predicate.
                     another_pass_needed = true;
                     trivial_nogood_deleted = true;
-                    self.nogood_info[info_index].is_deleted = true;
+                    self.nogood_info[info_index].mark_deleted();
                     false
                 } else {
                     true
@@ -1623,7 +1623,7 @@ impl NogoodPropagator {
                 self.watch_lists[index].retain(|watcher| {
                     let info_index = self.nogood_predicates.get_nogood_index(&watcher.nogood_id);
                     // If the nogood has been deleted, do not keep this watcher
-                    !self.nogood_info[info_index].is_deleted
+                    !self.nogood_info[info_index].is_deleted()
                 });
             }
         }
@@ -1632,15 +1632,15 @@ impl NogoodPropagator {
         // structures to ensure that it does not clutter up the tier.
         if trivial_nogood_deleted {
             self.learned_nogood_ids.high_lbd.retain(|nogood_id| {
-                !self.nogood_info[self.nogood_predicates.get_nogood_index(nogood_id)].is_deleted
+                !self.nogood_info[self.nogood_predicates.get_nogood_index(nogood_id)].is_deleted()
             });
 
             self.learned_nogood_ids.mid_lbd.retain(|nogood_id| {
-                !self.nogood_info[self.nogood_predicates.get_nogood_index(nogood_id)].is_deleted
+                !self.nogood_info[self.nogood_predicates.get_nogood_index(nogood_id)].is_deleted()
             });
 
             self.learned_nogood_ids.low_lbd.retain(|nogood_id| {
-                !self.nogood_info[self.nogood_predicates.get_nogood_index(nogood_id)].is_deleted
+                !self.nogood_info[self.nogood_predicates.get_nogood_index(nogood_id)].is_deleted()
             });
         }
     }
@@ -1711,7 +1711,7 @@ impl NogoodPropagator {
             //
             // It will be kept in the database for now but it will not be used for propagation
             // since its watchers will be removed in the next step.
-            nogood_info[nogoods.get_nogood_index(&id)].is_deleted = true;
+            nogood_info[nogoods.get_nogood_index(&id)].mark_deleted();
 
             num_nogoods_to_remove -= 1;
         }
@@ -1720,7 +1720,7 @@ impl NogoodPropagator {
         //
         // Note that this does not remove it from either the nogood database or the watchers!
         let num_nogoods_before_removal = nogood_ids.len();
-        nogood_ids.retain(|&id| !nogood_info[nogoods.get_nogood_index(&id)].is_deleted);
+        nogood_ids.retain(|&id| !nogood_info[nogoods.get_nogood_index(&id)].is_deleted());
         let num_nogoods_after_removal = nogood_ids.len();
 
         num_nogoods_before_removal != num_nogoods_after_removal
@@ -1731,10 +1731,10 @@ impl NogoodPropagator {
     fn promote_high_lbd_nogoods(&mut self) {
         self.learned_nogood_ids.high_lbd.retain(|id| {
             let info_index = self.nogood_predicates.get_nogood_index(id);
-            if self.nogood_info[info_index].lbd >= self.parameters.lbd_threshold_high {
+            if self.nogood_info[info_index].lbd() >= self.parameters.lbd_threshold_high {
                 // If the LBD is still high, the nogood stays in the high LBD category.
                 true
-            } else if self.nogood_info[info_index].lbd <= self.parameters.lbd_threshold_low {
+            } else if self.nogood_info[info_index].lbd() <= self.parameters.lbd_threshold_low {
                 // If the LBD is low then the nogood is moved to the low LBD category
                 self.learned_nogood_ids.low_lbd.push(*id);
                 false
@@ -1754,7 +1754,7 @@ impl NogoodPropagator {
     fn promote_mid_lbd_nogoods(&mut self) {
         self.learned_nogood_ids.mid_lbd.retain(|id| {
             let info_index = self.nogood_predicates.get_nogood_index(id);
-            if self.nogood_info[info_index].lbd > self.parameters.lbd_threshold_low {
+            if self.nogood_info[info_index].lbd() > self.parameters.lbd_threshold_low {
                 // If the LBD is still mid, the nogood stays in the mid LBD category.
                 //
                 // Note that we do not move it to the high LBD tier.
@@ -1789,8 +1789,8 @@ impl NogoodPropagator {
         nogood_info: &KeyedVec<NogoodIndex, NogoodInfo>,
     ) {
         nogood_ids.sort_unstable_by(|&id1, &id2| {
-            let lbd1 = nogood_info[nogoods.get_nogood_index(&id1)].lbd;
-            let lbd2 = nogood_info[nogoods.get_nogood_index(&id2)].lbd;
+            let lbd1 = nogood_info[nogoods.get_nogood_index(&id1)].lbd();
+            let lbd2 = nogood_info[nogoods.get_nogood_index(&id2)].lbd();
 
             if lbd1 != lbd2 {
                 // Recall that lower LBD is better.
@@ -1813,7 +1813,7 @@ impl NogoodPropagator {
         self.parameters.activity_bump_increment /= self.parameters.activity_decay_factor;
         for &id in &self.bumped_nogoods {
             let info_id = self.nogood_predicates.get_nogood_index(&id);
-            self.nogood_info[info_id].block_bumps = false;
+            self.nogood_info[info_id].set_block_bumps(false);
         }
         self.bumped_nogoods.clear();
     }
@@ -1877,7 +1877,7 @@ impl NogoodPropagator {
         let info_id = self.nogood_predicates.get_nogood_index(&nogood_id);
         let inference_code = &self.inference_codes[info_id];
 
-        if self.nogood_info[info_id].is_deleted {
+        if self.nogood_info[info_id].is_deleted() {
             // The nogood has already been deleted, meaning that it could be that the call to
             // `propagate` would not find any propagations using it due to the watchers being
             // deleted
@@ -2007,7 +2007,7 @@ impl NogoodPropagator {
         for nogood_id in self.nogood_predicates.nogoods_ids() {
             let nogood_predicates = &self.nogood_predicates.get_nogood(nogood_id);
 
-            if self.nogood_info[self.nogood_predicates.get_nogood_index(&nogood_id)].is_deleted {
+            if self.nogood_info[self.nogood_predicates.get_nogood_index(&nogood_id)].is_deleted() {
                 // If the clause is deleted then it will have no watchers
                 assert!(
                     !is_watching(nogood_predicates[0], nogood_id)
