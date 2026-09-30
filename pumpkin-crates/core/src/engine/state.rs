@@ -397,8 +397,14 @@ impl State {
         checker: impl InferenceChecker<Predicate> + 'static,
     ) -> InferenceCode {
         let inference_code = InferenceCode::new(constraint_tag, inference_label);
-        self.checkers
-            .add_inference_checker(inference_code.clone(), BoxedChecker::new(Box::new(checker)));
+        if cfg!(feature = "check-propagations") {
+            // The checkers are only used when this feature is enabled, so we avoid storing them
+            // otherwise.
+            self.checkers.add_inference_checker(
+                inference_code.clone(),
+                BoxedChecker::new(Box::new(checker)),
+            );
+        }
         inference_code
     }
 }
