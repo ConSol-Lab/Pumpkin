@@ -97,6 +97,7 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
             registration: EventsToRegister::empty(),
             checkers: checkers.build(),
             propagator,
+            requires_notify: false,
         }
     }
 }

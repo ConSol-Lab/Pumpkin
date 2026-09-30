@@ -1006,6 +1006,7 @@ mod tests {
                     other,
                     inference_code,
                 },
+                requires_notify: false,
             }
         }
     }
