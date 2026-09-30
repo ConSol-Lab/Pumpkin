@@ -69,6 +69,7 @@ where
             registration,
             checkers: checkers.build(),
             propagator,
+            requires_notify: false,
         }
     }
 }

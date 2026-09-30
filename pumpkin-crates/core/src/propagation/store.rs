@@ -3,16 +3,31 @@ use std::marker::PhantomData;
 use std::ops::Index;
 use std::ops::IndexMut;
 
+use super::Priority;
 use super::Propagator;
 use super::PropagatorId;
 use crate::containers::KeyedVec;
 use crate::containers::Slot;
 use crate::engine::DebugDyn;
+use crate::pumpkin_assert_simple;
 
 /// A central store for propagators.
 #[derive(Default, Clone)]
 pub(crate) struct PropagatorStore {
     propagators: KeyedVec<PropagatorId, Box<dyn Propagator>>,
+    /// Information about each propagator which is used when notifying propagators, stored
+    /// separately to avoid dynamic dispatch.
+    infos: KeyedVec<PropagatorId, PropagatorInfo>,
+}
+
+/// Information about a propagator which does not change after it has been added.
+#[derive(Clone, Copy, Debug)]
+struct PropagatorInfo {
+    /// The [`Priority`] of the propagator (see [`Propagator::priority`]).
+    priority: Priority,
+    /// Whether [`Propagator::notify`] should be called (see
+    /// [`crate::propagation::PropagatorSpec::requires_notify`]).
+    requires_notify: bool,
 }
 
 /// A typed wrapper around a propagator id that allows retrieving concrete propagators instead of
@@ -63,8 +78,20 @@ impl PropagatorStore {
     pub(crate) fn new_propagator<P>(&mut self) -> NewPropagatorSlot<'_, P> {
         NewPropagatorSlot {
             underlying_slot: self.propagators.new_slot(),
+            infos: &mut self.infos,
             propagator_type: PhantomData,
         }
+    }
+
+    /// Returns the [`Priority`] of the propagator with the given id.
+    pub(crate) fn priority(&self, propagator_id: PropagatorId) -> Priority {
+        self.infos[propagator_id].priority
+    }
+
+    /// Returns whether [`Propagator::notify`] should be called for the propagator with the given
+    /// id.
+    pub(crate) fn requires_notify(&self, propagator_id: PropagatorId) -> bool {
+        self.infos[propagator_id].requires_notify
     }
 
     /// Get an exclusive reference to the propagator identified by the given handle.
@@ -118,6 +145,7 @@ impl IndexMut<PropagatorId> for PropagatorStore {
 /// type-erased [`PropagatorId`].
 pub(crate) struct NewPropagatorSlot<'a, P> {
     underlying_slot: Slot<'a, PropagatorId, Box<dyn Propagator>>,
+    infos: &'a mut KeyedVec<PropagatorId, PropagatorInfo>,
     propagator_type: PhantomData<P>,
 }
 
@@ -131,9 +159,18 @@ impl<P: Propagator + 'static> NewPropagatorSlot<'_, P> {
     }
 
     /// Put a propagator into the slot.
-    pub(crate) fn populate(self, propagator: P) -> PropagatorHandle<P> {
+    ///
+    /// See [`crate::propagation::PropagatorSpec::requires_notify`] for `requires_notify`.
+    pub(crate) fn populate(self, propagator: P, requires_notify: bool) -> PropagatorHandle<P> {
+        let info_id = self.infos.push(PropagatorInfo {
+            priority: propagator.priority(),
+            requires_notify,
+        });
+        let id = self.underlying_slot.populate(Box::new(propagator));
+        pumpkin_assert_simple!(info_id == id);
+
         PropagatorHandle {
-            id: self.underlying_slot.populate(Box::new(propagator)),
+            id,
             propagator: PhantomData,
         }
     }

@@ -52,6 +52,8 @@ where
             mut registration,
             propagator,
             checkers,
+            // The reified propagator always implements notify.
+            requires_notify: _,
         } = propagator.create(context.reborrow());
 
         // The local ID for the reification literal will be one larger than the largest ID
@@ -95,6 +97,7 @@ where
             registration,
             checkers: wrapped_checkers,
             propagator,
+            requires_notify: true,
         }
     }
 }
@@ -495,6 +498,7 @@ mod tests {
                 registration,
                 checkers: RuntimeCheckers::empty(),
                 propagator: self,
+                requires_notify: false,
             }
         }
     }

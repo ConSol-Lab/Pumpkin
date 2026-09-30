@@ -76,6 +76,7 @@ where
             registration: registration.build(),
             checkers: checkers.build(),
             propagator,
+            requires_notify: false,
         }
     }
 }

@@ -24,6 +24,8 @@ use crate::propagation::PropagatorConstructor;
 #[cfg(doc)]
 use crate::propagation::PropagatorConstructorContext;
 #[cfg(doc)]
+use crate::propagation::PropagatorSpec;
+#[cfg(doc)]
 use crate::propagation::ReadDomains;
 use crate::propagation::local_id::LocalId;
 #[cfg(doc)]
@@ -121,6 +123,10 @@ pub trait Propagator: Downcast + DynClone {
     ///
     /// By default the propagator is always enqueued for every event it is subscribed to. Not all
     /// propagators will benefit from implementing this, so it is not required to do so.
+    ///
+    /// Propagators which do not implement this method should set
+    /// [`PropagatorSpec::requires_notify`] to `false`, which allows the solver to enqueue them
+    /// without calling this method.
     fn notify(
         &mut self,
         _context: NotificationContext,
@@ -180,6 +186,9 @@ pub trait Propagator: Downcast + DynClone {
     ///
     /// By default the priority is set to [`Priority::VeryLow`]. It is expected that
     /// propagator implementations would set this value to some appropriate value.
+    ///
+    /// The priority is retrieved once when the propagator is added to the solver, so it should
+    /// not change over time.
     fn priority(&self) -> Priority {
         Priority::VeryLow
     }

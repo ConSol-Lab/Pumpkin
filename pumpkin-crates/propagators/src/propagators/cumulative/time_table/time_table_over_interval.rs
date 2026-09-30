@@ -141,6 +141,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor
             registration,
             checkers: checkers.build(),
             propagator: self,
+            requires_notify: true,
         }
     }
 }

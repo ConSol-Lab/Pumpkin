@@ -397,12 +397,12 @@ impl NotificationEngine {
                 for propagator_id in propagators_to_notify {
                     let mut context = NotificationContext::new(trailed_values, assignments);
 
-                    let propagator = &mut propagators[propagator_id];
-                    let enqueue_decision =
-                        propagator.notify_predicate_id_satisfied(context.reborrow(), predicate_id);
+                    let enqueue_decision = propagators[propagator_id]
+                        .notify_predicate_id_satisfied(context.reborrow(), predicate_id);
 
                     if enqueue_decision == EnqueueDecision::Enqueue {
-                        propagator_queue.enqueue_propagator(propagator_id, propagator.priority());
+                        propagator_queue
+                            .enqueue_propagator(propagator_id, propagators.priority(propagator_id));
                     }
                 }
             }
@@ -419,13 +419,19 @@ impl NotificationEngine {
         assignments: &Assignments,
         trailed_values: &mut TrailedValues,
     ) {
+        // Propagators which do not require notify are always enqueued, so we avoid calling their
+        // (default) notify method.
+        if !propagators.requires_notify(propagator_id) {
+            propagator_queue.enqueue_propagator(propagator_id, propagators.priority(propagator_id));
+            return;
+        }
+
         let context = NotificationContext::new(trailed_values, assignments);
 
         let enqueue_decision = propagators[propagator_id].notify(context, local_id, event.into());
 
         if enqueue_decision == EnqueueDecision::Enqueue {
-            propagator_queue
-                .enqueue_propagator(propagator_id, propagators[propagator_id].priority());
+            propagator_queue.enqueue_propagator(propagator_id, propagators.priority(propagator_id));
         }
     }
 

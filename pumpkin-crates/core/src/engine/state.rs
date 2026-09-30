@@ -314,7 +314,7 @@ impl State {
     /// Enqueues the propagator with [`PropagatorHandle`] `handle` for propagation.
     #[deprecated]
     pub(crate) fn enqueue_propagator<P: Propagator>(&mut self, handle: PropagatorHandle<P>) {
-        let priority = self.propagators[handle.propagator_id()].priority();
+        let priority = self.propagators.priority(handle.propagator_id());
         self.propagator_queue
             .enqueue_propagator(handle.propagator_id(), priority);
     }
@@ -344,6 +344,7 @@ impl State {
             registration,
             checkers,
             propagator,
+            requires_notify,
         } = constructor.create(constructor_context);
 
         for (domain_id, events, local_id) in registration.iter() {
@@ -373,7 +374,7 @@ impl State {
         );
 
         let slot = self.propagators.new_propagator();
-        let handle = slot.populate(propagator);
+        let handle = slot.populate(propagator, requires_notify);
 
         pumpkin_assert_eq_simple!(handle.propagator_id(), original_handle.propagator_id());
 

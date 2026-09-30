@@ -154,6 +154,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstruc
             registration,
             checkers: checkers.build(),
             propagator: self,
+            requires_notify: true,
         }
     }
 }

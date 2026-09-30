@@ -201,6 +201,7 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             registration: EventsToRegister::empty(),
             checkers: RuntimeCheckers::empty(),
             propagator,
+            requires_notify: false,
         }
     }
 }

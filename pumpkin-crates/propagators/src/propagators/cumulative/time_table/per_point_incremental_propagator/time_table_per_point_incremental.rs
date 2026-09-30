@@ -144,6 +144,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
             registration,
             checkers: checkers.build(),
             propagator: self,
+            requires_notify: true,
         }
     }
 }

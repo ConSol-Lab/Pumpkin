@@ -126,6 +126,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
             registration: registration.build(),
             checkers: checkers.build(),
             propagator,
+            requires_notify: false,
         }
     }
 }

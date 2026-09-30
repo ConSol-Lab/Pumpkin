@@ -53,6 +53,13 @@ pub struct PropagatorSpec<P> {
     pub checkers: RuntimeCheckers,
     /// The propagator
     pub propagator: P,
+    /// Whether [`Propagator::notify`] should be called when one of the registered domain events
+    /// occurs.
+    ///
+    /// If `false`, the propagator is enqueued for every registered domain event without calling
+    /// [`Propagator::notify`]. This should only be set to `false` if the propagator does not
+    /// implement [`Propagator::notify`].
+    pub requires_notify: bool,
 }
 
 /// [`PropagatorConstructorContext`] is used when [`Propagator`]s are initialised after creation.

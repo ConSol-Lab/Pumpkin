@@ -85,6 +85,7 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
             registration,
             checkers: checkers.build(),
             propagator,
+            requires_notify: false,
         }
     }
 }
