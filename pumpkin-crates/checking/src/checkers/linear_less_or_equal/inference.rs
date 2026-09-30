@@ -5,13 +5,18 @@ use crate::InferenceChecker;
 use crate::IntExt;
 use crate::VariableState;
 
+impl<Var> LinearLessOrEqualChecker<Var> {
+    /// The name of the rule of this checker.
+    pub const RULE_NAME: &'static str = "linear_bounds";
+}
+
 impl<Var, Atomic> InferenceChecker<Atomic> for LinearLessOrEqualChecker<Var>
 where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
     fn rule_name(&self) -> &'static str {
-        "linear_bounds"
+        Self::RULE_NAME
     }
 
     fn check(

@@ -5,6 +5,11 @@ use crate::InferenceChecker;
 use crate::IntExt;
 use crate::VariableState;
 
+impl<ElementVar, Rhs> MaximumChecker<ElementVar, Rhs> {
+    /// The name of the rule of this checker.
+    pub const RULE_NAME: &'static str = "maximum";
+}
+
 impl<ElementVar, Rhs, Atomic> InferenceChecker<Atomic> for MaximumChecker<ElementVar, Rhs>
 where
     Atomic: AtomicConstraint,
@@ -12,7 +17,7 @@ where
     Rhs: CheckerVariable<Atomic>,
 {
     fn rule_name(&self) -> &'static str {
-        "maximum"
+        Self::RULE_NAME
     }
 
     fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {

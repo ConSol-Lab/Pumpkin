@@ -49,3 +49,32 @@ pub(crate) fn test_state(
     crate::VariableState::prepare_for_conflict_check(atomics, None)
         .expect("the atomic constraints are consistent")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rule_names_are_distinct() {
+        // A new built-in checker adds its rule name here.
+        let names = [
+            AbsoluteValueChecker::<(), ()>::RULE_NAME,
+            BinaryEqualsChecker::<(), ()>::RULE_NAME,
+            BinaryNotEqualsChecker::<(), ()>::RULE_NAME,
+            TimeTableChecker::<()>::RULE_NAME,
+            DisjunctiveEdgeFindingChecker::<()>::RULE_NAME,
+            ElementChecker::<(), (), ()>::RULE_NAME,
+            HypercubeLinearChecker::<(), ()>::RULE_NAME,
+            IntegerDivisionChecker::<(), (), ()>::RULE_NAME,
+            IntegerMultiplicationChecker::<(), (), ()>::RULE_NAME,
+            LinearLessOrEqualChecker::<()>::RULE_NAME,
+            LinearNotEqualChecker::<()>::RULE_NAME,
+            MaximumChecker::<(), ()>::RULE_NAME,
+            NogoodChecker::<()>::RULE_NAME,
+            "initial_domain",
+        ];
+
+        let distinct = names.iter().collect::<std::collections::HashSet<_>>();
+        assert_eq!(distinct.len(), names.len(), "{names:?}");
+    }
+}

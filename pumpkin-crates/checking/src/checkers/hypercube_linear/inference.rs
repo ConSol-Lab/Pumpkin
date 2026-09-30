@@ -7,13 +7,18 @@ use crate::InferenceChecker;
 use crate::IntExt;
 use crate::VariableState;
 
+impl<Atomic, Var> HypercubeLinearChecker<Atomic, Var> {
+    /// The name of the rule of this checker.
+    pub const RULE_NAME: &'static str = "hypercube_linear";
+}
+
 impl<Atomic, Var> InferenceChecker<Atomic> for HypercubeLinearChecker<Atomic, Var>
 where
     Atomic: AtomicConstraint + Clone + Debug,
     Var: CheckerVariable<Atomic>,
 {
     fn rule_name(&self) -> &'static str {
-        "hypercube_linear"
+        Self::RULE_NAME
     }
 
     fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {

@@ -16,13 +16,18 @@ fn can_be_propagated_by_profile<Var: CheckerVariable<Atomic>, Atomic: AtomicCons
     height + task.resource_usage > capacity
 }
 
+impl<Var> TimeTableChecker<Var> {
+    /// The name of the rule of this checker.
+    pub const RULE_NAME: &'static str = "time_table";
+}
+
 impl<Var, Atomic> InferenceChecker<Atomic> for TimeTableChecker<Var>
 where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
     fn rule_name(&self) -> &'static str {
-        "time_table"
+        Self::RULE_NAME
     }
 
     fn check(

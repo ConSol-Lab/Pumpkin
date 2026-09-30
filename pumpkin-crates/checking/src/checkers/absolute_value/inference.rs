@@ -5,6 +5,11 @@ use crate::InferenceChecker;
 use crate::IntExt;
 use crate::VariableState;
 
+impl<VA, VB> AbsoluteValueChecker<VA, VB> {
+    /// The name of the rule of this checker.
+    pub const RULE_NAME: &'static str = "absolute_value";
+}
+
 impl<VA, VB, Atomic> InferenceChecker<Atomic> for AbsoluteValueChecker<VA, VB>
 where
     VA: CheckerVariable<Atomic>,
@@ -12,7 +17,7 @@ where
     Atomic: AtomicConstraint,
 {
     fn rule_name(&self) -> &'static str {
-        "absolute_value"
+        Self::RULE_NAME
     }
 
     fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {

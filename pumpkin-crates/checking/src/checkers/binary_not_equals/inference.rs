@@ -4,6 +4,11 @@ use crate::CheckerVariable;
 use crate::InferenceChecker;
 use crate::VariableState;
 
+impl<Lhs, Rhs> BinaryNotEqualsChecker<Lhs, Rhs> {
+    /// The name of the rule of this checker.
+    pub const RULE_NAME: &'static str = "binary_not_equals";
+}
+
 impl<Lhs, Rhs, Atomic> InferenceChecker<Atomic> for BinaryNotEqualsChecker<Lhs, Rhs>
 where
     Atomic: AtomicConstraint,
@@ -11,7 +16,7 @@ where
     Rhs: CheckerVariable<Atomic>,
 {
     fn rule_name(&self) -> &'static str {
-        "binary_not_equals"
+        Self::RULE_NAME
     }
 
     fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
