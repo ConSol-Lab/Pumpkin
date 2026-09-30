@@ -54,7 +54,7 @@ mod tests {
                 predicate![domain >= 2],
                 (
                     conjunction!(),
-                    &InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
+                    &InferenceCode::unknown_rule(ConstraintTag::create_from_index(0)),
                 ),
             );
             assert!(result.is_ok());
@@ -89,7 +89,7 @@ mod tests {
                 predicate![domain <= 15],
                 (
                     conjunction!(),
-                    &InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
+                    &InferenceCode::unknown_rule(ConstraintTag::create_from_index(0)),
                 ),
             );
             assert!(result.is_ok());
@@ -124,7 +124,7 @@ mod tests {
                 predicate![domain != 15],
                 (
                     conjunction!(),
-                    &InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
+                    &InferenceCode::unknown_rule(ConstraintTag::create_from_index(0)),
                 ),
             );
             assert!(result.is_ok());

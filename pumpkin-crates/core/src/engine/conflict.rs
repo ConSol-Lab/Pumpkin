@@ -19,7 +19,7 @@ pub fn propagator_conflict(
 ) -> PropagationStatusCP {
     Err(Conflict::Propagator(PropagatorConflict {
         conjunction,
-        inference_code: inference_code.clone(),
+        inference_code: *inference_code,
     }))
 }
 

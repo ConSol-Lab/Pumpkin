@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 #[cfg(doc)]
 use crate::Solver;
+use crate::containers::HashMap;
 use crate::containers::StorageKey;
 
 /// An identifier for constraints, which is used to relate constraints from the model to steps in
@@ -43,24 +44,27 @@ impl StorageKey for ConstraintTag {
     }
 }
 
-/// An inference code is a combination of a constraint tag with an inference label. Propagators
+/// An inference code is a combination of a constraint tag with an inference rule. Propagators
 /// associate an inference code with every propagation to identify why that propagation happened
 /// in terms of the constraint and inference that identified it.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct InferenceCode(ConstraintTag, Arc<str>);
+///
+/// The rule is identified by a [`RuleId`], which is only meaningful in the solver that assigned
+/// it; the name of the rule is obtained from that solver.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct InferenceCode(ConstraintTag, RuleId);
 
 impl InferenceCode {
-    /// Create a new inference code from a [`ConstraintTag`] and [`InferenceLabel`].
-    pub fn new(tag: ConstraintTag, label: impl InferenceLabel) -> Self {
-        InferenceCode(tag, label.to_str())
+    /// Create a new inference code from a [`ConstraintTag`] and a [`RuleId`].
+    pub(crate) fn new(tag: ConstraintTag, rule: RuleId) -> Self {
+        InferenceCode(tag, rule)
     }
 
-    /// Create an inference label with the [`Unknown`] inference label.
+    /// Create an inference code with the rule [`UNKNOWN_RULE`], which every solver knows.
     ///
     /// This should be avoided as much as possible. This is likely only useful for writing unit
     /// tests.
-    pub fn unknown_label(tag: ConstraintTag) -> Self {
-        InferenceCode::new(tag, Unknown)
+    pub fn unknown_rule(tag: ConstraintTag) -> Self {
+        InferenceCode(tag, RuleId::UNKNOWN)
     }
 
     /// Get the constraint tag.
@@ -68,9 +72,56 @@ impl InferenceCode {
         self.0
     }
 
-    /// Get the inference label.
-    pub fn label(&self) -> Arc<str> {
-        Arc::clone(&self.1)
+    /// Get the identifier of the inference rule.
+    pub fn rule(&self) -> RuleId {
+        self.1
+    }
+}
+
+/// The name of the rule of [`InferenceCode::unknown_rule`].
+pub const UNKNOWN_RULE: &str = "unknown";
+
+/// Identifies an inference rule in the solver that assigned it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct RuleId(u32);
+
+impl RuleId {
+    const UNKNOWN: RuleId = RuleId(0);
+}
+
+/// The names of the inference rules used by a solver, each with the [`RuleId`] that the solver
+/// assigned to it. A name is assigned an identifier when it is first used.
+#[derive(Clone, Debug)]
+pub(crate) struct InferenceRules {
+    names: Vec<&'static str>,
+    ids: HashMap<&'static str, RuleId>,
+}
+
+impl Default for InferenceRules {
+    fn default() -> Self {
+        let mut rules = InferenceRules {
+            names: vec![],
+            ids: HashMap::default(),
+        };
+        let unknown = rules.id(UNKNOWN_RULE);
+        debug_assert_eq!(unknown, RuleId::UNKNOWN);
+        rules
+    }
+}
+
+impl InferenceRules {
+    /// The identifier of the rule with the given name.
+    pub(crate) fn id(&mut self, name: &'static str) -> RuleId {
+        *self.ids.entry(name).or_insert_with(|| {
+            let id = RuleId(u32::try_from(self.names.len()).expect("fewer than 2^32 rules"));
+            self.names.push(name);
+            id
+        })
+    }
+
+    /// The name of the rule with the given identifier.
+    pub(crate) fn name(&self, id: RuleId) -> &'static str {
+        self.names[id.0 as usize]
     }
 }
 

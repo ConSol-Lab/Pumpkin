@@ -27,7 +27,10 @@ where
 {
     type PropagatorImpl = BinaryEqualsPropagator<AVar, BVar>;
 
-    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
+    fn create(
+        self,
+        mut context: PropagatorConstructorContext,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let BinaryEqualsPropagatorArgs {
             a,
             b,
@@ -41,9 +44,9 @@ where
 
         let mut checkers = RuntimeCheckers::builder();
         let inference_code = checkers.add_rule(
+            &mut context,
             ((super::ID_LHS, &a), (super::ID_RHS, &b)),
             constraint_tag,
-            super::BinaryEquals,
             BinaryEqualsChecker {
                 lhs: a.clone(),
                 rhs: b.clone(),

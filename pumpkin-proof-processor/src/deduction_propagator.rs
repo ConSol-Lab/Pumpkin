@@ -1,7 +1,6 @@
 use std::rc::Rc;
 
 use pumpkin_checking::checkers::NogoodChecker;
-use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
@@ -62,8 +61,6 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
         self,
         mut context: PropagatorConstructorContext,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
-        declare_inference_label!(Nogood);
-
         let DeductionPropagatorConstructor {
             nogood,
             constraint_tag,
@@ -77,8 +74,8 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
 
         let mut checkers = RuntimeCheckers::builder();
         let inference_code = checkers.add_inference_checker(
+            &mut context,
             constraint_tag,
-            Nogood,
             NogoodChecker {
                 nogood: nogood.iter().copied().collect(),
             },
@@ -180,7 +177,7 @@ impl Propagator for DeductionPropagator {
             DeductionPropagationMode::OnlyConflictDetection if num_unassigned_predicates == 0 => {
                 return Err(Conflict::Propagator(PropagatorConflict {
                     conjunction: self.nogood.iter().copied().collect(),
-                    inference_code: self.inference_code.clone(),
+                    inference_code: self.inference_code,
                 }));
             }
             DeductionPropagationMode::OnlyUnitPropagation if num_unassigned_predicates == 1 => {

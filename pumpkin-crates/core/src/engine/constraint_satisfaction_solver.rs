@@ -32,7 +32,6 @@ use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::conflict_resolving::ConflictResolver;
 use crate::containers::HashMap;
 use crate::containers::HashSet;
-use crate::declare_inference_label;
 use crate::engine::Assignments;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
@@ -808,6 +807,7 @@ impl ConstraintSatisfactionSolver {
             let inference_premises = reason.iter().copied().chain(std::iter::once(!propagated));
             let _ = self.internal_parameters.proof_log.log_inference(
                 &mut self.state.constraint_tags,
+                &self.state.inference_rules,
                 inference_code,
                 inference_premises,
                 None,
@@ -852,7 +852,9 @@ impl ConstraintSatisfactionSolver {
             );
 
             if let Ok(constraint_tag) = constraint_tag {
-                let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
+                let inference_code = self
+                    .state
+                    .inference_code_for_rule(constraint_tag, NogoodChecker::<Predicate>::RULE_NAME);
 
                 let _ = self
                     .unit_nogood_inference_codes
@@ -904,7 +906,6 @@ impl ConstraintSatisfactionSolver {
 
         let inference_code = self.state.add_inference_checker(
             constraint_tag,
-            NogoodLabel,
             NogoodChecker {
                 nogood: nogood.clone().into(),
             },
@@ -961,12 +962,16 @@ impl ConstraintSatisfactionSolver {
         if are_all_falsified_at_root {
             // Since the propagation is not actually performed, we log the inference
             // explicitly here for the proof.
+            let inference_code = self
+                .state
+                .inference_code_for_rule(constraint_tag, NogoodChecker::<Predicate>::RULE_NAME);
             let _ = self
                 .internal_parameters
                 .proof_log
                 .log_inference(
                     &mut self.state.constraint_tags,
-                    InferenceCode::new(constraint_tag, NogoodLabel),
+                    &self.state.inference_rules,
+                    inference_code,
                     predicates.iter().copied(),
                     None,
                     &self.state.variable_names,
@@ -1118,8 +1123,6 @@ impl CSPSolverState {
         }
     }
 }
-
-declare_inference_label!(pub(crate) NogoodLabel, "nogood");
 
 #[cfg(test)]
 mod tests {

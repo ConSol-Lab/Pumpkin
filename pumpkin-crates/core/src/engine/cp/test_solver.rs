@@ -17,7 +17,6 @@ use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::proof::InferenceLabel;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
 use crate::propagation::NotificationContext;
@@ -64,14 +63,14 @@ impl TestSolver {
     pub fn accept_inferences_by(
         &mut self,
         constraint_tag: ConstraintTag,
-        inference_label: impl InferenceLabel,
+        rule_name: &'static str,
     ) -> InferenceCode {
         #[derive(Debug, Clone, Copy)]
-        struct Checker;
+        struct Checker(&'static str);
 
         impl InferenceChecker<Predicate> for Checker {
             fn rule_name(&self) -> &'static str {
-                "accept_all"
+                self.0
             }
 
             fn check(
@@ -85,7 +84,7 @@ impl TestSolver {
         }
 
         self.state
-            .add_inference_checker(constraint_tag, inference_label, Checker)
+            .add_inference_checker(constraint_tag, Checker(rule_name))
     }
 
     pub fn new_variable(&mut self, lb: i32, ub: i32) -> DomainId {

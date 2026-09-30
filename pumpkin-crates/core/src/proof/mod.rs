@@ -82,9 +82,11 @@ impl ProofLog {
     }
 
     /// Log an inference to the proof.
+    #[allow(clippy::too_many_arguments, reason = "the state is borrowed in parts")]
     pub(crate) fn log_inference(
         &mut self,
         constraint_tags: &mut KeyGenerator<ConstraintTag>,
+        inference_rules: &InferenceRules,
         inference_code: InferenceCode,
         premises: impl IntoIterator<Item = Predicate> + Clone,
         propagated: Option<Predicate>,
@@ -123,7 +125,7 @@ impl ProofLog {
                     proof_atomics.map_predicate_to_proof_atomic(predicate, variable_names)
                 }),
             generated_by: Some(inference_code.tag().into()),
-            label: Some(inference_code.label()),
+            label: Some(inference_rules.name(inference_code.rule())),
         };
 
         writer.log_inference(inference)?;

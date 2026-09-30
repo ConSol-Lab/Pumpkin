@@ -9,7 +9,6 @@ use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
-use super::BinaryNotEquals;
 use super::BinaryNotEqualsPropagator;
 
 /// The [`PropagatorConstructor`] for the [`BinaryNotEqualsPropagator`].
@@ -27,7 +26,10 @@ where
 {
     type PropagatorImpl = BinaryNotEqualsPropagator<AVar, BVar>;
 
-    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
+    fn create(
+        self,
+        mut context: PropagatorConstructorContext,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let BinaryNotEqualsPropagatorArgs {
             a,
             b,
@@ -42,9 +44,9 @@ where
 
         let mut checkers = RuntimeCheckers::builder();
         let inference_code = checkers.add_rule(
+            &mut context,
             ((LocalId::from(0), &a), (LocalId::from(1), &b)),
             constraint_tag,
-            BinaryNotEquals,
             BinaryNotEqualsChecker {
                 lhs: a.clone(),
                 rhs: b.clone(),

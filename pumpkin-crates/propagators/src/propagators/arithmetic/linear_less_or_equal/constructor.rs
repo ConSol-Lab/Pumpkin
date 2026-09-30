@@ -11,7 +11,6 @@ use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
-use super::LinearBounds;
 use super::LinearLessOrEqualPropagator;
 
 /// The [`PropagatorConstructor`] for the [`LinearLessOrEqualPropagator`].
@@ -53,9 +52,9 @@ where
 
         let mut checkers = RuntimeCheckers::builder();
         let inference_code = checkers.add_rule(
+            &mut context,
             Scope::from_variables(x.iter()),
             constraint_tag,
-            LinearBounds,
             LinearLessOrEqualChecker::new(x.clone(), c),
         );
 

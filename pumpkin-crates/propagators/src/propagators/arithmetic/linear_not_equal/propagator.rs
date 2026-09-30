@@ -216,7 +216,7 @@ where
 
             return Err(PropagatorConflict {
                 conjunction,
-                inference_code: self.inference_code.clone(),
+                inference_code: self.inference_code,
             }
             .into());
         }
@@ -258,7 +258,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
 
             return Err(PropagatorConflict {
                 conjunction,
-                inference_code: self.inference_code.clone(),
+                inference_code: self.inference_code,
             });
         }
         Ok(())

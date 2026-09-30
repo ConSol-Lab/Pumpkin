@@ -12,7 +12,6 @@ use super::TimeTablePerPointIncrementalPropagator;
 #[cfg(doc)]
 use crate::cumulative::time_table::TimeTablePerPointPropagator;
 use crate::cumulative::util::register_tasks;
-use crate::propagators::cumulative::time_table::TimeTable;
 
 impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> PropagatorConstructor
     for TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE>
@@ -33,8 +32,8 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         let mut checkers = RuntimeCheckers::builder();
         self.inference_code = Some(
             checkers.add_inference_checker(
+                &mut context,
                 self.constraint_tag,
-                TimeTable,
                 TimeTableChecker {
                     tasks: self
                         .parameters

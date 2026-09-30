@@ -91,7 +91,7 @@ impl IntegerMultiplicationExplainer {
 
         LazyExplanation {
             predicates: self.reason_buffer.as_slice(),
-            inference_code: self.inference_code.clone(),
+            inference_code: self.inference_code,
         }
     }
 }

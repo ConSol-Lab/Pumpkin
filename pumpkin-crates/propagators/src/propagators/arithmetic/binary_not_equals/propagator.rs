@@ -34,7 +34,7 @@ where
             // conflict
             Some(PropagatorConflict {
                 conjunction: conjunction!([self.a == fixed_a] & [self.b == fixed_a]),
-                inference_code: self.inference_code.clone(),
+                inference_code: self.inference_code,
             })
         } else {
             None

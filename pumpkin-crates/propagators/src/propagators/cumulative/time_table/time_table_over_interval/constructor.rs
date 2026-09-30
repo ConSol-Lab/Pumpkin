@@ -7,7 +7,6 @@ use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::TimeTableOverIntervalPropagator;
-use crate::cumulative::time_table::TimeTable;
 #[cfg(doc)]
 use crate::cumulative::time_table::TimeTablePerPointPropagator;
 use crate::cumulative::util::register_tasks;
@@ -28,8 +27,8 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor
         let mut checkers = RuntimeCheckers::builder();
         self.inference_code = Some(
             checkers.add_inference_checker(
+                &mut context,
                 self.constraint_tag,
-                TimeTable,
                 TimeTableChecker {
                     tasks: self
                         .parameters

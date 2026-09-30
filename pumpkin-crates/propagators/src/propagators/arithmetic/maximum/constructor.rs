@@ -11,7 +11,6 @@ use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use crate::arithmetic::MaximumPropagator;
-use crate::arithmetic::maximum::Maximum;
 
 /// The [`PropagatorConstructor`] for the [`MaximumPropagator`].
 #[derive(Clone, Debug)]
@@ -28,7 +27,10 @@ where
 {
     type PropagatorImpl = MaximumPropagator<ElementVar, Rhs>;
 
-    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
+    fn create(
+        self,
+        mut context: PropagatorConstructorContext,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let MaximumArgs {
             array,
             rhs,
@@ -48,9 +50,9 @@ where
 
         let mut checkers = RuntimeCheckers::builder();
         let inference_code = checkers.add_rule(
+            &mut context,
             scope,
             constraint_tag,
-            Maximum,
             MaximumChecker {
                 array: array.clone(),
                 rhs: rhs.clone(),

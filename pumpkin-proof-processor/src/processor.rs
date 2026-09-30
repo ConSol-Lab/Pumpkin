@@ -507,14 +507,14 @@ impl ProofProcessor {
                 inference_code,
             }) => {
                 let generated_by = inference_code.tag();
-                let label = inference_code.label();
+                let label = self.state.rule_name(inference_code);
 
                 inferences.push(Some(Inference {
                     constraint_id: self.state.new_constraint_tag().into(),
                     premises: convert_predicates_to_proof_atomic(&self.variables, &conjunction),
                     consequent: None,
                     generated_by: Some(generated_by.into()),
-                    label: Some(label),
+                    label: Some(Arc::from(label)),
                 }));
 
                 self.mark_stack_entry(nogood_stack, inference_code);
@@ -531,7 +531,7 @@ impl ProofProcessor {
 
                 if let Some(inference_code) = maybe_trigger_inference {
                     let generated_by = inference_code.tag();
-                    let label = inference_code.label();
+                    let label = self.state.rule_name(inference_code);
 
                     inferences.push(Some(Inference {
                         constraint_id: self.state.new_constraint_tag().into(),
@@ -544,7 +544,7 @@ impl ProofProcessor {
                             empty_domain_confict.trigger_predicate,
                         )),
                         generated_by: Some(generated_by.into()),
-                        label: Some(label),
+                        label: Some(Arc::from(label)),
                     }));
 
                     self.mark_stack_entry(nogood_stack, inference_code);
@@ -628,9 +628,9 @@ impl ProofProcessor {
             // predicate. Those inferences do not need to be in the proof, so we only create an
             // inference for propagations by constraints.
             if let Some(inference_code) = inference_code {
-                self.mark_stack_entry(nogood_stack, inference_code.clone());
+                self.mark_stack_entry(nogood_stack, inference_code);
 
-                let label = inference_code.label();
+                let label = self.state.rule_name(inference_code);
                 inferences.push(Some(Inference {
                     constraint_id: self.state.new_constraint_tag().into(),
                     premises: convert_predicates_to_proof_atomic(&self.variables, &reason_buffer),
@@ -639,7 +639,7 @@ impl ProofProcessor {
                         predicate,
                     )),
                     generated_by: Some(inference_code.tag().into()),
-                    label: Some(label),
+                    label: Some(Arc::from(label)),
                 }));
             }
 
@@ -746,7 +746,6 @@ mod tests {
     use drcp_format::reader::ReadStep;
     use pumpkin_checking::InferenceChecker;
     use pumpkin_checking::VariableState;
-    use pumpkin_core::declare_inference_label;
     use pumpkin_core::propagation::EventsToRegister;
     use pumpkin_core::propagation::PropagationContext;
     use pumpkin_core::propagation::Propagator;
@@ -979,8 +978,6 @@ mod tests {
             self,
             mut context: PropagatorConstructorContext,
         ) -> PropagatorSpec<Self::PropagatorImpl> {
-            declare_inference_label!(AlwaysConflict);
-
             let AlwaysConflictConstructor {
                 watched,
                 other,
@@ -993,8 +990,8 @@ mod tests {
 
             let mut checkers = RuntimeCheckers::builder();
             let inference_code = checkers.add_inference_checker(
+                &mut context,
                 constraint_tag,
-                AlwaysConflict,
                 AlwaysConflictChecker { watched, other },
             );
 
@@ -1055,7 +1052,7 @@ mod tests {
             if is_watched_satisfied && is_other_satisfied {
                 return Err(Conflict::Propagator(PropagatorConflict {
                     conjunction: [self.watched, self.other].into_iter().collect(),
-                    inference_code: self.inference_code.clone(),
+                    inference_code: self.inference_code,
                 }));
             }
 

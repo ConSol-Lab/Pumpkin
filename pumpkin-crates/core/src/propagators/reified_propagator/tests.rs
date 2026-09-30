@@ -7,7 +7,7 @@ use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::proof::Unknown;
+use crate::proof::UNKNOWN_RULE;
 use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
@@ -36,9 +36,10 @@ fn a_detected_inconsistency_is_given_as_reason_for_propagating_reification_liter
     let t1 = triggered_conflict.clone();
     let t2 = triggered_conflict.clone();
 
-    let inference_code = solver.accept_inferences_by(ConstraintTag::create_from_index(0), Unknown);
-    let i1 = inference_code.clone();
-    let i2 = inference_code.clone();
+    let inference_code =
+        solver.accept_inferences_by(ConstraintTag::create_from_index(0), UNKNOWN_RULE);
+    let i1 = inference_code;
+    let i2 = inference_code;
 
     let _ = solver
         .new_propagator(ReifiedPropagatorArgs {
@@ -47,14 +48,14 @@ fn a_detected_inconsistency_is_given_as_reason_for_propagating_reification_liter
                 move |_: PropagationContext| {
                     Err(PropagatorConflict {
                         conjunction: t1.clone(),
-                        inference_code: i1.clone(),
+                        inference_code: i1,
                     }
                     .into())
                 },
                 move |_: Domains| {
                     Some(PropagatorConflict {
                         conjunction: t2.clone(),
-                        inference_code: i2.clone(),
+                        inference_code: i2,
                     })
                 },
             ),
@@ -84,7 +85,7 @@ fn a_true_literal_is_added_to_reason_for_propagation() {
                         predicate![var >= 3],
                         (
                             conjunction!(),
-                            &InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
+                            &InferenceCode::unknown_rule(ConstraintTag::create_from_index(0)),
                         ),
                     )?;
                     Ok(())
@@ -116,7 +117,8 @@ fn a_true_literal_is_added_to_a_conflict_conjunction() {
     let _ = solver.set_literal(reification_literal, true);
 
     let var = solver.new_variable(1, 1);
-    let inference_code = solver.accept_inferences_by(ConstraintTag::create_from_index(0), Unknown);
+    let inference_code =
+        solver.accept_inferences_by(ConstraintTag::create_from_index(0), UNKNOWN_RULE);
 
     let inconsistency = solver
         .new_propagator(ReifiedPropagatorArgs {
@@ -125,7 +127,7 @@ fn a_true_literal_is_added_to_a_conflict_conjunction() {
                 move |_: PropagationContext| {
                     Err(PropagatorConflict {
                         conjunction: conjunction!([var >= 1]),
-                        inference_code: inference_code.clone(),
+                        inference_code,
                     }
                     .into())
                 },
@@ -157,7 +159,8 @@ fn notify_propagator_is_enqueued_if_inconsistency_can_be_detected() {
     let reification_literal = solver.new_literal();
     let var = solver.new_variable(1, 5);
 
-    let inference_code = solver.accept_inferences_by(ConstraintTag::create_from_index(0), Unknown);
+    let inference_code =
+        solver.accept_inferences_by(ConstraintTag::create_from_index(0), UNKNOWN_RULE);
 
     let propagator = solver
         .new_propagator(ReifiedPropagatorArgs {
@@ -168,7 +171,7 @@ fn notify_propagator_is_enqueued_if_inconsistency_can_be_detected() {
                     if context.is_fixed(&var) {
                         Some(PropagatorConflict {
                             conjunction: conjunction!([var == 5]),
-                            inference_code: inference_code.clone(),
+                            inference_code,
                         })
                     } else {
                         None

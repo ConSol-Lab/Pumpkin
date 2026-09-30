@@ -28,7 +28,7 @@ use crate::predicates::PredicateType;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::proof::InferenceLabel;
+use crate::proof::InferenceRules;
 use crate::propagation::CurrentNogood;
 use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
@@ -81,6 +81,8 @@ pub struct State {
 
     /// The [`ConstraintTag`]s generated for this proof.
     pub(crate) constraint_tags: KeyGenerator<ConstraintTag>,
+    /// The inference rules used by the inference codes of this state.
+    pub(crate) inference_rules: InferenceRules,
 
     statistics: StateStatistics,
 
@@ -117,6 +119,7 @@ impl Default for State {
             notification_engine: NotificationEngine::default(),
             statistics: StateStatistics::default(),
             constraint_tags: KeyGenerator::default(),
+            inference_rules: InferenceRules::default(),
             checkers: CheckerStore::default(),
             retention_checkers: Default::default(),
         };
@@ -182,6 +185,31 @@ impl State {
     /// Create a new [`ConstraintTag`].
     pub fn new_constraint_tag(&mut self) -> ConstraintTag {
         self.constraint_tags.next_key()
+    }
+
+    /// The [`InferenceCode`] of the inferences made with the rule of `checker` for the constraint
+    /// with `constraint_tag`.
+    pub fn inference_code(
+        &mut self,
+        constraint_tag: ConstraintTag,
+        checker: &impl InferenceChecker<Predicate>,
+    ) -> InferenceCode {
+        self.inference_code_for_rule(constraint_tag, checker.rule_name())
+    }
+
+    /// The [`InferenceCode`] of the rule named `rule_name` for the constraint with
+    /// `constraint_tag`.
+    pub(crate) fn inference_code_for_rule(
+        &mut self,
+        constraint_tag: ConstraintTag,
+        rule_name: &'static str,
+    ) -> InferenceCode {
+        InferenceCode::new(constraint_tag, self.inference_rules.id(rule_name))
+    }
+
+    /// The name of the inference rule of `inference_code`.
+    pub fn rule_name(&self, inference_code: InferenceCode) -> &'static str {
+        self.inference_rules.name(inference_code.rule())
     }
 
     /// Creates a new Boolean (0-1) variable.
@@ -433,12 +461,11 @@ impl State {
     pub fn add_inference_checker(
         &mut self,
         constraint_tag: ConstraintTag,
-        inference_label: impl InferenceLabel,
         checker: impl InferenceChecker<Predicate> + 'static,
     ) -> InferenceCode {
-        let inference_code = InferenceCode::new(constraint_tag, inference_label);
+        let inference_code = self.inference_code(constraint_tag, &checker);
         self.checkers
-            .add_inference_checker(inference_code.clone(), BoxedChecker::new(Box::new(checker)));
+            .add_inference_checker(inference_code, BoxedChecker::new(Box::new(checker)));
         inference_code
     }
 }
@@ -1309,14 +1336,10 @@ impl State {
 mod tests {
     use crate::conjunction;
     use crate::containers::StorageKey;
-    use crate::declare_inference_label;
     use crate::predicate;
-    use crate::proof::InferenceCode;
     use crate::state::CurrentNogood;
     use crate::state::PropagatorId;
     use crate::state::State;
-
-    declare_inference_label!(TestLabel);
 
     /// A retention checker that accepts everything and counts how often it was consulted.
     #[cfg(feature = "check-consistency")]
@@ -1493,10 +1516,11 @@ mod tests {
         let x = state.new_interval_variable(0, 10, None);
 
         let tag = state.new_constraint_tag();
+        let inference_code = state.inference_code_for_rule(tag, "test_rule");
         let result = state.post_with_reason(
             predicate!(x >= 5),
             conjunction!([y >= 5]),
-            InferenceCode::new(tag, TestLabel),
+            inference_code,
             PropagatorId::create_from_index(0),
         );
 

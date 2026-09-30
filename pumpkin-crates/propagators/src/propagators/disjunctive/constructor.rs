@@ -14,7 +14,6 @@ use super::DisjunctivePropagator;
 use super::disjunctive_task::ArgDisjunctiveTask;
 use super::disjunctive_task::DisjunctiveTask;
 use super::theta_lambda_tree::ThetaLambdaTree;
-use crate::propagators::disjunctive::DisjunctiveEdgeFinding;
 
 #[derive(Debug)]
 pub struct DisjunctiveConstructor<Var> {
@@ -37,7 +36,10 @@ impl<Var> DisjunctiveConstructor<Var> {
 impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstructor<Var> {
     type PropagatorImpl = DisjunctivePropagator<Var>;
 
-    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
+    fn create(
+        self,
+        mut context: PropagatorConstructorContext,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let tasks = self
             .tasks
             .into_iter()
@@ -57,8 +59,8 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
 
         let mut checkers = RuntimeCheckers::builder();
         let inference_code = checkers.add_inference_checker(
+            &mut context,
             self.constraint_tag,
-            DisjunctiveEdgeFinding,
             DisjunctiveEdgeFindingChecker {
                 tasks: tasks
                     .iter()

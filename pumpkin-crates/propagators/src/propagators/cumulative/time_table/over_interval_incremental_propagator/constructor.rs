@@ -12,7 +12,6 @@ use crate::cumulative::time_table::TimeTableOverIntervalPropagator;
 #[cfg(doc)]
 use crate::cumulative::time_table::TimeTablePerPointPropagator;
 use crate::cumulative::util::register_tasks;
-use crate::propagators::cumulative::time_table::TimeTable;
 
 impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstructor
     for TimeTableOverIntervalIncrementalPropagator<Var, SYNCHRONISE>
@@ -40,8 +39,8 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstruc
         let mut checkers = RuntimeCheckers::builder();
         self.inference_code = Some(
             checkers.add_inference_checker(
+                &mut context,
                 self.constraint_tag,
-                TimeTable,
                 TimeTableChecker {
                     tasks: self
                         .parameters

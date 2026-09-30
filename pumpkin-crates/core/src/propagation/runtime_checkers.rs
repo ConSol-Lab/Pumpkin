@@ -7,9 +7,9 @@ use crate::checkers::Scope;
 use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::proof::InferenceLabel;
 #[cfg(doc)]
 use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
 
 /// Holds the runtime checkers that are added by a propagator.
 ///
@@ -44,19 +44,27 @@ impl RuntimeCheckers {
         }
     }
 
-    /// Add an [`InferenceChecker`] to verify the soundness of propagations.
+    /// Add an [`InferenceChecker`] to verify the soundness of propagations. Returns the
+    /// [`InferenceCode`] of its inferences for the constraint with `constraint_tag`.
     pub fn add_inference_checker(
         &mut self,
+        context: &mut PropagatorConstructorContext<'_>,
         constraint_tag: ConstraintTag,
-        inference_label: impl InferenceLabel,
         checker: impl InferenceChecker<Predicate> + 'static,
     ) -> InferenceCode {
-        let inference_code = InferenceCode::new(constraint_tag, inference_label);
-
-        self.inference_checkers
-            .push((inference_code.clone(), BoxedChecker::new(Box::new(checker))));
-
+        let inference_code = context.inference_code(constraint_tag, &checker);
+        self.add_inference_checker_with_code(inference_code, checker);
         inference_code
+    }
+
+    /// Add an [`InferenceChecker`] for inferences with an existing `inference_code`.
+    pub(crate) fn add_inference_checker_with_code(
+        &mut self,
+        inference_code: InferenceCode,
+        checker: impl InferenceChecker<Predicate> + 'static,
+    ) {
+        self.inference_checkers
+            .push((inference_code, BoxedChecker::new(Box::new(checker))));
     }
 
     /// Add a [`RetentionChecker`] over the given scope to verify that the propagator has nothing
@@ -74,16 +82,15 @@ impl RuntimeCheckers {
     /// and the retention checker of the propagator's rule, with the retention checker over `scope`.
     pub fn add_rule<Checker>(
         &mut self,
+        context: &mut PropagatorConstructorContext<'_>,
         scope: impl Into<Scope>,
         constraint_tag: ConstraintTag,
-        inference_label: impl InferenceLabel,
         checker: Checker,
     ) -> InferenceCode
     where
         Checker: InferenceChecker<Predicate> + RetentionChecker<Predicate> + Clone + 'static,
     {
-        let inference_code =
-            self.add_inference_checker(constraint_tag, inference_label, checker.clone());
+        let inference_code = self.add_inference_checker(context, constraint_tag, checker.clone());
         self.add_retention_checker(scope, checker);
         inference_code
     }
@@ -107,15 +114,16 @@ pub struct RuntimeCheckersBuilder {
 }
 
 impl RuntimeCheckersBuilder {
-    /// Add an [`InferenceChecker`] to verify the soundness of propagations.
+    /// Add an [`InferenceChecker`] to verify the soundness of propagations. Returns the
+    /// [`InferenceCode`] of its inferences for the constraint with `constraint_tag`.
     pub fn add_inference_checker(
         &mut self,
+        context: &mut PropagatorConstructorContext<'_>,
         constraint_tag: ConstraintTag,
-        inference_label: impl InferenceLabel,
         checker: impl InferenceChecker<Predicate> + 'static,
     ) -> InferenceCode {
         self.checkers
-            .add_inference_checker(constraint_tag, inference_label, checker)
+            .add_inference_checker(context, constraint_tag, checker)
     }
 
     /// Add a [`RetentionChecker`] over the given scope to verify that the propagator has nothing
@@ -132,16 +140,16 @@ impl RuntimeCheckersBuilder {
     /// and the retention checker of the propagator's rule, with the retention checker over `scope`.
     pub fn add_rule<Checker>(
         &mut self,
+        context: &mut PropagatorConstructorContext<'_>,
         scope: impl Into<Scope>,
         constraint_tag: ConstraintTag,
-        inference_label: impl InferenceLabel,
         checker: Checker,
     ) -> InferenceCode
     where
         Checker: InferenceChecker<Predicate> + RetentionChecker<Predicate> + Clone + 'static,
     {
         self.checkers
-            .add_rule(scope, constraint_tag, inference_label, checker)
+            .add_rule(context, scope, constraint_tag, checker)
     }
 
     /// Finish adding runtime checkers.

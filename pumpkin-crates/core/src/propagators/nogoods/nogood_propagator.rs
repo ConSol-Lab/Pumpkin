@@ -629,7 +629,7 @@ impl Propagator for NogoodPropagator {
 
             LazyExplanation {
                 predicates: &self.temp_nogood_reason,
-                inference_code: self.inference_codes[info_id].clone(),
+                inference_code: self.inference_codes[info_id],
             }
         } else {
             self.temp_nogood_reason.extend(
@@ -642,7 +642,7 @@ impl Propagator for NogoodPropagator {
 
             LazyExplanation {
                 predicates: self.temp_nogood_reason.as_slice(),
-                inference_code: self.inference_codes[info_id].clone(),
+                inference_code: self.inference_codes[info_id],
             }
         };
 
@@ -764,7 +764,7 @@ impl NogoodPropagator {
 
             return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction: reason,
-                inference_code: inference_code.clone(),
+                inference_code: *inference_code,
             }));
         }
 
@@ -2056,7 +2056,7 @@ impl NogoodPropagator {
                     .iter()
                     .map(|predicate_id| context.get_predicate(*predicate_id))
                     .collect::<PropositionalConjunction>(),
-                inference_code: inference_code.clone(),
+                inference_code: *inference_code,
             }
             .into());
         }

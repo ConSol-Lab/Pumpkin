@@ -59,9 +59,8 @@ where
 
         let mut wrapped_checkers = RuntimeCheckers::empty();
         for (inference_code, checker) in inference_checkers {
-            let _ = wrapped_checkers.add_inference_checker(
-                inference_code.tag(),
-                inference_code.label(),
+            wrapped_checkers.add_inference_checker_with_code(
+                inference_code,
                 ReifiedChecker {
                     inner: checker,
                     reification_literal,

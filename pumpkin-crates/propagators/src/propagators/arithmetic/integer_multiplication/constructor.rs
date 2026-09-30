@@ -1,5 +1,4 @@
 use pumpkin_checking::checkers::IntegerMultiplicationChecker;
-use pumpkin_core::declare_inference_label;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
@@ -11,8 +10,6 @@ use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::propagator::IntegerMultiplicationPropagator;
-
-declare_inference_label!(IntegerMultiplication);
 
 const ID_A: LocalId = LocalId::from(0);
 const ID_B: LocalId = LocalId::from(1);
@@ -37,7 +34,10 @@ where
 {
     type PropagatorImpl = IntegerMultiplicationPropagator<VA, VB, VC>;
 
-    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
+    fn create(
+        self,
+        mut context: PropagatorConstructorContext,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let IntegerMultiplicationConstructor {
             a,
             b,
@@ -53,8 +53,8 @@ where
 
         let mut checkers = RuntimeCheckers::builder();
         let inference_code = checkers.add_inference_checker(
+            &mut context,
             constraint_tag,
-            IntegerMultiplication,
             IntegerMultiplicationChecker {
                 a: a.clone(),
                 b: b.clone(),

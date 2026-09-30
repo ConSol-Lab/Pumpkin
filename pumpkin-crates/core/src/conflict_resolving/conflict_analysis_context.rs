@@ -18,7 +18,6 @@ use crate::engine::RestartStrategy;
 use crate::engine::State;
 use crate::engine::TrailedValues;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
-use crate::engine::constraint_satisfaction_solver::NogoodLabel;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate::PredicateType;
 use crate::predicate;
@@ -96,6 +95,7 @@ impl ConflictAnalysisContext<'_> {
             StoredConflictInfo::Propagator(conflict) => {
                 let _ = self.proof_log.log_inference(
                     &mut self.state.constraint_tags,
+                    &self.state.inference_rules,
                     conflict.inference_code,
                     conflict.conjunction.iter().copied(),
                     None,
@@ -225,6 +225,7 @@ impl ConflictAnalysisContext<'_> {
             .proof_log
             .log_inference(
                 &mut self.state.constraint_tags,
+                &self.state.inference_rules,
                 inference_code,
                 premises,
                 consequent,
@@ -300,7 +301,6 @@ impl ConflictAnalysisContext<'_> {
 
         let inference_code = self.state.add_inference_checker(
             constraint_tag,
-            NogoodLabel,
             NogoodChecker {
                 nogood: learned_nogood.predicates.clone().into(),
             },
@@ -311,7 +311,7 @@ impl ConflictAnalysisContext<'_> {
         if learned_nogood.len() == 1 {
             let _ = self
                 .unit_nogood_inference_codes
-                .insert(!learned_nogood[0], inference_code.clone());
+                .insert(!learned_nogood[0], inference_code);
         }
 
         #[cfg(feature = "check-propagations")]
@@ -386,7 +386,8 @@ impl ConflictAnalysisContext<'_> {
                 if let Some(unit_ic) = unit_ic {
                     let _ = proof_log.log_inference(
                         &mut state.constraint_tags,
-                        unit_ic.clone(),
+                        &state.inference_rules,
+                        *unit_ic,
                         [],
                         Some(predicate),
                         &state.variable_names,
@@ -396,7 +397,8 @@ impl ConflictAnalysisContext<'_> {
                     // Otherwise we log the inference which was used to derive the nogood
                     let _ = proof_log.log_inference(
                         &mut state.constraint_tags,
-                        ic.clone(),
+                        &state.inference_rules,
+                        *ic,
                         reason_buffer.as_ref().iter().copied(),
                         Some(predicate),
                         &state.variable_names,
@@ -407,7 +409,8 @@ impl ConflictAnalysisContext<'_> {
                 // Otherwise we log the inference which was used to derive the nogood
                 let _ = proof_log.log_inference(
                     &mut state.constraint_tags,
-                    ic.clone(),
+                    &state.inference_rules,
+                    *ic,
                     reason_buffer.as_ref().iter().copied(),
                     Some(predicate),
                     &state.variable_names,
@@ -444,6 +447,7 @@ impl ConflictAnalysisContext<'_> {
         // We also need to log this last propagation to the proof log as an inference.
         let _ = self.proof_log.log_inference(
             &mut self.state.constraint_tags,
+            &self.state.inference_rules,
             trigger_inference_code,
             empty_domain_reason.iter().copied(),
             Some(conflict.trigger_predicate),

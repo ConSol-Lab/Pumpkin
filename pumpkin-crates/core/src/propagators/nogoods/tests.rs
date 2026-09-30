@@ -9,7 +9,7 @@ use crate::proof::InferenceCode;
 #[test]
 fn ternary_nogood_propagate() {
     let mut solver = TestSolver::default();
-    let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
+    let inference_code = InferenceCode::unknown_rule(ConstraintTag::create_from_index(0));
     let dummy = solver.new_variable(0, 1);
     let a = solver.new_variable(1, 3);
     let b = solver.new_variable(-4, 4);
@@ -47,7 +47,7 @@ fn ternary_nogood_propagate() {
 #[test]
 fn unsat() {
     let mut solver = TestSolver::default();
-    let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
+    let inference_code = InferenceCode::unknown_rule(ConstraintTag::create_from_index(0));
     let a = solver.new_variable(1, 3);
     let b = solver.new_variable(-4, 4);
     let c = solver.new_variable(-10, 20);

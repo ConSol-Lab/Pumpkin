@@ -143,7 +143,7 @@ impl StoredReason {
             }
             StoredReason::Eager(result, inference_code) => {
                 destination_buffer.extend(result.iter().copied());
-                inference_code.clone()
+                *inference_code
             }
         }
     }
@@ -151,7 +151,7 @@ impl StoredReason {
 
 impl From<(PropositionalConjunction, &InferenceCode)> for Reason {
     fn from((conj, code): (PropositionalConjunction, &InferenceCode)) -> Self {
-        Reason::Eager(conj, code.clone())
+        Reason::Eager(conj, *code)
     }
 }
 
@@ -197,7 +197,7 @@ mod tests {
     use crate::proof::ConstraintTag;
 
     fn dummy_inference_code() -> InferenceCode {
-        InferenceCode::unknown_label(ConstraintTag::from_non_zero(NonZero::new(1).unwrap()))
+        InferenceCode::unknown_rule(ConstraintTag::from_non_zero(NonZero::new(1).unwrap()))
     }
 
     #[test]

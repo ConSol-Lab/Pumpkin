@@ -15,7 +15,6 @@ use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::LinearNotEqualPropagator;
-use super::LinearNotEquals;
 
 /// The [`PropagatorConstructor`] for the [`LinearNotEqualPropagator`].
 #[derive(Clone, Debug)]
@@ -56,9 +55,9 @@ where
 
         let mut checkers = RuntimeCheckers::builder();
         let inference_code = checkers.add_rule(
+            &mut context,
             Scope::from_variables(terms.iter()),
             constraint_tag,
-            LinearNotEquals,
             LinearNotEqualChecker {
                 terms: terms.as_ref().into(),
                 bound: rhs,

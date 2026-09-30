@@ -1,7 +1,6 @@
 use pumpkin_checking::checkers::HypercubeLinearChecker;
 
 use crate::basic_types::PredicateId;
-use crate::declare_inference_label;
 use crate::engine::PropagationStatusCP;
 use crate::predicate;
 use crate::predicates::Predicate;
@@ -62,8 +61,8 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
 
         let mut checkers = RuntimeCheckers::builder();
         let inference_code = checkers.add_inference_checker(
+            &mut context,
             constraint_tag,
-            HypercubeLinear,
             HypercubeLinearChecker {
                 hypercube: hypercube.iter_predicates().collect(),
                 terms: linear.terms().collect(),
@@ -89,8 +88,6 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
         }
     }
 }
-
-declare_inference_label!(HypercubeLinear);
 
 const NUM_WATCHED_PREDICATES: usize = 2;
 
@@ -140,7 +137,7 @@ impl HypercubeLinearPropagator {
 
             return Err(crate::state::Conflict::Propagator(PropagatorConflict {
                 conjunction,
-                inference_code: self.inference_code.clone(),
+                inference_code: self.inference_code,
             }));
         }
 

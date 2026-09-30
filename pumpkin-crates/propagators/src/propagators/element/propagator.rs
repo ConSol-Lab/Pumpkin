@@ -81,7 +81,7 @@ where
 
         LazyExplanation {
             predicates: self.rhs_reason_buffer.as_slice(),
-            inference_code: self.inference_code.clone(),
+            inference_code: self.inference_code,
         }
     }
 }

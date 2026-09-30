@@ -10,7 +10,6 @@ use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
-use super::Division;
 use super::DivisionPropagator;
 use super::ID_DENOMINATOR;
 use super::ID_NUMERATOR;
@@ -33,7 +32,10 @@ where
 {
     type PropagatorImpl = DivisionPropagator<VA, VB, VC>;
 
-    fn create(self, context: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
+    fn create(
+        self,
+        mut context: PropagatorConstructorContext,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let DivisionArgs {
             numerator,
             denominator,
@@ -54,8 +56,8 @@ where
 
         let mut checkers = RuntimeCheckers::builder();
         let inference_code = checkers.add_inference_checker(
+            &mut context,
             constraint_tag,
-            Division,
             IntegerDivisionChecker {
                 numerator: numerator.clone(),
                 denominator: denominator.clone(),

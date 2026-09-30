@@ -9,7 +9,6 @@ use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
-use super::Element;
 use super::ElementPropagator;
 use super::ID_INDEX;
 use super::ID_RHS;
@@ -31,7 +30,10 @@ where
 {
     type PropagatorImpl = ElementPropagator<VX, VI, VE>;
 
-    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
+    fn create(
+        self,
+        mut context: PropagatorConstructorContext,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let ElementArgs {
             array,
             index,
@@ -53,8 +55,8 @@ where
 
         let mut checkers = RuntimeCheckers::builder();
         let inference_code = checkers.add_inference_checker(
+            &mut context,
             constraint_tag,
-            Element,
             ElementChecker::new(array.clone(), index.clone(), rhs.clone()),
         );
 

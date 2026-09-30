@@ -1,3 +1,5 @@
+use pumpkin_checking::InferenceChecker;
+
 use super::Domains;
 use super::LocalId;
 use super::Propagator;
@@ -15,6 +17,8 @@ use crate::engine::variables::AffineView;
 #[cfg(doc)]
 use crate::engine::variables::DomainId;
 use crate::predicates::Predicate;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
@@ -75,6 +79,16 @@ impl PropagatorConstructorContext<'_> {
             propagator_id,
             state,
         }
+    }
+
+    /// The [`InferenceCode`] of the inferences made with the rule of `checker` for the constraint
+    /// with `constraint_tag`.
+    pub fn inference_code(
+        &mut self,
+        constraint_tag: ConstraintTag,
+        checker: &impl InferenceChecker<Predicate>,
+    ) -> InferenceCode {
+        self.state.inference_code(constraint_tag, checker)
     }
 
     /// Get domain information.

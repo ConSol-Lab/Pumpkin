@@ -9,7 +9,6 @@ use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
-use super::AbsoluteValue;
 use super::AbsoluteValuePropagator;
 
 #[derive(Clone, Debug)]
@@ -26,7 +25,10 @@ where
 {
     type PropagatorImpl = AbsoluteValuePropagator<VA, VB>;
 
-    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
+    fn create(
+        self,
+        mut context: PropagatorConstructorContext,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let AbsoluteValueArgs {
             signed,
             absolute,
@@ -40,9 +42,9 @@ where
 
         let mut checkers = RuntimeCheckers::builder();
         let inference_code = checkers.add_rule(
+            &mut context,
             ((LocalId::from(0), &signed), (LocalId::from(1), &absolute)),
             constraint_tag,
-            AbsoluteValue,
             AbsoluteValueChecker {
                 signed: signed.clone(),
                 absolute: absolute.clone(),

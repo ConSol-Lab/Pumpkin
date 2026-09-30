@@ -67,7 +67,6 @@ mod time_table_util;
 pub use explanations::CumulativeExplanationType;
 pub use over_interval_incremental_propagator::*;
 pub use per_point_incremental_propagator::*;
-use pumpkin_core::declare_inference_label;
 pub use time_table_over_interval::*;
 pub use time_table_per_point::*;
 
@@ -75,5 +74,3 @@ pub use time_table_per_point::*;
 use crate::cumulative::Task;
 #[cfg(doc)]
 use crate::propagators::cumulative::time_table::time_table_util::*;
-
-declare_inference_label!(TimeTable);

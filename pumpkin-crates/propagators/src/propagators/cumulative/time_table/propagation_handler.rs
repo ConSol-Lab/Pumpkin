@@ -510,7 +510,7 @@ where
                 create_naive_conflict_explanation(conflict_profile, context, capacity).collect();
             PropagatorConflict {
                 conjunction,
-                inference_code: inference_code.clone(),
+                inference_code: *inference_code,
             }
         }
         CumulativeExplanationType::BigStep => {
@@ -518,7 +518,7 @@ where
                 create_big_step_conflict_explanation(conflict_profile, capacity).collect();
             PropagatorConflict {
                 conjunction,
-                inference_code: inference_code.clone(),
+                inference_code: *inference_code,
             }
         }
         CumulativeExplanationType::Pointwise => {
@@ -526,7 +526,7 @@ where
                 create_pointwise_conflict_explanation(conflict_profile, capacity).collect();
             PropagatorConflict {
                 conjunction,
-                inference_code: inference_code.clone(),
+                inference_code: *inference_code,
             }
         }
     }
@@ -563,7 +563,7 @@ pub(crate) mod test_propagation_handler {
         pub(crate) fn new(explanation_type: CumulativeExplanationType) -> Self {
             let propagation_handler = CumulativePropagationHandler::new(
                 explanation_type,
-                InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
+                InferenceCode::unknown_rule(ConstraintTag::create_from_index(0)),
             );
 
             let state = State::default();
