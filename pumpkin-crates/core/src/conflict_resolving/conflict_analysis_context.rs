@@ -324,7 +324,7 @@ impl ConflictAnalysisContext<'_> {
 
         nogood_propagator.add_asserting_nogood(
             learned_nogood.to_vec(),
-            inference_code,
+            constraint_tag,
             &mut propagation_context,
         );
 

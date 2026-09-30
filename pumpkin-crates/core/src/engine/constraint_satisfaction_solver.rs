@@ -902,7 +902,7 @@ impl ConstraintSatisfactionSolver {
     fn add_nogood(&mut self, nogood: Vec<Predicate>, constraint_tag: ConstraintTag) {
         pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
 
-        let inference_code = self.state.add_inference_checker(
+        let _ = self.state.add_inference_checker(
             constraint_tag,
             NogoodLabel,
             NogoodChecker {
@@ -917,7 +917,7 @@ impl ConstraintSatisfactionSolver {
         let nogood_propagator =
             nogood_propagator.expect("Nogood propagator handle should refer to nogood propagator");
 
-        nogood_propagator.add_nogood(nogood, inference_code, &mut context);
+        nogood_propagator.add_nogood(nogood, constraint_tag, &mut context);
 
         #[allow(deprecated, reason = "Will be refactored")]
         self.state.enqueue_propagator(self.nogood_propagator_handle);

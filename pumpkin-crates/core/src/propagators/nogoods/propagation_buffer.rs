@@ -1,6 +1,9 @@
 use crate::basic_types::PredicateId;
+use crate::basic_types::PropositionalConjunction;
 use crate::engine::Reason;
+use crate::engine::constraint_satisfaction_solver::NogoodLabel;
 use crate::predicates::Predicate;
+use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::PropagationContext;
 use crate::propagators::nogoods::NogoodPropagator;
@@ -14,23 +17,31 @@ use crate::state::Conflict;
 /// can propagate.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct PropagationBuffer {
-    /// The unit propagations which are buffered.
-    to_propagate: Vec<(Reason, Predicate)>,
+    /// The unit propagations which are buffered, together with their reason.
+    ///
+    /// For both kinds of buffered propagations, only the [`ConstraintTag`] is stored since all
+    /// nogoods share the [`NogoodLabel`].
+    to_propagate: Vec<(PropositionalConjunction, ConstraintTag, Predicate)>,
     /// The extended nogood propagation which are buffered.
-    to_propagate_extended: Vec<(Vec<PredicateId>, InferenceCode)>,
+    to_propagate_extended: Vec<(Vec<PredicateId>, ConstraintTag)>,
 }
 
 impl PropagationBuffer {
-    pub(crate) fn buffer_unit_propagation(&mut self, reason: Reason, predicate: Predicate) {
-        self.to_propagate.push((reason, predicate))
+    pub(crate) fn buffer_unit_propagation(
+        &mut self,
+        reason: PropositionalConjunction,
+        constraint_tag: ConstraintTag,
+        predicate: Predicate,
+    ) {
+        self.to_propagate.push((reason, constraint_tag, predicate))
     }
 
     pub(crate) fn buffer_extended_nogood_propagation(
         &mut self,
         nogood: Vec<PredicateId>,
-        inference_code: InferenceCode,
+        constraint_tag: ConstraintTag,
     ) {
-        self.to_propagate_extended.push((nogood, inference_code))
+        self.to_propagate_extended.push((nogood, constraint_tag))
     }
 
     pub(crate) fn propagate_buffer(
@@ -38,10 +49,15 @@ impl PropagationBuffer {
         context: &mut PropagationContext,
         statistics: &mut NogoodPropagatorStatistics,
     ) -> Result<(), Conflict> {
-        let result_unit = self
-            .to_propagate
-            .drain(..)
-            .try_for_each(|(reason, predicate)| context.post(predicate, reason));
+        let result_unit =
+            self.to_propagate
+                .drain(..)
+                .try_for_each(|(reason, constraint_tag, predicate)| {
+                    context.post(
+                        predicate,
+                        Reason::Eager(reason, InferenceCode::new(constraint_tag, NogoodLabel)),
+                    )
+                });
 
         if result_unit.is_err() {
             self.to_propagate_extended.clear();
@@ -50,14 +66,14 @@ impl PropagationBuffer {
 
         self.to_propagate_extended
             .drain(..)
-            .try_for_each(|(nogood, inference_code)| {
+            .try_for_each(|(nogood, constraint_tag)| {
                 let propagated_domain =
                     context.get_predicate(*nogood.first().unwrap()).get_domain();
                 NogoodPropagator::extended_nogood_propagation(
                     context,
                     &nogood,
                     propagated_domain,
-                    &inference_code,
+                    constraint_tag,
                     statistics,
                     None,
                 )

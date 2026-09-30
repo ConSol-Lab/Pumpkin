@@ -7,7 +7,7 @@ use crate::engine::Reason;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::reason::ReasonStore;
 use crate::predicates::Predicate;
-use crate::proof::InferenceCode;
+use crate::proof::ConstraintTag;
 use crate::propagation::PropagationContext;
 use crate::propagation::ReadDomains;
 use crate::propagators::nogoods::NogoodId;
@@ -140,11 +140,15 @@ impl PropagationMode {
     /// are being learned.
     ///
     /// Note that this method does *not* check whether the propagation conditions have been met.
+    ///
+    /// Only the [`ConstraintTag`] of the nogood is passed, so that its
+    /// [`InferenceCode`](crate::proof::InferenceCode) is only
+    /// created when an eager reason or a conflict is created.
     pub(crate) fn perform_propagation(
         &self,
         context: &mut PropagationContext,
         nogood_predicates: &[PredicateId],
-        inference_code: &InferenceCode,
+        constraint_tag: ConstraintTag,
         nogood_id: NogoodId,
         statistics: &mut NogoodPropagatorStatistics,
     ) -> PropagationStatusCP {
@@ -155,7 +159,7 @@ impl PropagationMode {
                     context,
                     nogood_predicates,
                     propagated_domain,
-                    inference_code,
+                    constraint_tag,
                     statistics,
                     Some(nogood_id),
                 )?;
@@ -318,11 +322,11 @@ impl PropagationMode {
         &self,
         nogood: Vec<Predicate>,
         input_nogood: &[Predicate],
-        inference_code: InferenceCode,
+        constraint_tag: ConstraintTag,
         context: &mut PropagationContext<'_>,
         nogood_predicates: &mut ArenaAllocator,
         nogood_info: &mut KeyedVec<NogoodIndex, NogoodInfo>,
-        inference_codes: &mut KeyedVec<NogoodIndex, InferenceCode>,
+        constraint_tags: &mut KeyedVec<NogoodIndex, ConstraintTag>,
         watch_lists: &mut KeyedVec<PredicateId, Vec<Watcher>>,
         statistics: &NogoodPropagatorStatistics,
         propagation_buffer: &mut PropagationBuffer,
@@ -360,7 +364,7 @@ impl PropagationMode {
                     // Currently we always allocate a fresh ID
                     let nogood_id = nogood_predicates.insert(nogood);
                     let _ = nogood_info.push(NogoodInfo::new_permanent_nogood_info());
-                    let _ = inference_codes.push(inference_code);
+                    let _ = constraint_tags.push(constraint_tag);
 
                     let watcher = Watcher {
                         nogood_id,
@@ -383,7 +387,7 @@ impl PropagationMode {
                 } else {
                     // Otherwise, we treat it as a "unit" nogood and we perform propagation and
                     // then do not add the nogood to the database.
-                    propagation_buffer.buffer_extended_nogood_propagation(nogood, inference_code);
+                    propagation_buffer.buffer_extended_nogood_propagation(nogood, constraint_tag);
                 }
             }
             PropagationMode::UnitPropagation => {
@@ -392,7 +396,7 @@ impl PropagationMode {
                 // Currently we always allocate a fresh ID
                 let nogood_id = nogood_predicates.insert(nogood);
                 let _ = nogood_info.push(NogoodInfo::new_permanent_nogood_info());
-                let _ = inference_codes.push(inference_code);
+                let _ = constraint_tags.push(constraint_tag);
 
                 let watcher = Watcher {
                     nogood_id,

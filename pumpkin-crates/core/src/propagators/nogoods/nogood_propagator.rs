@@ -16,12 +16,14 @@ use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::Lbd;
 use crate::engine::PropagatorConflict;
+use crate::engine::constraint_satisfaction_solver::NogoodLabel;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::predicate;
 use crate::predicates::PredicateType;
+use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::EventsToRegister;
@@ -65,8 +67,8 @@ pub struct NogoodPropagator {
     nogood_predicates: ArenaAllocator,
     /// The information corresponding to each nogood; including activity, and LBD.
     nogood_info: KeyedVec<NogoodIndex, NogoodInfo>,
-    /// The inference codes for the nogoods.
-    inference_codes: KeyedVec<NogoodIndex, InferenceCode>,
+    /// The constraint tags of the nogoods.
+    constraint_tags: KeyedVec<NogoodIndex, ConstraintTag>,
     /// Stores all learned nogoods.
     learned_nogood_ids: LearnedNogoodIds,
     /// Watch lists for the nogood propagator.
@@ -184,7 +186,7 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             parameters: self.parameters,
             nogood_predicates: ArenaAllocator::new(self.capacity),
             nogood_info: Default::default(),
-            inference_codes: Default::default(),
+            constraint_tags: Default::default(),
             learned_nogood_ids: Default::default(),
             watch_lists: Default::default(),
             updated_predicate_ids: Default::default(),
@@ -493,7 +495,7 @@ impl Propagator for NogoodPropagator {
                 self.propagation_mode.perform_propagation(
                     &mut context,
                     nogood_predicates,
-                    &self.inference_codes[nogood_index],
+                    self.constraint_tags[nogood_index],
                     watcher.nogood_id,
                     &mut self.statistics,
                 )?;
@@ -606,7 +608,7 @@ impl Propagator for NogoodPropagator {
 
             LazyExplanation {
                 predicates: &self.temp_nogood_reason,
-                inference_code: self.inference_codes[info_id].clone(),
+                inference_code: { InferenceCode::new(self.constraint_tags[info_id], NogoodLabel) },
             }
         } else {
             self.temp_nogood_reason.extend(
@@ -619,7 +621,7 @@ impl Propagator for NogoodPropagator {
 
             LazyExplanation {
                 predicates: self.temp_nogood_reason.as_slice(),
-                inference_code: self.inference_codes[info_id].clone(),
+                inference_code: { InferenceCode::new(self.constraint_tags[info_id], NogoodLabel) },
             }
         };
 
@@ -703,7 +705,7 @@ impl NogoodPropagator {
         context: &mut PropagationContext,
         nogood: &[PredicateId],
         propagated_domain: DomainId,
-        inference_code: &InferenceCode,
+        constraint_tag: ConstraintTag,
         statistics: &mut NogoodPropagatorStatistics,
         nogood_id: Option<NogoodId>,
     ) -> Result<(), Conflict> {
@@ -741,7 +743,7 @@ impl NogoodPropagator {
 
             return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction: reason,
-                inference_code: inference_code.clone(),
+                inference_code: InferenceCode::new(constraint_tag, NogoodLabel),
             }));
         }
 
@@ -776,7 +778,7 @@ impl NogoodPropagator {
                                 .then(|| context.get_predicate(*predicate_id))
                         })
                         .collect::<PropositionalConjunction>(),
-                    inference_code,
+                    &InferenceCode::new(constraint_tag, NogoodLabel),
                 )
                     .into()
             };
@@ -891,7 +893,7 @@ impl NogoodPropagator {
                                     .then_some(predicate)
                             })
                             .collect::<PropositionalConjunction>(),
-                        inference_code,
+                        &InferenceCode::new(constraint_tag, NogoodLabel),
                     )
                         .into()
                 };
@@ -960,7 +962,7 @@ impl NogoodPropagator {
                                     .then_some(predicate)
                             })
                             .collect::<PropositionalConjunction>(),
-                        inference_code,
+                        &InferenceCode::new(constraint_tag, NogoodLabel),
                     )
                         .into()
                 };
@@ -1043,7 +1045,7 @@ impl NogoodPropagator {
                                 (predicate.get_domain() != propagated_domain).then_some(predicate)
                             })
                             .collect::<PropositionalConjunction>(),
-                        inference_code,
+                        &InferenceCode::new(constraint_tag, NogoodLabel),
                     )
                         .into()
                 };
@@ -1073,14 +1075,14 @@ impl NogoodPropagator {
     pub(crate) fn add_asserting_nogood(
         &mut self,
         nogood: Vec<Predicate>,
-        inference_code: InferenceCode,
+        constraint_tag: ConstraintTag,
         context: &mut PropagationContext,
     ) {
         if self
             .propagation_mode
             .can_be_added_as_permanent(context, &nogood)
         {
-            self.add_permanent_nogood(nogood, inference_code, context);
+            self.add_permanent_nogood(nogood, constraint_tag, context);
 
             self.propagation_buffer
                 .propagate_buffer(context, &mut self.statistics)
@@ -1105,7 +1107,7 @@ impl NogoodPropagator {
         let _ = self
             .nogood_info
             .push(NogoodInfo::new_learned_nogood_info(lbd));
-        let _ = self.inference_codes.push(inference_code);
+        let _ = self.constraint_tags.push(constraint_tag);
 
         let watcher = Watcher {
             nogood_id,
@@ -1127,14 +1129,13 @@ impl NogoodPropagator {
             &mut self.watch_lists,
         );
 
-        let inference_code =
-            &self.inference_codes[self.nogood_predicates.get_nogood_index(&nogood_id)];
+        let nogood_index = self.nogood_predicates.get_nogood_index(&nogood_id);
 
         self.propagation_mode
             .perform_propagation(
                 context,
                 self.nogood_predicates.get_nogood(nogood_id),
-                inference_code,
+                self.constraint_tags[nogood_index],
                 nogood_id,
                 &mut self.statistics,
             )
@@ -1155,17 +1156,17 @@ impl NogoodPropagator {
     pub(crate) fn add_nogood(
         &mut self,
         nogood: Vec<Predicate>,
-        inference_code: InferenceCode,
+        constraint_tag: ConstraintTag,
         context: &mut PropagationContext,
     ) {
-        self.add_permanent_nogood(nogood, inference_code, context)
+        self.add_permanent_nogood(nogood, constraint_tag, context)
     }
 
     /// Adds a nogood which cannot be deleted by clause management.
     fn add_permanent_nogood(
         &mut self,
         mut nogood: Vec<Predicate>,
-        inference_code: InferenceCode,
+        constraint_tag: ConstraintTag,
         context: &mut PropagationContext,
     ) {
         pumpkin_assert_simple!(
@@ -1257,11 +1258,8 @@ impl NogoodPropagator {
             );
 
             self.propagation_buffer.buffer_unit_propagation(
-                (
-                    PropositionalConjunction::from(input_nogood),
-                    &inference_code,
-                )
-                    .into(),
+                PropositionalConjunction::from(input_nogood),
+                constraint_tag,
                 !nogood[0],
             );
         }
@@ -1272,11 +1270,11 @@ impl NogoodPropagator {
             self.propagation_mode.add_permanent_nogood_non_unit(
                 nogood,
                 &input_nogood,
-                inference_code,
+                constraint_tag,
                 context,
                 &mut self.nogood_predicates,
                 &mut self.nogood_info,
-                &mut self.inference_codes,
+                &mut self.constraint_tags,
                 &mut self.watch_lists,
                 &self.statistics,
                 &mut self.propagation_buffer,
@@ -1875,7 +1873,8 @@ impl NogoodPropagator {
         // This is an inefficient implementation for testing purposes
         let nogood = &self.nogood_predicates.get_nogood(nogood_id);
         let info_id = self.nogood_predicates.get_nogood_index(&nogood_id);
-        let inference_code = &self.inference_codes[info_id];
+        let constraint_tag = self.constraint_tags[info_id];
+        let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
 
         if self.nogood_info[info_id].is_deleted() {
             // The nogood has already been deleted, meaning that it could be that the call to
@@ -1924,7 +1923,7 @@ impl NogoodPropagator {
                         context,
                         nogood,
                         *unassigned_predicate_ids.iter().next().unwrap(),
-                        inference_code,
+                        constraint_tag,
                         &mut NogoodPropagatorStatistics::default(),
                         Some(nogood_id),
                     )?;
@@ -1990,7 +1989,7 @@ impl NogoodPropagator {
                 .filter(|&p| p != !propagated_predicate)
                 .collect::<PropositionalConjunction>();
 
-            context.post(propagated_predicate, (reason, inference_code))?;
+            context.post(propagated_predicate, (reason, &inference_code))?;
         }
         Ok(())
     }
@@ -2049,12 +2048,11 @@ mod tests {
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
     use crate::proof::ConstraintTag;
-    use crate::proof::InferenceCode;
 
     #[test]
     fn ternary_nogood_propagate() {
         let mut solver = TestSolver::default();
-        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
+        let constraint_tag = ConstraintTag::create_from_index(0);
         let dummy = solver.new_variable(0, 1);
         let a = solver.new_variable(1, 3);
         let b = solver.new_variable(-4, 4);
@@ -2071,7 +2069,7 @@ mod tests {
                 .get_propagator_mut_with_context(solver.nogood_handle);
             let nogood_propagator: &mut NogoodPropagator = nogood_propagator.unwrap();
 
-            nogood_propagator.add_nogood(nogood.into(), inference_code, &mut context);
+            nogood_propagator.add_nogood(nogood.into(), constraint_tag, &mut context);
         }
 
         let _ = solver.increase_lower_bound_and_notify(id, a.id(), a, 3);
@@ -2092,7 +2090,7 @@ mod tests {
     #[test]
     fn unsat() {
         let mut solver = TestSolver::default();
-        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
+        let constraint_tag = ConstraintTag::create_from_index(0);
         let a = solver.new_variable(1, 3);
         let b = solver.new_variable(-4, 4);
         let c = solver.new_variable(-10, 20);
@@ -2106,7 +2104,7 @@ mod tests {
                 .get_propagator_mut_with_context(solver.nogood_handle);
             let nogood_propagator: &mut NogoodPropagator = nogood_propagator.unwrap();
 
-            nogood_propagator.add_nogood(nogood.into(), inference_code, &mut context);
+            nogood_propagator.add_nogood(nogood.into(), constraint_tag, &mut context);
         }
 
         let _ = solver.increase_lower_bound_and_notify(id, a.id(), a, 3);
