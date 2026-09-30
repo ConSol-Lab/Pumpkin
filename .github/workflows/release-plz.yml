@@ -57,7 +57,7 @@ jobs:
       - name: Build and push Docker image
         if: contains(fromJSON(steps.release_plz.outputs.releases).*.package_name, 'pumpkin-solver')
         id: push
-        uses: docker/build-push-action@104b27ceb2d85774eec663b6724fd267b363adb3
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
         with:
           context: .
           file: minizinc/Dockerfile
