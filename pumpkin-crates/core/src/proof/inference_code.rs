@@ -1,5 +1,4 @@
 use std::num::NonZero;
-use std::sync::Arc;
 
 #[cfg(doc)]
 use crate::Solver;
@@ -124,77 +123,3 @@ impl InferenceRules {
         self.names[id.0 as usize]
     }
 }
-
-#[doc(hidden)]
-pub fn convert_label_name(ident_str: &str) -> Arc<str> {
-    use convert_case::Casing;
-
-    ident_str.to_case(convert_case::Case::Snake).into()
-}
-
-/// Conveniently creates [`InferenceLabel`] for use in a propagator.
-///
-/// In case it is desirable, the exact string that is printed in the DRCP proof can be
-/// provided as a second parameter. Otherwise, the type name is converted to snake
-///
-/// # Example
-/// ```ignore
-/// declare_inference_label!(SomeInference);
-/// declare_inference_label!(OtherInference, "label");
-///
-/// // Now we can use `SomeInference` and `OtherInference` when creating an inference
-/// // code as it implements `InferenceLabel`.
-/// ```
-/// case.
-#[macro_export]
-macro_rules! declare_inference_label {
-    ($v:vis $name:ident) => {
-        declare_inference_label!($v $name, $crate::proof::convert_label_name(stringify!($name)));
-    };
-
-    ($v:vis $name:ident, $label:expr) => {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        $v struct $name;
-
-        declare_inference_label!(@impl_trait $name, std::sync::Arc::from($label));
-    };
-
-    (@impl_trait $name:ident, $label:expr) => {
-        impl $crate::proof::InferenceLabel for $name {
-            fn to_str(&self) -> std::sync::Arc<str> {
-                static LABEL: std::sync::OnceLock<std::sync::Arc<str>> = std::sync::OnceLock::new();
-
-                let label = LABEL.get_or_init(|| $label);
-
-                std::sync::Arc::clone(label)
-            }
-        }
-    };
-}
-
-/// A label of the inference mechanism that identifies a particular inference. It is combined with a
-/// [`ConstraintTag`] to create an [`InferenceCode`].
-///
-/// There may be different inference algorithms for the same contraint that are incomparable in
-/// terms of propagation strength. To discriminate between these algorithms, the inference label is
-/// used.
-///
-/// Conceptually, the inference label is a string. To aid with auto-complete, we introduce
-/// this as a strongly-typed concept. For most cases, creating an inference label is done with the
-/// [`declare_inference_label`] macro.
-pub trait InferenceLabel {
-    /// Returns the string-representation of the inference label.
-    ///
-    /// Typically different instances of the same propagator will use the same inference label.
-    /// Users are encouraged to share the string allocation, which is why the return value is
-    /// `Arc<str>`.
-    fn to_str(&self) -> Arc<str>;
-}
-
-impl InferenceLabel for Arc<str> {
-    fn to_str(&self) -> Arc<str> {
-        Arc::clone(self)
-    }
-}
-
-declare_inference_label!(pub Unknown);

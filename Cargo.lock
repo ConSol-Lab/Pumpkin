@@ -1050,7 +1050,6 @@ version = "0.5.0"
 dependencies = [
  "bitfield-struct",
  "clap",
- "convert_case",
  "enumset",
  "log",
  "pumpkin-checking",
