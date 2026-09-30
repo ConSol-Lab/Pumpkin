@@ -11,6 +11,10 @@ where
     ElementVar: CheckerVariable<Atomic>,
     Rhs: CheckerVariable<Atomic>,
 {
+    fn rule_name(&self) -> &'static str {
+        "maximum"
+    }
+
     fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
         let lowest_maximum = self
             .array

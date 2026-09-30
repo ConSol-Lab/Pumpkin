@@ -9,6 +9,10 @@ impl<Atomic> InferenceChecker<Atomic> for NogoodChecker<Atomic>
 where
     Atomic: AtomicConstraint + Clone + Debug,
 {
+    fn rule_name(&self) -> &'static str {
+        "nogood"
+    }
+
     fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
         self.nogood.iter().all(|atomic| state.is_true(atomic))
     }

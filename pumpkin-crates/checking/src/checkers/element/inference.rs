@@ -12,6 +12,10 @@ where
     VI: CheckerVariable<Atomic>,
     VE: CheckerVariable<Atomic>,
 {
+    fn rule_name(&self) -> &'static str {
+        "element"
+    }
+
     fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
         self.union.borrow_mut().reset();
 

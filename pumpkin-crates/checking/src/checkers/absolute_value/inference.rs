@@ -11,6 +11,10 @@ where
     VB: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
+    fn rule_name(&self) -> &'static str {
+        "absolute_value"
+    }
+
     fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
         let signed_lower = self.signed.induced_lower_bound(&state);
         let signed_upper = self.signed.induced_upper_bound(&state);

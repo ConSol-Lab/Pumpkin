@@ -12,6 +12,10 @@ where
     Atomic: AtomicConstraint + Clone + Debug,
     Var: CheckerVariable<Atomic>,
 {
+    fn rule_name(&self) -> &'static str {
+        "hypercube_linear"
+    }
+
     fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
         let hypercube_satisfied = self.hypercube.iter().all(|atomic| state.is_true(atomic));
 

@@ -21,6 +21,10 @@ where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
+    fn rule_name(&self) -> &'static str {
+        "time_table"
+    }
+
     fn check(
         &self,
         mut state: VariableState<Atomic>,

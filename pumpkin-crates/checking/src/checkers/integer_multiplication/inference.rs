@@ -14,6 +14,10 @@ where
     VB: CheckerVariable<Atomic>,
     VC: CheckerVariable<Atomic>,
 {
+    fn rule_name(&self) -> &'static str {
+        "integer_multiplication"
+    }
+
     fn check(
         &self,
         state: VariableState<Atomic>,

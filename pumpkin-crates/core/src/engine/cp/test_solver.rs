@@ -70,6 +70,10 @@ impl TestSolver {
         struct Checker;
 
         impl InferenceChecker<Predicate> for Checker {
+            fn rule_name(&self) -> &'static str {
+                "accept_all"
+            }
+
             fn check(
                 &self,
                 _: pumpkin_checking::VariableState<Predicate>,

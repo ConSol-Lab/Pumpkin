@@ -59,6 +59,10 @@ where
     Atomic: AtomicConstraint,
     <Atomic as AtomicConstraint>::Identifier: Clone,
 {
+    fn rule_name(&self) -> &'static str {
+        "disjunctive_edge_finding"
+    }
+
     fn check(
         &self,
         state: VariableState<Atomic>,

@@ -10,6 +10,10 @@ where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
+    fn rule_name(&self) -> &'static str {
+        "linear_not_equals"
+    }
+
     fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
         // We evaluate the linear sum. It should be fixed to the bound for a conflict to
         // exist.

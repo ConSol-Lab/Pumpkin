@@ -11,6 +11,10 @@ where
     Lhs: CheckerVariable<Atomic>,
     Rhs: CheckerVariable<Atomic>,
 {
+    fn rule_name(&self) -> &'static str {
+        "binary_equals"
+    }
+
     fn check(&self, mut state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
         // We apply the domain of variable 2 to variable 1. If the state remains consistent, then
         // the step is unsound!

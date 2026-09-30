@@ -8,6 +8,9 @@ use crate::VariableState;
 /// An inference checker tests whether the given state is a conflict under the sematics of an
 /// inference rule.
 pub trait InferenceChecker<Atomic: AtomicConstraint>: Debug + DynClone {
+    /// The name of the inference rule, which identifies the inferences of this checker in proofs.
+    fn rule_name(&self) -> &'static str;
+
     /// Returns `true` if `state` is a conflict, and `false` if not.
     ///
     /// For the conflict check, all the premises are true in the state and the consequent, if
@@ -37,6 +40,11 @@ impl<Atomic: AtomicConstraint> BoxedChecker<Atomic> {
 }
 
 impl<Atomic: AtomicConstraint> BoxedChecker<Atomic> {
+    /// See [`InferenceChecker::rule_name`].
+    pub fn rule_name(&self) -> &'static str {
+        self.0.rule_name()
+    }
+
     /// See [`InferenceChecker::check`].
     pub fn check(
         &self,

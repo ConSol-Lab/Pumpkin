@@ -9,6 +9,10 @@ where
     Atomic: AtomicConstraint + Clone,
     Var: CheckerVariable<Atomic>,
 {
+    fn rule_name(&self) -> &'static str {
+        self.inner.rule_name()
+    }
+
     fn check(
         &self,
         state: VariableState<Atomic>,

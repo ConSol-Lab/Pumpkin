@@ -12,6 +12,10 @@ where
     VB: CheckerVariable<Atomic>,
     VC: CheckerVariable<Atomic>,
 {
+    fn rule_name(&self) -> &'static str {
+        "division"
+    }
+
     fn check(
         &self,
         state: VariableState<Atomic>,

@@ -10,6 +10,10 @@ where
     Lhs: CheckerVariable<Atomic>,
     Rhs: CheckerVariable<Atomic>,
 {
+    fn rule_name(&self) -> &'static str {
+        "binary_not_equals"
+    }
+
     fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
         // There is a conflict if both variables are fixed to the same values.
 

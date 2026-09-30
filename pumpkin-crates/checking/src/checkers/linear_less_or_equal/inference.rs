@@ -10,6 +10,10 @@ where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
+    fn rule_name(&self) -> &'static str {
+        "linear_bounds"
+    }
+
     fn check(
         &self,
         variable_state: VariableState<Atomic>,
