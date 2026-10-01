@@ -1,4 +1,4 @@
-<h1 style="text-align:center;">Pumpkin</h1>
+<h1 align="center">Pumpkin</h1>
 
 <p align="center">
   <a href="https://crates.io/crates/pumpkin-solver"><img src="https://img.shields.io/crates/v/pumpkin-solver?label=pumpkin-solver&logo=rust&color=CE422B&style=for-the-badge" alt="Pumpkin on crates.io"></a>
