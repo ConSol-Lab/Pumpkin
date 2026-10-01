@@ -67,8 +67,6 @@ pub struct NogoodPropagator {
     nogood_info: KeyedVec<NogoodIndex, NogoodInfo>,
     /// The inference codes for the nogoods.
     inference_codes: KeyedVec<NogoodIndex, InferenceCode>,
-    /// Nogoods which are permanently present
-    permanent_nogood_ids: Vec<NogoodId>,
     /// Stores all learned nogoods.
     learned_nogood_ids: LearnedNogoodIds,
     /// Watch lists for the nogood propagator.
@@ -187,7 +185,6 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             nogood_predicates: ArenaAllocator::new(self.capacity),
             nogood_info: Default::default(),
             inference_codes: Default::default(),
-            permanent_nogood_ids: Default::default(),
             learned_nogood_ids: Default::default(),
             watch_lists: Default::default(),
             updated_predicate_ids: Default::default(),
@@ -1281,7 +1278,6 @@ impl NogoodPropagator {
                 &mut self.nogood_info,
                 &mut self.inference_codes,
                 &mut self.watch_lists,
-                &mut self.permanent_nogood_ids,
                 &self.statistics,
                 &mut self.propagation_buffer,
             )
