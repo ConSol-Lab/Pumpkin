@@ -130,7 +130,7 @@ impl TestSolver {
             result.is_ok(),
             "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!"
         );
-        let mut propagator_queue = PropagatorQueue::new(4);
+        let mut propagator_queue = PropagatorQueue::default();
         #[allow(deprecated, reason = "Will be refactored in the future")]
         self.state
             .notification_engine
@@ -159,7 +159,7 @@ impl TestSolver {
             result.is_ok(),
             "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!"
         );
-        let mut propagator_queue = PropagatorQueue::new(4);
+        let mut propagator_queue = PropagatorQueue::default();
         #[allow(deprecated, reason = "Will be refactored in the future")]
         self.state
             .notification_engine
@@ -188,7 +188,7 @@ impl TestSolver {
             result.is_ok(),
             "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!"
         );
-        let mut propagator_queue = PropagatorQueue::new(4);
+        let mut propagator_queue = PropagatorQueue::default();
         #[allow(deprecated, reason = "Will be refactored in the future")]
         self.state
             .notification_engine
@@ -285,7 +285,7 @@ impl TestSolver {
                 &self.state.assignments,
                 &mut self.state.trailed_values,
                 &mut self.state.propagators,
-                &mut PropagatorQueue::new(4),
+                &mut PropagatorQueue::default(),
             );
     }
 

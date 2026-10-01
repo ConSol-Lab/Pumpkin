@@ -1,5 +1,3 @@
-use std::cmp::Reverse;
-use std::collections::BinaryHeap;
 use std::collections::VecDeque;
 
 use crate::containers::KeyedVec;
@@ -7,84 +5,87 @@ use crate::propagation::Priority;
 use crate::propagation::PropagatorId;
 use crate::pumpkin_assert_moderate;
 
+/// The number of different [`Priority`] levels.
+const DEFAULT_NUM_PRIORITY_LEVELS: usize = Priority::Lowest as usize + 1;
+
+/// A queue of propagators which supports `NUM_PRIORITY_LEVELS` different priority levels (at most
+/// 64), where propagators with a [`Priority`] closer to [`Priority::High`] are popped first.
 #[derive(Debug, Clone)]
-pub(crate) struct PropagatorQueue {
-    queues: Vec<VecDeque<PropagatorId>>,
+pub(crate) struct PropagatorQueue<const NUM_PRIORITY_LEVELS: usize = DEFAULT_NUM_PRIORITY_LEVELS> {
+    /// For every [`Priority`], the propagators which are enqueued with that priority.
+    queues: [VecDeque<PropagatorId>; NUM_PRIORITY_LEVELS],
     is_enqueued: KeyedVec<PropagatorId, bool>,
     num_enqueued: usize,
-    present_priorities: BinaryHeap<Reverse<u32>>,
+    /// A bitmask where bit `i` is set if and only if `queues[i]` is not empty.
+    present_priorities: u64,
 }
 
-impl Default for PropagatorQueue {
+impl<const NUM_PRIORITY_LEVELS: usize> Default for PropagatorQueue<NUM_PRIORITY_LEVELS> {
     fn default() -> Self {
-        Self::new(6)
-    }
-}
+        const {
+            assert!(
+                NUM_PRIORITY_LEVELS <= u64::BITS as usize,
+                "the bitmask of present priorities supports at most 64 priority levels"
+            )
+        };
 
-impl PropagatorQueue {
-    pub(crate) fn new(num_priority_levels: u32) -> PropagatorQueue {
         PropagatorQueue {
-            queues: vec![VecDeque::new(); num_priority_levels as usize],
+            queues: std::array::from_fn(|_| VecDeque::new()),
             is_enqueued: KeyedVec::default(),
             num_enqueued: 0,
-            present_priorities: BinaryHeap::new(),
+            present_priorities: 0,
         }
     }
+}
 
+impl<const NUM_PRIORITY_LEVELS: usize> PropagatorQueue<NUM_PRIORITY_LEVELS> {
     pub(crate) fn is_empty(&self) -> bool {
         self.num_enqueued == 0
     }
 
     pub(crate) fn enqueue_propagator(&mut self, propagator_id: PropagatorId, priority: Priority) {
-        pumpkin_assert_moderate!((priority as usize) < self.queues.len());
+        pumpkin_assert_moderate!((priority as usize) < NUM_PRIORITY_LEVELS);
 
-        if !self.is_propagator_enqueued(propagator_id) {
-            self.is_enqueued.accomodate(propagator_id, false);
+        self.is_enqueued.accomodate(propagator_id, false);
+        if !self.is_enqueued[propagator_id] {
             self.is_enqueued[propagator_id] = true;
             self.num_enqueued += 1;
 
-            if self.queues[priority as usize].is_empty() {
-                self.present_priorities.push(Reverse(priority as u32));
-            }
+            self.present_priorities |= 1 << priority as u64;
             self.queues[priority as usize].push_back(propagator_id);
         }
     }
 
     pub(crate) fn pop(&mut self) -> Option<PropagatorId> {
-        if self.present_priorities.is_empty() {
+        if self.present_priorities == 0 {
             return None;
         }
 
-        let top_priority = self.present_priorities.peek().unwrap().0 as usize;
+        // The lowest set bit corresponds to the highest priority which has enqueued propagators.
+        let top_priority = self.present_priorities.trailing_zeros() as usize;
         pumpkin_assert_moderate!(!self.queues[top_priority].is_empty());
 
-        let next_propagator_id = self.queues[top_priority].pop_front();
+        let propagator_id = self.queues[top_priority].pop_front()?;
+        self.is_enqueued[propagator_id] = false;
 
-        if let Some(propagator_id) = next_propagator_id {
-            self.is_enqueued[propagator_id] = false;
-
-            if self.queues[top_priority].is_empty() {
-                let _ = self.present_priorities.pop();
-            }
+        if self.queues[top_priority].is_empty() {
+            self.present_priorities &= !(1 << top_priority);
         }
 
         self.num_enqueued -= 1;
 
-        next_propagator_id
+        Some(propagator_id)
     }
 
     pub(crate) fn clear(&mut self) {
-        while !self.present_priorities.is_empty() {
-            let priority = self.present_priorities.pop().unwrap().0 as usize;
-            pumpkin_assert_moderate!(!self.queues[priority].is_empty());
-            self.queues[priority].clear();
+        // Only the enqueued propagators need to be reset, rather than all propagators.
+        for queue in self.queues.iter_mut() {
+            for propagator_id in queue.drain(..) {
+                self.is_enqueued[propagator_id] = false;
+            }
         }
 
-        for is_propagator_enqueued in self.is_enqueued.iter_mut() {
-            *is_propagator_enqueued = false;
-        }
-
-        self.present_priorities.clear();
+        self.present_priorities = 0;
         self.num_enqueued = 0;
     }
 
@@ -104,7 +105,7 @@ mod tests {
 
     #[test]
     fn test_ordering() {
-        let mut queue = PropagatorQueue::default();
+        let mut queue: PropagatorQueue = PropagatorQueue::default();
 
         queue.enqueue_propagator(PropagatorId(1), Priority::High);
         queue.enqueue_propagator(PropagatorId(0), Priority::Medium);
@@ -115,6 +116,42 @@ mod tests {
         assert_eq!(PropagatorId(0), queue.pop().unwrap());
         assert_eq!(PropagatorId(4), queue.pop().unwrap());
         assert_eq!(PropagatorId(3), queue.pop().unwrap());
+        assert_eq!(None, queue.pop());
+    }
+
+    #[test]
+    fn custom_number_of_priority_levels() {
+        let mut queue = PropagatorQueue::<2>::default();
+
+        queue.enqueue_propagator(PropagatorId(0), Priority::Medium);
+        queue.enqueue_propagator(PropagatorId(1), Priority::High);
+
+        assert_eq!(PropagatorId(1), queue.pop().unwrap());
+        assert_eq!(PropagatorId(0), queue.pop().unwrap());
+        assert_eq!(None, queue.pop());
+    }
+
+    #[test]
+    fn clear_resets_enqueued_propagators() {
+        let mut queue: PropagatorQueue = PropagatorQueue::default();
+
+        queue.enqueue_propagator(PropagatorId(2), Priority::Lowest);
+        queue.enqueue_propagator(PropagatorId(0), Priority::UltraLow);
+        queue.enqueue_propagator(PropagatorId(1), Priority::High);
+
+        queue.clear();
+
+        assert!(queue.is_empty());
+        assert!(!queue.is_propagator_enqueued(PropagatorId(0)));
+        assert!(!queue.is_propagator_enqueued(PropagatorId(1)));
+        assert!(!queue.is_propagator_enqueued(PropagatorId(2)));
+        assert_eq!(None, queue.pop());
+
+        queue.enqueue_propagator(PropagatorId(2), Priority::Lowest);
+        queue.enqueue_propagator(PropagatorId(0), Priority::UltraLow);
+
+        assert_eq!(PropagatorId(0), queue.pop().unwrap());
+        assert_eq!(PropagatorId(2), queue.pop().unwrap());
         assert_eq!(None, queue.pop());
     }
 }
