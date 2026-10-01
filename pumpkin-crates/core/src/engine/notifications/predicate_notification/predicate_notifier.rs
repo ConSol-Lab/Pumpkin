@@ -1,3 +1,5 @@
+use bit_set::BitSet;
+
 use super::PredicateIdAssignments;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
@@ -9,6 +11,7 @@ use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::predicate_notification::predicate_tracker::PredicateTracker;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
+use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
 
 /// An orchestrating struct which serves as the main contact point for the solver with
@@ -29,6 +32,16 @@ pub(crate) struct PredicateNotifier {
     pub(crate) predicate_id_assignments: PredicateIdAssignments,
     /// Contains the [`PredicateTracker`] for each [`DomainId`]
     domain_id_to_predicate_tracker: KeyedVec<DomainId, PredicateTracker>,
+    /// The [`PredicateId`]s (by index) which have been added to the scope of their
+    /// [`PredicateTracker`].
+    ///
+    /// Predicates are re-tracked frequently (e.g., when a watch list of the nogood propagator
+    /// becomes non-empty again), and determining whether a [`Predicate`] is tracked by the
+    /// [`PredicateTracker`] itself requires traversing its values.
+    ///
+    /// It is also used by the [`PredicateTracker`] to determine which predicates to update when a
+    /// disequality [`Predicate`] has been posted.
+    is_tracked: BitSet,
 }
 
 impl PredicateNotifier {
@@ -89,6 +102,8 @@ impl PredicateNotifier {
                     predicate_tracker.on_update(
                         predicate,
                         trailed_values,
+                        &self.predicate_to_id,
+                        &self.is_tracked,
                         &mut self.predicate_id_assignments,
                     );
                 }
@@ -98,6 +113,8 @@ impl PredicateNotifier {
             predicate_tracker.on_update(
                 predicate_type.into_predicate(domain, assignments, None),
                 trailed_values,
+                &self.predicate_to_id,
+                &self.is_tracked,
                 &mut self.predicate_id_assignments,
             );
         }
@@ -111,6 +128,11 @@ impl PredicateNotifier {
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
+        if !self.is_tracked.insert(id.index()) {
+            // The predicate is already in the scope of its tracker
+            return;
+        }
+
         let predicate = self.predicate_to_id.get_predicate(id);
 
         // First, we resize the number of DomainIds for which we store predicate trackers
@@ -122,15 +144,14 @@ impl PredicateNotifier {
         // Now we initialise the predicate tracker; this does not add it to the scope yet but it
         // initialises the structures
         self.domain_id_to_predicate_tracker[predicate.get_domain()].initialise(
-            predicate.get_domain(),
             assignments.get_initial_lower_bound(predicate.get_domain()),
             assignments.get_initial_upper_bound(predicate.get_domain()),
             trailed_values,
         );
 
         // Now we add it to the scope of the tracker
-        //
-        // We check whether it was already tracked or not
-        let _ = self.domain_id_to_predicate_tracker[predicate.get_domain()].track(predicate, id);
+        let added =
+            self.domain_id_to_predicate_tracker[predicate.get_domain()].track(predicate, id);
+        pumpkin_assert_simple!(added, "Expected {predicate:?} to not be tracked yet");
     }
 }
