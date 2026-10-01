@@ -56,7 +56,6 @@ changelog_include = [
     "pumpkin-conflict-resolvers", 
     "pumpkin-propagators", 
     "pumpkin-constraints",
-    "pumpkin-branching"
 ]
 
 [[package]]
@@ -85,12 +84,6 @@ changelog_update = false
 
 [[package]]
 name = "pumpkin-constraints"
-git_release_enable = false
-git_tag_enable = false
-changelog_update = false
-
-[[package]]
-name = "pumpkin-branching"
 git_release_enable = false
 git_tag_enable = false
 changelog_update = false
