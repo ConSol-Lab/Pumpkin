@@ -93,43 +93,67 @@ impl PredicateIdAssignments {
         if self.predicate_values[predicate_id] != value {
             // If it is not the same as what is already in the cache then we need to store it and
             // (potentially) update the predicates which should be notified
-            if value == PredicateValue::AssignedTrue {
-                self.satisfied_predicates.push(predicate_id)
-            }
-            self.predicate_values[predicate_id] = value;
-            self.trail.push(predicate_id)
+            self.assign(predicate_id, value);
         }
     }
 
-    /// Recalculates the value of a [`Predicate`] *if* it is unknown.
-    fn update_if_unknown(
+    /// Stores the provided `value` for the [`Predicate`], which is assumed to differ from the
+    /// value which is currently stored.
+    fn assign(&mut self, predicate_id: PredicateId, value: PredicateValue) {
+        if value == PredicateValue::AssignedTrue {
+            self.satisfied_predicates.push(predicate_id)
+        }
+        self.predicate_values[predicate_id] = value;
+        self.trail.push(predicate_id)
+    }
+
+    /// Returns the current value of the [`Predicate`].
+    ///
+    /// If the stored value is unknown, then it is recalculated using the provided [`Assignments`];
+    /// the result is only stored if the [`Predicate`] turns out to be assigned.
+    ///
+    /// This method is kept small so that it can be inlined; the recalculation happens in
+    /// [`Self::recalculate_value`].
+    #[inline]
+    fn get_value(
         &mut self,
         predicate_id: PredicateId,
         assignments: &Assignments,
         predicate_id_generator: &PredicateIdGenerator,
-    ) {
+    ) -> PredicateValue {
         // First we make space for it if we have not seen the predicate yet
-        if predicate_id.index() >= self.predicate_values.len() {
-            self.predicate_values
-                .resize(predicate_id.index() + 1, PredicateValue::Unknown);
+        self.predicate_values
+            .accomodate(predicate_id, PredicateValue::Unknown);
+
+        let stored_value = self.predicate_values[predicate_id];
+        if !stored_value.is_unknown() {
+            return stored_value;
         }
 
-        if self.predicate_values[predicate_id].is_unknown() {
-            // First we calculate the current value of the predicate in the assignments structure
-            let predicate = predicate_id_generator.get_predicate(predicate_id);
-            let value = match assignments.evaluate_predicate(predicate) {
-                Some(satisfied) => {
-                    if satisfied {
-                        PredicateValue::AssignedTrue
-                    } else {
-                        PredicateValue::AssignedFalse
-                    }
-                }
-                None => PredicateValue::Unknown,
-            };
-            // Then we store it in the cache
-            self.store_predicate(predicate_id, value);
-        }
+        self.recalculate_value(predicate_id, assignments, predicate_id_generator)
+    }
+
+    /// Recalculates the value of a [`Predicate`] whose stored value is unknown, and stores it if
+    /// the [`Predicate`] is assigned.
+    #[inline(never)]
+    fn recalculate_value(
+        &mut self,
+        predicate_id: PredicateId,
+        assignments: &Assignments,
+        predicate_id_generator: &PredicateIdGenerator,
+    ) -> PredicateValue {
+        // We calculate the current value of the predicate in the assignments structure
+        let predicate = predicate_id_generator.get_predicate(predicate_id);
+        let value = match assignments.evaluate_predicate(predicate) {
+            Some(true) => PredicateValue::AssignedTrue,
+            Some(false) => PredicateValue::AssignedFalse,
+            // The predicate is still unknown, so there is nothing to store
+            None => return PredicateValue::Unknown,
+        };
+
+        // Then we store it in the cache
+        self.assign(predicate_id, value);
+        value
     }
 
     /// Returns whether the [`Predicate`] is currently satsified.
@@ -142,9 +166,8 @@ impl PredicateIdAssignments {
         assignments: &Assignments,
         predicate_id_generator: &PredicateIdGenerator,
     ) -> bool {
-        self.update_if_unknown(predicate_id, assignments, predicate_id_generator);
-
-        self.predicate_values[predicate_id].is_satisified()
+        self.get_value(predicate_id, assignments, predicate_id_generator)
+            .is_satisified()
     }
 
     /// Returns whether the [`Predicate`] is currently falsified.
@@ -157,9 +180,8 @@ impl PredicateIdAssignments {
         assignments: &Assignments,
         predicate_id_generator: &PredicateIdGenerator,
     ) -> bool {
-        self.update_if_unknown(predicate_id, assignments, predicate_id_generator);
-
-        self.predicate_values[predicate_id].is_falsified()
+        self.get_value(predicate_id, assignments, predicate_id_generator)
+            .is_falsified()
     }
 
     pub(crate) fn evaluate(
@@ -168,9 +190,7 @@ impl PredicateIdAssignments {
         assignments: &Assignments,
         predicate_id_generator: &PredicateIdGenerator,
     ) -> Option<bool> {
-        self.update_if_unknown(predicate_id, assignments, predicate_id_generator);
-
-        match self.predicate_values[predicate_id] {
+        match self.get_value(predicate_id, assignments, predicate_id_generator) {
             PredicateValue::AssignedTrue => Some(true),
             PredicateValue::AssignedFalse => Some(false),
             PredicateValue::Unknown => None,
