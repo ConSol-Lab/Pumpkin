@@ -4,7 +4,7 @@ use crate::result::Solution;
 
 #[pyclass(from_py_object)]
 #[derive(Clone, Copy, Debug)]
-pub enum FixPointPropagationResult {
+pub(crate) enum FixPointPropagationResult {
     Feasible,
     Infeasible,
     Unknown,
@@ -12,7 +12,7 @@ pub enum FixPointPropagationResult {
 
 #[pyclass(from_py_object)]
 #[derive(Clone)]
-pub enum OptimisationResult {
+pub(crate) enum OptimisationResult {
     /// The problem was solved to optimality, and the solution is an optimal one.
     Optimal(Solution),
     /// At least one solution was identified, and the solution is the best one.
@@ -25,19 +25,19 @@ pub enum OptimisationResult {
 
 #[pyclass(eq, eq_int, from_py_object)]
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Optimiser {
+pub(crate) enum Optimiser {
     LinearSatUnsat,
     LinearUnsatSat,
 }
 
 #[pyclass(eq, eq_int, from_py_object)]
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Direction {
+pub(crate) enum Direction {
     Minimise,
     Maximise,
 }
 
-pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Optimiser>()?;
     m.add_class::<Direction>()?;
     m.add_class::<OptimisationResult>()?;

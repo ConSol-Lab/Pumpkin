@@ -403,8 +403,14 @@ impl State {
         checker: impl InferenceChecker<Predicate> + 'static,
     ) -> InferenceCode {
         let inference_code = InferenceCode::new(constraint_tag, inference_label);
-        self.checkers
-            .add_inference_checker(inference_code.clone(), BoxedChecker::new(Box::new(checker)));
+        if cfg!(feature = "check-propagations") {
+            // The checkers are only used when this feature is enabled, so we avoid storing them
+            // otherwise.
+            self.checkers.add_inference_checker(
+                inference_code.clone(),
+                BoxedChecker::new(Box::new(checker)),
+            );
+        }
         inference_code
     }
 }
@@ -571,14 +577,14 @@ impl State {
     pub fn restore_to(&mut self, checkpoint: usize) -> Vec<(DomainId, i32)> {
         pumpkin_assert_simple!(checkpoint <= self.get_checkpoint());
 
+        if checkpoint == self.get_checkpoint() {
+            return vec![];
+        }
+
         self.statistics.sum_of_backjumps +=
             (self.get_checkpoint().saturating_sub(1) - checkpoint) as u64;
         if self.get_checkpoint() - checkpoint > 1 {
             self.statistics.num_backjumps += 1;
-        }
-
-        if checkpoint == self.get_checkpoint() {
-            return vec![];
         }
 
         let unfixed_after_backtracking = self
@@ -1210,5 +1216,22 @@ mod tests {
             state.get_propagation_reason(predicate!(x >= 5), &mut buffer, CurrentNogood::empty());
 
         assert_eq!(buffer, vec![predicate!(y >= 5)])
+    }
+
+    #[test]
+    fn restore_to_current_checkpoint_is_no_op() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, None);
+
+        state.new_checkpoint();
+        let _ = state.post(predicate!(x >= 5)).expect("no conflict");
+
+        let unfixed = state.restore_to(state.get_checkpoint());
+
+        assert!(unfixed.is_empty());
+        assert_eq!(state.get_checkpoint(), 1);
+        assert_eq!(state.lower_bound(x), 5);
+        assert_eq!(state.statistics.sum_of_backjumps, 0);
+        assert_eq!(state.statistics.num_backjumps, 0);
     }
 }

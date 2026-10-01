@@ -901,13 +901,17 @@ impl ConstraintSatisfactionSolver {
     fn add_nogood(&mut self, nogood: Vec<Predicate>, constraint_tag: ConstraintTag) {
         pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
 
-        let inference_code = self.state.add_inference_checker(
-            constraint_tag,
-            NogoodLabel,
-            NogoodChecker {
-                nogood: nogood.clone().into(),
-            },
-        );
+        let inference_code = if cfg!(feature = "check-propagations") {
+            self.state.add_inference_checker(
+                constraint_tag,
+                NogoodLabel,
+                NogoodChecker {
+                    nogood: nogood.clone().into(),
+                },
+            )
+        } else {
+            InferenceCode::new(constraint_tag, NogoodLabel)
+        };
 
         let (nogood_propagator, mut context) = self
             .state

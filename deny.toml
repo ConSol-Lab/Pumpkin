@@ -94,7 +94,6 @@ allow = [
     "Apache-2.0 WITH LLVM-exception",
     "Zlib",
     "Unicode-3.0",
-    "BSD-3-Clause",
 ]
 # The confidence threshold for detecting a license from license text.
 # The higher the value, the more closely the license text must be to the
@@ -203,6 +202,8 @@ deny = [
 skip = [
     #"ansi_term@0.11.0",
     #{ crate = "ansi_term@0.11.0", reason = "you can specify a reason why it can't be updated/removed" },
+    {name = "syn"},
+    {name = "hashbrown"}
 ]
 # Similarly to `skip` allows you to skip certain crates during duplicate
 # detection. Unlike skip, it also includes the entire tree of transitive
@@ -227,7 +228,7 @@ unknown-git = "warn"
 # if not specified. If it is specified but empty, no registries are allowed.
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 # List of URLs for allowed Git repositories
-allow-git = []
+allow-git = ["git+https://github.com/servo/rust-fnv?branch=main#4e55052a343a4372c191141f29a17ab829cf1dbc"]
 
 [sources.allow-org]
 # 1 or more github.com organizations to allow git sources for

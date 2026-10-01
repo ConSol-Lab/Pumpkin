@@ -67,8 +67,6 @@ pub struct NogoodPropagator {
     nogood_info: KeyedVec<NogoodIndex, NogoodInfo>,
     /// The inference codes for the nogoods.
     inference_codes: KeyedVec<NogoodIndex, InferenceCode>,
-    /// Nogoods which are permanently present
-    permanent_nogood_ids: Vec<NogoodId>,
     /// Stores all learned nogoods.
     learned_nogood_ids: LearnedNogoodIds,
     /// Watch lists for the nogood propagator.
@@ -187,7 +185,6 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             nogood_predicates: ArenaAllocator::new(self.capacity),
             nogood_info: Default::default(),
             inference_codes: Default::default(),
-            permanent_nogood_ids: Default::default(),
             learned_nogood_ids: Default::default(),
             watch_lists: Default::default(),
             updated_predicate_ids: Default::default(),
@@ -430,6 +427,8 @@ impl Propagator for NogoodPropagator {
                                 &mut self.watch_lists,
                             );
 
+                            *last_traversed_watcher = i as u32;
+
                             // No propagation is taking place, go to the next nogood.
                             break;
                         }
@@ -536,6 +535,8 @@ impl Propagator for NogoodPropagator {
     ) -> LazyExplanation<'_> {
         let reason = LazyNogoodExplanation::from_bits(code);
         let id = reason.nogood_id();
+        self.temp_nogood_reason.clear();
+
         let result = if reason.explains_extended_propagation() {
             // The lazy explanations explains a propagation using extended nogood propagation.
             let nogood = &self.nogood_predicates.get_nogood(id);
@@ -550,19 +551,18 @@ impl Propagator for NogoodPropagator {
                 let propagating_predicate_id =
                     PredicateId::create_from_index(reason.unit_propagation_index() as usize);
 
-                self.temp_nogood_reason = self
-                    .nogood_predicates
-                    .get_nogood(id)
-                    .iter()
-                    .filter(|&&predicate_id| predicate_id != propagating_predicate_id)
-                    .map(|&predicate_id| context.get_predicate(predicate_id))
-                    .collect::<Vec<_>>();
+                self.temp_nogood_reason.extend(
+                    self.nogood_predicates
+                        .get_nogood(id)
+                        .iter()
+                        .filter(|&&predicate_id| predicate_id != propagating_predicate_id)
+                        .map(|&predicate_id| context.get_predicate(predicate_id)),
+                );
             } else {
                 match predicate_to_be_explained.get_predicate_type() {
                     PredicateType::UpperBound => {
-                        self.temp_nogood_reason = nogood
-                            .iter()
-                            .filter_map(|predicate_id| {
+                        self.temp_nogood_reason
+                            .extend(nogood.iter().filter_map(|predicate_id| {
                                 let predicate = context.get_predicate(*predicate_id);
 
                                 (context.evaluate_predicate_at_trail_position(
@@ -574,13 +574,11 @@ impl Propagator for NogoodPropagator {
                                         || (predicate.is_not_equal_predicate()
                                             && predicate.get_right_hand_side() > rhs)))
                                     .then_some(predicate)
-                            })
-                            .collect();
+                            }));
                     }
                     PredicateType::LowerBound => {
-                        self.temp_nogood_reason = nogood
-                            .iter()
-                            .filter_map(|predicate_id| {
+                        self.temp_nogood_reason
+                            .extend(nogood.iter().filter_map(|predicate_id| {
                                 let predicate = context.get_predicate(*predicate_id);
 
                                 (context.evaluate_predicate_at_trail_position(
@@ -592,18 +590,15 @@ impl Propagator for NogoodPropagator {
                                         || (predicate.is_not_equal_predicate()
                                             && predicate.get_right_hand_side() < rhs)))
                                     .then_some(predicate)
-                            })
-                            .collect();
+                            }));
                     }
                     PredicateType::NotEqual => {
-                        self.temp_nogood_reason = nogood
-                            .iter()
-                            .filter_map(|predicate_id| {
+                        self.temp_nogood_reason
+                            .extend(nogood.iter().filter_map(|predicate_id| {
                                 let predicate = context.get_predicate(*predicate_id);
 
                                 (predicate.get_domain() != propagated_domain).then_some(predicate)
-                            })
-                            .collect();
+                            }));
                     }
                     PredicateType::Equal => unreachable!(),
                 }
@@ -614,10 +609,11 @@ impl Propagator for NogoodPropagator {
                 inference_code: self.inference_codes[info_id].clone(),
             }
         } else {
-            self.temp_nogood_reason = self.nogood_predicates.get_nogood(id)[1..]
-                .iter()
-                .map(|predicate_id| context.get_predicate(*predicate_id))
-                .collect::<Vec<_>>();
+            self.temp_nogood_reason.extend(
+                self.nogood_predicates.get_nogood(id)[1..]
+                    .iter()
+                    .map(|predicate_id| context.get_predicate(*predicate_id)),
+            );
 
             let info_id = self.nogood_predicates.get_nogood_index(&id);
 
@@ -1282,7 +1278,6 @@ impl NogoodPropagator {
                 &mut self.nogood_info,
                 &mut self.inference_codes,
                 &mut self.watch_lists,
-                &mut self.permanent_nogood_ids,
                 &self.statistics,
                 &mut self.propagation_buffer,
             )
