@@ -18,6 +18,7 @@ use crate::propagators::nogoods::PropagationBuffer;
 use crate::propagators::nogoods::Watcher;
 use crate::propagators::nogoods::arena_allocator::ArenaAllocator;
 use crate::propagators::nogoods::arena_allocator::NogoodIndex;
+use crate::propagators::nogoods::arena_allocator::store_at_nogood_index;
 use crate::pumpkin_assert_moderate;
 use crate::state::PropagationStatusCP;
 use crate::state::PropagatorHandle;
@@ -355,12 +356,15 @@ impl PropagationMode {
                     // 0th, then we proceed to add watchers
                     nogood.swap(1, position);
 
-                    // Add the nogood to the database.
-                    //
-                    // Currently we always allocate a fresh ID
-                    let nogood_id = nogood_predicates.insert(nogood);
-                    let _ = nogood_info.push(NogoodInfo::new_permanent_nogood_info());
-                    let _ = inference_codes.push(inference_code);
+                    // Add the nogood to the database (possibly reusing the slot of a deleted
+                    // nogood).
+                    let (nogood_id, nogood_index) = nogood_predicates.insert(nogood);
+                    store_at_nogood_index(
+                        nogood_info,
+                        nogood_index,
+                        NogoodInfo::new_permanent_nogood_info(),
+                    );
+                    store_at_nogood_index(inference_codes, nogood_index, inference_code);
 
                     let watcher = Watcher {
                         nogood_id,
@@ -387,12 +391,14 @@ impl PropagationMode {
                 }
             }
             PropagationMode::UnitPropagation => {
-                // Add the nogood to the database.
-                //
-                // Currently we always allocate a fresh ID
-                let nogood_id = nogood_predicates.insert(nogood);
-                let _ = nogood_info.push(NogoodInfo::new_permanent_nogood_info());
-                let _ = inference_codes.push(inference_code);
+                // Add the nogood to the database (possibly reusing the slot of a deleted nogood).
+                let (nogood_id, nogood_index) = nogood_predicates.insert(nogood);
+                store_at_nogood_index(
+                    nogood_info,
+                    nogood_index,
+                    NogoodInfo::new_permanent_nogood_info(),
+                );
+                store_at_nogood_index(inference_codes, nogood_index, inference_code);
 
                 let watcher = Watcher {
                     nogood_id,

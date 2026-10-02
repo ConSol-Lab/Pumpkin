@@ -42,6 +42,7 @@ use crate::propagators::nogoods::PropagationMode;
 use crate::propagators::nogoods::WatcherProcessingStatus;
 use crate::propagators::nogoods::arena_allocator::ArenaAllocator;
 use crate::propagators::nogoods::arena_allocator::NogoodIndex;
+use crate::propagators::nogoods::arena_allocator::store_at_nogood_index;
 use crate::propagators::nogoods::semantic_minimiser::SemanticMinimiser;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_extreme;
@@ -1098,14 +1099,14 @@ impl NogoodPropagator {
             .map(|predicate| context.get_id(*predicate))
             .collect::<Vec<_>>();
 
-        // Add the nogood to the database.
-        //
-        // Currently we always allocate a fresh ID
-        let nogood_id = self.nogood_predicates.insert(nogood);
-        let _ = self
-            .nogood_info
-            .push(NogoodInfo::new_learned_nogood_info(lbd));
-        let _ = self.inference_codes.push(inference_code);
+        // Add the nogood to the database (possibly reusing the slot of a deleted nogood).
+        let (nogood_id, nogood_index) = self.nogood_predicates.insert(nogood);
+        store_at_nogood_index(
+            &mut self.nogood_info,
+            nogood_index,
+            NogoodInfo::new_learned_nogood_info(lbd),
+        );
+        store_at_nogood_index(&mut self.inference_codes, nogood_index, inference_code);
 
         let watcher = Watcher {
             nogood_id,
@@ -1127,8 +1128,7 @@ impl NogoodPropagator {
             &mut self.watch_lists,
         );
 
-        let inference_code =
-            &self.inference_codes[self.nogood_predicates.get_nogood_index(&nogood_id)];
+        let inference_code = &self.inference_codes[nogood_index];
 
         self.propagation_mode
             .perform_propagation(
@@ -1458,7 +1458,7 @@ impl NogoodPropagator {
                 self.handle,
                 &mut self.learned_nogood_ids.high_lbd,
                 &mut self.nogood_info,
-                &self.nogood_predicates,
+                &mut self.nogood_predicates,
                 assignments,
                 reason_store,
                 notification_engine,
@@ -1482,7 +1482,7 @@ impl NogoodPropagator {
                 self.handle,
                 &mut self.learned_nogood_ids.mid_lbd,
                 &mut self.nogood_info,
-                &self.nogood_predicates,
+                &mut self.nogood_predicates,
                 assignments,
                 reason_store,
                 notification_engine,
@@ -1504,7 +1504,7 @@ impl NogoodPropagator {
                 self.handle,
                 &mut self.learned_nogood_ids.low_lbd,
                 &mut self.nogood_info,
-                &self.nogood_predicates,
+                &mut self.nogood_predicates,
                 assignments,
                 reason_store,
                 notification_engine,
@@ -1513,7 +1513,11 @@ impl NogoodPropagator {
         }
 
         if removed_at_least_one_nogood {
-            self.remove_deleted_nogoods_from_watchers(assignments, notification_engine);
+            self.remove_deleted_nogoods_from_watchers(
+                assignments,
+                reason_store,
+                notification_engine,
+            );
         }
     }
 
@@ -1548,6 +1552,7 @@ impl NogoodPropagator {
     fn remove_deleted_nogoods_from_watchers(
         &mut self,
         assignments: &Assignments,
+        reason_store: &ReasonStore,
         notification_engine: &mut NotificationEngine,
     ) {
         // The idea is to go through the watchers and remove watchers that contain deleted nogoods.
@@ -1575,6 +1580,9 @@ impl NogoodPropagator {
         // As above, we expect to rarely happen, so most of the time, this flag will stay false.
         let mut trivial_nogood_deleted = false;
 
+        // The trivially deleted nogoods; their slots are freed after removing their watchers.
+        let mut trivially_deleted_nogood_ids = Vec::new();
+
         // We now go over all of the watchers
         for i in 0..self.watch_lists.len() {
             let index = PredicateId::create_from_index(i);
@@ -1592,6 +1600,7 @@ impl NogoodPropagator {
                     // for deletion, and do not keep this watcher.
                     self.nogood_info[info_index].is_deleted = true;
                     trivial_nogood_deleted = true;
+                    trivially_deleted_nogood_ids.push(watcher.nogood_id);
                     false
                 }
                 // We check whether the cached predicate is falsified at the root level
@@ -1608,6 +1617,7 @@ impl NogoodPropagator {
                     another_pass_needed = true;
                     trivial_nogood_deleted = true;
                     self.nogood_info[info_index].is_deleted = true;
+                    trivially_deleted_nogood_ids.push(watcher.nogood_id);
                     false
                 } else {
                     true
@@ -1643,6 +1653,23 @@ impl NogoodPropagator {
                 !self.nogood_info[self.nogood_predicates.get_nogood_index(nogood_id)].is_deleted
             });
         }
+
+        // Now that the trivially deleted nogoods are not watched anymore, we can free their slots.
+        //
+        // A nogood which is (still) the reason for a root-level propagation could be used to
+        // explain that propagation (e.g., when logging a proof), so its slot is not reused.
+        for nogood_id in trivially_deleted_nogood_ids {
+            if !self.propagation_mode.is_nogood_propagating(
+                self.handle,
+                self.nogood_predicates.get_nogood(nogood_id),
+                assignments,
+                reason_store,
+                nogood_id,
+                notification_engine,
+            ) {
+                self.nogood_predicates.free(nogood_id);
+            }
+        }
     }
 
     // Attempts to remove the worst half of the provided `nogood_ids` and returns true if at least
@@ -1662,7 +1689,7 @@ impl NogoodPropagator {
         handle: PropagatorHandle<NogoodPropagator>,
         nogood_ids: &mut Vec<NogoodId>,
         nogood_info: &mut KeyedVec<NogoodIndex, NogoodInfo>,
-        nogoods: &ArenaAllocator,
+        nogoods: &mut ArenaAllocator,
         assignments: &Assignments,
         reason_store: &ReasonStore,
         notification_engine: &mut NotificationEngine,
@@ -1688,30 +1715,41 @@ impl NogoodPropagator {
                 break;
             }
 
-            // Skip nogoods which are propagating at a non-root level.
-            if propagation_mode.is_nogood_propagating(
+            let is_propagating = propagation_mode.is_nogood_propagating(
                 handle,
                 nogoods.get_nogood(id),
                 assignments,
                 reason_store,
                 id,
                 notification_engine,
-            ) && (matches!(propagation_mode, PropagationMode::ExtendedNogoodPropagation)
-                || assignments
-                    .get_checkpoint_for_predicate(
-                        &!notification_engine.get_predicate(nogoods.get_nogood(id)[0]),
-                    )
-                    .expect("A propagating predicate must have a decision level.")
-                    > 0)
+            );
+
+            // Skip nogoods which are propagating at a non-root level.
+            if is_propagating
+                && (matches!(propagation_mode, PropagationMode::ExtendedNogoodPropagation)
+                    || assignments
+                        .get_checkpoint_for_predicate(
+                            &!notification_engine.get_predicate(nogoods.get_nogood(id)[0]),
+                        )
+                        .expect("A propagating predicate must have a decision level.")
+                        > 0)
             {
                 continue;
             }
 
             // We can now delete the nogood.
             //
-            // It will be kept in the database for now but it will not be used for propagation
-            // since its watchers will be removed in the next step.
+            // It will not be used for propagation since its watchers will be removed in the next
+            // step.
             nogood_info[nogoods.get_nogood_index(&id)].is_deleted = true;
+
+            // Its slot can be reused once its watchers have been removed, which happens before
+            // any new nogood is added. However, a nogood which propagated at the root could be
+            // used to explain that propagation (e.g., when logging a proof), so its slot is not
+            // reused.
+            if !is_propagating {
+                nogoods.free(id);
+            }
 
             num_nogoods_to_remove -= 1;
         }
