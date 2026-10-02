@@ -34,8 +34,9 @@ pub(crate) struct ArenaAllocator {
     /// The current index for the next [`NogoodId`] which is entered; see
     /// [`ArenaAllocator::nogood_id_to_index`].
     current_index: u32,
-    /// The slots of the freed nogoods which can be reused by newly inserted nogoods.
-    free_slots: Vec<NogoodId>,
+    /// The slots of the freed nogoods which can be reused by newly inserted nogoods, grouped by
+    /// their capacity; i.e., `free_slots[c]` contains the freed slots with capacity `c`.
+    free_slots: Vec<Vec<NogoodId>>,
     /// The number of elements (i.e., [`PredicateId`]s), that are created when the arena is
     /// initialised.
     ///
@@ -49,11 +50,6 @@ pub(crate) struct ArenaAllocator {
 ///
 /// See [`ArenaAllocator::nogoods`] for more information.
 const OFFSET: usize = 3;
-
-/// A freed slot is preferably reused by a nogood if the capacity of the slot is at most this factor
-/// times the length of the nogood; this prevents short nogoods from wasting most of a large slot
-/// when a better fitting slot is available.
-const MAXIMUM_CAPACITY_FACTOR: usize = 2;
 
 #[derive(Clone, Copy, Debug, Hash)]
 pub(crate) struct NogoodIndex(u32);
@@ -84,7 +80,7 @@ impl ArenaAllocator {
     ///
     /// The nogood is appended to the arena as long as it fits in the allocated memory, which
     /// keeps recently added nogoods close together. Otherwise, it is stored in a freed slot (see
-    /// [`ArenaAllocator::find_free_slot`]), and the [`NogoodId`] and [`NogoodIndex`] of that slot
+    /// [`ArenaAllocator::take_free_slot`]), and the [`NogoodId`] and [`NogoodIndex`] of that slot
     /// are reused; see [`store_at_nogood_index`] for storing information about the nogood.
     pub(crate) fn insert(&mut self, nogood: Vec<PredicateId>) -> (NogoodId, NogoodIndex) {
         if self.nogoods.is_empty() {
@@ -92,10 +88,8 @@ impl ArenaAllocator {
         }
 
         if self.nogoods.len() + OFFSET + nogood.len() > self.nogoods.capacity()
-            && let Some(position) = self.find_free_slot(nogood.len())
+            && let Some(nogood_id) = self.take_free_slot(nogood.len())
         {
-            let nogood_id = self.free_slots.swap_remove(position);
-
             self.nogoods[nogood_id.index()] = PredicateId::create_from_index(nogood.len());
             self.nogoods[nogood_id.index() + OFFSET - 1] = PredicateId::create_from_index(2);
 
@@ -127,31 +121,13 @@ impl ArenaAllocator {
         (nogood_id, nogood_index)
     }
 
-    /// Returns the position in [`ArenaAllocator::free_slots`] of the first freed slot which fits a
-    /// nogood of length `len` without wasting too much space (see [`MAXIMUM_CAPACITY_FACTOR`]).
-    ///
-    /// If there is no such slot, then the position of the freed slot with the smallest capacity
-    /// which fits the nogood is returned (if any).
-    fn find_free_slot(&self, len: usize) -> Option<usize> {
-        // The position and capacity of the closest fitting slot encountered so far.
-        let mut closest_fitting: Option<(usize, usize)> = None;
-
-        for (position, &nogood_id) in self.free_slots.iter().enumerate() {
-            let capacity = self.capacity_of_slot(nogood_id);
-            if capacity < len {
-                continue;
-            }
-
-            if capacity <= MAXIMUM_CAPACITY_FACTOR * len {
-                return Some(position);
-            }
-
-            if closest_fitting.is_none_or(|(_, closest_capacity)| capacity < closest_capacity) {
-                closest_fitting = Some((position, capacity));
-            }
-        }
-
-        closest_fitting.map(|(position, _)| position)
+    /// Removes and returns a freed slot with the smallest capacity which fits a nogood of length
+    /// `len` (if any); this minimises the space which is wasted in the slot.
+    fn take_free_slot(&mut self, len: usize) -> Option<NogoodId> {
+        self.free_slots
+            .iter_mut()
+            .skip(len)
+            .find_map(|slots_with_capacity| slots_with_capacity.pop())
     }
 
     /// Frees the slot of the nogood with the provided [`NogoodId`] so that it can be reused by a
@@ -160,7 +136,12 @@ impl ArenaAllocator {
     /// The nogood should not be used anymore after this call; i.e., it should not be watched, and
     /// it should not be the reason for any propagation.
     pub(crate) fn free(&mut self, nogood_id: NogoodId) {
-        self.free_slots.push(nogood_id);
+        let capacity = self.capacity_of_slot(nogood_id);
+        if self.free_slots.len() <= capacity {
+            self.free_slots.resize_with(capacity + 1, Vec::default);
+        }
+
+        self.free_slots[capacity].push(nogood_id);
     }
 
     /// Returns the index of the provided [`NogoodId`].
@@ -388,6 +369,20 @@ mod tests {
 
         assert_eq!(id, small_id);
         assert_eq!(arena.get_nogood(id), predicate_ids(&[9, 10]));
+    }
+
+    #[test]
+    fn freed_slot_with_smallest_fitting_capacity_is_reused() {
+        let (mut arena, ids) = full_arena(&[&[1, 2, 3, 4], &[5, 6, 7], &[8, 9]]);
+        let (larger_id, _) = ids[0];
+        let (smaller_id, _) = ids[1];
+
+        arena.free(larger_id);
+        arena.free(smaller_id);
+        let (id, _) = arena.insert(predicate_ids(&[10, 11]));
+
+        assert_eq!(id, smaller_id);
+        assert_eq!(arena.get_nogood(id), predicate_ids(&[10, 11]));
     }
 
     #[test]
