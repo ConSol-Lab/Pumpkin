@@ -353,9 +353,11 @@ impl Propagator for NogoodPropagator {
                     continue;
                 }
 
-                // We retrieve the index of the last-traversed watcher and the nogood itself.
+                // We retrieve the index of the nogood, the index of the last-traversed watcher
+                // and the nogood itself.
                 //
                 // We do it in this convoluted way to avoid borrow issues later.
+                let nogood_index = self.nogood_predicates.get_nogood_index(&watcher.nogood_id);
                 let (last_traversed_watcher, nogood_predicates) = {
                     let nogood_id = watcher.nogood_id;
                     let nogood_range = self
@@ -485,11 +487,6 @@ impl Propagator for NogoodPropagator {
                 }
 
                 // Now we perform the propagation
-                let nogood_index = *self
-                    .nogood_predicates
-                    .nogood_id_to_index
-                    .get(&watcher.nogood_id)
-                    .expect("Expected nogood predicate to exist");
                 self.propagation_mode.perform_propagation(
                     &mut context,
                     nogood_predicates,
