@@ -268,6 +268,7 @@ impl State {
                 description.scope(),
                 BoxedRetentionChecker::new(Rule::create_retention_checker(description)),
                 propagator,
+                inference_code,
             )
         } else {
             None
@@ -909,9 +910,11 @@ impl State {
         ));
     }
 
-    /// Panics, naming the propagator that is not finished and the variables it watches.
+    /// Panics, naming the rule and the propagator that is not finished and the variables it
+    /// watches.
     #[cfg(feature = "check-consistency")]
     fn report_retention_failure(&self, failure: &RetentionFailure) -> ! {
+        let rule = self.rule_name(failure.inference_code);
         let propagator = self.propagators[failure.propagator].name();
         let variables = failure
             .variables
@@ -924,8 +927,9 @@ impl State {
             .join(", ");
 
         panic!(
-            "Propagation reported a fixed point, but the retention checker of the propagator \
-             '{propagator}' reports that it still has something to propagate over {variables}. \
+            "Propagation reported a fixed point, but the retention checker of the rule '{rule}' \
+             of the propagator '{propagator}' reports that it still has something to propagate \
+             over {variables}. \
              The checker describes what it expected in a message logged at the error level, \
              which is only visible when a logger is installed."
         )
@@ -1603,6 +1607,7 @@ mod tests {
     fn a_removed_retention_checker_is_not_consulted() {
         let mut state = State::default();
         let x = state.new_interval_variable(1, 10, None);
+        let tag = state.new_constraint_tag();
         state.propagate_to_fixed_point().expect("no conflict");
 
         let checker = state
@@ -1611,6 +1616,7 @@ mod tests {
                 crate::checkers::Scope::from_variables([x].iter()),
                 pumpkin_checking::BoxedRetentionChecker::new(UnfinishedChecker),
                 PropagatorId::create_from_index(0),
+                crate::proof::InferenceCode::unknown_rule(tag),
             )
             .expect("the propagator is not excluded");
         state.retention_checkers.remove(checker);
@@ -1620,6 +1626,26 @@ mod tests {
             .post(predicate!(x >= 5))
             .expect("the value is in the domain");
         state.propagate_to_fixed_point().expect("no conflict");
+    }
+
+    #[cfg(feature = "check-consistency")]
+    #[test]
+    #[should_panic(expected = "the retention checker of the rule 'checked' of the propagator")]
+    fn a_retention_failure_names_the_rule() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(1, 10, None);
+        state.propagate_to_fixed_point().expect("no conflict");
+        let _ = state.add_propagator(CheckedPropagator {
+            variable: x,
+            checker: UnfinishedChecker,
+        });
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.new_checkpoint();
+        let _ = state
+            .post(predicate!(x >= 5))
+            .expect("the value is in the domain");
+        let _ = state.propagate_to_fixed_point();
     }
 
     #[cfg(feature = "check-consistency-all")]

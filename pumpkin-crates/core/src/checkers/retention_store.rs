@@ -5,6 +5,7 @@ use crate::containers::KeyedBitSet;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::predicates::Predicate;
+use crate::proof::InferenceCode;
 use crate::propagation::Domains;
 use crate::propagation::PropagatorId;
 use crate::variables::DomainId;
@@ -35,6 +36,8 @@ struct Entry {
     checker: BoxedRetentionChecker<Predicate>,
     /// The propagator whose rule the checker describes.
     propagator: PropagatorId,
+    /// The inference code of the rule and the constraint that the checker belongs to.
+    inference_code: InferenceCode,
 }
 
 /// Which checkers are consulted when a fixpoint is reached.
@@ -53,6 +56,8 @@ pub enum RetentionCoverage {
 pub struct RetentionFailure {
     /// The propagator whose rule the checker describes.
     pub propagator: PropagatorId,
+    /// The inference code of the rule and the constraint that the checker belongs to.
+    pub inference_code: InferenceCode,
     /// The variables the checker watches.
     pub variables: Vec<DomainId>,
 }
@@ -67,7 +72,8 @@ impl RetentionCheckerStore {
         self.excluded[propagator] = true;
     }
 
-    /// Add a new `checker` to the store with the given `scope`.
+    /// Add a new `checker` to the store with the given `scope`, for the rule and constraint of
+    /// `inference_code`.
     ///
     /// Returns the identifier through which the checker can be removed, or `None` when the
     /// checker is dropped because its propagator has been excluded.
@@ -76,6 +82,7 @@ impl RetentionCheckerStore {
         scope: Scope,
         checker: BoxedRetentionChecker<Predicate>,
         propagator: PropagatorId,
+        inference_code: InferenceCode,
     ) -> Option<RetentionCheckerId> {
         if self.is_excluded(propagator) {
             return None;
@@ -93,6 +100,7 @@ impl RetentionCheckerStore {
             scope,
             checker,
             propagator,
+            inference_code,
         }));
 
         Some(RetentionCheckerId(checker_id))
@@ -179,6 +187,7 @@ impl RetentionCheckerStore {
 
         Err(RetentionFailure {
             propagator: entry.propagator,
+            inference_code: entry.inference_code,
             variables: entry.scope.domains().map(|(_, domain)| domain).collect(),
         })
     }
