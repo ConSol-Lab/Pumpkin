@@ -136,6 +136,19 @@ impl<'a> PropagationContext<'a> {
         )
     }
 
+    /// Register the propagator to be enqueued when the predicate with the provided [`PredicateId`]
+    /// becomes true.
+    ///
+    /// Avoids looking up the [`PredicateId`] when it is already known.
+    pub(crate) fn register_predicate_id(&mut self, predicate_id: PredicateId) {
+        self.notification_engine.watch_predicate_id(
+            predicate_id,
+            self.propagator_id,
+            self.trailed_values,
+            self.assignments,
+        )
+    }
+
     /// Stop being enqueued for the given predicate.
     pub fn unregister_predicate(&mut self, predicate_id: PredicateId) {
         self.notification_engine
