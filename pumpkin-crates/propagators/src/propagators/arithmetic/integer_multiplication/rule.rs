@@ -8,7 +8,6 @@ use pumpkin_core::checkers::Scope;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConflictRule;
 use pumpkin_core::propagation::ConstraintDescription;
-use pumpkin_core::propagation::MissingRetentionChecker;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::constructor::ID_A;
@@ -38,6 +37,23 @@ where
 #[derive(Clone, Copy, Debug)]
 pub struct IntegerMultiplicationRule<VA, VB, VC>(PhantomData<(VA, VB, VC)>);
 
+impl<VA, VB, VC> IntegerMultiplicationRule<VA, VB, VC>
+where
+    VA: IntegerVariable + 'static,
+    VB: IntegerVariable + 'static,
+    VC: IntegerVariable + 'static,
+{
+    fn checker(
+        description: &IntegerMultiplicationDescription<VA, VB, VC>,
+    ) -> IntegerMultiplicationChecker<VA, VB, VC> {
+        IntegerMultiplicationChecker {
+            a: description.a.clone(),
+            b: description.b.clone(),
+            c: description.c.clone(),
+        }
+    }
+}
+
 impl<VA, VB, VC> ConflictRule for IntegerMultiplicationRule<VA, VB, VC>
 where
     VA: IntegerVariable + 'static,
@@ -53,16 +69,12 @@ where
     fn create_inference_checker(
         description: &IntegerMultiplicationDescription<VA, VB, VC>,
     ) -> impl InferenceChecker<Predicate> + 'static {
-        IntegerMultiplicationChecker {
-            a: description.a.clone(),
-            b: description.b.clone(),
-            c: description.c.clone(),
-        }
+        Self::checker(description)
     }
 
     fn create_retention_checker(
-        _: &IntegerMultiplicationDescription<VA, VB, VC>,
+        description: &IntegerMultiplicationDescription<VA, VB, VC>,
     ) -> impl RetentionChecker<Predicate> + 'static {
-        MissingRetentionChecker::todo("the integer multiplication rule")
+        Self::checker(description)
     }
 }

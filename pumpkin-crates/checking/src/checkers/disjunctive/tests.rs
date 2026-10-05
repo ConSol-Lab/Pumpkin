@@ -1,10 +1,14 @@
 use crate::Comparison;
 use crate::ConflictCheck;
 use crate::InferenceChecker;
+use crate::RetentionCheck;
+use crate::RetentionChecker;
 use crate::TestAtomic;
 use crate::VariableState;
 use crate::checkers::DisjunctiveCheckerTask;
 use crate::checkers::DisjunctiveEdgeFindingChecker;
+use crate::checkers::test_state;
+use crate::test_atomic;
 
 #[test]
 fn test_simple_propagation() {
@@ -223,5 +227,54 @@ fn test_conflict_not_accepted() {
     assert_eq!(
         checker.check(state, &premises, None),
         ConflictCheck::NoConflictDetected
+    );
+}
+
+/// Task `a` is fixed to start at 0 and task `b` can start in `[b_lower, 5]`; both take 2.
+fn two_tasks(
+    b_lower: i32,
+) -> (
+    DisjunctiveEdgeFindingChecker<&'static str>,
+    VariableState<TestAtomic>,
+) {
+    let checker = DisjunctiveEdgeFindingChecker {
+        tasks: vec![
+            DisjunctiveCheckerTask {
+                start_time: "a",
+                processing_time: 2,
+            },
+            DisjunctiveCheckerTask {
+                start_time: "b",
+                processing_time: 2,
+            },
+        ]
+        .into(),
+    };
+    let state = test_state([
+        test_atomic!([a >= 0]),
+        test_atomic!([a <= 0]),
+        test_atomic!([b >= b_lower]),
+        test_atomic!([b <= 5]),
+    ]);
+    (checker, state)
+}
+
+#[test]
+fn retention_fails_when_a_task_can_still_overlap_a_task_it_must_follow() {
+    let (checker, state) = two_tasks(0);
+
+    assert_eq!(
+        checker.check_retention(&state),
+        RetentionCheck::PropagationMissed
+    );
+}
+
+#[test]
+fn retention_holds_when_a_task_starts_after_the_task_it_must_follow() {
+    let (checker, state) = two_tasks(2);
+
+    assert_eq!(
+        checker.check_retention(&state),
+        RetentionCheck::NothingToPropagate
     );
 }

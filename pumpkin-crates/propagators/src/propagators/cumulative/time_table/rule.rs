@@ -9,7 +9,6 @@ use pumpkin_core::checkers::Scope;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConflictRule;
 use pumpkin_core::propagation::ConstraintDescription;
-use pumpkin_core::propagation::MissingRetentionChecker;
 use pumpkin_core::variables::IntegerVariable;
 
 use crate::cumulative::ArgTask;
@@ -65,6 +64,18 @@ impl<Var: IntegerVariable + 'static> ConflictRule for TimeTableRule<Var> {
     fn create_inference_checker(
         description: &CumulativeDescription<Var>,
     ) -> impl InferenceChecker<Predicate> + 'static {
+        Self::checker(description)
+    }
+
+    fn create_retention_checker(
+        description: &CumulativeDescription<Var>,
+    ) -> impl RetentionChecker<Predicate> + 'static {
+        Self::checker(description)
+    }
+}
+
+impl<Var: IntegerVariable + 'static> TimeTableRule<Var> {
+    fn checker(description: &CumulativeDescription<Var>) -> TimeTableChecker<Var> {
         TimeTableChecker {
             tasks: description
                 .tasks
@@ -77,11 +88,5 @@ impl<Var: IntegerVariable + 'static> ConflictRule for TimeTableRule<Var> {
                 .collect(),
             capacity: description.capacity,
         }
-    }
-
-    fn create_retention_checker(
-        _: &CumulativeDescription<Var>,
-    ) -> impl RetentionChecker<Predicate> + 'static {
-        MissingRetentionChecker::todo("the time-table rule")
     }
 }

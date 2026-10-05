@@ -1,5 +1,6 @@
 mod helpers;
 mod inference;
+mod retention;
 #[cfg(test)]
 mod tests;
 

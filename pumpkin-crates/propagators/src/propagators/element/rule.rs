@@ -9,7 +9,6 @@ use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConflictRule;
 use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::LocalId;
-use pumpkin_core::propagation::MissingRetentionChecker;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::ID_INDEX;
@@ -60,16 +59,27 @@ where
     fn create_inference_checker(
         description: &ElementDescription<VX, VI, VE>,
     ) -> impl InferenceChecker<Predicate> + 'static {
+        Self::checker(description)
+    }
+
+    fn create_retention_checker(
+        description: &ElementDescription<VX, VI, VE>,
+    ) -> impl RetentionChecker<Predicate> + 'static {
+        Self::checker(description)
+    }
+}
+
+impl<VX, VI, VE> ElementRule<VX, VI, VE>
+where
+    VX: IntegerVariable + 'static,
+    VI: IntegerVariable + 'static,
+    VE: IntegerVariable + 'static,
+{
+    fn checker(description: &ElementDescription<VX, VI, VE>) -> ElementChecker<VX, VI, VE> {
         ElementChecker::new(
             description.array.clone(),
             description.index.clone(),
             description.rhs.clone(),
         )
-    }
-
-    fn create_retention_checker(
-        _: &ElementDescription<VX, VI, VE>,
-    ) -> impl RetentionChecker<Predicate> + 'static {
-        MissingRetentionChecker::todo("the element rule")
     }
 }

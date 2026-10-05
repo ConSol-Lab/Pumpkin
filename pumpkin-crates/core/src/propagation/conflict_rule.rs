@@ -1,9 +1,7 @@
 use std::borrow::Cow;
 
 use pumpkin_checking::InferenceChecker;
-use pumpkin_checking::RetentionCheck;
 use pumpkin_checking::RetentionChecker;
-use pumpkin_checking::VariableState;
 
 use crate::checkers::Scope;
 use crate::predicates::Predicate;
@@ -44,25 +42,4 @@ pub trait ConflictRule {
     fn create_retention_checker(
         description: &Self::Description,
     ) -> impl RetentionChecker<Predicate> + 'static;
-}
-
-/// Stands in for the retention checker of a rule that does not have one yet.
-///
-/// It has no values, so it can only be obtained from [`MissingRetentionChecker::todo`], which
-/// panics. Registering a rule that returns it therefore panics when `check-consistency` is
-/// enabled.
-#[derive(Clone, Copy, Debug)]
-pub enum MissingRetentionChecker {}
-
-impl MissingRetentionChecker {
-    /// Marks that the retention checker of `rule` still has to be written.
-    pub fn todo(rule: &str) -> MissingRetentionChecker {
-        todo!("the retention checker of {rule}")
-    }
-}
-
-impl RetentionChecker<Predicate> for MissingRetentionChecker {
-    fn check_retention(&self, _: &VariableState<Predicate>) -> RetentionCheck {
-        match *self {}
-    }
 }

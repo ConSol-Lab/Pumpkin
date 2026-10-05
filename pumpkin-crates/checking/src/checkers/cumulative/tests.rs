@@ -1,10 +1,14 @@
 use crate::Comparison;
 use crate::ConflictCheck;
 use crate::InferenceChecker;
+use crate::RetentionCheck;
+use crate::RetentionChecker;
 use crate::TestAtomic;
 use crate::VariableState;
 use crate::checkers::CheckerTask;
 use crate::checkers::TimeTableChecker;
+use crate::checkers::test_state;
+use crate::test_atomic;
 
 #[test]
 fn conflict() {
@@ -463,5 +467,69 @@ fn test_holes_in_domain() {
     assert_eq!(
         checker.check(state, &premises, consequent.as_ref()),
         ConflictCheck::ConflictDetected
+    );
+}
+
+/// Task `a` is fixed to start at 0 and task `b` can start in `[b_lower, 5]`; both take 2 and use
+/// 1 of a capacity of 1.
+fn two_tasks(b_lower: i32) -> (TimeTableChecker<&'static str>, VariableState<TestAtomic>) {
+    let checker = TimeTableChecker {
+        tasks: vec![
+            CheckerTask {
+                start_time: "a",
+                resource_usage: 1,
+                processing_time: 2,
+            },
+            CheckerTask {
+                start_time: "b",
+                resource_usage: 1,
+                processing_time: 2,
+            },
+        ]
+        .into(),
+        capacity: 1,
+    };
+    let state = test_state([
+        test_atomic!([a >= 0]),
+        test_atomic!([a <= 0]),
+        test_atomic!([b >= b_lower]),
+        test_atomic!([b <= 5]),
+    ]);
+    (checker, state)
+}
+
+#[test]
+fn retention_fails_when_a_task_can_still_start_in_a_full_time_table() {
+    let (checker, state) = two_tasks(0);
+
+    assert_eq!(
+        checker.check_retention(&state),
+        RetentionCheck::PropagationMissed
+    );
+}
+
+#[test]
+fn retention_holds_when_no_task_can_start_in_a_full_time_table() {
+    let (checker, state) = two_tasks(2);
+
+    assert_eq!(
+        checker.check_retention(&state),
+        RetentionCheck::NothingToPropagate
+    );
+}
+
+#[test]
+fn retention_fails_when_the_mandatory_parts_exceed_the_capacity() {
+    let (checker, _) = two_tasks(0);
+    let state = test_state([
+        test_atomic!([a >= 0]),
+        test_atomic!([a <= 0]),
+        test_atomic!([b >= 1]),
+        test_atomic!([b <= 1]),
+    ]);
+
+    assert_eq!(
+        checker.check_retention(&state),
+        RetentionCheck::PropagationMissed
     );
 }

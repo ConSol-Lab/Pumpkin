@@ -1,4 +1,7 @@
 mod inference;
+mod retention;
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug, Clone)]
 pub struct HypercubeLinearChecker<Atomic, Var> {

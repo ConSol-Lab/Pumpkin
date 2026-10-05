@@ -1,9 +1,13 @@
 use crate::Comparison;
 use crate::ConflictCheck;
 use crate::InferenceChecker;
+use crate::RetentionCheck;
+use crate::RetentionChecker;
 use crate::TestAtomic;
 use crate::VariableState;
 use crate::checkers::IntegerMultiplicationChecker;
+use crate::checkers::test_state;
+use crate::test_atomic;
 
 #[test]
 fn checker_detects_a_pure_conflict_with_no_consequent() {
@@ -67,5 +71,63 @@ fn checker_does_not_report_a_conflict_for_consistent_premises_with_no_consequent
     assert_eq!(
         checker.check(state, &premises, None),
         ConflictCheck::NoConflictDetected
+    );
+}
+
+const RETENTION_CHECKER: IntegerMultiplicationChecker<&str, &str, &str> =
+    IntegerMultiplicationChecker {
+        a: "a",
+        b: "b",
+        c: "c",
+    };
+
+#[test]
+fn retention_fails_when_the_product_is_not_propagated_to_c() {
+    let state = test_state([
+        test_atomic!([a >= 2]),
+        test_atomic!([a <= 3]),
+        test_atomic!([b >= 4]),
+        test_atomic!([b <= 5]),
+        test_atomic!([c >= 0]),
+        test_atomic!([c <= 100]),
+    ]);
+
+    assert_eq!(
+        RETENTION_CHECKER.check_retention(&state),
+        RetentionCheck::PropagationMissed
+    );
+}
+
+#[test]
+fn retention_fails_when_the_quotient_is_not_propagated_to_a() {
+    let state = test_state([
+        test_atomic!([a >= 0]),
+        test_atomic!([a <= 10]),
+        test_atomic!([b >= 2]),
+        test_atomic!([b <= 2]),
+        test_atomic!([c >= 6]),
+        test_atomic!([c <= 6]),
+    ]);
+
+    assert_eq!(
+        RETENTION_CHECKER.check_retention(&state),
+        RetentionCheck::PropagationMissed
+    );
+}
+
+#[test]
+fn retention_holds_when_the_bounds_agree() {
+    let state = test_state([
+        test_atomic!([a >= 2]),
+        test_atomic!([a <= 2]),
+        test_atomic!([b >= 3]),
+        test_atomic!([b <= 3]),
+        test_atomic!([c >= 6]),
+        test_atomic!([c <= 6]),
+    ]);
+
+    assert_eq!(
+        RETENTION_CHECKER.check_retention(&state),
+        RetentionCheck::NothingToPropagate
     );
 }

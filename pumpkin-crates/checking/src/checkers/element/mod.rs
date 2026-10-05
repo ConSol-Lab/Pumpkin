@@ -1,4 +1,7 @@
 mod inference;
+mod retention;
+#[cfg(test)]
+mod tests;
 
 use std::cell::RefCell;
 

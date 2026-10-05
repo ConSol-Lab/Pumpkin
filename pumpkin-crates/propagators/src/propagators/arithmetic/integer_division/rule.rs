@@ -8,7 +8,6 @@ use pumpkin_core::checkers::Scope;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConflictRule;
 use pumpkin_core::propagation::ConstraintDescription;
-use pumpkin_core::propagation::MissingRetentionChecker;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::ID_DENOMINATOR;
@@ -42,6 +41,23 @@ where
 #[derive(Clone, Copy, Debug)]
 pub struct DivisionRule<VA, VB, VC>(PhantomData<(VA, VB, VC)>);
 
+impl<VA, VB, VC> DivisionRule<VA, VB, VC>
+where
+    VA: IntegerVariable + 'static,
+    VB: IntegerVariable + 'static,
+    VC: IntegerVariable + 'static,
+{
+    fn checker(
+        description: &DivisionDescription<VA, VB, VC>,
+    ) -> IntegerDivisionChecker<VA, VB, VC> {
+        IntegerDivisionChecker {
+            numerator: description.numerator.clone(),
+            denominator: description.denominator.clone(),
+            rhs: description.rhs.clone(),
+        }
+    }
+}
+
 impl<VA, VB, VC> ConflictRule for DivisionRule<VA, VB, VC>
 where
     VA: IntegerVariable + 'static,
@@ -57,16 +73,12 @@ where
     fn create_inference_checker(
         description: &DivisionDescription<VA, VB, VC>,
     ) -> impl InferenceChecker<Predicate> + 'static {
-        IntegerDivisionChecker {
-            numerator: description.numerator.clone(),
-            denominator: description.denominator.clone(),
-            rhs: description.rhs.clone(),
-        }
+        Self::checker(description)
     }
 
     fn create_retention_checker(
-        _: &DivisionDescription<VA, VB, VC>,
+        description: &DivisionDescription<VA, VB, VC>,
     ) -> impl RetentionChecker<Predicate> + 'static {
-        MissingRetentionChecker::todo("the integer division rule")
+        Self::checker(description)
     }
 }

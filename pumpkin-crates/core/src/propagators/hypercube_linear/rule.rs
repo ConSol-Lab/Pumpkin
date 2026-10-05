@@ -11,9 +11,10 @@ use crate::predicates::Predicate;
 use crate::propagation::ConflictRule;
 use crate::propagation::ConstraintDescription;
 use crate::propagation::LocalId;
-use crate::propagation::MissingRetentionChecker;
 use crate::propagators::hypercube_linear::Hypercube;
 use crate::propagators::hypercube_linear::LinearInequality;
+use crate::variables::AffineView;
+use crate::variables::DomainId;
 
 /// The description of the hypercube linear constraint: when every predicate of the hypercube
 /// holds, the linear inequality holds.
@@ -54,16 +55,24 @@ impl ConflictRule for HypercubeLinearRule {
     fn create_inference_checker(
         description: &HypercubeLinearDescription,
     ) -> impl InferenceChecker<Predicate> + 'static {
+        Self::checker(description)
+    }
+
+    fn create_retention_checker(
+        description: &HypercubeLinearDescription,
+    ) -> impl RetentionChecker<Predicate> + 'static {
+        Self::checker(description)
+    }
+}
+
+impl HypercubeLinearRule {
+    fn checker(
+        description: &HypercubeLinearDescription,
+    ) -> HypercubeLinearChecker<Predicate, AffineView<DomainId>> {
         HypercubeLinearChecker {
             hypercube: description.hypercube.iter_predicates().collect(),
             terms: description.linear.terms().collect(),
             bound: description.linear.bound(),
         }
-    }
-
-    fn create_retention_checker(
-        _: &HypercubeLinearDescription,
-    ) -> impl RetentionChecker<Predicate> + 'static {
-        MissingRetentionChecker::todo("the hypercube linear rule")
     }
 }

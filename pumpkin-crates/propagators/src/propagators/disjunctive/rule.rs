@@ -9,7 +9,6 @@ use pumpkin_core::checkers::Scope;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConflictRule;
 use pumpkin_core::propagation::ConstraintDescription;
-use pumpkin_core::propagation::MissingRetentionChecker;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::disjunctive_task::ArgDisjunctiveTask;
@@ -40,6 +39,18 @@ impl<Var: IntegerVariable + 'static> ConflictRule for DisjunctiveEdgeFindingRule
     fn create_inference_checker(
         description: &DisjunctiveDescription<Var>,
     ) -> impl InferenceChecker<Predicate> + 'static {
+        Self::checker(description)
+    }
+
+    fn create_retention_checker(
+        description: &DisjunctiveDescription<Var>,
+    ) -> impl RetentionChecker<Predicate> + 'static {
+        Self::checker(description)
+    }
+}
+
+impl<Var: IntegerVariable + 'static> DisjunctiveEdgeFindingRule<Var> {
+    fn checker(description: &DisjunctiveDescription<Var>) -> DisjunctiveEdgeFindingChecker<Var> {
         DisjunctiveEdgeFindingChecker {
             tasks: description
                 .tasks
@@ -50,11 +61,5 @@ impl<Var: IntegerVariable + 'static> ConflictRule for DisjunctiveEdgeFindingRule
                 })
                 .collect(),
         }
-    }
-
-    fn create_retention_checker(
-        _: &DisjunctiveDescription<Var>,
-    ) -> impl RetentionChecker<Predicate> + 'static {
-        MissingRetentionChecker::todo("the disjunctive edge-finding rule")
     }
 }
