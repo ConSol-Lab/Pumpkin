@@ -179,10 +179,7 @@ impl RetentionCheckerStore {
             return Ok(());
         };
 
-        match entry
-            .checker
-            .check_retention(&entry.scope.snapshot(domains))
-        {
+        match entry.checker.check_retention(domains.assignments) {
             RetentionCheck::NothingToPropagate => Ok(()),
             RetentionCheck::PropagationMissed => Err(RetentionFailure {
                 propagator: entry.propagator,

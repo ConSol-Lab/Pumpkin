@@ -1,3 +1,4 @@
+mod domain_view;
 mod propagation_checker;
 mod retention_store;
 mod scope;
