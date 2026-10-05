@@ -46,11 +46,9 @@ use crate::propagation::NotificationContext;
 use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
-use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorSpec;
 use crate::propagation::ReadDomains;
-use crate::propagation::RuntimeCheckers;
 use crate::propagators::nogoods::PropagationBuffer;
 use crate::propagators::nogoods::PropagationMode;
 use crate::propagators::nogoods::WatcherProcessingStatus;
@@ -195,10 +193,14 @@ impl NogoodPropagatorConstructor {
     }
 }
 
-impl PropagatorConstructor for NogoodPropagatorConstructor {
-    type PropagatorImpl = NogoodPropagator;
-
-    fn create(self, context: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
+impl NogoodPropagatorConstructor {
+    /// Create the propagator, which is added through `State::add_propagator_without_rule`: it
+    /// holds many nogoods that arrive at runtime, and the rule of each is registered as it
+    /// arrives.
+    pub(crate) fn create(
+        self,
+        context: PropagatorConstructorContext,
+    ) -> PropagatorSpec<NogoodPropagator> {
         let propagator = NogoodPropagator {
             statistics: NogoodPropagatorStatistics::default(),
             handle: PropagatorHandle::new(context.propagator_id),
@@ -222,7 +224,6 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
 
         PropagatorSpec {
             registration: EventsToRegister::empty(),
-            checkers: RuntimeCheckers::empty(),
             propagator,
         }
     }

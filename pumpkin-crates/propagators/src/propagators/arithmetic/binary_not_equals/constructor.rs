@@ -1,21 +1,21 @@
-use pumpkin_checking::checkers::BinaryNotEqualsChecker;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
+use super::BinaryNotEqualsDescription;
 use super::BinaryNotEqualsPropagator;
+use super::BinaryNotEqualsRule;
 
 /// The [`PropagatorConstructor`] for the [`BinaryNotEqualsPropagator`].
 #[derive(Clone, Debug)]
 pub struct BinaryNotEqualsPropagatorArgs<AVar, BVar> {
-    pub a: AVar,
-    pub b: BVar,
+    pub constraint_description: BinaryNotEqualsDescription<AVar, BVar>,
     pub constraint_tag: ConstraintTag,
 }
 
@@ -25,33 +25,28 @@ where
     BVar: IntegerVariable + 'static,
 {
     type PropagatorImpl = BinaryNotEqualsPropagator<AVar, BVar>;
+    type Rule = BinaryNotEqualsRule<AVar, BVar>;
+
+    fn constraint_description(&self) -> BinaryNotEqualsDescription<AVar, BVar> {
+        self.constraint_description.clone()
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
 
     fn create(
         self,
-        mut context: PropagatorConstructorContext,
+        _: PropagatorConstructorContext,
+        inference_code: InferenceCode,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
-        let BinaryNotEqualsPropagatorArgs {
-            a,
-            b,
-            constraint_tag,
-        } = self;
+        let BinaryNotEqualsDescription { a, b } = self.constraint_description;
 
         // We only care about the case where one of the two is assigned
         let registration = EventsToRegister::builder()
             .add(&a, DomainEvents::ASSIGN, LocalId::from(0))
             .add(&b, DomainEvents::ASSIGN, LocalId::from(1))
             .build();
-
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_rule(
-            &mut context,
-            ((LocalId::from(0), &a), (LocalId::from(1), &b)),
-            constraint_tag,
-            BinaryNotEqualsChecker {
-                lhs: a.clone(),
-                rhs: b.clone(),
-            },
-        );
 
         let propagator = BinaryNotEqualsPropagator {
             a,
@@ -62,7 +57,6 @@ where
 
         PropagatorSpec {
             registration,
-            checkers: checkers.build(),
             propagator,
         }
     }

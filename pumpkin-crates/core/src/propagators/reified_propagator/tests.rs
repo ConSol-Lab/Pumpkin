@@ -1,13 +1,23 @@
+use std::borrow::Cow;
+
+use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::RetentionChecker;
+use pumpkin_checking::VariableState;
+
+use crate::checkers::Scope;
 use crate::conjunction;
 use crate::containers::StorageKey;
 use crate::engine::PropagationStatusCP;
 use crate::engine::PropagatorConflict;
 use crate::engine::test_solver::TestSolver;
 use crate::predicate;
+use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::UNKNOWN_RULE;
+use crate::propagation::ConflictRule;
+use crate::propagation::ConstraintDescription;
 use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
@@ -19,7 +29,6 @@ use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorSpec;
 use crate::propagation::ReadDomains;
-use crate::propagation::RuntimeCheckers;
 use crate::propagators::ReifiedPropagatorArgs;
 use crate::state::Conflict;
 use crate::variables::DomainId;
@@ -201,8 +210,21 @@ where
     ConsistencyCheck: Fn(Domains) -> Option<PropagatorConflict> + 'static + Clone,
 {
     type PropagatorImpl = Self;
+    type Rule = GenericRule;
 
-    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
+    fn constraint_description(&self) -> GenericDescription {
+        GenericDescription(self.variables_to_register.clone())
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        ConstraintTag::create_from_index(0)
+    }
+
+    fn create(
+        self,
+        _: PropagatorConstructorContext,
+        _: InferenceCode,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let mut registration = EventsToRegister::empty();
 
         for (index, variable) in self.variables_to_register.iter().enumerate() {
@@ -211,9 +233,61 @@ where
 
         PropagatorSpec {
             registration,
-            checkers: RuntimeCheckers::empty(),
             propagator: self,
         }
+    }
+}
+
+/// The variables of a [`GenericPropagator`].
+#[derive(Clone, Debug)]
+struct GenericDescription(Vec<DomainId>);
+
+impl ConstraintDescription for GenericDescription {
+    fn scope(&self) -> Scope {
+        Scope::from_variables(self.0.iter())
+    }
+}
+
+/// The rule of a [`GenericPropagator`], whose inferences are given by each test; its checkers
+/// accept everything.
+struct GenericRule;
+
+impl ConflictRule for GenericRule {
+    type Description = GenericDescription;
+
+    fn name() -> Cow<'static, str> {
+        Cow::Borrowed("generic")
+    }
+
+    fn create_inference_checker(
+        _: &GenericDescription,
+    ) -> impl InferenceChecker<Predicate> + 'static {
+        AcceptEverything
+    }
+
+    fn create_retention_checker(
+        _: &GenericDescription,
+    ) -> impl RetentionChecker<Predicate> + 'static {
+        AcceptEverything
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct AcceptEverything;
+
+impl InferenceChecker<Predicate> for AcceptEverything {
+    fn rule_name(&self) -> &'static str {
+        "generic"
+    }
+
+    fn check(&self, _: VariableState<Predicate>, _: &[Predicate], _: Option<&Predicate>) -> bool {
+        true
+    }
+}
+
+impl RetentionChecker<Predicate> for AcceptEverything {
+    fn check_retention(&self, _: &VariableState<Predicate>) -> bool {
+        true
     }
 }
 

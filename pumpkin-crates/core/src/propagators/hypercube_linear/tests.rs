@@ -29,8 +29,7 @@ fn conflict_detected() {
 
     let constraint_tag = state.new_constraint_tag();
     let _ = state.add_propagator(HypercubeLinearConstructor {
-        hypercube,
-        linear,
+        constraint_description: HypercubeLinearDescription { hypercube, linear },
         constraint_tag,
     });
 
@@ -52,8 +51,7 @@ fn incremental_hypercube_evaluation() {
 
     let constraint_tag = state.new_constraint_tag();
     let _ = state.add_propagator(HypercubeLinearConstructor {
-        hypercube,
-        linear,
+        constraint_description: HypercubeLinearDescription { hypercube, linear },
         constraint_tag,
     });
 
@@ -88,8 +86,7 @@ fn empty_hypercube_simplifies_to_linear_conflict() {
 
     let constraint_tag = state.new_constraint_tag();
     let _ = state.add_propagator(HypercubeLinearConstructor {
-        hypercube,
-        linear,
+        constraint_description: HypercubeLinearDescription { hypercube, linear },
         constraint_tag,
     });
 
@@ -116,8 +113,7 @@ fn conflicting_linear_propagates_last_unassigned_hypercube_bound_to_false() {
 
     let constraint_tag = state.new_constraint_tag();
     let _ = state.add_propagator(HypercubeLinearConstructor {
-        hypercube,
-        linear,
+        constraint_description: HypercubeLinearDescription { hypercube, linear },
         constraint_tag,
     });
 
@@ -150,8 +146,7 @@ fn propagate_weaker_than_unassigned_predicate_in_hypercube() {
 
     let constraint_tag = state.new_constraint_tag();
     let _ = state.add_propagator(HypercubeLinearConstructor {
-        hypercube,
-        linear,
+        constraint_description: HypercubeLinearDescription { hypercube, linear },
         constraint_tag,
     });
 
@@ -186,8 +181,7 @@ fn linear_component_propagates_if_hypercube_is_satisfied() {
 
     let constraint_tag = state.new_constraint_tag();
     let _ = state.add_propagator(HypercubeLinearConstructor {
-        hypercube,
-        linear,
+        constraint_description: HypercubeLinearDescription { hypercube, linear },
         constraint_tag,
     });
 
@@ -231,8 +225,7 @@ fn backtracking_does_not_break_the_propagator() {
 
     let constraint_tag = state.new_constraint_tag();
     let _ = state.add_propagator(HypercubeLinearConstructor {
-        hypercube,
-        linear,
+        constraint_description: HypercubeLinearDescription { hypercube, linear },
         constraint_tag,
     });
 

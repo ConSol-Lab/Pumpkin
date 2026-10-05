@@ -5,6 +5,7 @@
 mod constructor;
 pub(crate) mod disjunctive_task;
 mod propagator;
+mod rule;
 #[cfg(test)]
 mod tests;
 mod theta_lambda_tree;
@@ -12,3 +13,4 @@ mod theta_tree;
 pub use constructor::DisjunctiveConstructor;
 pub use disjunctive_task::ArgDisjunctiveTask;
 pub use propagator::DisjunctivePropagator;
+pub use rule::*;

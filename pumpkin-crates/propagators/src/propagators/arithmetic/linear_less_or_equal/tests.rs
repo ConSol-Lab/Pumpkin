@@ -17,8 +17,10 @@ fn test_bounds_are_propagated() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
-        x: [x, y].into(),
-        c: 7,
+        constraint_description: LinearLessOrEqualDescription {
+            terms: [x, y].into(),
+            bound: 7,
+        },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("no empty domains");
@@ -35,8 +37,10 @@ fn test_explanations() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
-        x: [x, y].into(),
-        c: 7,
+        constraint_description: LinearLessOrEqualDescription {
+            terms: [x, y].into(),
+            bound: 7,
+        },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("no empty domains");
@@ -61,8 +65,10 @@ fn overflow_leads_to_conflict() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
-        x: [x, y].into(),
-        c: i32::MAX,
+        constraint_description: LinearLessOrEqualDescription {
+            terms: [x, y].into(),
+            bound: i32::MAX,
+        },
         constraint_tag,
     });
     let _ = state
@@ -79,8 +85,10 @@ fn underflow_leads_to_no_propagation() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
-        x: [x, y].into(),
-        c: i32::MIN,
+        constraint_description: LinearLessOrEqualDescription {
+            terms: [x, y].into(),
+            bound: i32::MIN,
+        },
         constraint_tag,
     });
     state

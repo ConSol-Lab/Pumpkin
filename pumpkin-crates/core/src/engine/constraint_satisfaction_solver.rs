@@ -268,7 +268,7 @@ impl ConstraintSatisfactionSolver {
 impl ConstraintSatisfactionSolver {
     pub fn new(solver_options: SatisfactionSolverOptions) -> Self {
         let mut state = State::default();
-        let handle = state.add_propagator(NogoodPropagatorConstructor::new(
+        let nogood_propagator = NogoodPropagatorConstructor::new(
             (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
             solver_options.learning_options,
             match solver_options.analysis_mode {
@@ -281,7 +281,8 @@ impl ConstraintSatisfactionSolver {
                 ConflictResolverType::NoLearning => PropagationMode::default(),
             },
             solver_options.learning_options.nogood_propagator_priority,
-        ));
+        );
+        let handle = state.add_propagator_without_rule(|context| nogood_propagator.create(context));
 
         ConstraintSatisfactionSolver {
             solver_state: CSPSolverState::default(),

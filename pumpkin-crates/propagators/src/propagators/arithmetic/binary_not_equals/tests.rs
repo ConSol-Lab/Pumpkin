@@ -1,6 +1,7 @@
 use pumpkin_core::state::State;
 
 use crate::StateExt;
+use crate::propagators::arithmetic::BinaryNotEqualsDescription;
 use crate::propagators::arithmetic::BinaryNotEqualsPropagatorArgs;
 
 #[test]
@@ -11,8 +12,7 @@ fn detects_conflict() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(BinaryNotEqualsPropagatorArgs {
-        a,
-        b,
+        constraint_description: BinaryNotEqualsDescription { a, b },
         constraint_tag,
     });
     let _ = state
@@ -28,8 +28,7 @@ fn propagate_when_one_is_fixed() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(BinaryNotEqualsPropagatorArgs {
-        a,
-        b,
+        constraint_description: BinaryNotEqualsDescription { a, b },
         constraint_tag,
     });
     state
@@ -52,8 +51,7 @@ fn incremental_propagation() {
 
     let propagator = solver
         .new_propagator(BinaryNotEqualsPropagatorArgs {
-            a,
-            b,
+            constraint_description: BinaryNotEqualsDescription { a, b },
             constraint_tag,
         })
         .expect("Expected no conflict to be detected");
@@ -78,8 +76,7 @@ fn non_overlapping_is_ok() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(BinaryNotEqualsPropagatorArgs {
-        a,
-        b,
+        constraint_description: BinaryNotEqualsDescription { a, b },
         constraint_tag,
     });
     state

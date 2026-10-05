@@ -1,22 +1,21 @@
-use pumpkin_checking::checkers::MaximumChecker;
-use pumpkin_core::checkers::Scope;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
+use crate::arithmetic::MaximumDescription;
 use crate::arithmetic::MaximumPropagator;
+use crate::arithmetic::MaximumRule;
 
 /// The [`PropagatorConstructor`] for the [`MaximumPropagator`].
 #[derive(Clone, Debug)]
 pub struct MaximumArgs<ElementVar, Rhs> {
-    pub array: Box<[ElementVar]>,
-    pub rhs: Rhs,
+    pub constraint_description: MaximumDescription<ElementVar, Rhs>,
     pub constraint_tag: ConstraintTag,
 }
 
@@ -26,16 +25,22 @@ where
     Rhs: IntegerVariable + 'static,
 {
     type PropagatorImpl = MaximumPropagator<ElementVar, Rhs>;
+    type Rule = MaximumRule<ElementVar, Rhs>;
+
+    fn constraint_description(&self) -> MaximumDescription<ElementVar, Rhs> {
+        self.constraint_description.clone()
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
 
     fn create(
         self,
-        mut context: PropagatorConstructorContext,
+        _: PropagatorConstructorContext,
+        inference_code: InferenceCode,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
-        let MaximumArgs {
-            array,
-            rhs,
-            constraint_tag,
-        } = self;
+        let MaximumDescription { array, rhs } = self.constraint_description;
 
         let mut registration = EventsToRegister::builder();
         for (idx, var) in array.iter().enumerate() {
@@ -45,20 +50,6 @@ where
         let rhs_local_id = LocalId::from(array.len() as u32);
         registration = registration.add(&rhs, DomainEvents::BOUNDS, rhs_local_id);
 
-        let mut scope = Scope::from_variables(array.iter());
-        rhs.add_to_scope(&mut scope, rhs_local_id);
-
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_rule(
-            &mut context,
-            scope,
-            constraint_tag,
-            MaximumChecker {
-                array: array.clone(),
-                rhs: rhs.clone(),
-            },
-        );
-
         let propagator = MaximumPropagator {
             array,
             rhs,
@@ -67,7 +58,6 @@ where
 
         PropagatorSpec {
             registration: registration.build(),
-            checkers: checkers.build(),
             propagator,
         }
     }

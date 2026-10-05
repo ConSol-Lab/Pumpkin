@@ -1,6 +1,5 @@
-use pumpkin_checking::checkers::LinearLessOrEqualChecker;
-use pumpkin_core::checkers::Scope;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
@@ -8,16 +7,16 @@ use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
+use super::LinearLessOrEqualDescription;
 use super::LinearLessOrEqualPropagator;
+use super::LinearLessOrEqualRule;
 
 /// The [`PropagatorConstructor`] for the [`LinearLessOrEqualPropagator`].
 #[derive(Clone, Debug)]
 pub struct LinearLessOrEqualPropagatorArgs<Var> {
-    pub x: Box<[Var]>,
-    pub c: i32,
+    pub constraint_description: LinearLessOrEqualDescription<Var>,
     pub constraint_tag: ConstraintTag,
 }
 
@@ -26,16 +25,22 @@ where
     Var: IntegerVariable + 'static,
 {
     type PropagatorImpl = LinearLessOrEqualPropagator<Var>;
+    type Rule = LinearLessOrEqualRule<Var>;
+
+    fn constraint_description(&self) -> LinearLessOrEqualDescription<Var> {
+        self.constraint_description.clone()
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
 
     fn create(
         self,
         mut context: PropagatorConstructorContext,
+        inference_code: InferenceCode,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
-        let LinearLessOrEqualPropagatorArgs {
-            x,
-            c,
-            constraint_tag,
-        } = self;
+        let LinearLessOrEqualDescription { terms: x, bound: c } = self.constraint_description;
 
         let mut lower_bound_left_hand_side = 0_i64;
         let mut current_bounds = vec![];
@@ -50,14 +55,6 @@ where
 
         let lower_bound_left_hand_side = context.new_trailed_integer(lower_bound_left_hand_side);
 
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_rule(
-            &mut context,
-            Scope::from_variables(x.iter()),
-            constraint_tag,
-            LinearLessOrEqualChecker::new(x.clone(), c),
-        );
-
         let propagator = LinearLessOrEqualPropagator {
             x,
             c,
@@ -69,7 +66,6 @@ where
 
         PropagatorSpec {
             registration: registration.build(),
-            checkers: checkers.build(),
             propagator,
         }
     }

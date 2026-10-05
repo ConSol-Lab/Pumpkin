@@ -19,14 +19,21 @@ use crate::engine::variables::DomainId;
 use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::ConflictRule;
+#[cfg(doc)]
+use crate::propagation::ConstraintDescription;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
 use crate::propagation::EventsToRegister;
-use crate::propagation::RuntimeCheckers;
 use crate::variables::IntegerVariable;
 
 /// A propagator constructor creates a fully initialized instance of a [`Propagator`].
+///
+/// The constructor names the [`ConflictRule`] that the propagator implements and gives the
+/// [`ConstraintDescription`] of its constraint. The solver registers the rule for that
+/// description before the propagator is created, so the checkers of the rule are built from the
+/// same data as the propagator.
 ///
 /// The constructor is responsible for:
 /// 1) Indicating on which [`DomainEvent`]s the propagator should be enqueued (via the
@@ -36,25 +43,36 @@ pub trait PropagatorConstructor {
     /// The propagator that is produced by this constructor.
     type PropagatorImpl: Propagator + Clone;
 
+    /// The rule that the propagator implements.
+    type Rule: ConflictRule;
+
+    /// The description of the constraint that the propagator propagates.
+    fn constraint_description(&self) -> <Self::Rule as ConflictRule>::Description;
+
+    /// The tag of the constraint that the propagator propagates.
+    fn constraint_tag(&self) -> ConstraintTag;
+
     /// Create the propagator instance from `Self`.
     ///
-    /// Returns a [`PropagatorSpec`] that contains:
-    /// - the propagator instance,
-    /// - the events for which the propagator should be enqueued,
-    /// - and the runtime checkers that verify the propagator's behavior.
-    fn create(self, context: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl>;
+    /// The `inference_code` identifies the inferences of the propagator with its rule.
+    ///
+    /// Returns a [`PropagatorSpec`] that contains the propagator instance and the events for which
+    /// the propagator should be enqueued.
+    fn create(
+        self,
+        context: PropagatorConstructorContext,
+        inference_code: InferenceCode,
+    ) -> PropagatorSpec<Self::PropagatorImpl>;
 }
 
 /// The result of [`PropagatorConstructor::create`].
 ///
-/// Contains an initialized [`Propagator`], alongside runtime checkers and the events that should
-/// cause the propagator to be enqueued.
+/// Contains an initialized [`Propagator`] and the events that should cause the propagator to be
+/// enqueued.
 #[derive(Clone, Debug)]
 pub struct PropagatorSpec<P> {
     /// The domain events the propagator needs to be be registered for.
     pub registration: EventsToRegister,
-    /// Any runtime checkers that verify the propagator's implementation.
-    pub checkers: RuntimeCheckers,
     /// The propagator
     pub propagator: P,
 }

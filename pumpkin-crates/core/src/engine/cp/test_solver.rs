@@ -41,12 +41,13 @@ pub struct TestSolver {
 impl Default for TestSolver {
     fn default() -> Self {
         let mut state = State::default();
-        let handle = state.add_propagator(NogoodPropagatorConstructor::new(
+        let nogood_propagator = NogoodPropagatorConstructor::new(
             0,
             LearningOptions::default(),
             PropagationMode::UnitPropagation,
             crate::propagation::Priority::High,
-        ));
+        );
+        let handle = state.add_propagator_without_rule(|context| nogood_propagator.create(context));
         let mut solver = Self {
             state,
             constraint_tags: Default::default(),

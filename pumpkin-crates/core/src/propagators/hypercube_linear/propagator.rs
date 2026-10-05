@@ -1,5 +1,3 @@
-use pumpkin_checking::checkers::HypercubeLinearChecker;
-
 use crate::basic_types::PredicateId;
 use crate::engine::PropagationStatusCP;
 use crate::predicate;
@@ -16,8 +14,8 @@ use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorSpec;
 use crate::propagation::ReadDomains;
-use crate::propagation::RuntimeCheckers;
-use crate::propagators::hypercube_linear::Hypercube;
+use crate::propagators::hypercube_linear::HypercubeLinearDescription;
+use crate::propagators::hypercube_linear::HypercubeLinearRule;
 use crate::propagators::hypercube_linear::LinearInequality;
 use crate::pumpkin_assert_simple;
 use crate::state::PropagatorConflict;
@@ -27,23 +25,28 @@ use crate::variables::DomainId;
 /// The [`PropagatorConstructor`] for the [`HypercubeLinearPropagator`].
 #[derive(Clone, Debug)]
 pub struct HypercubeLinearConstructor {
-    pub hypercube: Hypercube,
-    pub linear: LinearInequality,
+    pub constraint_description: HypercubeLinearDescription,
     pub constraint_tag: ConstraintTag,
 }
 
 impl PropagatorConstructor for HypercubeLinearConstructor {
     type PropagatorImpl = HypercubeLinearPropagator;
+    type Rule = HypercubeLinearRule;
+
+    fn constraint_description(&self) -> HypercubeLinearDescription {
+        self.constraint_description.clone()
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
 
     fn create(
         self,
         mut context: PropagatorConstructorContext,
+        inference_code: InferenceCode,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
-        let HypercubeLinearConstructor {
-            hypercube,
-            linear,
-            constraint_tag,
-        } = self;
+        let HypercubeLinearDescription { hypercube, linear } = self.constraint_description;
 
         let hypercube_predicates = hypercube.iter_predicates().collect::<Box<[_]>>();
 
@@ -59,17 +62,6 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
             ]
         };
 
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
-            &mut context,
-            constraint_tag,
-            HypercubeLinearChecker {
-                hypercube: hypercube.iter_predicates().collect(),
-                terms: linear.terms().collect(),
-                bound: linear.bound(),
-            },
-        );
-
         let propagator = HypercubeLinearPropagator {
             linear,
 
@@ -83,7 +75,6 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
 
         PropagatorSpec {
             registration,
-            checkers: checkers.build(),
             propagator,
         }
     }

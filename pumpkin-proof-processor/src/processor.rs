@@ -741,20 +741,27 @@ fn convert_proof_atomic_to_predicate(
 
 #[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
+
     use drcp_format::IntComparison::*;
     use drcp_format::reader::ReadAtomic;
     use drcp_format::reader::ReadStep;
     use pumpkin_checking::InferenceChecker;
+    use pumpkin_checking::RetentionChecker;
     use pumpkin_checking::VariableState;
+    use pumpkin_core::checkers::Scope;
+    use pumpkin_core::propagation::ConflictRule;
+    use pumpkin_core::propagation::ConstraintDescription;
     use pumpkin_core::propagation::EventsToRegister;
+    use pumpkin_core::propagation::LocalId;
     use pumpkin_core::propagation::PropagationContext;
     use pumpkin_core::propagation::Propagator;
     use pumpkin_core::propagation::PropagatorConstructor;
     use pumpkin_core::propagation::PropagatorConstructorContext;
     use pumpkin_core::propagation::PropagatorSpec;
     use pumpkin_core::propagation::ReadDomains;
-    use pumpkin_core::propagation::RuntimeCheckers;
     use pumpkin_core::state::PropagationStatusCP;
+    use pumpkin_propagators::arithmetic::BinaryEqualsDescription;
     use pumpkin_propagators::arithmetic::BinaryEqualsPropagatorArgs;
 
     use super::*;
@@ -798,8 +805,7 @@ mod tests {
 
         let constraint_tag = state.new_constraint_tag();
         let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
-            a: x1,
-            b: x2,
+            constraint_description: BinaryEqualsDescription { a: x1, b: x2 },
             constraint_tag,
         });
 
@@ -973,31 +979,32 @@ mod tests {
 
     impl PropagatorConstructor for AlwaysConflictConstructor {
         type PropagatorImpl = AlwaysConflictPropagator;
+        type Rule = AlwaysConflictRule;
+
+        fn constraint_description(&self) -> AlwaysConflictChecker {
+            AlwaysConflictChecker {
+                watched: self.watched,
+                other: self.other,
+            }
+        }
+
+        fn constraint_tag(&self) -> ConstraintTag {
+            self.constraint_tag
+        }
 
         fn create(
             self,
             mut context: PropagatorConstructorContext,
+            inference_code: InferenceCode,
         ) -> PropagatorSpec<Self::PropagatorImpl> {
-            let AlwaysConflictConstructor {
-                watched,
-                other,
-                constraint_tag,
-            } = self;
+            let AlwaysConflictConstructor { watched, other, .. } = self;
 
             // This propagator must not react to `other` becoming true. It only
             // needs to fire once `watched` becomes true.
             let _ = context.register_predicate(watched);
 
-            let mut checkers = RuntimeCheckers::builder();
-            let inference_code = checkers.add_inference_checker(
-                &mut context,
-                constraint_tag,
-                AlwaysConflictChecker { watched, other },
-            );
-
             PropagatorSpec {
                 registration: EventsToRegister::empty(),
-                checkers: checkers.build(),
                 propagator: AlwaysConflictPropagator {
                     watched,
                     other,
@@ -1025,6 +1032,49 @@ mod tests {
             _consequent: Option<&Predicate>,
         ) -> bool {
             state.is_true(&self.watched) && state.is_true(&self.other)
+        }
+    }
+
+    /// The checker doubles as the description of the constraint: the two predicates.
+    impl ConstraintDescription for AlwaysConflictChecker {
+        fn scope(&self) -> Scope {
+            Scope::from_iter([
+                (LocalId::from(0), self.watched.get_domain()),
+                (LocalId::from(1), self.other.get_domain()),
+            ])
+        }
+    }
+
+    /// The rule of the [`AlwaysConflictPropagator`].
+    struct AlwaysConflictRule;
+
+    impl ConflictRule for AlwaysConflictRule {
+        type Description = AlwaysConflictChecker;
+
+        fn name() -> Cow<'static, str> {
+            Cow::Borrowed("always_conflict")
+        }
+
+        fn create_inference_checker(
+            description: &AlwaysConflictChecker,
+        ) -> impl InferenceChecker<Predicate> + 'static {
+            description.clone()
+        }
+
+        fn create_retention_checker(
+            _: &AlwaysConflictChecker,
+        ) -> impl RetentionChecker<Predicate> + 'static {
+            // The propagator ignores `other` on purpose, so it is not meant to be complete.
+            AcceptEverything
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct AcceptEverything;
+
+    impl RetentionChecker<Predicate> for AcceptEverything {
+        fn check_retention(&self, _: &VariableState<Predicate>) -> bool {
+            true
         }
     }
 

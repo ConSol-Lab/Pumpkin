@@ -1,16 +1,17 @@
-use pumpkin_checking::checkers::IntegerDivisionChecker;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
+use super::DivisionDescription;
 use super::DivisionPropagator;
+use super::DivisionRule;
 use super::ID_DENOMINATOR;
 use super::ID_NUMERATOR;
 use super::ID_RHS;
@@ -18,9 +19,7 @@ use super::ID_RHS;
 /// The [`PropagatorConstructor`] for the [`DivisionPropagator`].
 #[derive(Clone, Debug)]
 pub struct DivisionArgs<VA, VB, VC> {
-    pub numerator: VA,
-    pub denominator: VB,
-    pub rhs: VC,
+    pub constraint_description: DivisionDescription<VA, VB, VC>,
     pub constraint_tag: ConstraintTag,
 }
 
@@ -31,17 +30,26 @@ where
     VC: IntegerVariable + 'static,
 {
     type PropagatorImpl = DivisionPropagator<VA, VB, VC>;
+    type Rule = DivisionRule<VA, VB, VC>;
+
+    fn constraint_description(&self) -> DivisionDescription<VA, VB, VC> {
+        self.constraint_description.clone()
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
 
     fn create(
         self,
-        mut context: PropagatorConstructorContext,
+        context: PropagatorConstructorContext,
+        inference_code: InferenceCode,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
-        let DivisionArgs {
+        let DivisionDescription {
             numerator,
             denominator,
             rhs,
-            constraint_tag,
-        } = self;
+        } = self.constraint_description;
 
         pumpkin_assert_simple!(
             !context.contains(&denominator, 0),
@@ -54,17 +62,6 @@ where
             .add(&rhs, DomainEvents::BOUNDS, ID_RHS)
             .build();
 
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
-            &mut context,
-            constraint_tag,
-            IntegerDivisionChecker {
-                numerator: numerator.clone(),
-                denominator: denominator.clone(),
-                rhs: rhs.clone(),
-            },
-        );
-
         let propagator = DivisionPropagator {
             numerator,
             denominator,
@@ -74,7 +71,6 @@ where
 
         PropagatorSpec {
             registration,
-            checkers: checkers.build(),
             propagator,
         }
     }

@@ -1,9 +1,6 @@
-use std::rc::Rc;
-
 use enumset::enum_set;
-use pumpkin_checking::checkers::LinearNotEqualChecker;
-use pumpkin_core::checkers::Scope;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
@@ -11,18 +8,16 @@ use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
+use super::LinearNotEqualDescription;
 use super::LinearNotEqualPropagator;
+use super::LinearNotEqualRule;
 
 /// The [`PropagatorConstructor`] for the [`LinearNotEqualPropagator`].
 #[derive(Clone, Debug)]
 pub struct LinearNotEqualPropagatorArgs<Var> {
-    /// The terms of the sum
-    pub terms: Rc<[Var]>,
-    /// The right-hand side of the sum
-    pub rhs: i32,
+    pub constraint_description: LinearNotEqualDescription<Var>,
     /// The constraint tag of the constraint this propagator is propagating for.
     pub constraint_tag: ConstraintTag,
 }
@@ -32,16 +27,22 @@ where
     Var: IntegerVariable + 'static,
 {
     type PropagatorImpl = LinearNotEqualPropagator<Var>;
+    type Rule = LinearNotEqualRule<Var>;
+
+    fn constraint_description(&self) -> LinearNotEqualDescription<Var> {
+        self.constraint_description.clone()
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
 
     fn create(
         self,
         mut context: PropagatorConstructorContext,
+        inference_code: InferenceCode,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
-        let LinearNotEqualPropagatorArgs {
-            terms,
-            rhs,
-            constraint_tag,
-        } = self;
+        let LinearNotEqualDescription { terms, rhs } = self.constraint_description;
 
         let mut registration = EventsToRegister::builder();
         for (i, x_i) in terms.iter().enumerate() {
@@ -52,17 +53,6 @@ where
                 LocalId::from(i as u32),
             );
         }
-
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_rule(
-            &mut context,
-            Scope::from_variables(terms.iter()),
-            constraint_tag,
-            LinearNotEqualChecker {
-                terms: terms.as_ref().into(),
-                bound: rhs,
-            },
-        );
 
         let mut propagator = LinearNotEqualPropagator {
             terms,
@@ -78,7 +68,6 @@ where
 
         PropagatorSpec {
             registration: registration.build(),
-            checkers: checkers.build(),
             propagator,
         }
     }

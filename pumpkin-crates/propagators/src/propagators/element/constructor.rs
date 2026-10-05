@@ -1,24 +1,23 @@
-use pumpkin_checking::checkers::ElementChecker;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
+use super::ElementDescription;
 use super::ElementPropagator;
+use super::ElementRule;
 use super::ID_INDEX;
 use super::ID_RHS;
 use super::ID_X_OFFSET;
 
 #[derive(Clone, Debug)]
 pub struct ElementArgs<VX, VI, VE> {
-    pub array: Box<[VX]>,
-    pub index: VI,
-    pub rhs: VE,
+    pub constraint_description: ElementDescription<VX, VI, VE>,
     pub constraint_tag: ConstraintTag,
 }
 
@@ -29,17 +28,22 @@ where
     VE: IntegerVariable + 'static,
 {
     type PropagatorImpl = ElementPropagator<VX, VI, VE>;
+    type Rule = ElementRule<VX, VI, VE>;
+
+    fn constraint_description(&self) -> ElementDescription<VX, VI, VE> {
+        self.constraint_description.clone()
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
 
     fn create(
         self,
-        mut context: PropagatorConstructorContext,
+        _: PropagatorConstructorContext,
+        inference_code: InferenceCode,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
-        let ElementArgs {
-            array,
-            index,
-            rhs,
-            constraint_tag,
-        } = self;
+        let ElementDescription { array, index, rhs } = self.constraint_description;
 
         let mut registration = EventsToRegister::builder();
         for (i, x_i) in array.iter().enumerate() {
@@ -53,13 +57,6 @@ where
         registration = registration.add(&index, DomainEvents::ANY_INT, ID_INDEX);
         registration = registration.add(&rhs, DomainEvents::ANY_INT, ID_RHS);
 
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
-            &mut context,
-            constraint_tag,
-            ElementChecker::new(array.clone(), index.clone(), rhs.clone()),
-        );
-
         let propagator = ElementPropagator {
             array,
             index,
@@ -70,7 +67,6 @@ where
 
         PropagatorSpec {
             registration: registration.build(),
-            checkers: checkers.build(),
             propagator,
         }
     }

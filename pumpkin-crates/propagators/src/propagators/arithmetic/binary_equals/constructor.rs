@@ -1,22 +1,22 @@
-use pumpkin_checking::checkers::BinaryEqualsChecker;
 use pumpkin_core::containers::HashSet;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
+use crate::arithmetic::BinaryEqualsDescription;
 use crate::arithmetic::BinaryEqualsPropagator;
+use crate::arithmetic::BinaryEqualsRule;
 
 /// The [`PropagatorConstructor`] for the [`BinaryEqualsPropagator`].
 #[derive(Clone, Debug)]
 pub struct BinaryEqualsPropagatorArgs<AVar, BVar> {
-    pub a: AVar,
-    pub b: BVar,
+    pub constraint_description: BinaryEqualsDescription<AVar, BVar>,
     pub constraint_tag: ConstraintTag,
 }
 
@@ -26,32 +26,27 @@ where
     BVar: IntegerVariable + 'static,
 {
     type PropagatorImpl = BinaryEqualsPropagator<AVar, BVar>;
+    type Rule = BinaryEqualsRule<AVar, BVar>;
+
+    fn constraint_description(&self) -> BinaryEqualsDescription<AVar, BVar> {
+        self.constraint_description.clone()
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
 
     fn create(
         self,
-        mut context: PropagatorConstructorContext,
+        _: PropagatorConstructorContext,
+        inference_code: InferenceCode,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
-        let BinaryEqualsPropagatorArgs {
-            a,
-            b,
-            constraint_tag,
-        } = self;
+        let BinaryEqualsDescription { a, b } = self.constraint_description;
 
         let registration = EventsToRegister::builder()
             .add(&a, DomainEvents::ANY_INT, super::ID_LHS)
             .add(&b, DomainEvents::ANY_INT, super::ID_RHS)
             .build();
-
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_rule(
-            &mut context,
-            ((super::ID_LHS, &a), (super::ID_RHS, &b)),
-            constraint_tag,
-            BinaryEqualsChecker {
-                lhs: a.clone(),
-                rhs: b.clone(),
-            },
-        );
 
         let propagator = BinaryEqualsPropagator {
             a,
@@ -69,7 +64,6 @@ where
 
         PropagatorSpec {
             registration,
-            checkers: checkers.build(),
             propagator,
         }
     }

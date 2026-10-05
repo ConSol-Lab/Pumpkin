@@ -1,13 +1,13 @@
-use pumpkin_checking::checkers::ReifiedChecker;
-use pumpkin_checking::checkers::ReifiedRetentionChecker;
-
-use crate::checkers::ScopeItem;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
+use crate::propagation::ConflictRule;
 use crate::propagation::DomainEvents;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorSpec;
-use crate::propagation::RuntimeCheckers;
+use crate::propagators::HalfReified;
+use crate::propagators::HalfReifiedDescription;
 use crate::propagators::ReifiedPropagator;
 use crate::variables::Literal;
 
@@ -24,21 +24,36 @@ where
     WrappedPropagator: Propagator + Clone,
 {
     type PropagatorImpl = ReifiedPropagator<WrappedPropagator>;
+    type Rule = HalfReified<WrappedArgs::Rule>;
+
+    fn constraint_description(
+        &self,
+    ) -> HalfReifiedDescription<<WrappedArgs::Rule as ConflictRule>::Description> {
+        HalfReifiedDescription {
+            inner: self.propagator.constraint_description(),
+            reification_literal: self.reification_literal,
+        }
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.propagator.constraint_tag()
+    }
 
     fn create(
         self,
-        mut context: PropagatorConstructorContext,
+        context: PropagatorConstructorContext,
+        inference_code: InferenceCode,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
         let ReifiedPropagatorArgs {
             propagator,
             reification_literal,
         } = self;
 
+        // The wrapped propagator makes the inferences of the half reified rule.
         let PropagatorSpec {
             mut registration,
             propagator,
-            checkers,
-        } = propagator.create(context.reborrow());
+        } = propagator.create(context, inference_code);
 
         // The local ID for the reification literal will be one larger than the largest ID
         // registered by the wrapped propagator.
@@ -55,32 +70,6 @@ where
             reification_literal_id,
         );
 
-        let (inference_checkers, retention_checkers) = checkers.into_parts();
-
-        let mut wrapped_checkers = RuntimeCheckers::empty();
-        for (inference_code, checker) in inference_checkers {
-            wrapped_checkers.add_inference_checker_with_code(
-                inference_code,
-                ReifiedChecker {
-                    inner: checker,
-                    reification_literal,
-                },
-            );
-        }
-
-        // The reification literal becomes part of the scope of every wrapped retention checker,
-        // since whether the wrapped constraint has to hold depends on it.
-        for (mut scope, checker) in retention_checkers {
-            reification_literal.add_to_scope(&mut scope, reification_literal_id);
-            wrapped_checkers.add_retention_checker(
-                scope,
-                ReifiedRetentionChecker {
-                    inner: checker,
-                    reification_literal,
-                },
-            );
-        }
-
         let name = format!("Reified({})", propagator.name());
 
         let propagator = ReifiedPropagator {
@@ -93,7 +82,6 @@ where
 
         PropagatorSpec {
             registration,
-            checkers: wrapped_checkers,
             propagator,
         }
     }

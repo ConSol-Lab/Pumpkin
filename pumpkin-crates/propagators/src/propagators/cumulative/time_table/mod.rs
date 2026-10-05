@@ -60,6 +60,7 @@ mod explanations;
 mod over_interval_incremental_propagator;
 mod per_point_incremental_propagator;
 mod propagation_handler;
+mod rule;
 mod time_table_over_interval;
 mod time_table_per_point;
 mod time_table_util;
@@ -67,6 +68,7 @@ mod time_table_util;
 pub use explanations::CumulativeExplanationType;
 pub use over_interval_incremental_propagator::*;
 pub use per_point_incremental_propagator::*;
+pub use rule::*;
 pub use time_table_over_interval::*;
 pub use time_table_per_point::*;
 

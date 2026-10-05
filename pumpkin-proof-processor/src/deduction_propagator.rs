@@ -1,6 +1,5 @@
 use std::rc::Rc;
 
-use pumpkin_checking::checkers::NogoodChecker;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
@@ -14,7 +13,8 @@ use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::propagation::RuntimeCheckers;
+use pumpkin_core::propagators::nogoods::NogoodDescription;
+use pumpkin_core::propagators::nogoods::UnitNogoodRule;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
@@ -56,14 +56,26 @@ pub(crate) const MARKED_PROPAGATION_PRIORITY: Priority = Priority::VeryLow;
 
 impl PropagatorConstructor for DeductionPropagatorConstructor {
     type PropagatorImpl = DeductionPropagator;
+    type Rule = UnitNogoodRule;
+
+    fn constraint_description(&self) -> NogoodDescription {
+        NogoodDescription {
+            nogood: self.nogood.iter().copied().collect(),
+        }
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
 
     fn create(
         self,
         mut context: PropagatorConstructorContext,
+        inference_code: InferenceCode,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
         let DeductionPropagatorConstructor {
             nogood,
-            constraint_tag,
+            constraint_tag: _,
             priority,
             propagation_mode,
         } = self;
@@ -71,15 +83,6 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
             .iter()
             .map(|&predicate| context.register_predicate(predicate))
             .collect();
-
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
-            &mut context,
-            constraint_tag,
-            NogoodChecker {
-                nogood: nogood.iter().copied().collect(),
-            },
-        );
 
         let propagator = DeductionPropagator {
             nogood,
@@ -92,7 +95,6 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
 
         PropagatorSpec {
             registration: EventsToRegister::empty(),
-            checkers: checkers.build(),
             propagator,
         }
     }

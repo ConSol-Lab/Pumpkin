@@ -1,20 +1,20 @@
-use pumpkin_checking::checkers::AbsoluteValueChecker;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
+use super::AbsoluteValueDescription;
 use super::AbsoluteValuePropagator;
+use super::AbsoluteValueRule;
 
 #[derive(Clone, Debug)]
 pub struct AbsoluteValueArgs<VA, VB> {
-    pub signed: VA,
-    pub absolute: VB,
+    pub constraint_description: AbsoluteValueDescription<VA, VB>,
     pub constraint_tag: ConstraintTag,
 }
 
@@ -24,32 +24,27 @@ where
     VB: IntegerVariable + 'static,
 {
     type PropagatorImpl = AbsoluteValuePropagator<VA, VB>;
+    type Rule = AbsoluteValueRule<VA, VB>;
+
+    fn constraint_description(&self) -> AbsoluteValueDescription<VA, VB> {
+        self.constraint_description.clone()
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
 
     fn create(
         self,
-        mut context: PropagatorConstructorContext,
+        _: PropagatorConstructorContext,
+        inference_code: InferenceCode,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
-        let AbsoluteValueArgs {
-            signed,
-            absolute,
-            constraint_tag,
-        } = self;
+        let AbsoluteValueDescription { signed, absolute } = self.constraint_description;
 
         let registration = EventsToRegister::builder()
             .add(&signed, DomainEvents::BOUNDS, LocalId::from(0))
             .add(&absolute, DomainEvents::BOUNDS, LocalId::from(1))
             .build();
-
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_rule(
-            &mut context,
-            ((LocalId::from(0), &signed), (LocalId::from(1), &absolute)),
-            constraint_tag,
-            AbsoluteValueChecker {
-                signed: signed.clone(),
-                absolute: absolute.clone(),
-            },
-        );
 
         let propagator = AbsoluteValuePropagator {
             signed,
@@ -59,7 +54,6 @@ where
 
         PropagatorSpec {
             registration,
-            checkers: checkers.build(),
             propagator,
         }
     }

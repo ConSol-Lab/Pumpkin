@@ -442,17 +442,44 @@ impl State {
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
-        let original_handle: PropagatorHandle<Constructor::PropagatorImpl> =
-            self.propagators.new_propagator().key();
+        let description = constructor.constraint_description();
+        let inference_code = self.rule_code::<Constructor::Rule>(constructor.constraint_tag());
+
+        let handle =
+            self.add_propagator_without_rule(|context| constructor.create(context, inference_code));
+
+        // The rule is checked for this propagator only after it is created, since the retention
+        // checkers of a propagator can be excluded by its name.
+        self.add_rule_checkers::<Constructor::Rule>(
+            inference_code,
+            &description,
+            handle.propagator_id(),
+        );
+
+        handle
+    }
+
+    /// Add a propagator that does not implement a single rule fixed at its construction.
+    ///
+    /// Such a propagator registers the rules of its constraints itself, through
+    /// [`State::register_rule`], as the constraints arrive. Only the nogood propagator is built
+    /// this way.
+    pub(crate) fn add_propagator_without_rule<P>(
+        &mut self,
+        create: impl FnOnce(PropagatorConstructorContext) -> PropagatorSpec<P>,
+    ) -> PropagatorHandle<P>
+    where
+        P: Propagator + Clone + 'static,
+    {
+        let original_handle: PropagatorHandle<P> = self.propagators.new_propagator().key();
 
         let constructor_context =
             PropagatorConstructorContext::new(original_handle.propagator_id(), self);
 
         let PropagatorSpec {
             registration,
-            checkers,
             propagator,
-        } = constructor.create(constructor_context);
+        } = create(constructor_context);
 
         for (domain_id, events, local_id) in registration.iter() {
             let propagator_var = PropagatorVarId {
@@ -464,27 +491,9 @@ impl State {
                 .register(domain_id, events, propagator_var);
         }
 
-        let (inference_checkers, retention_checkers) = checkers.into_parts();
-
-        if cfg!(feature = "check-propagations") {
-            // Only register the checkers when this feature is enabled. This is an if statement
-            // instead of a #[cfg(...)] to avoid the 'unused variable' warning that we would
-            // otherwise get on `self.checkers`.
-            for (inference_code, checker) in inference_checkers {
-                self.checkers.add_inference_checker(inference_code, checker);
-            }
-        }
-
-        if cfg!(feature = "check-consistency") {
-            if !retention_checking_covers(propagator.name()) {
-                self.retention_checkers
-                    .exclude(original_handle.propagator_id());
-            }
-
-            for (scope, checker) in retention_checkers {
-                self.retention_checkers
-                    .register(scope, checker, original_handle.propagator_id());
-            }
+        if cfg!(feature = "check-consistency") && !retention_checking_covers(propagator.name()) {
+            self.retention_checkers
+                .exclude(original_handle.propagator_id());
         }
 
         pumpkin_assert_simple!(
@@ -1428,10 +1437,20 @@ mod tests {
         Checker: pumpkin_checking::RetentionChecker<crate::predicates::Predicate> + Clone + 'static,
     {
         type PropagatorImpl = CheckedPropagator<Checker>;
+        type Rule = CheckedRule<Checker>;
+
+        fn constraint_description(&self) -> CheckedPropagator<Checker> {
+            self.clone()
+        }
+
+        fn constraint_tag(&self) -> crate::proof::ConstraintTag {
+            crate::proof::ConstraintTag::create_from_index(0)
+        }
 
         fn create(
             self,
             _: crate::propagation::PropagatorConstructorContext,
+            _: crate::proof::InferenceCode,
         ) -> crate::propagation::PropagatorSpec<Self::PropagatorImpl> {
             let registration = crate::propagation::EventsToRegister::builder()
                 .add(
@@ -1441,19 +1460,70 @@ mod tests {
                 )
                 .build();
 
-            // Not the builder, which insists on an inference checker when propagations are
-            // checked; this propagator makes no inferences.
-            let mut checkers = crate::propagation::RuntimeCheckers::empty();
-            checkers.add_retention_checker(
-                crate::checkers::Scope::from_variables([self.variable].iter()),
-                self.checker.clone(),
-            );
-
             crate::propagation::PropagatorSpec {
                 registration,
-                checkers,
                 propagator: self,
             }
+        }
+    }
+
+    /// The description of a [`CheckedPropagator`] is the propagator itself: its variable and
+    /// the retention checker of its rule.
+    #[cfg(feature = "check-consistency")]
+    impl<Checker> crate::propagation::ConstraintDescription for CheckedPropagator<Checker> {
+        fn scope(&self) -> crate::checkers::Scope {
+            crate::checkers::Scope::from_variables([self.variable].iter())
+        }
+    }
+
+    /// The rule of a [`CheckedPropagator`], whose retention checker is the one the test gave.
+    #[cfg(feature = "check-consistency")]
+    struct CheckedRule<Checker>(std::marker::PhantomData<Checker>);
+
+    #[cfg(feature = "check-consistency")]
+    impl<Checker> crate::propagation::ConflictRule for CheckedRule<Checker>
+    where
+        Checker: pumpkin_checking::RetentionChecker<crate::predicates::Predicate> + Clone + 'static,
+    {
+        type Description = CheckedPropagator<Checker>;
+
+        fn name() -> std::borrow::Cow<'static, str> {
+            std::borrow::Cow::Borrowed("checked")
+        }
+
+        fn create_inference_checker(
+            _: &CheckedPropagator<Checker>,
+        ) -> impl pumpkin_checking::InferenceChecker<crate::predicates::Predicate> + 'static
+        {
+            NoInferences
+        }
+
+        fn create_retention_checker(
+            description: &CheckedPropagator<Checker>,
+        ) -> impl pumpkin_checking::RetentionChecker<crate::predicates::Predicate> + 'static
+        {
+            description.checker.clone()
+        }
+    }
+
+    /// The inference checker of a propagator that makes no inferences.
+    #[cfg(feature = "check-consistency")]
+    #[derive(Debug, Clone)]
+    struct NoInferences;
+
+    #[cfg(feature = "check-consistency")]
+    impl pumpkin_checking::InferenceChecker<crate::predicates::Predicate> for NoInferences {
+        fn rule_name(&self) -> &'static str {
+            "checked"
+        }
+
+        fn check(
+            &self,
+            _: pumpkin_checking::VariableState<crate::predicates::Predicate>,
+            _: &[crate::predicates::Predicate],
+            _: Option<&crate::predicates::Predicate>,
+        ) -> bool {
+            false
         }
     }
 
