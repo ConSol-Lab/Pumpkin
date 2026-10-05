@@ -1,11 +1,10 @@
 use super::AbsoluteValueChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::IntExt;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::VariableState;
-use crate::checkers::retention_checker::scope_lower_bound;
-use crate::checkers::retention_checker::scope_upper_bound;
 
 impl<VA, VB, Atomic> RetentionChecker<Atomic> for AbsoluteValueChecker<VA, VB>
 where
@@ -14,23 +13,26 @@ where
     Atomic: AtomicConstraint,
 {
     fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
-        let signed_lower = i64::from(scope_lower_bound(&self.signed, state));
-        let signed_upper = i64::from(scope_upper_bound(&self.signed, state));
-        let absolute_lower = i64::from(scope_lower_bound(&self.absolute, state));
-        let absolute_upper = i64::from(scope_upper_bound(&self.absolute, state));
+        // The bounds are widened to i64 so that negating i32::MIN does not overflow.
+        let signed_lower = IntExt::<i64>::from(self.signed.induced_lower_bound(state));
+        let signed_upper = IntExt::<i64>::from(self.signed.induced_upper_bound(state));
+        let absolute_lower = IntExt::<i64>::from(self.absolute.induced_lower_bound(state));
+        let absolute_upper = IntExt::<i64>::from(self.absolute.induced_upper_bound(state));
 
-        let greatest_absolute = signed_lower.abs().max(signed_upper.abs());
-        let least_absolute = if signed_lower <= 0 && 0 <= signed_upper {
-            0
+        let greatest_absolute = (0 - signed_lower).max(signed_upper);
+        let least_absolute = if signed_lower > 0 {
+            signed_lower
+        } else if signed_upper < 0 {
+            0 - signed_upper
         } else {
-            signed_lower.abs().min(signed_upper.abs())
+            IntExt::Int(0)
         };
 
         // 1. Assert that the lower bound of absolute is at least the least absolute value of
         //    signed, which is 0 when signed can be 0
         if absolute_lower < least_absolute {
             log::error!(
-                "The lower bound of {:?} could be raised to {least_absolute} by the absolute value of {:?}",
+                "The lower bound of {:?} could be raised to {least_absolute:?} by the absolute value of {:?}",
                 self.absolute,
                 self.signed
             );
@@ -41,7 +43,7 @@ where
         //  The bounds of signed lie within [-ub(absolute), ub(absolute)] at the same time.
         if absolute_upper != greatest_absolute {
             log::error!(
-                "The upper bound of {:?} is {absolute_upper} while the greatest absolute value of {:?} is {greatest_absolute}",
+                "The upper bound of {:?} is {absolute_upper:?} while the greatest absolute value of {:?} is {greatest_absolute:?}",
                 self.absolute,
                 self.signed
             );
@@ -51,18 +53,18 @@ where
         // 3. Assert that the bound of signed nearest to zero is at least the lower bound of
         //    absolute in magnitude when the sign of signed is fixed
         //  When signed can be 0, the propagator does not remove the values nearest to zero.
-        if signed_upper <= 0 && -signed_upper < absolute_lower {
+        if signed_upper <= 0 && 0 - signed_upper < absolute_lower {
             log::error!(
-                "The upper bound of {:?} could be lowered to {} by the lower bound of {:?}",
+                "The upper bound of {:?} could be lowered to {:?} by the lower bound of {:?}",
                 self.signed,
-                -absolute_lower,
+                0 - absolute_lower,
                 self.absolute
             );
             return RetentionCheck::PropagationMissed;
         }
         if signed_lower >= 0 && signed_lower < absolute_lower {
             log::error!(
-                "The lower bound of {:?} could be raised to {absolute_lower} by the lower bound of {:?}",
+                "The lower bound of {:?} could be raised to {absolute_lower:?} by the lower bound of {:?}",
                 self.signed,
                 self.absolute
             );

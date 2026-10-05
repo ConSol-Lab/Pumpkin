@@ -3,7 +3,6 @@ use std::fmt::Debug;
 use dyn_clone::DynClone;
 
 use crate::AtomicConstraint;
-use crate::CheckerVariable;
 use crate::VariableState;
 
 /// Verifies that a propagator has nothing left to propagate.
@@ -57,26 +56,4 @@ impl<Atomic: AtomicConstraint> BoxedRetentionChecker<Atomic> {
     pub fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
         self.0.check_retention(state)
     }
-}
-
-/// The lower bound of a variable in the scope of a retention check.
-pub(crate) fn scope_lower_bound<Atomic: AtomicConstraint, Var: CheckerVariable<Atomic>>(
-    variable: &Var,
-    state: &VariableState<Atomic>,
-) -> i32 {
-    variable
-        .induced_lower_bound(state)
-        .as_int()
-        .unwrap_or_else(|| panic!("{variable:?} is not bounded below in the retention check"))
-}
-
-/// The upper bound of a variable in the scope of a retention check.
-pub(crate) fn scope_upper_bound<Atomic: AtomicConstraint, Var: CheckerVariable<Atomic>>(
-    variable: &Var,
-    state: &VariableState<Atomic>,
-) -> i32 {
-    variable
-        .induced_upper_bound(state)
-        .as_int()
-        .unwrap_or_else(|| panic!("{variable:?} is not bounded above in the retention check"))
 }

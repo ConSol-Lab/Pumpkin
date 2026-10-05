@@ -1,11 +1,10 @@
 use super::LinearLessOrEqualChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::IntExt;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::VariableState;
-use crate::checkers::retention_checker::scope_lower_bound;
-use crate::checkers::retention_checker::scope_upper_bound;
 
 impl<Var, Atomic> RetentionChecker<Atomic> for LinearLessOrEqualChecker<Var>
 where
@@ -18,8 +17,8 @@ where
         let lower_bound_sum = self
             .terms
             .iter()
-            .map(|term| i64::from(scope_lower_bound(term, state)))
-            .sum::<i64>();
+            .map(|term| IntExt::<i64>::from(term.induced_lower_bound(state)))
+            .sum::<IntExt<i64>>();
 
         if lower_bound_sum > bound {
             log::error!(
@@ -35,12 +34,13 @@ where
         //  We do this by effectively assigning the greatest value to the variable whilst keeping
         //  the other variables at their lower bound.
         let all_tight = self.terms.iter().all(|term| {
-            let greatest = bound - (lower_bound_sum - i64::from(scope_lower_bound(term, state)));
-            let is_tight = i64::from(scope_upper_bound(term, state)) <= greatest;
+            let greatest = bound
+                - (lower_bound_sum - IntExt::<i64>::from(term.induced_lower_bound(state)));
+            let is_tight = IntExt::<i64>::from(term.induced_upper_bound(state)) <= greatest;
 
             if !is_tight {
                 log::error!(
-                    "The upper bound of {term:?} could be lowered to {greatest} by the linear inequality {:?} <= {}",
+                    "The upper bound of {term:?} could be lowered to {greatest:?} by the linear inequality {:?} <= {}",
                     self.terms,
                     self.bound
                 );

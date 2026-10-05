@@ -3,11 +3,10 @@ use std::collections::BTreeSet;
 use super::BinaryEqualsChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::IntExt;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::VariableState;
-use crate::checkers::retention_checker::scope_lower_bound;
-use crate::checkers::retention_checker::scope_upper_bound;
 
 impl<Lhs, Rhs, Atomic> RetentionChecker<Atomic> for BinaryEqualsChecker<Lhs, Rhs>
 where
@@ -17,10 +16,10 @@ where
 {
     fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
         // 1. Assert that the bounds are equal
-        let lower = scope_lower_bound(&self.lhs, state);
-        let upper = scope_upper_bound(&self.lhs, state);
-        let same_bounds = lower == scope_lower_bound(&self.rhs, state)
-            && upper == scope_upper_bound(&self.rhs, state);
+        let lower = self.lhs.induced_lower_bound(state);
+        let upper = self.lhs.induced_upper_bound(state);
+        let same_bounds = lower == self.rhs.induced_lower_bound(state)
+            && upper == self.rhs.induced_upper_bound(state);
         // 2. Assert that the holes within the bounds are equal
         let are_equal = same_bounds
             && holes_within(state, &self.lhs, lower, upper)
@@ -51,8 +50,8 @@ where
 fn holes_within<Atomic: AtomicConstraint, Var: CheckerVariable<Atomic>>(
     state: &VariableState<Atomic>,
     variable: &Var,
-    lower: i32,
-    upper: i32,
+    lower: IntExt,
+    upper: IntExt,
 ) -> BTreeSet<i32> {
     variable
         .induced_holes(state)
