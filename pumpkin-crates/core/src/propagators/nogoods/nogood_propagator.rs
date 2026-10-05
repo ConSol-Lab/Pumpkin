@@ -43,7 +43,6 @@ use crate::propagators::nogoods::WatcherProcessingStatus;
 use crate::propagators::nogoods::arena_allocator::ArenaAllocator;
 use crate::propagators::nogoods::arena_allocator::NogoodIndex;
 use crate::propagators::nogoods::semantic_minimiser::SemanticMinimiser;
-use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -418,9 +417,16 @@ impl Propagator for NogoodPropagator {
                             // Found another predicate that can be the watcher.
                             found_new_watch = true;
 
+                            // The old cached predicate is known to not be falsified (otherwise no
+                            // new watcher would be searched for), so we set it to the other
+                            // watcher.
+                            let new_watcher = Watcher {
+                                cached_predicate: nogood_predicates[0],
+                                ..watcher
+                            };
                             Self::replace_watcher(
                                 &mut context,
-                                watcher,
+                                new_watcher,
                                 nogood_predicates,
                                 i,
                                 1,
@@ -1107,23 +1113,24 @@ impl NogoodPropagator {
             .push(NogoodInfo::new_learned_nogood_info(lbd));
         let _ = self.inference_codes.push(inference_code);
 
-        let watcher = Watcher {
-            nogood_id,
-            cached_predicate: self.nogood_predicates.get_nogood(nogood_id)[0],
-        };
-
         // Now we add two watchers to the first two predicates in the nogood; we are
         // guaranteed that these are different predicates
         NogoodPropagator::add_watcher(
             context,
             self.nogood_predicates.get_nogood(nogood_id)[0],
-            watcher,
+            Watcher {
+                nogood_id,
+                cached_predicate: self.nogood_predicates.get_nogood(nogood_id)[1],
+            },
             &mut self.watch_lists,
         );
         NogoodPropagator::add_watcher(
             context,
             self.nogood_predicates.get_nogood(nogood_id)[1],
-            watcher,
+            Watcher {
+                nogood_id,
+                cached_predicate: self.nogood_predicates.get_nogood(nogood_id)[0],
+            },
             &mut self.watch_lists,
         );
 
@@ -1380,9 +1387,7 @@ impl NogoodPropagator {
         }
 
         if watch_lists[predicate].is_empty() {
-            let actual_predicate = context.get_predicate(predicate);
-            let other_id = context.register_predicate(actual_predicate);
-            pumpkin_assert_eq_simple!(predicate, other_id);
+            context.register_predicate_id(predicate);
         }
 
         watch_lists[predicate].push(watcher);

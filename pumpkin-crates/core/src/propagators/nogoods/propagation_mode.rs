@@ -362,22 +362,23 @@ impl PropagationMode {
                     let _ = nogood_info.push(NogoodInfo::new_permanent_nogood_info());
                     let _ = inference_codes.push(inference_code);
 
-                    let watcher = Watcher {
-                        nogood_id,
-                        cached_predicate: nogood_predicates.get_nogood(nogood_id)[0],
-                    };
-
                     NogoodPropagator::add_watcher(
                         context,
                         nogood_predicates.get_nogood(nogood_id)[0],
-                        watcher,
+                        Watcher {
+                            nogood_id,
+                            cached_predicate: nogood_predicates.get_nogood(nogood_id)[1],
+                        },
                         watch_lists,
                     );
 
                     NogoodPropagator::add_watcher(
                         context,
                         nogood_predicates.get_nogood(nogood_id)[1],
-                        watcher,
+                        Watcher {
+                            nogood_id,
+                            cached_predicate: nogood_predicates.get_nogood(nogood_id)[0],
+                        },
                         watch_lists,
                     );
                 } else {
@@ -394,21 +395,22 @@ impl PropagationMode {
                 let _ = nogood_info.push(NogoodInfo::new_permanent_nogood_info());
                 let _ = inference_codes.push(inference_code);
 
-                let watcher = Watcher {
-                    nogood_id,
-                    cached_predicate: nogood_predicates.get_nogood(nogood_id)[0],
-                };
-
                 NogoodPropagator::add_watcher(
                     context,
                     nogood_predicates.get_nogood(nogood_id)[0],
-                    watcher,
+                    Watcher {
+                        nogood_id,
+                        cached_predicate: nogood_predicates.get_nogood(nogood_id)[1],
+                    },
                     watch_lists,
                 );
                 NogoodPropagator::add_watcher(
                     context,
                     nogood_predicates.get_nogood(nogood_id)[1],
-                    watcher,
+                    Watcher {
+                        nogood_id,
+                        cached_predicate: nogood_predicates.get_nogood(nogood_id)[0],
+                    },
                     watch_lists,
                 );
             }
