@@ -1,6 +1,7 @@
 use super::IntegerDivisionChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::ConflictCheck;
 use crate::InferenceChecker;
 use crate::IntExt;
 use crate::VariableState;
@@ -17,7 +18,7 @@ where
         state: VariableState<Atomic>,
         _premises: &[Atomic],
         _consequent: Option<&Atomic>,
-    ) -> bool {
+    ) -> ConflictCheck {
         // We apply interval arithmetic to determine that the computed interval `a div b`
         // does not intersect with the domain of `c`.
         //
@@ -58,6 +59,6 @@ where
         let c_lower = self.rhs.induced_lower_bound(&state);
         let c_upper = self.rhs.induced_upper_bound(&state);
 
-        computed_c_upper < c_lower || computed_c_lower > c_upper
+        ConflictCheck::detected_if(computed_c_upper < c_lower || computed_c_lower > c_upper)
     }
 }

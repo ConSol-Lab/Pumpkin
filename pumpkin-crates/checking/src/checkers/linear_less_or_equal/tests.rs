@@ -1,3 +1,4 @@
+use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::checkers::LinearLessOrEqualChecker;
 use crate::checkers::test_state;
@@ -16,7 +17,10 @@ fn retention_fails_when_an_upper_bound_can_be_lowered() {
         test_atomic!([y <= 10]),
     ]);
 
-    assert!(!checker().check_retention(&state));
+    assert_eq!(
+        checker().check_retention(&state),
+        RetentionCheck::PropagationMissed
+    );
 }
 
 #[test]
@@ -28,5 +32,8 @@ fn retention_fails_when_the_lower_bounds_exceed_the_bound() {
         test_atomic!([y <= 10]),
     ]);
 
-    assert!(!checker().check_retention(&state));
+    assert_eq!(
+        checker().check_retention(&state),
+        RetentionCheck::PropagationMissed
+    );
 }

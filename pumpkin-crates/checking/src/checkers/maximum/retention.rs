@@ -1,6 +1,7 @@
 use super::MaximumChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::VariableState;
 use crate::checkers::retention_checker::scope_lower_bound;
@@ -12,9 +13,9 @@ where
     ElementVar: CheckerVariable<Atomic>,
     Rhs: CheckerVariable<Atomic>,
 {
-    fn check_retention(&self, state: &VariableState<Atomic>) -> bool {
+    fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
         if self.array.is_empty() {
-            return false;
+            return RetentionCheck::PropagationMissed;
         }
 
         let rhs_lower = scope_lower_bound(&self.rhs, state);
@@ -35,7 +36,7 @@ where
                 self.rhs,
                 self.array
             );
-            return false;
+            return RetentionCheck::PropagationMissed;
         }
 
         if rhs_upper > greatest_upper {
@@ -44,7 +45,7 @@ where
                 self.rhs,
                 self.array
             );
-            return false;
+            return RetentionCheck::PropagationMissed;
         }
 
         // 2. Assert that no element exceeds the upper bound of the maximum
@@ -54,7 +55,7 @@ where
                     "The upper bound of {element:?} could be lowered to {rhs_upper}, the upper bound of the maximum {:?}",
                     self.rhs
                 );
-                return false;
+                return RetentionCheck::PropagationMissed;
             }
         }
 
@@ -73,9 +74,9 @@ where
                 candidates[0],
                 self.rhs
             );
-            return false;
+            return RetentionCheck::PropagationMissed;
         }
 
-        true
+        RetentionCheck::NothingToPropagate
     }
 }

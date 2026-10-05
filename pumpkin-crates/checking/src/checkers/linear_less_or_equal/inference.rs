@@ -1,6 +1,7 @@
 use super::LinearLessOrEqualChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::ConflictCheck;
 use crate::InferenceChecker;
 use crate::IntExt;
 use crate::VariableState;
@@ -15,7 +16,7 @@ where
         variable_state: VariableState<Atomic>,
         _: &[Atomic],
         _: Option<&Atomic>,
-    ) -> bool {
+    ) -> ConflictCheck {
         // Next, we evaluate the linear inequality. The lower bound of the
         // left-hand side must exceed the bound in the constraint. Note that the accumulator is an
         // IntExt, and if the lower bound of one of the terms is -infty, then the left-hand side
@@ -26,6 +27,6 @@ where
             .map(|variable| variable.induced_lower_bound(&variable_state).into())
             .sum();
 
-        left_hand_side > i64::from(self.bound)
+        ConflictCheck::detected_if(left_hand_side > i64::from(self.bound))
     }
 }

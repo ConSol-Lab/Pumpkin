@@ -1,6 +1,7 @@
 use super::ReifiedChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::ConflictCheck;
 use crate::InferenceChecker;
 use crate::VariableState;
 
@@ -14,9 +15,9 @@ where
         state: VariableState<Atomic>,
         premises: &[Atomic],
         consequent: Option<&Atomic>,
-    ) -> bool {
+    ) -> ConflictCheck {
         if self.reification_literal.induced_domain_contains(&state, 0) {
-            return false;
+            return ConflictCheck::NoConflictDetected;
         }
 
         if let Some(consequent) = consequent

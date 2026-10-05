@@ -1,6 +1,7 @@
 use super::LinearLessOrEqualChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::VariableState;
 use crate::checkers::retention_checker::scope_lower_bound;
@@ -11,7 +12,7 @@ where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
-    fn check_retention(&self, state: &VariableState<Atomic>) -> bool {
+    fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
         // 1. Check if the constraint is conflicting
         let bound = i64::from(self.bound);
         let lower_bound_sum = self
@@ -26,14 +27,14 @@ where
                 self.terms,
                 self.bound
             );
-            return false;
+            return RetentionCheck::PropagationMissed;
         }
 
         // 2. Assert that it is possible to assign the greatest value in the domain for each
         //    variable
         //  We do this by effectively assigning the greatest value to the variable whilst keeping
         //  the other variables at their lower bound.
-        self.terms.iter().all(|term| {
+        let all_tight = self.terms.iter().all(|term| {
             let greatest = bound - (lower_bound_sum - i64::from(scope_lower_bound(term, state)));
             let is_tight = i64::from(scope_upper_bound(term, state)) <= greatest;
 
@@ -46,6 +47,8 @@ where
             }
 
             is_tight
-        })
+        });
+
+        RetentionCheck::missed_if(!all_tight)
     }
 }

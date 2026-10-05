@@ -1,4 +1,5 @@
 use crate::Comparison;
+use crate::ConflictCheck;
 use crate::InferenceChecker;
 use crate::TestAtomic;
 use crate::VariableState;
@@ -61,7 +62,10 @@ fn test_simple_propagation() {
         .into(),
     };
 
-    assert!(checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(state, &premises, consequent.as_ref()),
+        ConflictCheck::ConflictDetected
+    );
 }
 
 #[test]
@@ -106,7 +110,10 @@ fn test_conflict() {
         .into(),
     };
 
-    assert!(checker.check(state, &premises, None));
+    assert_eq!(
+        checker.check(state, &premises, None),
+        ConflictCheck::ConflictDetected
+    );
 }
 
 #[test]
@@ -165,7 +172,10 @@ fn test_simple_propagation_not_accepted() {
         .into(),
     };
 
-    assert!(!checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(state, &premises, consequent.as_ref()),
+        ConflictCheck::NoConflictDetected
+    );
 }
 
 #[test]
@@ -210,5 +220,8 @@ fn test_conflict_not_accepted() {
         .into(),
     };
 
-    assert!(!checker.check(state, &premises, None));
+    assert_eq!(
+        checker.check(state, &premises, None),
+        ConflictCheck::NoConflictDetected
+    );
 }

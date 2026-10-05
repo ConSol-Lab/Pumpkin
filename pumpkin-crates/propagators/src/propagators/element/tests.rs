@@ -1,3 +1,4 @@
+use pumpkin_checking::ConflictCheck;
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::TestAtomic;
 use pumpkin_checking::VariableState;
@@ -229,5 +230,8 @@ fn holes_outside_union_bounds_are_ignored() {
 
     let checker = ElementChecker::new(vec!["x1", "x2"].into(), "x3", "x4");
 
-    assert!(checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(state, &premises, consequent.as_ref()),
+        ConflictCheck::ConflictDetected
+    );
 }

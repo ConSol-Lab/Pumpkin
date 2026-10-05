@@ -1,6 +1,7 @@
 use super::BinaryNotEqualsChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::VariableState;
 
@@ -10,7 +11,7 @@ where
     Lhs: CheckerVariable<Atomic>,
     Rhs: CheckerVariable<Atomic>,
 {
-    fn check_retention(&self, state: &VariableState<Atomic>) -> bool {
+    fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
         match (
             self.lhs.induced_fixed_value(state),
             self.rhs.induced_fixed_value(state),
@@ -24,7 +25,7 @@ where
                         self.rhs
                     );
                 }
-                lhs != rhs
+                RetentionCheck::missed_if(lhs == rhs)
             }
             (Some(value), None) => {
                 // 2. One side is fixed: assert that its value is removed from the other side
@@ -36,7 +37,7 @@ where
                         self.lhs
                     );
                 }
-                is_removed
+                RetentionCheck::missed_if(!is_removed)
             }
             (None, Some(value)) => {
                 // 2. One side is fixed: assert that its value is removed from the other side
@@ -48,10 +49,10 @@ where
                         self.rhs
                     );
                 }
-                is_removed
+                RetentionCheck::missed_if(!is_removed)
             }
             // 3. Neither side is fixed: nothing can be propagated
-            (None, None) => true,
+            (None, None) => RetentionCheck::NothingToPropagate,
         }
     }
 }

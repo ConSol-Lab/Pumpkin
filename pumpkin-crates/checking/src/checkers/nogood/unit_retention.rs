@@ -1,11 +1,12 @@
 use super::NogoodChecker;
 use super::truth_value;
 use crate::AtomicConstraint;
+use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::VariableState;
 
 impl<Atomic: AtomicConstraint> RetentionChecker<Atomic> for NogoodChecker<Atomic> {
-    fn check_retention(&self, state: &VariableState<Atomic>) -> bool {
+    fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
         // For unit propagation, the state is consistent if:
         // - at least two predicates are unassigned
         // - or otherwise, at least one predicate is assigned
@@ -35,6 +36,6 @@ impl<Atomic: AtomicConstraint> RetentionChecker<Atomic> for NogoodChecker<Atomic
             );
         }
 
-        is_consistent
+        RetentionCheck::missed_if(!is_consistent)
     }
 }

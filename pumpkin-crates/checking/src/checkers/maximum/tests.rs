@@ -1,3 +1,4 @@
+use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::checkers::MaximumChecker;
 use crate::checkers::test_state;
@@ -21,7 +22,10 @@ fn retention_fails_when_the_lower_bound_of_the_maximum_is_below_the_greatest_low
         test_atomic!([rhs <= 10]),
     ]);
 
-    assert!(!checker().check_retention(&state));
+    assert_eq!(
+        checker().check_retention(&state),
+        RetentionCheck::PropagationMissed
+    );
 }
 
 #[test]
@@ -35,7 +39,10 @@ fn retention_fails_when_an_element_exceeds_the_upper_bound_of_the_maximum() {
         test_atomic!([rhs <= 8]),
     ]);
 
-    assert!(!checker().check_retention(&state));
+    assert_eq!(
+        checker().check_retention(&state),
+        RetentionCheck::PropagationMissed
+    );
 }
 
 #[test]
@@ -49,5 +56,8 @@ fn retention_fails_when_the_sole_candidate_does_not_attain_the_lower_bound_of_th
         test_atomic!([rhs <= 8]),
     ]);
 
-    assert!(!checker().check_retention(&state));
+    assert_eq!(
+        checker().check_retention(&state),
+        RetentionCheck::PropagationMissed
+    );
 }

@@ -1,3 +1,4 @@
+use pumpkin_checking::ConflictCheck;
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::checkers::IntegerDivisionChecker;
 use pumpkin_core::state::State;
@@ -64,5 +65,8 @@ fn checker_does_not_report_false_conflict_for_tight_but_valid_quotient() {
 
     // div_floor(7, 2) = 3 is the max corner, so the true upper bound is 3 (matching rhs); a
     // buggy `.min()` over the floor-corners instead yields 2, which would wrongly conflict.
-    assert!(!checker.check(state, &premises, None));
+    assert_eq!(
+        checker.check(state, &premises, None),
+        ConflictCheck::NoConflictDetected
+    );
 }

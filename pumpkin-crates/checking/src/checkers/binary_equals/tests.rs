@@ -1,3 +1,4 @@
+use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::checkers::BinaryEqualsChecker;
 use crate::checkers::test_state;
@@ -14,7 +15,10 @@ fn retention_fails_when_the_bounds_differ() {
         test_atomic!([b <= 8]),
     ]);
 
-    assert!(!CHECKER.check_retention(&state));
+    assert_eq!(
+        CHECKER.check_retention(&state),
+        RetentionCheck::PropagationMissed
+    );
 }
 
 #[test]
@@ -27,7 +31,10 @@ fn retention_fails_when_a_hole_is_not_shared() {
         test_atomic!([b <= 5]),
     ]);
 
-    assert!(!CHECKER.check_retention(&state));
+    assert_eq!(
+        CHECKER.check_retention(&state),
+        RetentionCheck::PropagationMissed
+    );
 }
 
 #[test]
@@ -40,5 +47,8 @@ fn retention_holds_when_removed_values_leave_equal_domains() {
         test_atomic!([b == 3]),
     ]);
 
-    assert!(CHECKER.check_retention(&state));
+    assert_eq!(
+        CHECKER.check_retention(&state),
+        RetentionCheck::NothingToPropagate
+    );
 }

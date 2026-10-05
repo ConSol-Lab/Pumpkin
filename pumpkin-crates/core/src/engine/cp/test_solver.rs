@@ -75,8 +75,8 @@ impl TestSolver {
                 _: pumpkin_checking::VariableState<Predicate>,
                 _: &[Predicate],
                 _: Option<&Predicate>,
-            ) -> bool {
-                true
+            ) -> pumpkin_checking::ConflictCheck {
+                pumpkin_checking::ConflictCheck::ConflictDetected
             }
         }
 

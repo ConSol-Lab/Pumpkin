@@ -11,9 +11,11 @@ pub mod types;
 
 pub use checkers::BoxedChecker;
 pub use checkers::BoxedRetentionChecker;
+pub use checkers::ConflictCheck;
 pub use checkers::IgnoredInference;
 pub use checkers::InferenceChecker;
 pub use checkers::InvalidDeduction;
+pub use checkers::RetentionCheck;
 pub use checkers::RetentionChecker;
 pub use checkers::SupportingInference;
 pub use checkers::verify_deduction;

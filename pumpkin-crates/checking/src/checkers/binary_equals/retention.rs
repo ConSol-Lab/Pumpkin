@@ -3,6 +3,7 @@ use std::collections::BTreeSet;
 use super::BinaryEqualsChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::VariableState;
 use crate::checkers::retention_checker::scope_lower_bound;
@@ -14,7 +15,7 @@ where
     Lhs: CheckerVariable<Atomic>,
     Rhs: CheckerVariable<Atomic>,
 {
-    fn check_retention(&self, state: &VariableState<Atomic>) -> bool {
+    fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
         // 1. Assert that the bounds are equal
         let lower = scope_lower_bound(&self.lhs, state);
         let upper = scope_upper_bound(&self.lhs, state);
@@ -43,7 +44,7 @@ where
             );
         }
 
-        are_equal
+        RetentionCheck::missed_if(!are_equal)
     }
 }
 

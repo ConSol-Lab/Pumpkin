@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::ConflictCheck;
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::VariableState;
 use pumpkin_checking::checkers::BinaryEqualsChecker;
@@ -37,7 +38,9 @@ pub(crate) fn verify_binary_equals(
 
     let checker = BinaryEqualsChecker { lhs, rhs };
 
-    if checker.check(state, &fact.premises, fact.consequent.as_ref()) {
+    if checker.check(state, &fact.premises, fact.consequent.as_ref())
+        == ConflictCheck::ConflictDetected
+    {
         Ok(())
     } else {
         Err(InvalidInference::Unsound)

@@ -1,4 +1,5 @@
 use crate::Comparison;
+use crate::ConflictCheck;
 use crate::InferenceChecker;
 use crate::TestAtomic;
 use crate::VariableState;
@@ -40,7 +41,10 @@ fn conflict() {
         capacity: 1,
     };
 
-    assert!(checker.check(state, &premises, None));
+    assert_eq!(
+        checker.check(state, &premises, None),
+        ConflictCheck::ConflictDetected
+    );
 }
 
 #[test]
@@ -76,7 +80,10 @@ fn hole_in_domain() {
         capacity: 4,
     };
 
-    assert!(checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(state, &premises, consequent.as_ref()),
+        ConflictCheck::ConflictDetected
+    );
 }
 
 #[test]
@@ -129,7 +136,10 @@ fn lower_bound_chain() {
         capacity: 4,
     };
 
-    assert!(checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(state, &premises, consequent.as_ref()),
+        ConflictCheck::ConflictDetected
+    );
 }
 
 #[test]
@@ -182,7 +192,10 @@ fn upper_bound_chain() {
         capacity: 4,
     };
 
-    assert!(checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(state, &premises, consequent.as_ref()),
+        ConflictCheck::ConflictDetected
+    );
 }
 
 #[test]
@@ -218,7 +231,10 @@ fn hole_in_domain_not_accepted() {
         capacity: 4,
     };
 
-    assert!(!checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(state, &premises, consequent.as_ref()),
+        ConflictCheck::NoConflictDetected
+    );
 }
 
 #[test]
@@ -271,7 +287,10 @@ fn lower_bound_chain_not_accepted() {
         capacity: 4,
     };
 
-    assert!(!checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(state, &premises, consequent.as_ref()),
+        ConflictCheck::NoConflictDetected
+    );
 }
 
 #[test]
@@ -324,7 +343,10 @@ fn upper_bound_chain_not_accepted() {
         capacity: 4,
     };
 
-    assert!(!checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(state, &premises, consequent.as_ref()),
+        ConflictCheck::NoConflictDetected
+    );
 }
 
 #[test]
@@ -372,7 +394,10 @@ fn simple_test() {
         capacity: 2,
     };
 
-    assert!(checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(state, &premises, consequent.as_ref()),
+        ConflictCheck::ConflictDetected
+    );
 }
 
 #[test]
@@ -435,5 +460,8 @@ fn test_holes_in_domain() {
         capacity: 2,
     };
 
-    assert!(checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(state, &premises, consequent.as_ref()),
+        ConflictCheck::ConflictDetected
+    );
 }

@@ -3,6 +3,7 @@ use super::helpers::compute_quotient_bound_ext;
 use super::helpers::product_bound_ext;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::ConflictCheck;
 use crate::InferenceChecker;
 use crate::IntExt;
 use crate::VariableState;
@@ -19,7 +20,7 @@ where
         state: VariableState<Atomic>,
         _premises: &[Atomic],
         consequent: Option<&Atomic>,
-    ) -> bool {
+    ) -> ConflictCheck {
         let a_min = self.a.induced_lower_bound(&state).into();
         let a_max = self.a.induced_upper_bound(&state).into();
         let b_min = self.b.induced_lower_bound(&state).into();
@@ -40,13 +41,15 @@ where
                 .is_some_and(|(lo, hi)| is_disjoint(lo, hi, b_min, b_max))
         };
 
-        match consequent {
+        let is_conflict = match consequent {
             Some(atomic) if self.c.does_atomic_constrain_self(atomic) => check_c(),
             Some(atomic) if self.a.does_atomic_constrain_self(atomic) => check_a(),
             Some(atomic) if self.b.does_atomic_constrain_self(atomic) => check_b(),
             Some(_) => unreachable!(),
             None => check_c() || check_a() || check_b(),
-        }
+        };
+
+        ConflictCheck::detected_if(is_conflict)
     }
 }
 

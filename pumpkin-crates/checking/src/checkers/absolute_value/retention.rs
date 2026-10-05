@@ -1,6 +1,7 @@
 use super::AbsoluteValueChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::VariableState;
 use crate::checkers::retention_checker::scope_lower_bound;
@@ -12,7 +13,7 @@ where
     VB: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
-    fn check_retention(&self, state: &VariableState<Atomic>) -> bool {
+    fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
         let signed_lower = i64::from(scope_lower_bound(&self.signed, state));
         let signed_upper = i64::from(scope_upper_bound(&self.signed, state));
         let absolute_lower = i64::from(scope_lower_bound(&self.absolute, state));
@@ -33,7 +34,7 @@ where
                 self.absolute,
                 self.signed
             );
-            return false;
+            return RetentionCheck::PropagationMissed;
         }
 
         // 2. Assert that the upper bound of absolute equals the greatest absolute value of signed
@@ -44,7 +45,7 @@ where
                 self.absolute,
                 self.signed
             );
-            return false;
+            return RetentionCheck::PropagationMissed;
         }
 
         // 3. Assert that the bound of signed nearest to zero is at least the lower bound of
@@ -57,7 +58,7 @@ where
                 -absolute_lower,
                 self.absolute
             );
-            return false;
+            return RetentionCheck::PropagationMissed;
         }
         if signed_lower >= 0 && signed_lower < absolute_lower {
             log::error!(
@@ -65,9 +66,9 @@ where
                 self.signed,
                 self.absolute
             );
-            return false;
+            return RetentionCheck::PropagationMissed;
         }
 
-        true
+        RetentionCheck::NothingToPropagate
     }
 }

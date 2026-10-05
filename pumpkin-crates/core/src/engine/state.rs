@@ -1429,9 +1429,9 @@ mod tests {
         fn check_retention(
             &self,
             _: &pumpkin_checking::VariableState<crate::predicates::Predicate>,
-        ) -> bool {
+        ) -> pumpkin_checking::RetentionCheck {
             let _ = self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            true
+            pumpkin_checking::RetentionCheck::NothingToPropagate
         }
     }
 
@@ -1533,8 +1533,8 @@ mod tests {
             _: pumpkin_checking::VariableState<crate::predicates::Predicate>,
             _: &[crate::predicates::Predicate],
             _: Option<&crate::predicates::Predicate>,
-        ) -> bool {
-            false
+        ) -> pumpkin_checking::ConflictCheck {
+            pumpkin_checking::ConflictCheck::NoConflictDetected
         }
     }
 
@@ -1565,8 +1565,8 @@ mod tests {
         fn check_retention(
             &self,
             _: &pumpkin_checking::VariableState<crate::predicates::Predicate>,
-        ) -> bool {
-            false
+        ) -> pumpkin_checking::RetentionCheck {
+            pumpkin_checking::RetentionCheck::PropagationMissed
         }
     }
 

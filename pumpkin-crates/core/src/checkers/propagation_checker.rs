@@ -1,4 +1,5 @@
 use pumpkin_checking::BoxedChecker;
+use pumpkin_checking::ConflictCheck;
 use pumpkin_checking::VariableState;
 
 use crate::predicates::Predicate;
@@ -42,13 +43,12 @@ impl PropagationChecker {
             VariableState::prepare_for_conflict_check(premises.iter().copied(), consequent)
                 .map_err(InvalidInference::InconsistentPredicates)?;
 
-        if self
+        match self
             .inference_checker
             .check(variable_state, premises, consequent.as_ref())
         {
-            Ok(())
-        } else {
-            Err(InvalidInference::Unsound)
+            ConflictCheck::ConflictDetected => Ok(()),
+            ConflictCheck::NoConflictDetected => Err(InvalidInference::Unsound),
         }
     }
 }

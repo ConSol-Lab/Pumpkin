@@ -1,6 +1,8 @@
 use std::borrow::Cow;
 
+use pumpkin_checking::ConflictCheck;
 use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::RetentionCheck;
 use pumpkin_checking::RetentionChecker;
 use pumpkin_checking::VariableState;
 
@@ -276,14 +278,19 @@ impl ConflictRule for GenericRule {
 struct AcceptEverything;
 
 impl InferenceChecker<Predicate> for AcceptEverything {
-    fn check(&self, _: VariableState<Predicate>, _: &[Predicate], _: Option<&Predicate>) -> bool {
-        true
+    fn check(
+        &self,
+        _: VariableState<Predicate>,
+        _: &[Predicate],
+        _: Option<&Predicate>,
+    ) -> ConflictCheck {
+        ConflictCheck::ConflictDetected
     }
 }
 
 impl RetentionChecker<Predicate> for AcceptEverything {
-    fn check_retention(&self, _: &VariableState<Predicate>) -> bool {
-        true
+    fn check_retention(&self, _: &VariableState<Predicate>) -> RetentionCheck {
+        RetentionCheck::NothingToPropagate
     }
 }
 

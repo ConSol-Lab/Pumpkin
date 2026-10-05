@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
 use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::RetentionCheck;
 use pumpkin_checking::RetentionChecker;
 use pumpkin_checking::VariableState;
 
@@ -61,7 +62,7 @@ impl MissingRetentionChecker {
 }
 
 impl RetentionChecker<Predicate> for MissingRetentionChecker {
-    fn check_retention(&self, _: &VariableState<Predicate>) -> bool {
+    fn check_retention(&self, _: &VariableState<Predicate>) -> RetentionCheck {
         match *self {}
     }
 }

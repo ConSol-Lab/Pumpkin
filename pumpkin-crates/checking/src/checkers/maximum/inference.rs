@@ -1,6 +1,7 @@
 use super::MaximumChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::ConflictCheck;
 use crate::InferenceChecker;
 use crate::IntExt;
 use crate::VariableState;
@@ -11,7 +12,12 @@ where
     ElementVar: CheckerVariable<Atomic>,
     Rhs: CheckerVariable<Atomic>,
 {
-    fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
+    fn check(
+        &self,
+        state: VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> ConflictCheck {
         let lowest_maximum = self
             .array
             .iter()
@@ -28,7 +34,9 @@ where
         // If the intersection between the domain of `rhs` and `[lowest_maximum,
         // highest_maximum]` is empty, there is a conflict.
 
-        lowest_maximum > self.rhs.induced_upper_bound(&state)
-            || highest_maximum < self.rhs.induced_lower_bound(&state)
+        ConflictCheck::detected_if(
+            lowest_maximum > self.rhs.induced_upper_bound(&state)
+                || highest_maximum < self.rhs.induced_lower_bound(&state),
+        )
     }
 }

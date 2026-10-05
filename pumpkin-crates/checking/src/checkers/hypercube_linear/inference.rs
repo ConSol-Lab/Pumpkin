@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use super::HypercubeLinearChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::ConflictCheck;
 use crate::InferenceChecker;
 use crate::IntExt;
 use crate::VariableState;
@@ -12,7 +13,12 @@ where
     Atomic: AtomicConstraint + Clone + Debug,
     Var: CheckerVariable<Atomic>,
 {
-    fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
+    fn check(
+        &self,
+        state: VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> ConflictCheck {
         let hypercube_satisfied = self.hypercube.iter().all(|atomic| state.is_true(atomic));
 
         let term_sum = self
@@ -24,6 +30,6 @@ where
         let linear_slack = i64::from(self.bound) - term_sum;
         let linear_conflicting = linear_slack < 0;
 
-        hypercube_satisfied && linear_conflicting
+        ConflictCheck::detected_if(hypercube_satisfied && linear_conflicting)
     }
 }

@@ -5,6 +5,7 @@ use super::ExtendedNogoodChecker;
 use super::truth_value;
 use crate::AtomicConstraint;
 use crate::Comparison;
+use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::VariableState;
 
@@ -13,7 +14,7 @@ where
     Atomic: AtomicConstraint,
     Atomic::Identifier: Debug,
 {
-    fn check_retention(&self, state: &VariableState<Atomic>) -> bool {
+    fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
         // 1. Determine the variables with a predicate which is not true; if there are none then the
         //    nogood is conflicting
         let free_domains = self
@@ -27,13 +28,13 @@ where
                 "The nogood {:?} holds; it should have been reported as a conflict",
                 self.nogood
             );
-            return false;
+            return RetentionCheck::PropagationMissed;
         }
 
         // 2. If predicates over at least two variables are not true then nothing can be propagated
         let free_domain = &free_domains[0];
         if free_domains.iter().any(|domain| domain != free_domain) {
-            return true;
+            return RetentionCheck::NothingToPropagate;
         }
 
         // 3. Determine the values of the remaining variable which satisfy all of its predicates
@@ -78,6 +79,6 @@ where
             );
         }
 
-        no_value_allowed
+        RetentionCheck::missed_if(!no_value_allowed)
     }
 }

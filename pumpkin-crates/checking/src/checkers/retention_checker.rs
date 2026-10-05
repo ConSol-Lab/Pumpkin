@@ -12,9 +12,30 @@ use crate::VariableState;
 /// bounded. The check succeeds when no inference of the rule applies in that state: giving any
 /// variable any value of its domain does not let the rule report a conflict.
 pub trait RetentionChecker<Atomic: AtomicConstraint>: Debug + DynClone {
-    /// Returns `true` if nothing is left to propagate in `state`, and `false` if some inference
-    /// of the rule still applies.
-    fn check_retention(&self, state: &VariableState<Atomic>) -> bool;
+    /// Whether some inference of the rule still applies in `state`.
+    fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck;
+}
+
+/// The outcome of [`RetentionChecker::check_retention`].
+#[must_use]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RetentionCheck {
+    /// No inference of the rule applies, so the propagator reached its fixpoint.
+    NothingToPropagate,
+    /// Some inference of the rule still applies, which the propagator missed.
+    PropagationMissed,
+}
+
+impl RetentionCheck {
+    /// [`RetentionCheck::PropagationMissed`] when `propagation_missed` holds, and
+    /// [`RetentionCheck::NothingToPropagate`] otherwise.
+    pub fn missed_if(propagation_missed: bool) -> RetentionCheck {
+        if propagation_missed {
+            RetentionCheck::PropagationMissed
+        } else {
+            RetentionCheck::NothingToPropagate
+        }
+    }
 }
 
 /// Wrapper around `Box<dyn RetentionChecker<Atomic>>` that implements [`Clone`].
@@ -32,7 +53,8 @@ impl<Atomic: AtomicConstraint> BoxedRetentionChecker<Atomic> {
         BoxedRetentionChecker(Box::new(checker))
     }
 
-    pub fn check_retention(&self, state: &VariableState<Atomic>) -> bool {
+    /// See [`RetentionChecker::check_retention`].
+    pub fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
         self.0.check_retention(state)
     }
 }

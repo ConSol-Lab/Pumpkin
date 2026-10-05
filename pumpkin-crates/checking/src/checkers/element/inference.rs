@@ -1,6 +1,7 @@
 use super::ElementChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::ConflictCheck;
 use crate::Domain;
 use crate::InferenceChecker;
 use crate::VariableState;
@@ -12,7 +13,12 @@ where
     VI: CheckerVariable<Atomic>,
     VE: CheckerVariable<Atomic>,
 {
-    fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
+    fn check(
+        &self,
+        state: VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> ConflictCheck {
         self.union.borrow_mut().reset();
 
         // A domain consistent checker for element does the following:
@@ -60,6 +66,6 @@ where
         let intersected_domain =
             Domain::new(intersection_lower_bound, intersection_upper_bound, holes);
 
-        !intersected_domain.is_consistent()
+        ConflictCheck::detected_if(!intersected_domain.is_consistent())
     }
 }

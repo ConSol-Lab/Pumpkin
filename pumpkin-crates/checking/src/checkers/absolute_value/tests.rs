@@ -1,3 +1,4 @@
+use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::checkers::AbsoluteValueChecker;
 use crate::checkers::test_state;
@@ -17,7 +18,10 @@ fn retention_fails_when_the_upper_bound_of_absolute_exceeds_the_greatest_absolut
         test_atomic!([absolute <= 10]),
     ]);
 
-    assert!(!CHECKER.check_retention(&state));
+    assert_eq!(
+        CHECKER.check_retention(&state),
+        RetentionCheck::PropagationMissed
+    );
 }
 
 #[test]
@@ -29,7 +33,10 @@ fn retention_fails_when_the_lower_bound_of_absolute_is_below_the_least_absolute_
         test_atomic!([absolute <= 5]),
     ]);
 
-    assert!(!CHECKER.check_retention(&state));
+    assert_eq!(
+        CHECKER.check_retention(&state),
+        RetentionCheck::PropagationMissed
+    );
 }
 
 #[test]
@@ -41,5 +48,8 @@ fn retention_fails_when_a_sign_fixed_signed_reaches_below_the_lower_bound_of_abs
         test_atomic!([absolute <= 5]),
     ]);
 
-    assert!(!CHECKER.check_retention(&state));
+    assert_eq!(
+        CHECKER.check_retention(&state),
+        RetentionCheck::PropagationMissed
+    );
 }

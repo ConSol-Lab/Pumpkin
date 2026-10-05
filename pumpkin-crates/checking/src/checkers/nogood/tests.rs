@@ -1,3 +1,4 @@
+use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::TestAtomic;
 use crate::checkers::ExtendedNogoodChecker;
@@ -26,7 +27,10 @@ fn a_nogood_with_multiple_untrue_predicates_is_consistent() {
         nogood: [test_atomic!([x >= 4]), test_atomic!([y <= 2])].into(),
     };
 
-    assert!(checker.check_retention(&state));
+    assert_eq!(
+        checker.check_retention(&state),
+        RetentionCheck::NothingToPropagate
+    );
 }
 
 #[test]
@@ -41,7 +45,10 @@ fn a_nogood_with_one_untrue_predicates_and_no_false_predicates_is_inconsistent()
         nogood: [test_atomic!([x >= 4]), test_atomic!([y <= 5])].into(),
     };
 
-    assert!(!checker.check_retention(&state));
+    assert_eq!(
+        checker.check_retention(&state),
+        RetentionCheck::PropagationMissed
+    );
 }
 
 #[test]
@@ -56,7 +63,10 @@ fn a_nogood_with_any_false_predicates_is_consistent() {
         nogood: [test_atomic!([x >= 4]), test_atomic!([y <= 2])].into(),
     };
 
-    assert!(checker.check_retention(&state));
+    assert_eq!(
+        checker.check_retention(&state),
+        RetentionCheck::NothingToPropagate
+    );
 }
 
 #[test]
@@ -68,11 +78,17 @@ fn a_free_variable_with_allowed_values_is_not_consistent_under_extended_propagat
     ]);
 
     let extended = ExtendedNogoodChecker { nogood: nogood() };
-    assert!(!extended.check_retention(&state));
+    assert_eq!(
+        extended.check_retention(&state),
+        RetentionCheck::PropagationMissed
+    );
 
     // Unit propagation cannot fire with two atomic constraints over `x` unassigned.
     let unit = NogoodChecker { nogood: nogood() };
-    assert!(unit.check_retention(&state));
+    assert_eq!(
+        unit.check_retention(&state),
+        RetentionCheck::NothingToPropagate
+    );
 }
 
 #[test]
@@ -87,7 +103,10 @@ fn a_free_variable_without_allowed_values_is_consistent() {
     ]);
     let checker = ExtendedNogoodChecker { nogood: nogood() };
 
-    assert!(checker.check_retention(&state));
+    assert_eq!(
+        checker.check_retention(&state),
+        RetentionCheck::NothingToPropagate
+    );
 }
 
 #[test]
@@ -100,7 +119,10 @@ fn two_free_variables_are_consistent() {
     ]);
     let checker = ExtendedNogoodChecker { nogood: nogood() };
 
-    assert!(checker.check_retention(&state));
+    assert_eq!(
+        checker.check_retention(&state),
+        RetentionCheck::NothingToPropagate
+    );
 }
 
 #[test]
@@ -108,5 +130,8 @@ fn a_nogood_that_holds_is_not_consistent() {
     let state = test_state([test_atomic!([x == 4]), test_atomic!([y == 1])]);
     let checker = ExtendedNogoodChecker { nogood: nogood() };
 
-    assert!(!checker.check_retention(&state));
+    assert_eq!(
+        checker.check_retention(&state),
+        RetentionCheck::PropagationMissed
+    );
 }

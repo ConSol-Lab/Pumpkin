@@ -8,16 +8,38 @@ use crate::VariableState;
 /// An inference checker tests whether the given state is a conflict under the semantics of an
 /// inference rule.
 pub trait InferenceChecker<Atomic: AtomicConstraint>: Debug + DynClone {
-    /// Returns `true` if `state` is a conflict, and `false` if not.
+    /// Whether `state` is a conflict under the rule.
     ///
     /// For the conflict check, all the premises are true in the state and the consequent, if
-    /// present, is false.
+    /// present, is false. The inference is accepted when a conflict is detected.
     fn check(
         &self,
         state: VariableState<Atomic>,
         premises: &[Atomic],
         consequent: Option<&Atomic>,
-    ) -> bool;
+    ) -> ConflictCheck;
+}
+
+/// The outcome of [`InferenceChecker::check`].
+#[must_use]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConflictCheck {
+    /// The state is a conflict under the rule, so the inference is accepted.
+    ConflictDetected,
+    /// The state is not a conflict under the rule, so the inference is rejected.
+    NoConflictDetected,
+}
+
+impl ConflictCheck {
+    /// [`ConflictCheck::ConflictDetected`] when `is_conflict` holds, and
+    /// [`ConflictCheck::NoConflictDetected`] otherwise.
+    pub fn detected_if(is_conflict: bool) -> ConflictCheck {
+        if is_conflict {
+            ConflictCheck::ConflictDetected
+        } else {
+            ConflictCheck::NoConflictDetected
+        }
+    }
 }
 
 /// Wrapper around `Box<dyn InferenceChecker<Atomic>>` that implements [`Clone`].
@@ -43,7 +65,7 @@ impl<Atomic: AtomicConstraint> BoxedChecker<Atomic> {
         variable_state: VariableState<Atomic>,
         premises: &[Atomic],
         consequent: Option<&Atomic>,
-    ) -> bool {
+    ) -> ConflictCheck {
         self.0.check(variable_state, premises, consequent)
     }
 }

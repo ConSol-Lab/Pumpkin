@@ -1,4 +1,5 @@
 use pumpkin_checking::BoxedRetentionChecker;
+use pumpkin_checking::RetentionCheck;
 
 use crate::checkers::Scope;
 use crate::containers::KeyedBitSet;
@@ -178,18 +179,17 @@ impl RetentionCheckerStore {
             return Ok(());
         };
 
-        if entry
+        match entry
             .checker
             .check_retention(&entry.scope.snapshot(domains))
         {
-            return Ok(());
+            RetentionCheck::NothingToPropagate => Ok(()),
+            RetentionCheck::PropagationMissed => Err(RetentionFailure {
+                propagator: entry.propagator,
+                inference_code: entry.inference_code,
+                variables: entry.scope.domains().map(|(_, domain)| domain).collect(),
+            }),
         }
-
-        Err(RetentionFailure {
-            propagator: entry.propagator,
-            inference_code: entry.inference_code,
-            variables: entry.scope.domains().map(|(_, domain)| domain).collect(),
-        })
     }
 
     fn is_excluded(&self, propagator: PropagatorId) -> bool {

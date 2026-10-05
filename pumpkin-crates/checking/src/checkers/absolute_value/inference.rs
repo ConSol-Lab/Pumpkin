@@ -1,6 +1,7 @@
 use super::AbsoluteValueChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::ConflictCheck;
 use crate::InferenceChecker;
 use crate::IntExt;
 use crate::VariableState;
@@ -11,7 +12,12 @@ where
     VB: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
-    fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
+    fn check(
+        &self,
+        state: VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> ConflictCheck {
         let signed_lower = self.signed.induced_lower_bound(&state);
         let signed_upper = self.signed.induced_upper_bound(&state);
         let absolute_lower = self.absolute.induced_lower_bound(&state);
@@ -19,7 +25,7 @@ where
 
         if absolute_lower < 0 {
             // The absolute value cannot have negative values.
-            return true;
+            return ConflictCheck::ConflictDetected;
         }
 
         // Now we compute the interval for |signed| based on the domain of signed.
@@ -34,6 +40,8 @@ where
         };
 
         // The intervals should not match, otherwise there is no conflict.
-        computed_signed_lower != absolute_lower || computed_signed_upper != absolute_upper
+        ConflictCheck::detected_if(
+            computed_signed_lower != absolute_lower || computed_signed_upper != absolute_upper,
+        )
     }
 }

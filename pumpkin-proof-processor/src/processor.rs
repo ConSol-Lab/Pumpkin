@@ -746,7 +746,9 @@ mod tests {
     use drcp_format::IntComparison::*;
     use drcp_format::reader::ReadAtomic;
     use drcp_format::reader::ReadStep;
+    use pumpkin_checking::ConflictCheck;
     use pumpkin_checking::InferenceChecker;
+    use pumpkin_checking::RetentionCheck;
     use pumpkin_checking::RetentionChecker;
     use pumpkin_checking::VariableState;
     use pumpkin_core::checkers::Scope;
@@ -1026,8 +1028,8 @@ mod tests {
             state: VariableState<Predicate>,
             _premises: &[Predicate],
             _consequent: Option<&Predicate>,
-        ) -> bool {
-            state.is_true(&self.watched) && state.is_true(&self.other)
+        ) -> ConflictCheck {
+            ConflictCheck::detected_if(state.is_true(&self.watched) && state.is_true(&self.other))
         }
     }
 
@@ -1069,8 +1071,8 @@ mod tests {
     struct AcceptEverything;
 
     impl RetentionChecker<Predicate> for AcceptEverything {
-        fn check_retention(&self, _: &VariableState<Predicate>) -> bool {
-            true
+        fn check_retention(&self, _: &VariableState<Predicate>) -> RetentionCheck {
+            RetentionCheck::NothingToPropagate
         }
     }
 

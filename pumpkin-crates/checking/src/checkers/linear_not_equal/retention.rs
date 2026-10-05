@@ -1,6 +1,7 @@
 use super::LinearNotEqualChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::VariableState;
 
@@ -9,7 +10,7 @@ where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
-    fn check_retention(&self, state: &VariableState<Atomic>) -> bool {
+    fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
         let unfixed_terms = self
             .terms
             .iter()
@@ -36,12 +37,12 @@ where
                 );
             }
 
-            return !is_violated;
+            return RetentionCheck::missed_if(is_violated);
         }
 
         // 2. If at least two terms are unfixed then nothing can be propagated
         if unfixed_terms.len() >= 2 {
-            return true;
+            return RetentionCheck::NothingToPropagate;
         }
 
         // 3. Assert that the single unfixed term cannot take the value which completes the sum to
@@ -61,6 +62,6 @@ where
             );
         }
 
-        is_removed
+        RetentionCheck::missed_if(!is_removed)
     }
 }

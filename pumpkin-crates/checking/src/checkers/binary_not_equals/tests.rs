@@ -1,3 +1,4 @@
+use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::checkers::BinaryNotEqualsChecker;
 use crate::checkers::test_state;
@@ -13,7 +14,10 @@ fn retention_fails_when_the_fixed_value_is_present_in_the_other_domain() {
         test_atomic!([b <= 5]),
     ]);
 
-    assert!(!CHECKER.check_retention(&state));
+    assert_eq!(
+        CHECKER.check_retention(&state),
+        RetentionCheck::PropagationMissed
+    );
 }
 
 #[test]
@@ -25,5 +29,8 @@ fn retention_holds_with_both_sides_unfixed() {
         test_atomic!([b <= 5]),
     ]);
 
-    assert!(CHECKER.check_retention(&state));
+    assert_eq!(
+        CHECKER.check_retention(&state),
+        RetentionCheck::NothingToPropagate
+    );
 }

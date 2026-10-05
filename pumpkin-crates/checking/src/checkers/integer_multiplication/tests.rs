@@ -1,4 +1,5 @@
 use crate::Comparison;
+use crate::ConflictCheck;
 use crate::InferenceChecker;
 use crate::TestAtomic;
 use crate::VariableState;
@@ -39,7 +40,10 @@ fn checker_detects_a_pure_conflict_with_no_consequent() {
     };
 
     // 3 * 4 = 12 != 10, so this is a genuine conflict.
-    assert!(checker.check(state, &premises, None));
+    assert_eq!(
+        checker.check(state, &premises, None),
+        ConflictCheck::ConflictDetected
+    );
 }
 
 #[test]
@@ -60,5 +64,8 @@ fn checker_does_not_report_a_conflict_for_consistent_premises_with_no_consequent
     };
 
     // `b` and `c` are unconstrained, so `a = 3` alone can't be a conflict.
-    assert!(!checker.check(state, &premises, None));
+    assert_eq!(
+        checker.check(state, &premises, None),
+        ConflictCheck::NoConflictDetected
+    );
 }

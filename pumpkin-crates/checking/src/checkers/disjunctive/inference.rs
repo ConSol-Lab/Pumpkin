@@ -3,6 +3,7 @@ use super::DisjunctiveEdgeFindingChecker;
 use super::helpers::CheckerThetaLambdaTree;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::ConflictCheck;
 use crate::InferenceChecker;
 use crate::IntExt;
 use crate::VariableState;
@@ -64,7 +65,7 @@ where
         state: VariableState<Atomic>,
         _premises: &[Atomic],
         consequent: Option<&Atomic>,
-    ) -> bool {
+    ) -> ConflictCheck {
         // We want to detect conflicts, and we split into two cases:
         // 1. If it is a conflict explanation then overload checking can be applied directly and
         //    should lead to a conflict.
@@ -99,12 +100,12 @@ where
                 // If we do not find a conflict using overload checking,
                 // then it is not a valid explanation.
                 if !overload_checking(&self.tasks, &assigned_state) {
-                    return false;
+                    return ConflictCheck::NoConflictDetected;
                 }
             }
-            true
+            ConflictCheck::ConflictDetected
         } else {
-            overload_checking(&self.tasks, &state)
+            ConflictCheck::detected_if(overload_checking(&self.tasks, &state))
         }
     }
 }
