@@ -3,9 +3,9 @@ use std::cmp::Reverse;
 use super::DisjunctiveEdgeFindingChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::DomainView;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
-use crate::VariableState;
 
 /// A task with the bounds it has in the state.
 #[derive(Clone, Copy, Debug)]
@@ -33,7 +33,7 @@ where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
-    fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
+    fn check_retention(&self, state: &dyn DomainView<Atomic>) -> RetentionCheck {
         let mut tasks = self
             .tasks
             .iter()

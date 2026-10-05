@@ -3,16 +3,16 @@ use std::fmt::Debug;
 use dyn_clone::DynClone;
 
 use crate::AtomicConstraint;
-use crate::VariableState;
+use crate::DomainView;
 
 /// Verifies that a propagator has nothing left to propagate.
 ///
-/// The state holds the domains of the variables in the checker's scope, and each of them is
-/// bounded. The check succeeds when no inference of the rule applies in that state: giving any
-/// variable any value of its domain does not let the rule report a conflict.
+/// The checker reads the domains of the variables in its scope, and each of them is bounded. The
+/// check succeeds when no inference of the rule applies in those domains: giving any variable any
+/// value of its domain does not let the rule report a conflict.
 pub trait RetentionChecker<Atomic: AtomicConstraint>: Debug + DynClone {
-    /// Whether some inference of the rule still applies in `state`.
-    fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck;
+    /// Whether some inference of the rule still applies in `domains`.
+    fn check_retention(&self, domains: &dyn DomainView<Atomic>) -> RetentionCheck;
 }
 
 /// The outcome of [`RetentionChecker::check_retention`].
@@ -53,7 +53,7 @@ impl<Atomic: AtomicConstraint> BoxedRetentionChecker<Atomic> {
     }
 
     /// See [`RetentionChecker::check_retention`].
-    pub fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
-        self.0.check_retention(state)
+    pub fn check_retention(&self, domains: &dyn DomainView<Atomic>) -> RetentionCheck {
+        self.0.check_retention(domains)
     }
 }

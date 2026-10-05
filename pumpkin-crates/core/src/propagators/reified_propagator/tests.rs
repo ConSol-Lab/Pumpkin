@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
 use pumpkin_checking::ConflictCheck;
+use pumpkin_checking::DomainView;
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::RetentionCheck;
 use pumpkin_checking::RetentionChecker;
@@ -289,7 +290,7 @@ impl InferenceChecker<Predicate> for AcceptEverything {
 }
 
 impl RetentionChecker<Predicate> for AcceptEverything {
-    fn check_retention(&self, _: &VariableState<Predicate>) -> RetentionCheck {
+    fn check_retention(&self, _: &dyn DomainView<Predicate>) -> RetentionCheck {
         RetentionCheck::NothingToPropagate
     }
 }

@@ -3,10 +3,10 @@ use std::fmt::Debug;
 use super::HypercubeLinearChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::DomainView;
 use crate::IntExt;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
-use crate::VariableState;
 
 /// Mirrors one pass of the propagation of the hypercube linear propagator from scratch.
 ///
@@ -19,7 +19,7 @@ where
     Atomic: AtomicConstraint + Clone + Debug,
     Var: CheckerVariable<Atomic>,
 {
-    fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
+    fn check_retention(&self, state: &dyn DomainView<Atomic>) -> RetentionCheck {
         if self
             .hypercube
             .iter()
@@ -106,7 +106,7 @@ enum UpperBound {
 fn tightened_upper_bound<Atomic: AtomicConstraint, Var: CheckerVariable<Atomic>>(
     term: &Var,
     slack: IntExt<i64>,
-    state: &VariableState<Atomic>,
+    state: &dyn DomainView<Atomic>,
 ) -> UpperBound {
     let new_upper_bound = slack + IntExt::<i64>::from(term.induced_lower_bound(state));
 

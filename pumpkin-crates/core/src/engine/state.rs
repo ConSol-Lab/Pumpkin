@@ -1428,7 +1428,7 @@ mod tests {
     impl pumpkin_checking::RetentionChecker<crate::predicates::Predicate> for CountingChecker {
         fn check_retention(
             &self,
-            _: &pumpkin_checking::VariableState<crate::predicates::Predicate>,
+            _: &dyn pumpkin_checking::DomainView<crate::predicates::Predicate>,
         ) -> pumpkin_checking::RetentionCheck {
             let _ = self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             pumpkin_checking::RetentionCheck::NothingToPropagate
@@ -1564,7 +1564,7 @@ mod tests {
     impl pumpkin_checking::RetentionChecker<crate::predicates::Predicate> for UnfinishedChecker {
         fn check_retention(
             &self,
-            _: &pumpkin_checking::VariableState<crate::predicates::Predicate>,
+            _: &dyn pumpkin_checking::DomainView<crate::predicates::Predicate>,
         ) -> pumpkin_checking::RetentionCheck {
             pumpkin_checking::RetentionCheck::PropagationMissed
         }

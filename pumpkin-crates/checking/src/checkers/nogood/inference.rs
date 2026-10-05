@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use super::NogoodChecker;
 use crate::AtomicConstraint;
 use crate::ConflictCheck;
+use crate::DomainView;
 use crate::InferenceChecker;
 use crate::VariableState;
 

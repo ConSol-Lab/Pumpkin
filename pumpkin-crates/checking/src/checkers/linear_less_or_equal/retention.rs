@@ -1,17 +1,17 @@
 use super::LinearLessOrEqualChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::DomainView;
 use crate::IntExt;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
-use crate::VariableState;
 
 impl<Var, Atomic> RetentionChecker<Atomic> for LinearLessOrEqualChecker<Var>
 where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
-    fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
+    fn check_retention(&self, state: &dyn DomainView<Atomic>) -> RetentionCheck {
         // 1. Check if the constraint is conflicting
         let bound = i64::from(self.bound);
         let lower_bound_sum = self

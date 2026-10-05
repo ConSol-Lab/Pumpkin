@@ -110,10 +110,10 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
         predicate![self != value]
     }
 
-    fn induced_lower_bound(
-        &self,
-        variable_state: &pumpkin_checking::VariableState<Predicate>,
-    ) -> IntExt {
+    fn induced_lower_bound<View>(&self, variable_state: &View) -> IntExt
+    where
+        View: pumpkin_checking::DomainView<Predicate> + ?Sized,
+    {
         if self.scale.is_positive() {
             match self.inner.induced_lower_bound(variable_state) {
                 IntExt::Int(value) => IntExt::Int(self.map(value)),
@@ -128,10 +128,10 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
         }
     }
 
-    fn induced_upper_bound(
-        &self,
-        variable_state: &pumpkin_checking::VariableState<Predicate>,
-    ) -> IntExt {
+    fn induced_upper_bound<View>(&self, variable_state: &View) -> IntExt
+    where
+        View: pumpkin_checking::DomainView<Predicate> + ?Sized,
+    {
         if self.scale.is_positive() {
             match self.inner.induced_upper_bound(variable_state) {
                 IntExt::Int(value) => IntExt::Int(self.map(value)),
@@ -146,20 +146,19 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
         }
     }
 
-    fn induced_fixed_value(
-        &self,
-        variable_state: &pumpkin_checking::VariableState<Predicate>,
-    ) -> Option<i32> {
+    fn induced_fixed_value<View>(&self, variable_state: &View) -> Option<i32>
+    where
+        View: pumpkin_checking::DomainView<Predicate> + ?Sized,
+    {
         self.inner
             .induced_fixed_value(variable_state)
             .map(|value| self.map(value))
     }
 
-    fn induced_domain_contains(
-        &self,
-        variable_state: &pumpkin_checking::VariableState<Predicate>,
-        value: i32,
-    ) -> bool {
+    fn induced_domain_contains<View>(&self, variable_state: &View, value: i32) -> bool
+    where
+        View: pumpkin_checking::DomainView<Predicate> + ?Sized,
+    {
         let translated_value = value - self.offset;
 
         // If the translated value does not divide by scale, then the original value is not in the
@@ -174,12 +173,13 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
             .induced_domain_contains(variable_state, unscaled_value)
     }
 
-    fn induced_holes<'this, 'state>(
+    fn induced_holes<'this, 'state, View>(
         &'this self,
-        variable_state: &'state pumpkin_checking::VariableState<Predicate>,
+        variable_state: &'state View,
     ) -> impl Iterator<Item = i32> + 'state
     where
         'this: 'state,
+        View: pumpkin_checking::DomainView<Predicate> + ?Sized,
     {
         if self.scale == 1 || self.scale == -1 {
             return self
@@ -191,12 +191,13 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
         todo!("how to iterate holes of a scaled domain");
     }
 
-    fn iter_induced_domain<'this, 'state>(
+    fn iter_induced_domain<'this, 'state, View>(
         &'this self,
-        variable_state: &'state pumpkin_checking::VariableState<Predicate>,
+        variable_state: &'state View,
     ) -> Option<impl Iterator<Item = i32> + 'state>
     where
         'this: 'state,
+        View: pumpkin_checking::DomainView<Predicate> + ?Sized,
     {
         self.inner
             .iter_induced_domain(variable_state)

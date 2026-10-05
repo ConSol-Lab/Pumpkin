@@ -1,9 +1,9 @@
 use super::IntegerDivisionChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::DomainView;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
-use crate::VariableState;
 
 /// The bounds of a variable or of a view over it.
 #[derive(Clone, Copy, Debug)]
@@ -15,7 +15,7 @@ struct Bounds {
 impl Bounds {
     fn of<Atomic: AtomicConstraint, Var: CheckerVariable<Atomic>>(
         variable: &Var,
-        state: &VariableState<Atomic>,
+        state: &dyn DomainView<Atomic>,
     ) -> Bounds {
         let lower: i32 = variable
             .induced_lower_bound(state)
@@ -50,7 +50,7 @@ where
     VB: CheckerVariable<Atomic>,
     VC: CheckerVariable<Atomic>,
 {
-    fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
+    fn check_retention(&self, state: &dyn DomainView<Atomic>) -> RetentionCheck {
         let mut numerator = Bounds::of(&self.numerator, state);
         let mut denominator = Bounds::of(&self.denominator, state);
         let rhs = Bounds::of(&self.rhs, state);

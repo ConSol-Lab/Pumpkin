@@ -5,16 +5,16 @@ use super::ExtendedNogoodChecker;
 use super::truth_value;
 use crate::AtomicConstraint;
 use crate::Comparison;
+use crate::DomainView;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
-use crate::VariableState;
 
 impl<Atomic> RetentionChecker<Atomic> for ExtendedNogoodChecker<Atomic>
 where
     Atomic: AtomicConstraint,
     Atomic::Identifier: Debug,
 {
-    fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
+    fn check_retention(&self, state: &dyn DomainView<Atomic>) -> RetentionCheck {
         // 1. Determine the variables with a predicate which is not true; if there are none then the
         //    nogood is conflicting
         let free_domains = self

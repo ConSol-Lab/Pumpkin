@@ -5,7 +5,7 @@ mod tests;
 mod unit_retention;
 
 use crate::AtomicConstraint;
-use crate::VariableState;
+use crate::DomainView;
 
 /// The checker of a nogood under unit propagation.
 #[derive(Debug, Clone)]
@@ -27,7 +27,7 @@ pub struct ExtendedNogoodChecker<Atomic> {
 /// holds, and `None` otherwise.
 fn truth_value<Atomic: AtomicConstraint>(
     atomic: &Atomic,
-    state: &VariableState<Atomic>,
+    state: &dyn DomainView<Atomic>,
 ) -> Option<bool> {
     if state.is_true(atomic) {
         Some(true)

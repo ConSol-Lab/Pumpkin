@@ -1,9 +1,9 @@
 use super::MaximumChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::DomainView;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
-use crate::VariableState;
 
 impl<ElementVar, Rhs, Atomic> RetentionChecker<Atomic> for MaximumChecker<ElementVar, Rhs>
 where
@@ -11,7 +11,7 @@ where
     ElementVar: CheckerVariable<Atomic>,
     Rhs: CheckerVariable<Atomic>,
 {
-    fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
+    fn check_retention(&self, state: &dyn DomainView<Atomic>) -> RetentionCheck {
         if self.array.is_empty() {
             return RetentionCheck::PropagationMissed;
         }

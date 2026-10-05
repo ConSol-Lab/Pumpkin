@@ -1,9 +1,9 @@
 use super::BinaryNotEqualsChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::DomainView;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
-use crate::VariableState;
 
 impl<Lhs, Rhs, Atomic> RetentionChecker<Atomic> for BinaryNotEqualsChecker<Lhs, Rhs>
 where
@@ -11,7 +11,7 @@ where
     Lhs: CheckerVariable<Atomic>,
     Rhs: CheckerVariable<Atomic>,
 {
-    fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
+    fn check_retention(&self, state: &dyn DomainView<Atomic>) -> RetentionCheck {
         match (
             self.lhs.induced_fixed_value(state),
             self.rhs.induced_fixed_value(state),

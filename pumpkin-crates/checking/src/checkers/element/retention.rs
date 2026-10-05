@@ -1,10 +1,10 @@
 use super::ElementChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::DomainView;
 use crate::IntExt;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
-use crate::VariableState;
 
 /// Mirrors one pass of the propagation of the element propagator, which works on the bounds of
 /// the elements and the right-hand side and on the domain of the index.
@@ -15,7 +15,7 @@ where
     VI: CheckerVariable<Atomic>,
     VE: CheckerVariable<Atomic>,
 {
-    fn check_retention(&self, state: &VariableState<Atomic>) -> RetentionCheck {
+    fn check_retention(&self, state: &dyn DomainView<Atomic>) -> RetentionCheck {
         // 1. The index selects an element of the array.
         let last_index = self.array.len() as i32 - 1;
         if self.index.induced_lower_bound(state) < 0

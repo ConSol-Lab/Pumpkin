@@ -4,6 +4,7 @@ use super::HypercubeLinearChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
 use crate::ConflictCheck;
+use crate::DomainView;
 use crate::InferenceChecker;
 use crate::IntExt;
 use crate::VariableState;

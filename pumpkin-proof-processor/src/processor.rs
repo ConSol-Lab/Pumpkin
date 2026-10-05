@@ -747,6 +747,7 @@ mod tests {
     use drcp_format::reader::ReadAtomic;
     use drcp_format::reader::ReadStep;
     use pumpkin_checking::ConflictCheck;
+    use pumpkin_checking::DomainView;
     use pumpkin_checking::InferenceChecker;
     use pumpkin_checking::RetentionCheck;
     use pumpkin_checking::RetentionChecker;
@@ -1071,7 +1072,7 @@ mod tests {
     struct AcceptEverything;
 
     impl RetentionChecker<Predicate> for AcceptEverything {
-        fn check_retention(&self, _: &VariableState<Predicate>) -> RetentionCheck {
+        fn check_retention(&self, _: &dyn DomainView<Predicate>) -> RetentionCheck {
             RetentionCheck::NothingToPropagate
         }
     }
