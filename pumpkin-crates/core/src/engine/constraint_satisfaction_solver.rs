@@ -5,7 +5,6 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use pumpkin_checking::checkers::NogoodChecker;
 #[allow(
     clippy::disallowed_types,
     reason = "any rand generator is a valid implementation of Random"
@@ -50,6 +49,7 @@ use crate::propagation::store::PropagatorHandle;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
 use crate::propagators::nogoods::PropagationMode;
+use crate::propagators::nogoods::UnitNogoodRule;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_ne_moderate;
@@ -853,9 +853,7 @@ impl ConstraintSatisfactionSolver {
             );
 
             if let Ok(constraint_tag) = constraint_tag {
-                let inference_code = self
-                    .state
-                    .inference_code_for_rule(constraint_tag, NogoodChecker::<Predicate>::RULE_NAME);
+                let inference_code = self.state.rule_code::<UnitNogoodRule>(constraint_tag);
 
                 let _ = self
                     .unit_nogood_inference_codes
@@ -905,11 +903,16 @@ impl ConstraintSatisfactionSolver {
     fn add_nogood(&mut self, nogood: Vec<Predicate>, constraint_tag: ConstraintTag) {
         pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
 
-        let inference_code = self.state.add_inference_checker(
+        let propagation_mode = self
+            .state
+            .get_propagator(self.nogood_propagator_handle)
+            .expect("Nogood propagator handle should refer to nogood propagator")
+            .propagation_mode();
+        let (inference_code, retention_checker) = propagation_mode.register_nogood(
+            &mut self.state,
             constraint_tag,
-            NogoodChecker {
-                nogood: nogood.clone().into(),
-            },
+            &nogood,
+            self.nogood_propagator_handle.propagator_id(),
         );
 
         let (nogood_propagator, mut context) = self
@@ -919,7 +922,7 @@ impl ConstraintSatisfactionSolver {
         let nogood_propagator =
             nogood_propagator.expect("Nogood propagator handle should refer to nogood propagator");
 
-        nogood_propagator.add_nogood(nogood, inference_code, &mut context);
+        nogood_propagator.add_nogood(nogood, inference_code, retention_checker, &mut context);
 
         #[allow(deprecated, reason = "Will be refactored")]
         self.state.enqueue_propagator(self.nogood_propagator_handle);
@@ -963,9 +966,7 @@ impl ConstraintSatisfactionSolver {
         if are_all_falsified_at_root {
             // Since the propagation is not actually performed, we log the inference
             // explicitly here for the proof.
-            let inference_code = self
-                .state
-                .inference_code_for_rule(constraint_tag, NogoodChecker::<Predicate>::RULE_NAME);
+            let inference_code = self.state.rule_code::<UnitNogoodRule>(constraint_tag);
             let _ = self
                 .internal_parameters
                 .proof_log

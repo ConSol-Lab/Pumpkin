@@ -26,7 +26,7 @@ fn ternary_nogood_propagate() {
             .get_propagator_mut_with_context(solver.nogood_handle);
         let nogood_propagator: &mut NogoodPropagator = nogood_propagator.unwrap();
 
-        nogood_propagator.add_nogood(nogood.into(), inference_code, &mut context);
+        nogood_propagator.add_nogood(nogood.into(), inference_code, None, &mut context);
     }
 
     let _ = solver.increase_lower_bound_and_notify(id, a.id(), a, 3);
@@ -61,7 +61,7 @@ fn unsat() {
             .get_propagator_mut_with_context(solver.nogood_handle);
         let nogood_propagator: &mut NogoodPropagator = nogood_propagator.unwrap();
 
-        nogood_propagator.add_nogood(nogood.into(), inference_code, &mut context);
+        nogood_propagator.add_nogood(nogood.into(), inference_code, None, &mut context);
     }
 
     let _ = solver.increase_lower_bound_and_notify(id, a.id(), a, 3);

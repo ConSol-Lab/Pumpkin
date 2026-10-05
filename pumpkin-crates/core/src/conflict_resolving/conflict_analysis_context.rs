@@ -1,7 +1,5 @@
 use std::fmt::Debug;
 
-use pumpkin_checking::checkers::NogoodChecker;
-
 use crate::Random;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
@@ -299,11 +297,16 @@ impl ConflictAnalysisContext<'_> {
 
         let constraint_tag = self.log_deduction(learned_nogood.predicates.iter().copied());
 
-        let inference_code = self.state.add_inference_checker(
+        let propagation_mode = self
+            .state
+            .get_propagator(self.nogood_propagator_handle)
+            .expect("nogood propagator handle should refer to nogood propagator")
+            .propagation_mode();
+        let (inference_code, retention_checker) = propagation_mode.register_nogood(
+            self.state,
             constraint_tag,
-            NogoodChecker {
-                nogood: learned_nogood.predicates.clone().into(),
-            },
+            &learned_nogood.predicates,
+            self.nogood_propagator_handle.propagator_id(),
         );
 
         self.restore_to(learned_nogood.backtrack_level);
@@ -326,6 +329,7 @@ impl ConflictAnalysisContext<'_> {
         nogood_propagator.add_asserting_nogood(
             learned_nogood.to_vec(),
             inference_code,
+            retention_checker,
             &mut propagation_context,
         );
 

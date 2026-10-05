@@ -15,8 +15,8 @@ use crate::variables::DomainId;
 /// when instructed via [`RetentionCheckerStore::run`].
 #[derive(Clone, Debug, Default)]
 pub struct RetentionCheckerStore {
-    /// The checkers in the store.
-    store: KeyedVec<CheckerId, Entry>,
+    /// The checkers in the store; `None` for a checker that was removed.
+    store: KeyedVec<CheckerId, Option<Entry>>,
     /// Map from [`DomainId`] to the relevant checkers via their ID.
     watch_list: KeyedVec<DomainId, Vec<CheckerId>>,
     /// The checkers to run the next time.
@@ -69,45 +69,66 @@ impl RetentionCheckerStore {
 
     /// Add a new `checker` to the store with the given `scope`.
     ///
-    /// The checker is dropped when its propagator has been excluded.
+    /// Returns the identifier through which the checker can be removed, or `None` when the
+    /// checker is dropped because its propagator has been excluded.
     pub fn register(
         &mut self,
         scope: Scope,
         checker: BoxedRetentionChecker<Predicate>,
         propagator: PropagatorId,
-    ) {
+    ) -> Option<RetentionCheckerId> {
         if self.is_excluded(propagator) {
-            return;
+            return None;
         }
 
         let checker_slot = self.store.new_slot();
+        let checker_id = checker_slot.key();
 
         for (_, domain) in scope.domains() {
             self.watch_list.accomodate(domain, vec![]);
-            self.watch_list[domain].push(checker_slot.key());
+            self.watch_list[domain].push(checker_id);
         }
 
-        let _ = checker_slot.populate(Entry {
+        let _ = checker_slot.populate(Some(Entry {
             scope,
             checker,
             propagator,
-        });
+        }));
+
+        Some(RetentionCheckerId(checker_id))
+    }
+
+    /// Remove the checker with the given identifier, for a constraint that no longer exists.
+    ///
+    /// It is dropped from the watch lists of its domains the next time they change.
+    pub fn remove(&mut self, checker: RetentionCheckerId) {
+        self.store[checker.0] = None;
     }
 
     /// Called when the domain is modified.
     ///
     /// Causes the checkers for this domain to be enqueued.
     pub fn on_domain_event(&mut self, domain_id: DomainId) {
-        let Some(list) = self.watch_list.get(domain_id) else {
+        let Self {
+            store,
+            watch_list,
+            queue,
+            enqueued,
+            ..
+        } = self;
+
+        let Some(list) = watch_list.get_mut(domain_id) else {
             return;
         };
 
-        for &checker_id in list {
-            if !self.enqueued.insert(checker_id) {
+        list.retain(|&checker_id| store[checker_id].is_some());
+
+        for &checker_id in list.iter() {
+            if !enqueued.insert(checker_id) {
                 continue;
             }
 
-            self.queue.push(checker_id);
+            queue.push(checker_id);
         }
     }
 
@@ -144,7 +165,10 @@ impl RetentionCheckerStore {
     }
 
     fn check(&self, checker_id: CheckerId, domains: &Domains<'_>) -> Result<(), RetentionFailure> {
-        let entry = &self.store[checker_id];
+        // A removed checker can still be enqueued, since it only leaves the queue when it runs.
+        let Some(entry) = &self.store[checker_id] else {
+            return Ok(());
+        };
 
         if entry
             .checker
@@ -163,6 +187,10 @@ impl RetentionCheckerStore {
         self.excluded.get(propagator).copied().unwrap_or(false)
     }
 }
+
+/// Identifies a checker in the [`RetentionCheckerStore`], so that it can be removed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RetentionCheckerId(CheckerId);
 
 /// An identifier for added checkers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

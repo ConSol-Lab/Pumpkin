@@ -5,6 +5,7 @@ use pumpkin_checking::BoxedRetentionChecker;
 use pumpkin_checking::InferenceChecker;
 
 use crate::checkers::CheckerStore;
+use crate::checkers::RetentionCheckerId;
 use crate::checkers::RetentionCheckerStore;
 #[cfg(feature = "check-consistency")]
 use crate::checkers::RetentionCoverage;
@@ -233,18 +234,36 @@ impl State {
         description: &Rule::Description,
         propagator: PropagatorId,
     ) -> InferenceCode {
+        self.register_removable_rule::<Rule>(constraint_tag, description, propagator)
+            .0
+    }
+
+    /// Register `Rule` as in [`State::register_rule`], for a constraint that can be deleted
+    /// later.
+    ///
+    /// Also returns the identifier of the retention checker of the rule, if one was added, which
+    /// is removed with [`RetentionCheckerStore::remove`] when the constraint is deleted.
+    pub(crate) fn register_removable_rule<Rule: ConflictRule>(
+        &mut self,
+        constraint_tag: ConstraintTag,
+        description: &Rule::Description,
+        propagator: PropagatorId,
+    ) -> (InferenceCode, Option<RetentionCheckerId>) {
         let inference_code = self.rule_code::<Rule>(constraint_tag);
-        self.add_rule_checkers::<Rule>(inference_code, description, propagator);
-        inference_code
+        let retention_checker =
+            self.add_rule_checkers::<Rule>(inference_code, description, propagator);
+        (inference_code, retention_checker)
     }
 
     /// Add the checkers of `Rule` for the constraint with `description` under `inference_code`.
+    ///
+    /// Returns the identifier of the retention checker, if one was added.
     fn add_rule_checkers<Rule: ConflictRule>(
         &mut self,
         inference_code: InferenceCode,
         description: &Rule::Description,
         propagator: PropagatorId,
-    ) {
+    ) -> Option<RetentionCheckerId> {
         if cfg!(feature = "check-propagations") {
             self.checkers.add_inference_checker(
                 inference_code,
@@ -257,7 +276,9 @@ impl State {
                 description.scope(),
                 BoxedRetentionChecker::new(Rule::create_retention_checker(description)),
                 propagator,
-            );
+            )
+        } else {
+            None
         }
     }
 
@@ -450,7 +471,8 @@ impl State {
 
         // The rule is checked for this propagator only after it is created, since the retention
         // checkers of a propagator can be excluded by its name.
-        self.add_rule_checkers::<Constructor::Rule>(
+        // A propagator is never removed, so neither is its retention checker.
+        let _ = self.add_rule_checkers::<Constructor::Rule>(
             inference_code,
             &description,
             handle.propagator_id(),
@@ -1586,6 +1608,32 @@ mod tests {
     #[test]
     fn a_checker_whose_domains_did_not_change_is_not_consulted() {
         let mut state = state_with_an_unfinished_checker();
+        state.propagate_to_fixed_point().expect("no conflict");
+    }
+
+    /// A retention checker removed with its constraint is consulted neither when its domain
+    /// changes nor with the wider coverage.
+    #[cfg(feature = "check-consistency")]
+    #[test]
+    fn a_removed_retention_checker_is_not_consulted() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(1, 10, None);
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        let checker = state
+            .retention_checkers
+            .register(
+                crate::checkers::Scope::from_variables([x].iter()),
+                pumpkin_checking::BoxedRetentionChecker::new(UnfinishedChecker),
+                PropagatorId::create_from_index(0),
+            )
+            .expect("the propagator is not excluded");
+        state.retention_checkers.remove(checker);
+
+        state.new_checkpoint();
+        let _ = state
+            .post(predicate!(x >= 5))
+            .expect("the value is in the domain");
         state.propagate_to_fixed_point().expect("no conflict");
     }
 

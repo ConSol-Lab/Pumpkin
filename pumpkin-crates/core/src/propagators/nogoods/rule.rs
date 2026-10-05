@@ -5,12 +5,18 @@ use pumpkin_checking::RetentionChecker;
 use pumpkin_checking::checkers::ExtendedNogoodChecker;
 use pumpkin_checking::checkers::NogoodChecker;
 
+use crate::checkers::RetentionCheckerId;
 use crate::checkers::Scope;
 use crate::containers::HashSet;
 use crate::containers::KeyGenerator;
 use crate::predicates::Predicate;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
 use crate::propagation::ConflictRule;
 use crate::propagation::ConstraintDescription;
+use crate::propagation::PropagatorId;
+use crate::propagators::nogoods::PropagationMode;
+use crate::state::State;
 use crate::variables::DomainId;
 
 /// The description of a nogood: the atomic constraints that cannot all hold at once.
@@ -89,6 +95,38 @@ impl ConflictRule for ExtendedNogoodRule {
     ) -> impl RetentionChecker<Predicate> + 'static {
         ExtendedNogoodChecker {
             nogood: description.nogood.clone(),
+        }
+    }
+}
+
+impl PropagationMode {
+    /// Register the rule with which the nogood propagator propagates `nogood` in this mode.
+    ///
+    /// Returns the [`InferenceCode`] of the nogood and the identifier of its retention checker,
+    /// which the propagator removes when it deletes the nogood.
+    pub(crate) fn register_nogood(
+        self,
+        state: &mut State,
+        constraint_tag: ConstraintTag,
+        nogood: &[Predicate],
+        propagator: PropagatorId,
+    ) -> (InferenceCode, Option<RetentionCheckerId>) {
+        let description = NogoodDescription {
+            nogood: nogood.into(),
+        };
+
+        match self {
+            PropagationMode::UnitPropagation => state.register_removable_rule::<UnitNogoodRule>(
+                constraint_tag,
+                &description,
+                propagator,
+            ),
+            PropagationMode::ExtendedNogoodPropagation => state
+                .register_removable_rule::<ExtendedNogoodRule>(
+                    constraint_tag,
+                    &description,
+                    propagator,
+                ),
         }
     }
 }

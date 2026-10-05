@@ -1,28 +1,15 @@
 use std::cmp::max;
 use std::ops::Not;
-#[cfg(feature = "check-consistency")]
-use std::sync::Arc;
-#[cfg(feature = "check-consistency")]
-use std::sync::atomic::AtomicBool;
-#[cfg(feature = "check-consistency")]
-use std::sync::atomic::Ordering;
 
 use bitfield_struct::bitfield;
 use log::warn;
-#[cfg(feature = "check-consistency")]
-use pumpkin_checking::checkers::ExtendedNogoodChecker;
-#[cfg(feature = "check-consistency")]
-use pumpkin_checking::checkers::NogoodChecker;
 
 use super::LearningOptions;
 use super::NogoodId;
 use super::NogoodInfo;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PropositionalConjunction;
-#[cfg(feature = "check-consistency")]
-use crate::checkers::Scope;
-#[cfg(feature = "check-consistency")]
-use crate::checkers::SelfDisablingChecker;
+use crate::checkers::RetentionCheckerId;
 use crate::containers::HashSet;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
@@ -102,12 +89,10 @@ pub struct NogoodPropagator {
     #[allow(unused, reason = "Will be reintroduced with database management")]
     handle: PropagatorHandle<NogoodPropagator>,
 
-    /// Flags shared with retention checkers to signal that a nogood has been deleted.
-    ///
-    /// When clause management deletes a nogood, the corresponding flag is set to `true`,
-    /// causing the checker to become a no-op.
+    /// The retention checker of each stored nogood, which is removed when clause management
+    /// deletes the nogood.
     #[cfg(feature = "check-consistency")]
-    deletion_flags: KeyedVec<NogoodIndex, Arc<AtomicBool>>,
+    retention_checkers: KeyedVec<NogoodIndex, Option<RetentionCheckerId>>,
     /// What form of propagation is performed (e.g., unit propagation, or extended nogood
     /// propagation).
     ///
@@ -215,7 +200,7 @@ impl NogoodPropagatorConstructor {
             bumped_nogoods: Default::default(),
             temp_nogood_reason: Default::default(),
             #[cfg(feature = "check-consistency")]
-            deletion_flags: Default::default(),
+            retention_checkers: Default::default(),
             propagation_mode: self.propagation_mode,
             semantic_minimiser: Default::default(),
             priority: self.priority,
@@ -348,11 +333,18 @@ impl Propagator for NogoodPropagator {
 
         // First we perform nogood management to ensure that the database does not grow excessively
         // large with "bad" nogoods
-        self.clean_up_learned_nogoods_if_needed(
+        let removed_a_nogood = self.clean_up_learned_nogoods_if_needed(
             context.assignments,
             context.reason_store,
             context.notification_engine,
         );
+
+        #[cfg(feature = "check-consistency")]
+        if removed_a_nogood {
+            self.remove_retention_checkers_of_deleted_nogoods(&mut context);
+        }
+        #[cfg(not(feature = "check-consistency"))]
+        let _ = removed_a_nogood;
 
         if self.watch_lists.len() <= context.num_predicate_ids() {
             self.watch_lists
@@ -1090,21 +1082,31 @@ impl NogoodPropagator {
         Ok(())
     }
 
+    /// The form of propagation the propagator performs, which determines the rule of its nogoods.
+    pub(crate) fn propagation_mode(&self) -> PropagationMode {
+        self.propagation_mode
+    }
+
     /// Adds a nogood which has been learned during search.
     ///
     /// The first predicate should be asserting and the second predicate should contain the
     /// predicate with the next highest decision level.
+    ///
+    /// The rule of the nogood is registered by the caller, through
+    /// [`PropagationMode::register_nogood`], which gives the `inference_code` and the
+    /// `retention_checker` of the nogood.
     pub(crate) fn add_asserting_nogood(
         &mut self,
         nogood: Vec<Predicate>,
         inference_code: InferenceCode,
+        retention_checker: Option<RetentionCheckerId>,
         context: &mut PropagationContext,
     ) {
         if self
             .propagation_mode
             .can_be_added_as_permanent(context, &nogood)
         {
-            self.add_permanent_nogood(nogood, inference_code, context);
+            self.add_permanent_nogood(nogood, inference_code, retention_checker, context);
 
             self.propagation_buffer
                 .propagate_buffer(context, &mut self.statistics)
@@ -1116,10 +1118,6 @@ impl NogoodPropagator {
         let lbd = self
             .propagation_mode
             .calculate_lbd(context, &nogood, &mut self.lbd_helper);
-
-        // Capture checker predicates before conversion to PredicateIds.
-        #[cfg(feature = "check-consistency")]
-        let checker_predicates: Box<[Predicate]> = nogood.clone().into();
 
         let nogood = nogood
             .iter()
@@ -1136,7 +1134,9 @@ impl NogoodPropagator {
         let _ = self.inference_codes.push(inference_code);
 
         #[cfg(feature = "check-consistency")]
-        self.add_retention_checker(checker_predicates, context);
+        let _ = self.retention_checkers.push(retention_checker);
+        #[cfg(not(feature = "check-consistency"))]
+        let _ = retention_checker;
 
         let watcher = Watcher {
             nogood_id,
@@ -1183,22 +1183,33 @@ impl NogoodPropagator {
 
     /// Adds a nogood to the propagator as a permanent nogood and sets the internal state to be
     /// infeasible if the nogood led to a conflict.
+    ///
+    /// The rule of the nogood is registered by the caller, as for
+    /// [`NogoodPropagator::add_asserting_nogood`].
     pub(crate) fn add_nogood(
         &mut self,
         nogood: Vec<Predicate>,
         inference_code: InferenceCode,
+        retention_checker: Option<RetentionCheckerId>,
         context: &mut PropagationContext,
     ) {
-        self.add_permanent_nogood(nogood, inference_code, context)
+        self.add_permanent_nogood(nogood, inference_code, retention_checker, context)
     }
 
     /// Adds a nogood which cannot be deleted by clause management.
+    ///
+    /// The `retention_checker` of a permanent nogood is never removed, so it is only kept to stay
+    /// aligned with the stored nogoods.
     fn add_permanent_nogood(
         &mut self,
         mut nogood: Vec<Predicate>,
         inference_code: InferenceCode,
+        retention_checker: Option<RetentionCheckerId>,
         context: &mut PropagationContext,
     ) {
+        #[cfg(not(feature = "check-consistency"))]
+        let _ = retention_checker;
+
         pumpkin_assert_simple!(
             context.get_checkpoint() == 0,
             "Only allowed to add nogoods permanently at the root for now."
@@ -1316,12 +1327,11 @@ impl NogoodPropagator {
                 &mut self.propagation_buffer,
             );
 
-            // The retention checker is only registered when the nogood was actually stored:
-            // extended nogood propagation buffers nogoods over a single domain instead.
-            // The deletion flags must stay index-aligned with `nogood_info`.
+            // Extended nogood propagation buffers nogoods over a single domain instead of storing
+            // them. The retention checkers must stay index-aligned with `nogood_info`.
             #[cfg(feature = "check-consistency")]
             if self.nogood_info.len() > num_nogoods_before {
-                self.add_retention_checker(input_nogood.into(), context);
+                let _ = self.retention_checkers.push(retention_checker);
             }
         }
     }
@@ -1407,64 +1417,19 @@ fn get_domain_info(
     )
 }
 
-impl NogoodPropagator {
-    /// Add a retention checker for the given nogood predicates.
-    #[cfg(feature = "check-consistency")]
-    fn add_retention_checker(
-        &mut self,
-        nogood: Box<[Predicate]>,
-        context: &mut PropagationContext,
-    ) {
-        let scope = build_nogood_scope(&nogood);
-        match self.propagation_mode {
-            PropagationMode::UnitPropagation => {
-                let checker = SelfDisablingChecker::new(NogoodChecker { nogood });
-                let _ = self.deletion_flags.push(checker.deletion_flag());
-                context.add_retention_checker(scope, checker);
-            }
-            PropagationMode::ExtendedNogoodPropagation => {
-                let checker = SelfDisablingChecker::new(ExtendedNogoodChecker { nogood });
-                let _ = self.deletion_flags.push(checker.deletion_flag());
-                context.add_retention_checker(scope, checker);
-            }
-        }
-    }
-}
-
-/// Build a [`Scope`] for a nogood by extracting unique [`DomainId`]s from its predicates.
-///
-/// Avoids multiple enqueuing of the retention checker if the nogood contains multiple predicates
-/// over the same variable.
-#[cfg(feature = "check-consistency")]
-fn build_nogood_scope(predicates: &[Predicate]) -> Scope {
-    use crate::containers::HashSet;
-    use crate::containers::KeyGenerator;
-    use crate::variables::DomainId;
-
-    let mut scope = Scope::default();
-    let mut seen: HashSet<DomainId> = HashSet::default();
-    let mut id_generator = KeyGenerator::default();
-
-    for predicate in predicates {
-        let domain = predicate.get_domain();
-        if seen.insert(domain) {
-            scope.add_domain(id_generator.next_key(), domain);
-        }
-    }
-
-    scope
-}
-
 #[cfg(feature = "check-consistency")]
 impl NogoodPropagator {
-    /// Set the deletion flag for every nogood that has been marked as deleted in `nogood_info`.
+    /// Remove the retention checker of every nogood that has been marked as deleted in
+    /// `nogood_info`.
     ///
-    /// Called after clause management removes nogoods so that retention checkers self-disable.
-    fn signal_deleted_checker_flags(&self) {
+    /// Called after clause management removes nogoods.
+    fn remove_retention_checkers_of_deleted_nogoods(&mut self, context: &mut PropagationContext) {
         for idx in 0..self.nogood_info.len() {
             let idx = NogoodIndex::create_from_index(idx);
-            if self.nogood_info[idx].is_deleted {
-                self.deletion_flags[idx].store(true, Ordering::Relaxed);
+            if self.nogood_info[idx].is_deleted
+                && let Some(checker) = self.retention_checkers[idx].take()
+            {
+                context.remove_retention_checker(checker);
             }
         }
     }
@@ -1510,6 +1475,8 @@ impl NogoodPropagator {
     /// Nogoods can move from higher tiers to lower tiers if the LBD drops sufficiently low, but
     /// not the other way around. This is the main difference compared to \[2\].
     ///
+    /// Returns whether at least one nogood was removed.
+    ///
     /// # Bibliography
     /// - \[1\] Oh, C. (2016). Improving SAT solvers by exploiting empirical characteristics of
     ///   CDCL. New York University.
@@ -1521,7 +1488,7 @@ impl NogoodPropagator {
         assignments: &Assignments,
         reason_store: &ReasonStore,
         notification_engine: &mut NotificationEngine,
-    ) {
+    ) -> bool {
         // The clean-up procedure is divided into four stages (for simplicity of implementation).
         //
         // For each tier, if the number of nogoods exceeds the predefined threshold for that tier:
@@ -1618,10 +1585,10 @@ impl NogoodPropagator {
         }
 
         if removed_at_least_one_nogood {
-            #[cfg(feature = "check-consistency")]
-            self.signal_deleted_checker_flags();
             self.remove_deleted_nogoods_from_watchers(assignments, notification_engine);
         }
+
+        removed_at_least_one_nogood
     }
 
     fn has_a_watched_predicate_falsified_at_root_level(

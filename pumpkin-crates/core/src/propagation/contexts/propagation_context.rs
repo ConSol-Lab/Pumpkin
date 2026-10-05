@@ -1,12 +1,10 @@
 use enumset::EnumSet;
-#[cfg(feature = "check-consistency")]
-use pumpkin_checking::BoxedRetentionChecker;
-use pumpkin_checking::RetentionChecker;
 
 use crate::basic_types::PredicateId;
 #[cfg(feature = "check-consistency")]
+use crate::checkers::RetentionCheckerId;
+#[cfg(feature = "check-consistency")]
 use crate::checkers::RetentionCheckerStore;
-use crate::checkers::Scope;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::EmptyDomainConflict;
@@ -135,32 +133,10 @@ impl<'a> PropagationContext<'a> {
         }
     }
 
-    /// Add a retention checker for the given constraint and scope.
-    ///
-    /// If the `check-consistency` feature is not enabled, this is a no-op.
-    pub fn add_retention_checker(
-        &mut self,
-        scope: impl Into<Scope>,
-        checker: impl RetentionChecker<Predicate> + 'static,
-    ) {
-        pumpkin_assert_simple!(
-            self.reification_literal.is_none(),
-            "Cannot add retention checkers from within a reified propagation context."
-        );
-
-        #[cfg(feature = "check-consistency")]
-        self.retention_checkers.register(
-            scope.into(),
-            BoxedRetentionChecker::new(checker),
-            self.propagator_id,
-        );
-
-        // Use variables to avoid unused warnings.
-        #[cfg(not(feature = "check-consistency"))]
-        {
-            let _ = scope;
-            let _ = checker;
-        }
+    /// Remove the retention checker of a constraint that the propagator deleted.
+    #[cfg(feature = "check-consistency")]
+    pub(crate) fn remove_retention_checker(&mut self, checker: RetentionCheckerId) {
+        self.retention_checkers.remove(checker);
     }
 
     /// Register the propagator to be enqueued when the provided [`Predicate`] becomes true.
