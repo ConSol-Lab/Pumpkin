@@ -507,14 +507,14 @@ impl ProofProcessor {
                 inference_code,
             }) => {
                 let generated_by = inference_code.tag();
-                let label = self.state.rule_name(inference_code);
+                let label = Arc::from(self.state.rule_name(inference_code));
 
                 inferences.push(Some(Inference {
                     constraint_id: self.state.new_constraint_tag().into(),
                     premises: convert_predicates_to_proof_atomic(&self.variables, &conjunction),
                     consequent: None,
                     generated_by: Some(generated_by.into()),
-                    label: Some(Arc::from(label)),
+                    label: Some(label),
                 }));
 
                 self.mark_stack_entry(nogood_stack, inference_code);
@@ -531,7 +531,7 @@ impl ProofProcessor {
 
                 if let Some(inference_code) = maybe_trigger_inference {
                     let generated_by = inference_code.tag();
-                    let label = self.state.rule_name(inference_code);
+                    let label = Arc::from(self.state.rule_name(inference_code));
 
                     inferences.push(Some(Inference {
                         constraint_id: self.state.new_constraint_tag().into(),
@@ -544,7 +544,7 @@ impl ProofProcessor {
                             empty_domain_confict.trigger_predicate,
                         )),
                         generated_by: Some(generated_by.into()),
-                        label: Some(Arc::from(label)),
+                        label: Some(label),
                     }));
 
                     self.mark_stack_entry(nogood_stack, inference_code);
@@ -630,7 +630,7 @@ impl ProofProcessor {
             if let Some(inference_code) = inference_code {
                 self.mark_stack_entry(nogood_stack, inference_code);
 
-                let label = self.state.rule_name(inference_code);
+                let label = Arc::from(self.state.rule_name(inference_code));
                 inferences.push(Some(Inference {
                     constraint_id: self.state.new_constraint_tag().into(),
                     premises: convert_predicates_to_proof_atomic(&self.variables, &reason_buffer),
@@ -639,7 +639,7 @@ impl ProofProcessor {
                         predicate,
                     )),
                     generated_by: Some(inference_code.tag().into()),
-                    label: Some(Arc::from(label)),
+                    label: Some(label),
                 }));
             }
 

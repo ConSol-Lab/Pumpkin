@@ -92,8 +92,8 @@ impl RuleId {
 /// assigned to it. A name is assigned an identifier when it is first used.
 #[derive(Clone, Debug)]
 pub(crate) struct InferenceRules {
-    names: Vec<&'static str>,
-    ids: HashMap<&'static str, RuleId>,
+    names: Vec<Box<str>>,
+    ids: HashMap<Box<str>, RuleId>,
 }
 
 impl Default for InferenceRules {
@@ -110,16 +110,36 @@ impl Default for InferenceRules {
 
 impl InferenceRules {
     /// The identifier of the rule with the given name.
-    pub(crate) fn id(&mut self, name: &'static str) -> RuleId {
-        *self.ids.entry(name).or_insert_with(|| {
-            let id = RuleId(u32::try_from(self.names.len()).expect("fewer than 2^32 rules"));
-            self.names.push(name);
-            id
-        })
+    pub(crate) fn id(&mut self, name: &str) -> RuleId {
+        if let Some(&id) = self.ids.get(name) {
+            return id;
+        }
+
+        let id = RuleId(u32::try_from(self.names.len()).expect("fewer than 2^32 rules"));
+        self.names.push(name.into());
+        let _ = self.ids.insert(name.into(), id);
+        id
     }
 
     /// The name of the rule with the given identifier.
-    pub(crate) fn name(&self, id: RuleId) -> &'static str {
-        self.names[id.0 as usize]
+    pub(crate) fn name(&self, id: RuleId) -> &str {
+        &self.names[id.0 as usize]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_name_built_at_runtime_gets_the_identifier_of_the_same_name() {
+        let mut rules = InferenceRules::default();
+
+        let first = rules.id(&format!("HalfReified({})", "linear"));
+        let second = rules.id("HalfReified(linear)");
+
+        assert_eq!(first, second);
+        assert_eq!(rules.name(first), "HalfReified(linear)");
+        assert_ne!(first, RuleId::UNKNOWN);
     }
 }

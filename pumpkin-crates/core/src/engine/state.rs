@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_checking::BoxedChecker;
+use pumpkin_checking::BoxedRetentionChecker;
 use pumpkin_checking::InferenceChecker;
 
 use crate::checkers::CheckerStore;
@@ -29,6 +30,8 @@ use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::InferenceRules;
+use crate::propagation::ConflictRule;
+use crate::propagation::ConstraintDescription;
 use crate::propagation::CurrentNogood;
 use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
@@ -207,8 +210,59 @@ impl State {
         InferenceCode::new(constraint_tag, self.inference_rules.id(rule_name))
     }
 
+    /// The [`InferenceCode`] of the inferences made with `Rule` for the constraint with
+    /// `constraint_tag`, without registering any checkers.
+    ///
+    /// Used for inferences that are logged in the proof but never propagated, so there is nothing
+    /// to check at runtime. Use [`State::register_rule`] otherwise.
+    pub fn rule_code<Rule: ConflictRule>(
+        &mut self,
+        constraint_tag: ConstraintTag,
+    ) -> InferenceCode {
+        InferenceCode::new(constraint_tag, self.inference_rules.id(&Rule::name()))
+    }
+
+    /// Register `Rule` for the constraint with `constraint_tag` and `description`, implemented by
+    /// `propagator`. Returns the [`InferenceCode`] of its inferences.
+    ///
+    /// The inference checker of the rule is added when `check-propagations` is enabled, and its
+    /// retention checker when `check-consistency` is enabled.
+    pub fn register_rule<Rule: ConflictRule>(
+        &mut self,
+        constraint_tag: ConstraintTag,
+        description: &Rule::Description,
+        propagator: PropagatorId,
+    ) -> InferenceCode {
+        let inference_code = self.rule_code::<Rule>(constraint_tag);
+        self.add_rule_checkers::<Rule>(inference_code, description, propagator);
+        inference_code
+    }
+
+    /// Add the checkers of `Rule` for the constraint with `description` under `inference_code`.
+    fn add_rule_checkers<Rule: ConflictRule>(
+        &mut self,
+        inference_code: InferenceCode,
+        description: &Rule::Description,
+        propagator: PropagatorId,
+    ) {
+        if cfg!(feature = "check-propagations") {
+            self.checkers.add_inference_checker(
+                inference_code,
+                BoxedChecker::new(Box::new(Rule::create_inference_checker(description))),
+            );
+        }
+
+        if cfg!(feature = "check-consistency") {
+            self.retention_checkers.register(
+                description.scope(),
+                BoxedRetentionChecker::new(Rule::create_retention_checker(description)),
+                propagator,
+            );
+        }
+    }
+
     /// The name of the inference rule of `inference_code`.
-    pub fn rule_name(&self, inference_code: InferenceCode) -> &'static str {
+    pub fn rule_name(&self, inference_code: InferenceCode) -> &str {
         self.inference_rules.name(inference_code.rule())
     }
 
