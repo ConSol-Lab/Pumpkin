@@ -54,7 +54,7 @@ where
     type Description = ElementDescription<VX, VI, VE>;
 
     fn name() -> Cow<'static, str> {
-        Cow::Borrowed(ElementChecker::<VX, VI, VE>::RULE_NAME)
+        Cow::Borrowed("element")
     }
 
     fn create_inference_checker(

@@ -1021,10 +1021,6 @@ mod tests {
     }
 
     impl InferenceChecker<Predicate> for AlwaysConflictChecker {
-        fn rule_name(&self) -> &'static str {
-            "always_conflict"
-        }
-
         fn check(
             &self,
             state: VariableState<Predicate>,

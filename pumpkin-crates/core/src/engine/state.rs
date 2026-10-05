@@ -191,22 +191,14 @@ impl State {
         self.constraint_tags.next_key()
     }
 
-    /// The [`InferenceCode`] of the inferences made with the rule of `checker` for the constraint
-    /// with `constraint_tag`.
-    pub fn inference_code(
-        &mut self,
-        constraint_tag: ConstraintTag,
-        checker: &impl InferenceChecker<Predicate>,
-    ) -> InferenceCode {
-        self.inference_code_for_rule(constraint_tag, checker.rule_name())
-    }
-
     /// The [`InferenceCode`] of the rule named `rule_name` for the constraint with
     /// `constraint_tag`.
+    ///
+    /// For tests, which make inferences without a [`ConflictRule`].
     pub(crate) fn inference_code_for_rule(
         &mut self,
         constraint_tag: ConstraintTag,
-        rule_name: &'static str,
+        rule_name: &str,
     ) -> InferenceCode {
         InferenceCode::new(constraint_tag, self.inference_rules.id(rule_name))
     }
@@ -536,22 +528,19 @@ impl State {
         handle
     }
 
-    /// Add an inference checker to the state.
+    /// Add an inference checker for the inferences with `inference_code`, outside of a
+    /// [`ConflictRule`].
     ///
-    /// The inference checker will be used to check propagations performed during
-    /// [`Self::propagate_to_fixed_point`], if the `check-propagations` feature is enabled.
-    ///
-    /// Multiple inference checkers may be added for the same inference code. In that case, if
-    /// any checker accepts the inference, the inference is accepted.
-    pub fn add_inference_checker(
+    /// For tests, which make inferences without a rule. Multiple inference checkers may be added
+    /// for the same inference code. In that case, if any checker accepts the inference, the
+    /// inference is accepted.
+    pub(crate) fn add_inference_checker(
         &mut self,
-        constraint_tag: ConstraintTag,
+        inference_code: InferenceCode,
         checker: impl InferenceChecker<Predicate> + 'static,
-    ) -> InferenceCode {
-        let inference_code = self.inference_code(constraint_tag, &checker);
+    ) {
         self.checkers
             .add_inference_checker(inference_code, BoxedChecker::new(Box::new(checker)));
-        inference_code
     }
 }
 
@@ -1535,10 +1524,6 @@ mod tests {
 
     #[cfg(feature = "check-consistency")]
     impl pumpkin_checking::InferenceChecker<crate::predicates::Predicate> for NoInferences {
-        fn rule_name(&self) -> &'static str {
-            "checked"
-        }
-
         fn check(
             &self,
             _: pumpkin_checking::VariableState<crate::predicates::Predicate>,

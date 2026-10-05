@@ -5,21 +5,12 @@ use crate::InferenceChecker;
 use crate::IntExt;
 use crate::VariableState;
 
-impl<Lhs, Rhs> BinaryEqualsChecker<Lhs, Rhs> {
-    /// The name of the rule of this checker.
-    pub const RULE_NAME: &'static str = "binary_equals";
-}
-
 impl<Lhs, Rhs, Atomic> InferenceChecker<Atomic> for BinaryEqualsChecker<Lhs, Rhs>
 where
     Atomic: AtomicConstraint,
     Lhs: CheckerVariable<Atomic>,
     Rhs: CheckerVariable<Atomic>,
 {
-    fn rule_name(&self) -> &'static str {
-        Self::RULE_NAME
-    }
-
     fn check(&self, mut state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
         // We apply the domain of variable 2 to variable 1. If the state remains consistent, then
         // the step is unsound!

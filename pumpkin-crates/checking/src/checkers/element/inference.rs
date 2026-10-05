@@ -5,11 +5,6 @@ use crate::Domain;
 use crate::InferenceChecker;
 use crate::VariableState;
 
-impl<VX, VI, VE> ElementChecker<VX, VI, VE> {
-    /// The name of the rule of this checker.
-    pub const RULE_NAME: &'static str = "element";
-}
-
 impl<VX, VI, VE, Atomic> InferenceChecker<Atomic> for ElementChecker<VX, VI, VE>
 where
     Atomic: AtomicConstraint,
@@ -17,10 +12,6 @@ where
     VI: CheckerVariable<Atomic>,
     VE: CheckerVariable<Atomic>,
 {
-    fn rule_name(&self) -> &'static str {
-        Self::RULE_NAME
-    }
-
     fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
         self.union.borrow_mut().reset();
 

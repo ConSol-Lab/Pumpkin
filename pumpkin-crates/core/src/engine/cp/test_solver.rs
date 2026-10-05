@@ -67,13 +67,9 @@ impl TestSolver {
         rule_name: &'static str,
     ) -> InferenceCode {
         #[derive(Debug, Clone, Copy)]
-        struct Checker(&'static str);
+        struct Checker;
 
         impl InferenceChecker<Predicate> for Checker {
-            fn rule_name(&self) -> &'static str {
-                self.0
-            }
-
             fn check(
                 &self,
                 _: pumpkin_checking::VariableState<Predicate>,
@@ -84,8 +80,11 @@ impl TestSolver {
             }
         }
 
-        self.state
-            .add_inference_checker(constraint_tag, Checker(rule_name))
+        let inference_code = self
+            .state
+            .inference_code_for_rule(constraint_tag, rule_name);
+        self.state.add_inference_checker(inference_code, Checker);
+        inference_code
     }
 
     pub fn new_variable(&mut self, lb: i32, ub: i32) -> DomainId {

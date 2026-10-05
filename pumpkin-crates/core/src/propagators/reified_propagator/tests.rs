@@ -276,10 +276,6 @@ impl ConflictRule for GenericRule {
 struct AcceptEverything;
 
 impl InferenceChecker<Predicate> for AcceptEverything {
-    fn rule_name(&self) -> &'static str {
-        "generic"
-    }
-
     fn check(&self, _: VariableState<Predicate>, _: &[Predicate], _: Option<&Predicate>) -> bool {
         true
     }

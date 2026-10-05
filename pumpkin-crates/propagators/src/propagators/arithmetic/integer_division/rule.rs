@@ -51,7 +51,7 @@ where
     type Description = DivisionDescription<VA, VB, VC>;
 
     fn name() -> Cow<'static, str> {
-        Cow::Borrowed(IntegerDivisionChecker::<VA, VB, VC>::RULE_NAME)
+        Cow::Borrowed("division")
     }
 
     fn create_inference_checker(

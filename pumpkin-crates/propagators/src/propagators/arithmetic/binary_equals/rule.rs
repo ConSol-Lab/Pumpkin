@@ -52,7 +52,7 @@ where
     type Description = BinaryEqualsDescription<AVar, BVar>;
 
     fn name() -> Cow<'static, str> {
-        Cow::Borrowed(BinaryEqualsChecker::<AVar, BVar>::RULE_NAME)
+        Cow::Borrowed("binary_equals")
     }
 
     fn create_inference_checker(

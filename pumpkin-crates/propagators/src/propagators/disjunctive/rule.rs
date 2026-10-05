@@ -34,7 +34,7 @@ impl<Var: IntegerVariable + 'static> ConflictRule for DisjunctiveEdgeFindingRule
     type Description = DisjunctiveDescription<Var>;
 
     fn name() -> Cow<'static, str> {
-        Cow::Borrowed(DisjunctiveEdgeFindingChecker::<Var>::RULE_NAME)
+        Cow::Borrowed("disjunctive_edge_finding")
     }
 
     fn create_inference_checker(

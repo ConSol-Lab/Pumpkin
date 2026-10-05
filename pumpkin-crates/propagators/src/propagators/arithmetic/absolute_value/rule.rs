@@ -54,7 +54,7 @@ where
     type Description = AbsoluteValueDescription<VA, VB>;
 
     fn name() -> Cow<'static, str> {
-        Cow::Borrowed(AbsoluteValueChecker::<VA, VB>::RULE_NAME)
+        Cow::Borrowed("absolute_value")
     }
 
     fn create_inference_checker(

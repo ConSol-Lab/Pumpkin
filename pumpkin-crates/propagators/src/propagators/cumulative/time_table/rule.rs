@@ -59,7 +59,7 @@ impl<Var: IntegerVariable + 'static> ConflictRule for TimeTableRule<Var> {
     type Description = CumulativeDescription<Var>;
 
     fn name() -> Cow<'static, str> {
-        Cow::Borrowed(TimeTableChecker::<Var>::RULE_NAME)
+        Cow::Borrowed("time_table")
     }
 
     fn create_inference_checker(

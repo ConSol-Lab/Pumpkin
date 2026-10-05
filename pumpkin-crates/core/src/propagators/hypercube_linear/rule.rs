@@ -14,8 +14,6 @@ use crate::propagation::LocalId;
 use crate::propagation::MissingRetentionChecker;
 use crate::propagators::hypercube_linear::Hypercube;
 use crate::propagators::hypercube_linear::LinearInequality;
-use crate::variables::AffineView;
-use crate::variables::DomainId;
 
 /// The description of the hypercube linear constraint: when every predicate of the hypercube
 /// holds, the linear inequality holds.
@@ -50,7 +48,7 @@ impl ConflictRule for HypercubeLinearRule {
     type Description = HypercubeLinearDescription;
 
     fn name() -> Cow<'static, str> {
-        Cow::Borrowed(HypercubeLinearChecker::<Predicate, AffineView<DomainId>>::RULE_NAME)
+        Cow::Borrowed("hypercube_linear")
     }
 
     fn create_inference_checker(

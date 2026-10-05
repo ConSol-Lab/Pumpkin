@@ -1,5 +1,3 @@
-use pumpkin_checking::InferenceChecker;
-
 use super::Domains;
 use super::LocalId;
 use super::Propagator;
@@ -97,16 +95,6 @@ impl PropagatorConstructorContext<'_> {
             propagator_id,
             state,
         }
-    }
-
-    /// The [`InferenceCode`] of the inferences made with the rule of `checker` for the constraint
-    /// with `constraint_tag`.
-    pub fn inference_code(
-        &mut self,
-        constraint_tag: ConstraintTag,
-        checker: &impl InferenceChecker<Predicate>,
-    ) -> InferenceCode {
-        self.state.inference_code(constraint_tag, checker)
     }
 
     /// Get domain information.

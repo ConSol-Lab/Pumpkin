@@ -56,7 +56,7 @@ where
     type Description = MaximumDescription<ElementVar, Rhs>;
 
     fn name() -> Cow<'static, str> {
-        Cow::Borrowed(MaximumChecker::<ElementVar, Rhs>::RULE_NAME)
+        Cow::Borrowed("maximum")
     }
 
     fn create_inference_checker(

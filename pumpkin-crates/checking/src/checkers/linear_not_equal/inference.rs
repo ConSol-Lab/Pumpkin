@@ -5,20 +5,11 @@ use crate::InferenceChecker;
 use crate::IntExt;
 use crate::VariableState;
 
-impl<Var> LinearNotEqualChecker<Var> {
-    /// The name of the rule of this checker.
-    pub const RULE_NAME: &'static str = "linear_not_equals";
-}
-
 impl<Var, Atomic> InferenceChecker<Atomic> for LinearNotEqualChecker<Var>
 where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
-    fn rule_name(&self) -> &'static str {
-        Self::RULE_NAME
-    }
-
     fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
         // We evaluate the linear sum. It should be fixed to the bound for a conflict to
         // exist.

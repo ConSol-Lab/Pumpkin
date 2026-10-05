@@ -43,7 +43,7 @@ impl<Var: IntegerVariable + 'static> ConflictRule for LinearNotEqualRule<Var> {
     type Description = LinearNotEqualDescription<Var>;
 
     fn name() -> Cow<'static, str> {
-        Cow::Borrowed(LinearNotEqualChecker::<Var>::RULE_NAME)
+        Cow::Borrowed("linear_not_equals")
     }
 
     fn create_inference_checker(

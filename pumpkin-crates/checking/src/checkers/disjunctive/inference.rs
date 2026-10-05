@@ -53,21 +53,12 @@ fn overload_checking<Atomic: AtomicConstraint, Var: CheckerVariable<Atomic>>(
     false
 }
 
-impl<Var> DisjunctiveEdgeFindingChecker<Var> {
-    /// The name of the rule of this checker.
-    pub const RULE_NAME: &'static str = "disjunctive_edge_finding";
-}
-
 impl<Var, Atomic> InferenceChecker<Atomic> for DisjunctiveEdgeFindingChecker<Var>
 where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
     <Atomic as AtomicConstraint>::Identifier: Clone,
 {
-    fn rule_name(&self) -> &'static str {
-        Self::RULE_NAME
-    }
-
     fn check(
         &self,
         state: VariableState<Atomic>,

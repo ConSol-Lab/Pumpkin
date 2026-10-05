@@ -50,7 +50,7 @@ impl ConflictRule for UnitNogoodRule {
     type Description = NogoodDescription;
 
     fn name() -> Cow<'static, str> {
-        Cow::Borrowed(NogoodChecker::<Predicate>::RULE_NAME)
+        Cow::Borrowed("nogood")
     }
 
     fn create_inference_checker(

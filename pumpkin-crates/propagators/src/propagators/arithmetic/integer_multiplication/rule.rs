@@ -47,7 +47,7 @@ where
     type Description = IntegerMultiplicationDescription<VA, VB, VC>;
 
     fn name() -> Cow<'static, str> {
-        Cow::Borrowed(IntegerMultiplicationChecker::<VA, VB, VC>::RULE_NAME)
+        Cow::Borrowed("integer_multiplication")
     }
 
     fn create_inference_checker(

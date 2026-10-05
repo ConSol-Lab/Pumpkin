@@ -31,7 +31,7 @@ impl<Var: IntegerVariable + 'static> ConflictRule for LinearLessOrEqualRule<Var>
     type Description = LinearLessOrEqualDescription<Var>;
 
     fn name() -> Cow<'static, str> {
-        Cow::Borrowed(LinearLessOrEqualChecker::<Var>::RULE_NAME)
+        Cow::Borrowed("linear_bounds")
     }
 
     fn create_inference_checker(

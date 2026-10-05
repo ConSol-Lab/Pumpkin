@@ -7,11 +7,6 @@ use crate::InferenceChecker;
 use crate::IntExt;
 use crate::VariableState;
 
-impl<VA, VB, VC> IntegerMultiplicationChecker<VA, VB, VC> {
-    /// The name of the rule of this checker.
-    pub const RULE_NAME: &'static str = "integer_multiplication";
-}
-
 impl<VA, VB, VC, Atomic> InferenceChecker<Atomic> for IntegerMultiplicationChecker<VA, VB, VC>
 where
     Atomic: AtomicConstraint,
@@ -19,10 +14,6 @@ where
     VB: CheckerVariable<Atomic>,
     VC: CheckerVariable<Atomic>,
 {
-    fn rule_name(&self) -> &'static str {
-        Self::RULE_NAME
-    }
-
     fn check(
         &self,
         state: VariableState<Atomic>,
