@@ -317,9 +317,6 @@ impl ConflictAnalysisContext<'_> {
                 .insert(!learned_nogood[0], rule_checkers.inference_code());
         }
 
-        #[cfg(feature = "check-propagations")]
-        let trail_len_before_nogood = self.state.trail_len();
-
         let (nogood_propagator, mut propagation_context) = self
             .state
             .get_propagator_mut_with_context(self.nogood_propagator_handle);
@@ -331,9 +328,6 @@ impl ConflictAnalysisContext<'_> {
             rule_checkers,
             &mut propagation_context,
         );
-
-        #[cfg(feature = "check-propagations")]
-        self.state.check_propagations(trail_len_before_nogood);
 
         learned_nogood.backtrack_level
     }

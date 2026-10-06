@@ -56,4 +56,35 @@ impl<Atomic: AtomicConstraint> BoxedConflictChecker<Atomic> {
     ) -> ConflictCheck {
         self.0.check(state, premises, consequent)
     }
+
+    /// Check the inference `premises -> consequent` against the rule: the premises together with
+    /// the negation of the consequent have to be a conflict.
+    ///
+    /// Without a consequent, the premises alone have to be a conflict.
+    pub fn check_inference(
+        &self,
+        premises: &[Atomic],
+        consequent: Option<&Atomic>,
+    ) -> Result<(), RejectedInference<Atomic::Identifier>> {
+        let state = VariableState::prepare_for_conflict_check(
+            premises.iter().cloned(),
+            consequent.cloned(),
+        )
+        .map_err(RejectedInference::InconsistentPredicates)?;
+
+        match self.check(&state, premises, consequent) {
+            ConflictCheck::ConflictDetected => Ok(()),
+            ConflictCheck::NoConflictDetected => Err(RejectedInference::NoConflictDetected),
+        }
+    }
+}
+
+/// Why [`BoxedConflictChecker::check_inference`] rejects an inference.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RejectedInference<Identifier> {
+    /// The premises and the negated consequent contradict each other on this variable, so they
+    /// do not describe a state the rule can be checked in.
+    InconsistentPredicates(Identifier),
+    /// The rule does not detect a conflict, so the inference is not shown to be sound.
+    NoConflictDetected,
 }

@@ -6,10 +6,6 @@ use pumpkin_checking::BoxedRetentionChecker;
 use pumpkin_checking::ConflictChecker;
 
 use crate::checkers::RemovableRuleCheckers;
-#[cfg(feature = "check-consistency")]
-use crate::checkers::RetentionCoverage;
-#[cfg(feature = "check-consistency")]
-use crate::checkers::RetentionFailure;
 use crate::checkers::RuleCheckerStore;
 #[cfg(any(feature = "check-propagations", feature = "check-consistency"))]
 use crate::checkers::is_rule_checked;
@@ -63,6 +59,9 @@ use crate::statistics::log_statistic;
 use crate::variables::DomainId;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
+
+#[cfg(any(feature = "check-propagations", feature = "check-consistency"))]
+mod checking;
 
 /// The [`State`] is the container of variables and propagators.
 ///
@@ -795,9 +794,6 @@ impl State {
             propagator.propagate(context)
         };
 
-        #[cfg(feature = "check-propagations")]
-        self.check_propagations(num_trail_entries_before);
-
         match propagation_status {
             Ok(_) => {
                 // Notify other propagators of the propagations and continue.
@@ -822,9 +818,6 @@ impl State {
                 );
             }
             Err(conflict) => {
-                #[cfg(feature = "check-propagations")]
-                self.check_conflict(&conflict);
-
                 self.statistics.num_conflicts += 1;
                 if let Conflict::Propagator(inner) = &conflict {
                     pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
@@ -843,129 +836,6 @@ impl State {
         Ok(())
     }
 
-    /// Check the inference that triggered the given conflict.
-    ///
-    /// Does nothing when the conflict is an empty domain.
-    ///
-    /// Panics when the conflict checker rejects the conflict.
-    #[cfg(feature = "check-propagations")]
-    fn check_conflict(&mut self, conflict: &Conflict) {
-        if let Conflict::Propagator(propagator_conflict) = conflict {
-            self.run_checker(
-                propagator_conflict.conjunction.clone(),
-                None,
-                &propagator_conflict.inference_code,
-            );
-        }
-    }
-
-    /// Ask every propagator watching a domain that changed since `start_index`
-    /// whether it has anything left to propagate.
-    ///
-    /// The other propagators were asked when their domains last changed.
-    /// This panics if a propagator reports that it has not finished.
-    #[cfg(feature = "check-consistency")]
-    fn run_retention_checkers(&mut self, start_index: usize) {
-        for index in start_index..self.assignments.num_trail_entries() {
-            let domain = self
-                .assignments
-                .get_trail_entry(index)
-                .predicate
-                .get_domain();
-            self.rule_checkers
-                .retention_checkers
-                .on_domain_event(domain);
-        }
-
-        let coverage = if cfg!(feature = "check-consistency-all") {
-            RetentionCoverage::All
-        } else {
-            RetentionCoverage::Notified
-        };
-        let outcome = self.rule_checkers.retention_checkers.run(
-            coverage,
-            Domains::new(&self.assignments, &mut self.trailed_values),
-        );
-
-        if let Err(failure) = outcome {
-            self.report_retention_failure(&failure);
-        }
-
-        // The same claim, verified by re-propagating instead of by asking the checkers.
-        // The state may be inconsistent after a conflict,
-        // which is why this is only reached when propagation succeeded.
-        pumpkin_assert_extreme!(DebugHelper::debug_fixed_point_propagation(
-            &self.trailed_values,
-            &self.assignments,
-            &self.propagators,
-            &self.notification_engine
-        ));
-    }
-
-    /// Panics, naming the rule and the propagator that is not finished and the variables it
-    /// watches.
-    #[cfg(feature = "check-consistency")]
-    fn report_retention_failure(&self, failure: &RetentionFailure) -> ! {
-        let rule = self.rule_name(failure.inference_code);
-        let propagator = self.propagators[failure.propagator].name();
-        let variables = failure
-            .variables
-            .iter()
-            .map(|&domain| match self.variable_names.get_int_name(domain) {
-                Some(name) => name.to_owned(),
-                None => format!("{domain:?}"),
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        panic!(
-            "Propagation reported a fixed point, but the retention checker of the rule '{rule}' \
-             of the propagator '{propagator}' reports that it still has something to propagate \
-             over {variables}. \
-             The checker describes what it expected in a message logged at the error level, \
-             which is only visible when a logger is installed."
-        )
-    }
-
-    /// For every item on the trail starting at index `first_propagation_index`,
-    /// run the conflict checker for it.
-    ///
-    /// This method should be called after every propagator invocation,
-    /// so all elements on the trail starting at `first_propagation_index` should be propagations.
-    /// Otherwise this function will panic.
-    ///
-    /// If the checker rejects the inference, this method panics.
-    #[cfg(feature = "check-propagations")]
-    pub(crate) fn check_propagations(&mut self, first_propagation_index: usize) {
-        let mut reason_buffer = vec![];
-
-        for trail_index in first_propagation_index..self.assignments.num_trail_entries() {
-            let entry = self.assignments.get_trail_entry(trail_index);
-
-            let reason_ref = entry
-                .reason
-                .expect("propagations should only be checked after propagations");
-
-            reason_buffer.clear();
-            let inference_code = self.reason_store.get_or_compute(
-                reason_ref,
-                ExplanationContext::without_working_nogood(
-                    &self.assignments,
-                    trail_index,
-                    &mut self.notification_engine,
-                ),
-                &mut self.propagators,
-                &mut reason_buffer,
-            );
-
-            self.run_checker(
-                std::mem::take(&mut reason_buffer),
-                Some(entry.predicate),
-                &inference_code,
-            );
-        }
-    }
-
     /// Performs fixed-point propagation using the propagators defined in the [`State`].
     ///
     /// The posted [`Predicate`]s (using [`State::post`]) and added propagators (using
@@ -980,9 +850,24 @@ impl State {
     /// Once the [`State`] is conflicting, then the only operation that is defined is
     /// [`State::restore_to`]. All other operations and queries on the state are unspecified.
     pub fn propagate_to_fixed_point(&mut self) -> Result<(), Conflict> {
-        #[cfg(feature = "check-consistency")]
-        let retention_checking_start_index = self.notification_engine.last_notified_trail_index();
+        #[cfg(any(feature = "check-propagations", feature = "check-consistency"))]
+        let checking_start_index = self.notification_engine.last_notified_trail_index();
 
+        let result = self.propagate_to_fixed_point_internal();
+
+        #[cfg(feature = "check-propagations")]
+        self.check_inferences(checking_start_index, &result);
+
+        // A conflict leaves the state inconsistent.
+        #[cfg(feature = "check-consistency")]
+        if result.is_ok() {
+            self.run_retention_checkers(checking_start_index);
+        }
+
+        result
+    }
+
+    fn propagate_to_fixed_point_internal(&mut self) -> Result<(), Conflict> {
         // The initial domain events are due because of the decision predicate.
         self.notification_engine
             .notify_propagators_about_domain_events(
@@ -997,53 +882,7 @@ impl State {
             self.propagate(propagator_id)?;
         }
 
-        // A conflict leaves the state inconsistent, and returns before reaching this.
-        #[cfg(feature = "check-consistency")]
-        self.run_retention_checkers(retention_checking_start_index);
-
         Ok(())
-    }
-}
-
-#[cfg(feature = "check-propagations")]
-impl State {
-    /// Run the checker for the given inference code on the given inference.
-    fn run_checker(
-        &mut self,
-        premises: impl IntoIterator<Item = Predicate>,
-        consequent: Option<Predicate>,
-        inference_code: &InferenceCode,
-    ) {
-        if !is_rule_checked(self.rule_name(*inference_code)) {
-            return;
-        }
-
-        let premises: Vec<_> = premises.into_iter().collect();
-
-        let checkers = self
-            .rule_checkers
-            .conflict_checkers
-            .for_inference_code(inference_code);
-        assert!(
-            checkers.len() > 0,
-            "missing checker for inference code {inference_code:?}"
-        );
-
-        let results = checkers
-            .map(|checker| {
-                checker.check(
-                    &premises,
-                    consequent,
-                    Domains::new(&self.assignments, &mut self.trailed_values),
-                )
-            })
-            .collect::<Vec<_>>();
-        let any_checker_accepts_inference = results.iter().any(Result::is_ok);
-
-        assert!(
-            any_checker_accepts_inference,
-            "checker for inference code {inference_code:?} fails on inference {premises:?} -> {consequent:?}: {results:?}"
-        );
     }
 }
 

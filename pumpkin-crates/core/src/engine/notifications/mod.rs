@@ -433,7 +433,7 @@ impl NotificationEngine {
     ///
     /// Notification happens during propagation and after backtracking,
     /// so between two fixpoints this is the length the trail had at the end of the previous one.
-    #[cfg(feature = "check-consistency")]
+    #[cfg(any(feature = "check-propagations", feature = "check-consistency"))]
     pub(crate) fn last_notified_trail_index(&self) -> usize {
         self.last_notified_trail_index
     }

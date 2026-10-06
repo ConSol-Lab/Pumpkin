@@ -2,29 +2,28 @@ use pumpkin_checking::BoxedConflictChecker;
 #[cfg(doc)]
 use pumpkin_checking::ConflictChecker;
 
-use crate::checkers::PropagationChecker;
 use crate::containers::HashMap;
 use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
 
 /// Owns the conflict checkers, which verify that propagations are sound.
 ///
-/// The checkers are looked up by the inference code of a propagation. Each is wrapped in a
-/// [`PropagationChecker`], which evaluates the inference against the solver state.
+/// The checkers are looked up by the inference code of a propagation.
 #[derive(Clone, Debug, Default)]
 pub struct ConflictCheckerStore {
     /// For each inference code we associate possibly many conflict checkers.
-    conflict_checkers: HashMap<InferenceCode, Vec<(ConflictCheckerId, PropagationChecker)>>,
+    conflict_checkers:
+        HashMap<InferenceCode, Vec<(ConflictCheckerId, BoxedConflictChecker<Predicate>)>>,
     /// The identifier given to the next checker that is added.
     next_id: ConflictCheckerId,
 }
 
 impl ConflictCheckerStore {
-    /// Get the [`PropagationChecker`]s for the given inference code.
+    /// The conflict checkers of the given inference code.
     pub fn for_inference_code(
         &self,
         inference_code: &InferenceCode,
-    ) -> impl ExactSizeIterator<Item = &PropagationChecker> {
+    ) -> impl ExactSizeIterator<Item = &BoxedConflictChecker<Predicate>> {
         self.conflict_checkers
             .get(inference_code)
             .map(|checkers| itertools::Either::Left(checkers.iter().map(|(_, checker)| checker)))
@@ -59,7 +58,7 @@ impl ConflictCheckerStore {
         self.conflict_checkers
             .entry(inference_code)
             .or_default()
-            .push((id, PropagationChecker::new(checker)));
+            .push((id, checker));
 
         id
     }
