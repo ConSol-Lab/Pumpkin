@@ -29,10 +29,8 @@ where
             return RetentionCheck::PropagationMissed;
         }
 
-        // 2. Assert that it is possible to assign the greatest value in the domain for each
-        //    variable
-        //  We do this by effectively assigning the greatest value to the variable whilst keeping
-        //  the other variables at their lower bound.
+        // 2. Assert that each variable can take its upper bound while the other variables are at
+        //    their lower bounds.
         let all_tight = self.terms.iter().all(|term| {
             let greatest = bound
                 - (lower_bound_sum - IntExt::<i64>::from(term.induced_lower_bound(state)));

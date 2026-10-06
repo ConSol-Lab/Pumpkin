@@ -10,7 +10,6 @@ use pumpkin_core::variables::IntegerVariable;
 
 use super::MaximumDescription;
 
-/// The rule of the maximum constraint.
 #[derive(Clone, Copy, Debug)]
 pub struct MaximumRule<ElementVar, Rhs>(PhantomData<(ElementVar, Rhs)>);
 

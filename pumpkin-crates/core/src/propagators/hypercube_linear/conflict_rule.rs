@@ -10,7 +10,6 @@ use crate::propagation::ConflictRule;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
 
-/// The rule of the hypercube linear constraint.
 #[derive(Clone, Copy, Debug)]
 pub struct HypercubeLinearRule;
 

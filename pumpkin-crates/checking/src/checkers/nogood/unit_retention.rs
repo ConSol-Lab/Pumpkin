@@ -7,10 +7,6 @@ use crate::RetentionChecker;
 
 impl<Atomic: AtomicConstraint> RetentionChecker<Atomic> for NogoodChecker<Atomic> {
     fn check_retention(&self, state: &dyn DomainView<Atomic>) -> RetentionCheck {
-        // For unit propagation, the state is consistent if:
-        // - at least two predicates are unassigned
-        // - or otherwise, at least one predicate is assigned
-
         let untrue_predicate_count = self
             .nogood
             .iter()

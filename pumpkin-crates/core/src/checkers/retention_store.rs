@@ -11,15 +11,13 @@ use crate::propagation::Domains;
 use crate::propagation::PropagatorId;
 use crate::variables::DomainId;
 
-/// Holds the retention checkers in the solver.
-///
-/// Also responsible for enqueueing the checkers and dispatching them
-/// when instructed via [`RetentionCheckerStore::run`].
+/// Holds the retention checkers of the solver, enqueues those whose domains change, and runs them
+/// in [`RetentionCheckerStore::run`].
 #[derive(Clone, Debug, Default)]
 pub struct RetentionCheckerStore {
     /// The checkers in the store; `None` for a checker that was removed.
     store: KeyedVec<RetentionCheckerId, Option<Entry>>,
-    /// Map from [`DomainId`] to the relevant checkers via their ID.
+    /// The checkers that watch each domain.
     watch_list: KeyedVec<DomainId, Vec<RetentionCheckerId>>,
     /// The checkers to run the next time.
     queue: Vec<RetentionCheckerId>,
@@ -33,7 +31,7 @@ pub struct RetentionCheckerStore {
 struct Entry {
     scope: Scope,
     checker: BoxedRetentionChecker<Predicate>,
-    /// The propagator whose rule the checker describes.
+    /// The propagator that implements the rule of the checker.
     propagator: PropagatorId,
     /// The inference code of the rule and the constraint that the checker belongs to.
     inference_code: InferenceCode,
@@ -53,7 +51,7 @@ pub enum RetentionCoverage {
 /// The checker which reported that its propagator has something left to propagate.
 #[derive(Clone, Debug)]
 pub struct RetentionFailure {
-    /// The propagator whose rule the checker describes.
+    /// The propagator that implements the rule of the checker.
     pub propagator: PropagatorId,
     /// The inference code of the rule and the constraint that the checker belongs to.
     pub inference_code: InferenceCode,
@@ -110,9 +108,7 @@ impl RetentionCheckerStore {
         self.store[checker] = None;
     }
 
-    /// Called when the domain is modified.
-    ///
-    /// Causes the checkers for this domain to be enqueued.
+    /// Enqueue the checkers that watch `domain_id` and are not yet enqueued.
     pub fn on_domain_event(&mut self, domain_id: DomainId) {
         let Self {
             store,
@@ -163,7 +159,6 @@ impl RetentionCheckerStore {
         Ok(())
     }
 
-    /// Clear the queue of retention checkers.
     pub fn clear_queue(&mut self) {
         self.queue.clear();
         self.enqueued.clear();

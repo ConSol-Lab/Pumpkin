@@ -87,7 +87,6 @@ impl<Atomic: AtomicConstraint, Var: CheckerVariable<Atomic>> CheckerThetaLambdaT
         self.sorted_tasks
             .sort_by_key(|(_, task)| task.start_time.induced_lower_bound(context));
 
-        // Then we keep track of the position of each task among the leaves
         self.mapping = vec![usize::MAX; self.sorted_tasks.len()];
         for (position, (index, _)) in self.sorted_tasks.iter().enumerate() {
             self.mapping[*index] = position;

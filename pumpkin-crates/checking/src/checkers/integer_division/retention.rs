@@ -96,7 +96,8 @@ where
     }
 }
 
-/// The signs of the numerator and the right-hand side agree, given a positive denominator.
+/// Whether the propagator would tighten a bound so that the signs of the numerator and the
+/// right-hand side agree, given a positive denominator.
 fn signs_can_be_propagated(numerator: Bounds, rhs: Bounds) -> bool {
     (numerator.lower >= 0 && rhs.lower < 0)
         || (numerator.lower <= 0 && rhs.lower > 0)
@@ -104,8 +105,8 @@ fn signs_can_be_propagated(numerator: Bounds, rhs: Bounds) -> bool {
         || (numerator.upper >= 0 && rhs.upper < 0)
 }
 
-/// The upper bounds of the right-hand side and the numerator, for a non-negative numerator and
-/// right-hand side and a positive denominator.
+/// Whether the propagator would lower the upper bound of the right-hand side or of the numerator,
+/// for a non-negative numerator and right-hand side and a positive denominator.
 fn upper_bounds_can_be_propagated(numerator: Bounds, denominator: Bounds, rhs: Bounds) -> bool {
     let new_max_rhs = numerator.upper / denominator.lower;
     let new_max_numerator = (rhs.upper + 1) * denominator.upper - 1;
@@ -113,7 +114,8 @@ fn upper_bounds_can_be_propagated(numerator: Bounds, denominator: Bounds, rhs: B
     rhs.upper > new_max_rhs || numerator.upper > new_max_numerator
 }
 
-/// The bounds of all three variables when all of them are non-negative.
+/// Whether the propagator would tighten a bound of one of the three variables when all of them
+/// are non-negative.
 fn positive_domains_can_be_propagated(numerator: Bounds, denominator: Bounds, rhs: Bounds) -> bool {
     let new_min_rhs = numerator.lower / denominator.upper;
     if rhs.lower < new_min_rhs {
@@ -129,7 +131,7 @@ fn positive_domains_can_be_propagated(numerator: Bounds, denominator: Bounds, rh
         return true;
     }
 
-    // The ceiled ratio of `numerator + 1` and `rhs + 1`.
+    // `ceil((lb(numerator) + 1) / (ub(rhs) + 1))`, the smallest denominator the propagator allows.
     let dividend = numerator.lower + 1;
     let positive_divisor = rhs.upper + 1;
     let new_min_denominator = dividend / positive_divisor

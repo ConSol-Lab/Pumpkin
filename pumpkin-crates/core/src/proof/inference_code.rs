@@ -53,7 +53,6 @@ impl StorageKey for ConstraintTag {
 pub struct InferenceCode(ConstraintTag, RuleId);
 
 impl InferenceCode {
-    /// Create a new inference code from a [`ConstraintTag`] and a [`RuleId`].
     pub(crate) fn new(tag: ConstraintTag, rule: RuleId) -> Self {
         InferenceCode(tag, rule)
     }
@@ -71,7 +70,6 @@ impl InferenceCode {
         self.0
     }
 
-    /// Get the identifier of the inference rule.
     pub fn rule(&self) -> RuleId {
         self.1
     }
@@ -109,7 +107,7 @@ impl Default for InferenceRules {
 }
 
 impl InferenceRules {
-    /// The identifier of the rule with the given name.
+    /// The identifier of the rule named `name`, assigned when the name is first used.
     pub(crate) fn id(&mut self, name: &str) -> RuleId {
         if let Some(&id) = self.ids.get(name) {
             return id;
@@ -121,7 +119,6 @@ impl InferenceRules {
         id
     }
 
-    /// The name of the rule with the given identifier.
     pub(crate) fn name(&self, id: RuleId) -> &str {
         &self.names[id.0 as usize]
     }

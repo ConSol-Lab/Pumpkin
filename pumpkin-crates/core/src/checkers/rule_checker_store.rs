@@ -39,7 +39,6 @@ impl RuleCheckerStore {
 /// The checkers exist only when their features are enabled.
 #[derive(Clone, Copy, Debug)]
 pub struct RemovableRuleCheckers {
-    /// The inference code of the constraint.
     pub(crate) inference_code: InferenceCode,
     /// `None` when the rule is not checked; see `is_rule_checked`.
     #[cfg(feature = "check-propagations")]
@@ -50,7 +49,6 @@ pub struct RemovableRuleCheckers {
 }
 
 impl RemovableRuleCheckers {
-    /// The inference code of the constraint.
     pub fn inference_code(&self) -> InferenceCode {
         self.inference_code
     }

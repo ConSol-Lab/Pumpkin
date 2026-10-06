@@ -10,7 +10,6 @@ use pumpkin_core::variables::IntegerVariable;
 
 use super::LinearLessOrEqualDescription;
 
-/// The rule of the linear inequality.
 #[derive(Clone, Copy, Debug)]
 pub struct LinearLessOrEqualRule<Var>(PhantomData<Var>);
 

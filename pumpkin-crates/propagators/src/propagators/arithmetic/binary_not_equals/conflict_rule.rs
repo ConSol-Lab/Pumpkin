@@ -10,7 +10,6 @@ use pumpkin_core::variables::IntegerVariable;
 
 use super::BinaryNotEqualsDescription;
 
-/// The rule of the binary disequality.
 #[derive(Clone, Copy, Debug)]
 pub struct BinaryNotEqualsRule<AVar, BVar>(PhantomData<(AVar, BVar)>);
 

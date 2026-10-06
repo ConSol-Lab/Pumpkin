@@ -55,7 +55,6 @@ where
                     RetentionCheck::NothingToPropagate
                 }
             }
-            // 3. Neither side is fixed: nothing can be propagated
             (None, None) => RetentionCheck::NothingToPropagate,
         }
     }

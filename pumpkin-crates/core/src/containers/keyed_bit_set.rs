@@ -21,17 +21,16 @@ impl<Key: StorageKey> KeyedBitSet<Key> {
 
     /// Remove the key from the set.
     ///
-    /// If the key was present, returns true.
+    /// Returns `true` if the set contained `key`.
     pub fn remove(&mut self, key: Key) -> bool {
         self.bitset.remove(key.index())
     }
 
-    /// Get all keys in the set and remove them.
+    /// The keys in the set. The set is not changed.
     pub fn drain(&self) -> impl Iterator<Item = Key> {
         self.bitset.iter().map(Key::create_from_index)
     }
 
-    /// Remove all keys in the set.
     pub fn clear(&mut self) {
         self.bitset.make_empty();
     }

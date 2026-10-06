@@ -259,7 +259,6 @@ impl State {
         }
     }
 
-    /// The name of the inference rule of `inference_code`.
     pub fn rule_name(&self, inference_code: InferenceCode) -> &str {
         self.inference_rules.name(inference_code.rule())
     }
@@ -830,7 +829,7 @@ impl State {
         #[cfg(feature = "check-propagations")]
         self.check_inferences(checking_start_index, &result);
 
-        // A conflict leaves the state inconsistent.
+        // After a conflict the domains are not at a fixpoint, so the retention checkers do not run.
         #[cfg(feature = "check-consistency")]
         if result.is_ok() {
             self.run_retention_checkers(checking_start_index);

@@ -17,7 +17,7 @@ impl FromIterator<(LocalId, DomainId)> for Scope {
 }
 
 impl Scope {
-    /// The scope of the given variables, with the [`LocalId`] of each variable its position.
+    /// The scope of the given variables, each under the [`LocalId`] of its position.
     pub fn from_variables<'a, Variable: ScopeItem + 'a>(
         variables: impl IntoIterator<Item = &'a Variable>,
     ) -> Scope {
@@ -28,14 +28,12 @@ impl Scope {
         scope
     }
 
-    /// Add a new domain to the scope with the given local id.
-    ///
-    /// Any previous occurrance of this local id will be overridden.
+    /// Add `domain_id` under `local_id`, replacing the domain previously added under it.
     pub fn add_domain(&mut self, local_id: LocalId, domain_id: DomainId) {
         let _ = self.domains.insert(local_id, domain_id);
     }
 
-    /// The integer domains in the scope with the [`LocalId`]s they are registered.
+    /// The domains in the scope with the [`LocalId`]s under which they are registered.
     pub fn domains(&self) -> impl ExactSizeIterator<Item = (LocalId, DomainId)> {
         self.domains.iter().map(|(lid, did)| (*lid, *did))
     }
@@ -64,12 +62,12 @@ impl_scope_from_tuple!(la,va: VA, lb,vb: VB);
 impl_scope_from_tuple!(la,va: VA, lb,vb: VB, lc,vc: VC);
 
 pub trait ScopeItem {
-    /// Adds self to the given scope with the given [`LocalId`].
+    /// Add the domains of the variable to `scope` under `local_id`.
     fn add_to_scope(&self, scope: &mut Scope, local_id: LocalId);
 }
 
 impl ScopeItem for i32 {
     fn add_to_scope(&self, _: &mut Scope, _: LocalId) {
-        // Do nothing
+        // A constant has no domain.
     }
 }

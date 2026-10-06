@@ -1048,7 +1048,6 @@ mod tests {
         }
     }
 
-    /// The rule of the [`AlwaysConflictPropagator`].
     struct AlwaysConflictRule;
 
     impl ConflictRule for AlwaysConflictRule {

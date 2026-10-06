@@ -36,9 +36,10 @@ where
     /// consequent.
     ///
     /// If `premises /\ !consequent` contain mutually exclusive atomic constraints (e.g., `[x >=
-    /// 5]` and `[x <= 2]`) then `None` is returned.
+    /// 5]` and `[x <= 2]`) then the identifier of the variable of the first contradicting atomic
+    /// constraint is returned.
     ///
-    /// An [`ConflictChecker`] will receive a [`VariableState`] that conforms to this description.
+    /// A [`ConflictChecker`] receives a [`VariableState`] that conforms to this description.
     pub fn prepare_for_conflict_check(
         premises: impl IntoIterator<Item = Atomic>,
         consequent: Option<Atomic>,

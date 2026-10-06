@@ -10,7 +10,6 @@ use pumpkin_core::variables::IntegerVariable;
 
 use super::DivisionDescription;
 
-/// The rule of the integer division.
 #[derive(Clone, Copy, Debug)]
 pub struct DivisionRule<VA, VB, VC>(PhantomData<(VA, VB, VC)>);
 

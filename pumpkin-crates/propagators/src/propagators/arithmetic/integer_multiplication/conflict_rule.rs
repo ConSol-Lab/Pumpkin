@@ -10,7 +10,6 @@ use pumpkin_core::variables::IntegerVariable;
 
 use super::IntegerMultiplicationDescription;
 
-/// The rule of the integer multiplication.
 #[derive(Clone, Copy, Debug)]
 pub struct IntegerMultiplicationRule<VA, VB, VC>(PhantomData<(VA, VB, VC)>);
 

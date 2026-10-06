@@ -39,12 +39,11 @@ where
             return RetentionCheck::NothingToPropagate;
         }
 
-        // 2. If at least two terms are unfixed then nothing can be propagated
         if unfixed_terms.len() >= 2 {
             return RetentionCheck::NothingToPropagate;
         }
 
-        // 3. Assert that the single unfixed term cannot take the value which completes the sum to
+        // 2. Assert that the single unfixed term cannot take the value which completes the sum to
         //    the bound
         let unfixed_term = unfixed_terms[0];
         let forbidden = i64::from(self.bound) - fixed_sum;

@@ -10,7 +10,6 @@ use pumpkin_core::variables::IntegerVariable;
 
 use super::AbsoluteValueDescription;
 
-/// The rule of the absolute value constraint.
 #[derive(Clone, Copy, Debug)]
 pub struct AbsoluteValueRule<VA, VB>(PhantomData<(VA, VB)>);
 

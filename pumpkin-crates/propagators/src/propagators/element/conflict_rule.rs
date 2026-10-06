@@ -10,7 +10,6 @@ use pumpkin_core::variables::IntegerVariable;
 
 use super::ElementDescription;
 
-/// The rule of the element constraint.
 #[derive(Clone, Copy, Debug)]
 pub struct ElementRule<VX, VI, VE>(PhantomData<(VX, VI, VE)>);
 

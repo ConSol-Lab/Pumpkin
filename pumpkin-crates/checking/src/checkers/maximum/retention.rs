@@ -63,9 +63,9 @@ where
             }
         }
 
-        // 3. If only one element can be at least the lower bound of the maximum then it is the
-        //    maximum; assert that its lower bound is at least the lower bound of the maximum, the
-        //    upper bound is already equal by 1 and 2
+        // 3. If only one element can reach the lower bound of the maximum, it is the maximum:
+        //    assert that its lower bound is at least that of the maximum. Steps 1 and 2 cover its
+        //    upper bound.
         //  Elements are counted by position, as the propagator does.
         let candidates = self
             .array

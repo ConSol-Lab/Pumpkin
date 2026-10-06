@@ -11,7 +11,7 @@ use crate::proof::InferenceCode;
 /// The checkers are looked up by the inference code of a propagation.
 #[derive(Clone, Debug, Default)]
 pub struct ConflictCheckerStore {
-    /// For each inference code we associate possibly many conflict checkers.
+    /// The conflict checkers of each inference code, with their identifiers.
     conflict_checkers:
         HashMap<InferenceCode, Vec<(ConflictCheckerId, BoxedConflictChecker<Predicate>)>>,
     /// The identifier given to the next checker that is added.
@@ -19,7 +19,6 @@ pub struct ConflictCheckerStore {
 }
 
 impl ConflictCheckerStore {
-    /// The conflict checkers of the given inference code.
     pub fn for_inference_code(
         &self,
         inference_code: &InferenceCode,
@@ -34,7 +33,7 @@ impl ConflictCheckerStore {
     ///
     /// An inference code can have multiple checkers, for instance when several constraints share a
     /// constraint tag, so if a [`ConflictChecker`] was already registered for the given code,
-    /// this new checker is simply added to the collection.
+    /// the checker is added next to the existing ones.
     pub fn add_conflict_checker(
         &mut self,
         inference_code: InferenceCode,
