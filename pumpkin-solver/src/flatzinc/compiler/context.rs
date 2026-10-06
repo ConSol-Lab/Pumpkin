@@ -18,7 +18,7 @@ use crate::flatzinc::instance::Output;
 #[derive(Debug)]
 pub struct CompilationContext<'a> {
     /// The solver to compile the FlatZinc into.
-    pub(crate) solver: &'a mut Solver,
+    pub solver: &'a mut Solver,
 
     /// All identifiers occuring in the model. The identifiers are interned, to support cheap
     /// cloning.
