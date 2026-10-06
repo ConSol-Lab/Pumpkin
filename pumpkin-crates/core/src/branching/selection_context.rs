@@ -71,6 +71,10 @@ impl<'a> SelectionContext<'a> {
         self.lower_bound(var.clone()) == self.upper_bound(var)
     }
 
+    pub fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
+        self.state.truth_value(predicate)
+    }
+
     pub fn is_predicate_assigned(&self, predicate: Predicate) -> bool {
         self.state.truth_value(predicate).is_some()
     }
