@@ -67,6 +67,7 @@
 //! on Programming Languages and Systems (TOPLAS), vol. 31, no. 1, pp. 1–43, 2008.
 
 mod conflict_rule;
+mod constraint_description;
 mod constructor;
 mod contexts;
 mod domains;
@@ -91,6 +92,7 @@ mod reexports {
     pub use crate::engine::notifications::OpaqueDomainEvent;
 }
 pub use conflict_rule::*;
+pub use constraint_description::*;
 pub use constructor::*;
 pub use contexts::*;
 pub use domains::*;
