@@ -376,7 +376,9 @@ pub mod core {
     pub use pumpkin_core::*;
 }
 
+pub mod file_format;
 pub mod flatzinc;
+pub mod logging;
 mod os_signal_termination;
 
 use std::fs::File;
@@ -387,10 +389,12 @@ pub use pumpkin_core::Solver;
 #[cfg(doc)]
 use pumpkin_core::conflict_resolving::ConflictResolver;
 
+use crate::file_format::FileFormat;
 use crate::flatzinc::FlatZincInstance;
 use crate::flatzinc::FlatZincOptions;
 use crate::flatzinc::compiler::CompilationContext;
 use crate::flatzinc::error::FlatZincError;
+use crate::logging::configure_logging;
 
 /// The version of Pumpkin that is being executed.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -405,6 +409,12 @@ pub fn read_flatzinc(
     solver: &mut Solver,
     instance: impl AsRef<Path>,
 ) -> Result<(CompilationContext<'_>, FlatZincInstance), FlatZincError> {
+    let options = FlatZincOptions {
+        verbose: true,
+        ..Default::default()
+    };
+    configure_logging(FileFormat::FlatZinc, options.verbose, true, false, false)?;
+
     let instance = File::open(instance)?;
-    flatzinc::parse_and_compile(solver, instance, FlatZincOptions::default())
+    flatzinc::parse_and_compile(solver, instance, options)
 }
