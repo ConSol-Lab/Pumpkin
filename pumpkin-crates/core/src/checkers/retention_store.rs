@@ -26,8 +26,6 @@ pub struct RetentionCheckerStore {
     /// Marks which checkers are enqueued to prevent duplicate checkers in
     /// [`RetentionCheckerStore::queue`].
     enqueued: KeyedBitSet<RetentionCheckerId>,
-    /// The propagators whose checkers are discarded when they are registered.
-    excluded: KeyedVec<PropagatorId, bool>,
 }
 
 /// A checker together with what it is attached to.
@@ -64,19 +62,8 @@ pub struct RetentionFailure {
 }
 
 impl RetentionCheckerStore {
-    /// Discard the checkers of this propagator instead of storing them.
-    ///
-    /// Used to restrict checking to a chosen set of propagators.
-    /// It has to be called before the checkers of that propagator are registered.
-    pub fn exclude(&mut self, propagator: PropagatorId) {
-        self.excluded.accomodate(propagator, false);
-        self.excluded[propagator] = true;
-    }
-
     /// Add a new `checker` to the store with the given `scope`, for the rule and constraint of
     /// `inference_code`, for a constraint that is never removed.
-    ///
-    /// The checker is dropped when its propagator has been excluded.
     pub fn register(
         &mut self,
         scope: Scope,
@@ -90,19 +77,14 @@ impl RetentionCheckerStore {
     /// Add a new `checker` as with [`RetentionCheckerStore::register`], for a constraint that can
     /// be removed later.
     ///
-    /// Returns the identifier through which [`RetentionCheckerStore::remove`] removes the checker,
-    /// or `None` when the checker is dropped because its propagator has been excluded.
+    /// Returns the identifier through which [`RetentionCheckerStore::remove`] removes the checker.
     pub fn register_removable(
         &mut self,
         scope: Scope,
         checker: BoxedRetentionChecker<Predicate>,
         propagator: PropagatorId,
         inference_code: InferenceCode,
-    ) -> Option<RetentionCheckerId> {
-        if self.is_excluded(propagator) {
-            return None;
-        }
-
+    ) -> RetentionCheckerId {
         let checker_slot = self.store.new_slot();
         let checker_id = checker_slot.key();
 
@@ -118,7 +100,7 @@ impl RetentionCheckerStore {
             inference_code,
         }));
 
-        Some(checker_id)
+        checker_id
     }
 
     /// Remove the checker with the given identifier, for a constraint that no longer exists.
@@ -205,10 +187,6 @@ impl RetentionCheckerStore {
                 variables: entry.scope.domains().map(|(_, domain)| domain).collect(),
             }),
         }
-    }
-
-    fn is_excluded(&self, propagator: PropagatorId) -> bool {
-        self.excluded.get(propagator).copied().unwrap_or(false)
     }
 }
 
