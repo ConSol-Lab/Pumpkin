@@ -389,6 +389,13 @@ impl CompilationContext<'_> {
         }
     }
 
+    pub fn resolve_integer_variable_array_from_name(
+        &mut self,
+        expr: String,
+    ) -> Result<Rc<[DomainId]>, FlatZincError> {
+        self.resolve_integer_variable_array(&flatzinc::Expr::VarParIdentifier(expr))
+    }
+
     pub(crate) fn resolve_integer_variable_array(
         &mut self,
         expr: &flatzinc::Expr,
