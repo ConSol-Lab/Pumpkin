@@ -1,6 +1,6 @@
 mod ast;
 mod compiler;
-pub(crate) mod error;
+pub mod error;
 mod instance;
 mod parser;
 
@@ -11,6 +11,7 @@ use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
 
+use clap::ValueEnum;
 use pumpkin_branching::branching::alternating::AlternatingBrancher;
 use pumpkin_branching::branching::alternating::every_x_restarts::EveryXRestarts;
 use pumpkin_branching::branching::alternating::until_solution::UntilSolution;
@@ -18,27 +19,26 @@ use pumpkin_branching::branching::dynamic_brancher::DynamicBrancher;
 use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_core::statistics::log_statistic;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
-use pumpkin_solver::Solver;
-use pumpkin_solver::core::branching::Brancher;
-#[cfg(doc)]
-use pumpkin_solver::core::constraints::cumulative;
-use pumpkin_solver::core::optimisation::OptimisationDirection;
-use pumpkin_solver::core::optimisation::OptimisationStrategy;
-use pumpkin_solver::core::optimisation::linear_sat_unsat::LinearSatUnsat;
-use pumpkin_solver::core::optimisation::linear_unsat_sat::LinearUnsatSat;
-use pumpkin_solver::core::results::OptimisationResult;
-use pumpkin_solver::core::results::ProblemSolution;
-use pumpkin_solver::core::results::SatisfactionResult;
-use pumpkin_solver::core::results::SolutionReference;
-use pumpkin_solver::core::results::solution_iterator::IteratedSolution;
-use pumpkin_solver::core::termination::Combinator;
-use pumpkin_solver::core::termination::TerminationCondition;
-use pumpkin_solver::core::termination::TimeBudget;
-use pumpkin_solver::core::variables::DomainId;
 
-use self::instance::FlatZincInstance;
+pub use self::instance::FlatZincInstance;
 use self::instance::Output;
-use crate::ProofType;
+use crate::Solver;
+use crate::core::branching::Brancher;
+use crate::core::optimisation::OptimisationDirection;
+use crate::core::optimisation::OptimisationStrategy;
+use crate::core::optimisation::linear_sat_unsat::LinearSatUnsat;
+use crate::core::optimisation::linear_unsat_sat::LinearUnsatSat;
+use crate::core::results::OptimisationResult;
+use crate::core::results::ProblemSolution;
+use crate::core::results::SatisfactionResult;
+use crate::core::results::SolutionReference;
+use crate::core::results::solution_iterator::IteratedSolution;
+use crate::core::termination::Combinator;
+use crate::core::termination::TerminationCondition;
+use crate::core::termination::TimeBudget;
+use crate::core::variables::DomainId;
+#[cfg(doc)]
+use crate::cumulative;
 use crate::flatzinc::error::FlatZincError;
 use crate::os_signal_termination::OsSignal;
 
@@ -56,26 +56,37 @@ pub(crate) const MIN_INTEGER_VALUE: i32 = -500_000_000;
 /// with care since it might lead to overflow/underflow!
 pub(crate) const MAX_INTEGER_VALUE: i32 = 500_000_000;
 
+/// Options used when compiling and solving a FlatZinc instance.
 #[derive(Debug, Clone, Copy, Default)]
-pub(crate) struct FlatZincOptions {
+pub struct FlatZincOptions {
     /// If `true`, the solver will not strictly keep to the search annotations in the flatzinc.
-    pub(crate) free_search: bool,
+    pub free_search: bool,
 
     /// For satisfaction problems, print all solutions. For optimisation problems, this instructs
     /// the solver to print intermediate solutions.
-    pub(crate) all_solutions: bool,
+    pub all_solutions: bool,
 
     /// Options used for the cumulative constraint (see [`cumulative`]).
-    pub(crate) cumulative_options: CumulativeOptions,
+    pub cumulative_options: CumulativeOptions,
 
     /// Determines which type of search is performed by the solver
-    pub(crate) optimisation_strategy: OptimisationStrategy,
+    pub optimisation_strategy: OptimisationStrategy,
 
     /// The type of proof that is logged. This influences which preprocessing steps we can do.
-    pub(crate) proof_type: Option<ProofType>,
+    pub proof_type: Option<ProofType>,
 
     /// Indicates that the solver should perform verbose logging
-    pub(crate) verbose: bool,
+    pub verbose: bool,
+}
+
+/// The type of proof that is logged when solving a FlatZinc instance.
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum ProofType {
+    /// Log only the proof scaffold.
+    #[default]
+    Scaffold,
+    /// Log the full proof with hints.
+    Full,
 }
 
 fn log_statistics(
@@ -122,7 +133,9 @@ fn solution_callback(
     }
 }
 
-pub(crate) fn solve<R: ConflictResolver>(
+/// Parses, compiles and solves the FlatZinc instance at the given path, printing solutions to
+/// stdout.
+pub fn solve<R: ConflictResolver>(
     mut solver: Solver,
     instance: impl AsRef<Path>,
     time_limit: Option<Duration>,
@@ -380,7 +393,8 @@ fn satisfy(
     }
 }
 
-fn parse_and_compile(
+/// Parses the given FlatZinc instance and compiles it into the provided [`Solver`].
+pub fn parse_and_compile(
     solver: &mut Solver,
     instance: impl Read,
     options: FlatZincOptions,

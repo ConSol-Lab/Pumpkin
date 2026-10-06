@@ -376,13 +376,34 @@ pub mod core {
     pub use pumpkin_core::*;
 }
 
+pub mod flatzinc;
+mod os_signal_termination;
+
+use std::fs::File;
+use std::path::Path;
+
 pub use pumpkin_constraints::*;
 pub use pumpkin_core::Solver;
 #[cfg(doc)]
 use pumpkin_core::conflict_resolving::ConflictResolver;
+
+use crate::flatzinc::FlatZincInstance;
+use crate::flatzinc::FlatZincOptions;
+use crate::flatzinc::error::FlatZincError;
 
 /// The version of Pumpkin that is being executed.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// The latest commit hash.
 pub const LATEST_COMMIT: &str = env!("GIT_SHA");
+
+/// Reads the FlatZinc instance at the given path and compiles it into the provided [`Solver`].
+pub fn read_flatzinc(
+    mut solver: Solver,
+    instance: impl AsRef<Path>,
+) -> Result<(Solver, FlatZincInstance), FlatZincError> {
+    let instance = File::open(instance)?;
+    let instance = flatzinc::parse_and_compile(&mut solver, instance, FlatZincOptions::default())?;
+
+    Ok((solver, instance))
+}

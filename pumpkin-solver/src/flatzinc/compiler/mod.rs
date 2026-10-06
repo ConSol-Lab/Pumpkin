@@ -12,12 +12,12 @@ mod remove_unused_variables;
 mod reserve_constraint_tags;
 
 use context::CompilationContext;
-use pumpkin_solver::Solver;
 
 use super::FlatZincError;
 use super::FlatZincOptions;
 use super::ast::FlatZincAst;
 use super::instance::FlatZincInstance;
+use crate::Solver;
 
 pub(crate) fn compile(
     mut ast: FlatZincAst,

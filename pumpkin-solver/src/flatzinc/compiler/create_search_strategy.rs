@@ -8,11 +8,11 @@ use pumpkin_branching::branching::warm_start::WarmStart;
 use pumpkin_branching::value_selection::InDomainMax;
 use pumpkin_branching::value_selection::InDomainMin;
 use pumpkin_branching::variable_selection::InputOrder;
-use pumpkin_solver::core::branching::Brancher;
-use pumpkin_solver::core::variables::DomainId;
-use pumpkin_solver::core::variables::Literal;
 
 use super::context::CompilationContext;
+use crate::core::branching::Brancher;
+use crate::core::variables::DomainId;
+use crate::core::variables::Literal;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::ast::Search;
 use crate::flatzinc::ast::SearchStrategy;

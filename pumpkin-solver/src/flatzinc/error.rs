@@ -2,8 +2,9 @@ use std::num::TryFromIntError;
 
 use thiserror::Error;
 
+/// Errors that can occur while parsing, compiling or solving a FlatZinc instance.
 #[derive(Debug, Error)]
-pub(crate) enum FlatZincError {
+pub enum FlatZincError {
     #[error("failed to read instance file: {0}")]
     Io(#[from] std::io::Error),
 

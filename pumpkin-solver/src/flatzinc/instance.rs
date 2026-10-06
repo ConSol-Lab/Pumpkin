@@ -3,9 +3,10 @@ use std::fmt::Write;
 use std::rc::Rc;
 
 use pumpkin_branching::branching::dynamic_brancher::DynamicBrancher;
-use pumpkin_solver::core::optimisation::OptimisationDirection;
-use pumpkin_solver::core::variables::DomainId;
-use pumpkin_solver::core::variables::Literal;
+
+use crate::core::optimisation::OptimisationDirection;
+use crate::core::variables::DomainId;
+use crate::core::variables::Literal;
 
 /// The objective function of a FlatZinc model,
 /// consisting of the direction (e.g. maximization or minimization) and the integer variable which
@@ -25,8 +26,9 @@ impl From<FlatzincObjective> for (OptimisationDirection, DomainId) {
     }
 }
 
-#[derive(Default)]
-pub(crate) struct FlatZincInstance {
+/// A FlatZinc instance which has been compiled into a [`crate::Solver`].
+#[derive(Debug, Default)]
+pub struct FlatZincInstance {
     pub(super) outputs: Vec<Output>,
     pub(super) objective_function: Option<FlatzincObjective>,
     pub(super) search: Option<DynamicBrancher>,
