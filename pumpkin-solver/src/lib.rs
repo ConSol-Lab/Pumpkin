@@ -389,6 +389,7 @@ use pumpkin_core::conflict_resolving::ConflictResolver;
 
 use crate::flatzinc::FlatZincInstance;
 use crate::flatzinc::FlatZincOptions;
+use crate::flatzinc::compiler::CompilationContext;
 use crate::flatzinc::error::FlatZincError;
 
 /// The version of Pumpkin that is being executed.
@@ -398,12 +399,12 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const LATEST_COMMIT: &str = env!("GIT_SHA");
 
 /// Reads the FlatZinc instance at the given path and compiles it into the provided [`Solver`].
+///
+/// Returns the [`CompilationContext`] alongside the compiled instance.
 pub fn read_flatzinc(
-    mut solver: Solver,
+    solver: &mut Solver,
     instance: impl AsRef<Path>,
-) -> Result<(Solver, FlatZincInstance), FlatZincError> {
+) -> Result<(CompilationContext<'_>, FlatZincInstance), FlatZincError> {
     let instance = File::open(instance)?;
-    let instance = flatzinc::parse_and_compile(&mut solver, instance, FlatZincOptions::default())?;
-
-    Ok((solver, instance))
+    flatzinc::parse_and_compile(solver, instance, FlatZincOptions::default())
 }

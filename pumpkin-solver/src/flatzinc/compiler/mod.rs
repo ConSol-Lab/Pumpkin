@@ -1,5 +1,5 @@
 mod collect_domains;
-mod context;
+pub mod context;
 mod create_objective;
 mod create_search_strategy;
 mod define_constants;
@@ -11,7 +11,7 @@ mod prepare_variables;
 mod remove_unused_variables;
 mod reserve_constraint_tags;
 
-use context::CompilationContext;
+pub use context::CompilationContext;
 
 use super::FlatZincError;
 use super::FlatZincOptions;
@@ -23,7 +23,7 @@ pub(crate) fn compile(
     mut ast: FlatZincAst,
     solver: &mut Solver,
     options: FlatZincOptions,
-) -> Result<FlatZincInstance, FlatZincError> {
+) -> Result<(CompilationContext<'_>, FlatZincInstance), FlatZincError> {
     let mut context = CompilationContext::new(solver);
 
     define_constants::run(&ast, &mut context)?;
@@ -38,9 +38,11 @@ pub(crate) fn compile(
     let objective_function = create_objective::run(&ast, &mut context)?;
     let search = create_search_strategy::run(&ast, &mut context, objective_function)?;
 
-    Ok(FlatZincInstance {
-        outputs: context.outputs,
+    let instance = FlatZincInstance {
+        outputs: context.outputs.clone(),
         objective_function,
         search: Some(search),
-    })
+    };
+
+    Ok((context, instance))
 }

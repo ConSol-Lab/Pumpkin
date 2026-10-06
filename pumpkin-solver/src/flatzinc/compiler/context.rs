@@ -14,7 +14,9 @@ use crate::core::variables::Literal;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::instance::Output;
 
-pub(crate) struct CompilationContext<'a> {
+/// The state built up while compiling a FlatZinc instance into a [`Solver`].
+#[derive(Debug)]
+pub struct CompilationContext<'a> {
     /// The solver to compile the FlatZinc into.
     pub(crate) solver: &'a mut Solver,
 

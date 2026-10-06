@@ -1,5 +1,5 @@
 mod ast;
-mod compiler;
+pub mod compiler;
 pub mod error;
 mod instance;
 mod parser;
@@ -20,6 +20,7 @@ use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_core::statistics::log_statistic;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 
+use self::compiler::CompilationContext;
 pub use self::instance::FlatZincInstance;
 use self::instance::Output;
 use crate::Solver;
@@ -151,7 +152,7 @@ pub fn solve<R: ConflictResolver>(
         time_limit.map(TimeBudget::starting_now),
     );
 
-    let instance = parse_and_compile(&mut solver, instance, options)?;
+    let (_, instance) = parse_and_compile(&mut solver, instance, options)?;
     let outputs = instance.outputs.clone();
 
     let init_time = init_start_time.elapsed();
@@ -394,11 +395,13 @@ fn satisfy(
 }
 
 /// Parses the given FlatZinc instance and compiles it into the provided [`Solver`].
+///
+/// Returns the [`CompilationContext`] alongside the compiled instance.
 pub fn parse_and_compile(
     solver: &mut Solver,
     instance: impl Read,
     options: FlatZincOptions,
-) -> Result<FlatZincInstance, FlatZincError> {
+) -> Result<(CompilationContext<'_>, FlatZincInstance), FlatZincError> {
     let ast = parser::parse(instance)?;
     compiler::compile(ast, solver, options)
 }
@@ -616,7 +619,7 @@ mod tests {
         "#;
         let mut solver = Solver::default();
 
-        let instance =
+        let (_, instance) =
             parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
                 .expect("compilation should succeed");
 
@@ -638,7 +641,7 @@ mod tests {
         "#;
         let mut solver = Solver::default();
 
-        let instance =
+        let (_, instance) =
             parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
                 .expect("compilation should succeed");
 
@@ -656,7 +659,7 @@ mod tests {
         "#;
         let mut solver = Solver::default();
 
-        let instance =
+        let (_, instance) =
             parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
                 .expect("compilation should succeed");
 
@@ -678,7 +681,7 @@ mod tests {
         "#;
         let mut solver = Solver::default();
 
-        let instance =
+        let (_, instance) =
             parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
                 .expect("compilation should succeed");
 
