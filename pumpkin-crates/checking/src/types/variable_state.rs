@@ -4,9 +4,9 @@ use fnv::FnvHashMap;
 
 use crate::AtomicConstraint;
 use crate::Comparison;
-use crate::DomainView;
 #[cfg(doc)]
-use crate::InferenceChecker;
+use crate::ConflictChecker;
+use crate::DomainView;
 use crate::IntExt;
 
 /// The domains of all variables in the problem.
@@ -38,7 +38,7 @@ where
     /// If `premises /\ !consequent` contain mutually exclusive atomic constraints (e.g., `[x >=
     /// 5]` and `[x <= 2]`) then `None` is returned.
     ///
-    /// An [`InferenceChecker`] will receive a [`VariableState`] that conforms to this description.
+    /// An [`ConflictChecker`] will receive a [`VariableState`] that conforms to this description.
     pub fn prepare_for_conflict_check(
         premises: impl IntoIterator<Item = Atomic>,
         consequent: Option<Atomic>,

@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::marker::PhantomData;
 
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::RetentionChecker;
 use pumpkin_checking::checkers::IntegerDivisionChecker;
 use pumpkin_core::predicates::Predicate;
@@ -43,9 +43,9 @@ where
         Cow::Borrowed("division")
     }
 
-    fn create_inference_checker(
+    fn create_conflict_checker(
         constraint_description: &DivisionDescription<VA, VB, VC>,
-    ) -> impl InferenceChecker<Predicate> + 'static {
+    ) -> impl ConflictChecker<Predicate> + 'static {
         Self::checker(constraint_description)
     }
 

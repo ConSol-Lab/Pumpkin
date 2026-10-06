@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::marker::PhantomData;
 
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::RetentionChecker;
 use pumpkin_checking::checkers::CheckerTask;
 use pumpkin_checking::checkers::TimeTableChecker;
@@ -23,9 +23,9 @@ impl<Var: IntegerVariable + 'static> ConflictRule for TimeTableRule<Var> {
         Cow::Borrowed("time_table")
     }
 
-    fn create_inference_checker(
+    fn create_conflict_checker(
         constraint_description: &CumulativeDescription<Var>,
-    ) -> impl InferenceChecker<Predicate> + 'static {
+    ) -> impl ConflictChecker<Predicate> + 'static {
         Self::checker(constraint_description)
     }
 

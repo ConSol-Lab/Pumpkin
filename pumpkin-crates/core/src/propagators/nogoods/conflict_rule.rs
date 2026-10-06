@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::RetentionChecker;
 use pumpkin_checking::checkers::ExtendedNogoodChecker;
 use pumpkin_checking::checkers::NogoodChecker;
@@ -26,9 +26,9 @@ impl ConflictRule for UnitNogoodRule {
         Cow::Borrowed("nogood")
     }
 
-    fn create_inference_checker(
+    fn create_conflict_checker(
         constraint_description: &NogoodDescription,
-    ) -> impl InferenceChecker<Predicate> + 'static {
+    ) -> impl ConflictChecker<Predicate> + 'static {
         NogoodChecker {
             nogood: constraint_description.nogood.clone(),
         }
@@ -57,10 +57,10 @@ impl ConflictRule for ExtendedNogoodRule {
         UnitNogoodRule::name()
     }
 
-    fn create_inference_checker(
+    fn create_conflict_checker(
         constraint_description: &NogoodDescription,
-    ) -> impl InferenceChecker<Predicate> + 'static {
-        UnitNogoodRule::create_inference_checker(constraint_description)
+    ) -> impl ConflictChecker<Predicate> + 'static {
+        UnitNogoodRule::create_conflict_checker(constraint_description)
     }
 
     fn create_retention_checker(

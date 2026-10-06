@@ -2,11 +2,11 @@ use super::BinaryEqualsChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
 use crate::ConflictCheck;
-use crate::InferenceChecker;
+use crate::ConflictChecker;
 use crate::IntExt;
 use crate::VariableState;
 
-impl<Lhs, Rhs, Atomic> InferenceChecker<Atomic> for BinaryEqualsChecker<Lhs, Rhs>
+impl<Lhs, Rhs, Atomic> ConflictChecker<Atomic> for BinaryEqualsChecker<Lhs, Rhs>
 where
     Atomic: AtomicConstraint,
     Lhs: CheckerVariable<Atomic>,

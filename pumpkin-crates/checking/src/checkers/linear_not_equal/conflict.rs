@@ -2,11 +2,11 @@ use super::LinearNotEqualChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
 use crate::ConflictCheck;
-use crate::InferenceChecker;
+use crate::ConflictChecker;
 use crate::IntExt;
 use crate::VariableState;
 
-impl<Var, Atomic> InferenceChecker<Atomic> for LinearNotEqualChecker<Var>
+impl<Var, Atomic> ConflictChecker<Atomic> for LinearNotEqualChecker<Var>
 where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,

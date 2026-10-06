@@ -2,11 +2,11 @@ use super::ElementChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
 use crate::ConflictCheck;
+use crate::ConflictChecker;
 use crate::Domain;
-use crate::InferenceChecker;
 use crate::VariableState;
 
-impl<VX, VI, VE, Atomic> InferenceChecker<Atomic> for ElementChecker<VX, VI, VE>
+impl<VX, VI, VE, Atomic> ConflictChecker<Atomic> for ElementChecker<VX, VI, VE>
 where
     Atomic: AtomicConstraint,
     VX: CheckerVariable<Atomic>,

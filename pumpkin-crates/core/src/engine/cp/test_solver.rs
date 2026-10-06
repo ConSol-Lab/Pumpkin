@@ -2,7 +2,7 @@
 //! setting up specific scenarios under which to test the various operations of a propagator.
 use std::fmt::Debug;
 
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 
 use super::PropagatorQueue;
 use crate::containers::KeyGenerator;
@@ -69,7 +69,7 @@ impl TestSolver {
         #[derive(Debug, Clone, Copy)]
         struct Checker;
 
-        impl InferenceChecker<Predicate> for Checker {
+        impl ConflictChecker<Predicate> for Checker {
             fn check(
                 &self,
                 _: pumpkin_checking::VariableState<Predicate>,
@@ -83,7 +83,7 @@ impl TestSolver {
         let inference_code = self
             .state
             .inference_code_for_rule(constraint_tag, rule_name);
-        self.state.add_inference_checker(inference_code, Checker);
+        self.state.add_conflict_checker(inference_code, Checker);
         inference_code
     }
 

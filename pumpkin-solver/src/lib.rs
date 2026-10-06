@@ -350,7 +350,7 @@ pub mod propagators {
 pub mod checking {
     //! Exposes a common interface used to check inferences.
     //!
-    //! The main exposed type is the [`InferenceChecker`], which can be implemented to verify
+    //! The main exposed type is the [`ConflictChecker`], which can be implemented to verify
     //! whether inferences are sound w.r.t. an inference rule.
     pub use pumpkin_checking::*;
 }

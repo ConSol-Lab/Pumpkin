@@ -1,6 +1,6 @@
 use crate::Comparison;
 use crate::ConflictCheck;
-use crate::InferenceChecker;
+use crate::ConflictChecker;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::TestAtomic;

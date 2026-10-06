@@ -4,7 +4,7 @@ use super::helpers::CheckerThetaLambdaTree;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
 use crate::ConflictCheck;
-use crate::InferenceChecker;
+use crate::ConflictChecker;
 use crate::IntExt;
 use crate::VariableState;
 
@@ -54,7 +54,7 @@ fn overload_checking<Atomic: AtomicConstraint, Var: CheckerVariable<Atomic>>(
     false
 }
 
-impl<Var, Atomic> InferenceChecker<Atomic> for DisjunctiveEdgeFindingChecker<Var>
+impl<Var, Atomic> ConflictChecker<Atomic> for DisjunctiveEdgeFindingChecker<Var>
 where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,

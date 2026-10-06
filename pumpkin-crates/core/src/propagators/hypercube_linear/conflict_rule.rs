@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::RetentionChecker;
 use pumpkin_checking::checkers::HypercubeLinearChecker;
 
@@ -21,9 +21,9 @@ impl ConflictRule for HypercubeLinearRule {
         Cow::Borrowed("hypercube_linear")
     }
 
-    fn create_inference_checker(
+    fn create_conflict_checker(
         constraint_description: &HypercubeLinearDescription,
-    ) -> impl InferenceChecker<Predicate> + 'static {
+    ) -> impl ConflictChecker<Predicate> + 'static {
         Self::checker(constraint_description)
     }
 

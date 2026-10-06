@@ -5,7 +5,7 @@ use super::TimeTableChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
 use crate::ConflictCheck;
-use crate::InferenceChecker;
+use crate::ConflictChecker;
 use crate::IntExt;
 use crate::VariableState;
 
@@ -17,7 +17,7 @@ fn can_be_propagated_by_profile<Var: CheckerVariable<Atomic>, Atomic: AtomicCons
     height + task.resource_usage > capacity
 }
 
-impl<Var, Atomic> InferenceChecker<Atomic> for TimeTableChecker<Var>
+impl<Var, Atomic> ConflictChecker<Atomic> for TimeTableChecker<Var>
 where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,

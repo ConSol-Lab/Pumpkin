@@ -1,4 +1,4 @@
-use pumpkin_checking::BoxedChecker;
+use pumpkin_checking::BoxedConflictChecker;
 use pumpkin_checking::ConflictCheck;
 use pumpkin_checking::VariableState;
 
@@ -15,13 +15,13 @@ use crate::variables::DomainId;
 /// 3. The consequent is logically entailed given the inference code.
 #[derive(Clone, Debug)]
 pub struct PropagationChecker {
-    inference_checker: BoxedChecker<Predicate>,
+    conflict_checker: BoxedConflictChecker<Predicate>,
 }
 
 impl PropagationChecker {
-    /// Create a new propagation checker given an inference checker and inference code.
-    pub fn new(inference_checker: BoxedChecker<Predicate>) -> PropagationChecker {
-        PropagationChecker { inference_checker }
+    /// Create a new propagation checker given a conflict checker.
+    pub fn new(conflict_checker: BoxedConflictChecker<Predicate>) -> PropagationChecker {
+        PropagationChecker { conflict_checker }
     }
 
     /// Run the propagation checker for the given inference.
@@ -44,7 +44,7 @@ impl PropagationChecker {
                 .map_err(InvalidInference::InconsistentPredicates)?;
 
         match self
-            .inference_checker
+            .conflict_checker
             .check(variable_state, premises, consequent.as_ref())
         {
             ConflictCheck::ConflictDetected => Ok(()),

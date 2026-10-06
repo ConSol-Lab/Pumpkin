@@ -2,10 +2,10 @@ use super::ReifiedChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
 use crate::ConflictCheck;
-use crate::InferenceChecker;
+use crate::ConflictChecker;
 use crate::VariableState;
 
-impl<Atomic, Var> InferenceChecker<Atomic> for ReifiedChecker<Atomic, Var>
+impl<Atomic, Var> ConflictChecker<Atomic> for ReifiedChecker<Atomic, Var>
 where
     Atomic: AtomicConstraint + Clone,
     Var: CheckerVariable<Atomic>,

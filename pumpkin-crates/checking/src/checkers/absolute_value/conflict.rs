@@ -2,11 +2,11 @@ use super::AbsoluteValueChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
 use crate::ConflictCheck;
-use crate::InferenceChecker;
+use crate::ConflictChecker;
 use crate::IntExt;
 use crate::VariableState;
 
-impl<VA, VB, Atomic> InferenceChecker<Atomic> for AbsoluteValueChecker<VA, VB>
+impl<VA, VB, Atomic> ConflictChecker<Atomic> for AbsoluteValueChecker<VA, VB>
 where
     VA: CheckerVariable<Atomic>,
     VB: CheckerVariable<Atomic>,

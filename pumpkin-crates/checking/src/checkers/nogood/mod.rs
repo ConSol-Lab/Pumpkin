@@ -1,5 +1,5 @@
+mod conflict;
 mod extended_retention;
-mod inference;
 #[cfg(test)]
 mod tests;
 mod unit_retention;

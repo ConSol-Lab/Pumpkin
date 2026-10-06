@@ -747,8 +747,8 @@ mod tests {
     use drcp_format::reader::ReadAtomic;
     use drcp_format::reader::ReadStep;
     use pumpkin_checking::ConflictCheck;
+    use pumpkin_checking::ConflictChecker;
     use pumpkin_checking::DomainView;
-    use pumpkin_checking::InferenceChecker;
     use pumpkin_checking::RetentionCheck;
     use pumpkin_checking::RetentionChecker;
     use pumpkin_checking::VariableState;
@@ -1023,7 +1023,7 @@ mod tests {
         other: Predicate,
     }
 
-    impl InferenceChecker<Predicate> for AlwaysConflictChecker {
+    impl ConflictChecker<Predicate> for AlwaysConflictChecker {
         fn check(
             &self,
             state: VariableState<Predicate>,
@@ -1054,9 +1054,9 @@ mod tests {
             Cow::Borrowed("always_conflict")
         }
 
-        fn create_inference_checker(
+        fn create_conflict_checker(
             constraint_description: &AlwaysConflictChecker,
-        ) -> impl InferenceChecker<Predicate> + 'static {
+        ) -> impl ConflictChecker<Predicate> + 'static {
             constraint_description.clone()
         }
 

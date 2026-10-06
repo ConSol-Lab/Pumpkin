@@ -2,11 +2,11 @@ use super::MaximumChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
 use crate::ConflictCheck;
-use crate::InferenceChecker;
+use crate::ConflictChecker;
 use crate::IntExt;
 use crate::VariableState;
 
-impl<ElementVar, Rhs, Atomic> InferenceChecker<Atomic> for MaximumChecker<ElementVar, Rhs>
+impl<ElementVar, Rhs, Atomic> ConflictChecker<Atomic> for MaximumChecker<ElementVar, Rhs>
 where
     Atomic: AtomicConstraint,
     ElementVar: CheckerVariable<Atomic>,

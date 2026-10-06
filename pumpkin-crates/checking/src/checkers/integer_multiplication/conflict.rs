@@ -4,11 +4,11 @@ use super::helpers::product_bound_ext;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
 use crate::ConflictCheck;
-use crate::InferenceChecker;
+use crate::ConflictChecker;
 use crate::IntExt;
 use crate::VariableState;
 
-impl<VA, VB, VC, Atomic> InferenceChecker<Atomic> for IntegerMultiplicationChecker<VA, VB, VC>
+impl<VA, VB, VC, Atomic> ConflictChecker<Atomic> for IntegerMultiplicationChecker<VA, VB, VC>
 where
     Atomic: AtomicConstraint,
     VA: CheckerVariable<Atomic>,

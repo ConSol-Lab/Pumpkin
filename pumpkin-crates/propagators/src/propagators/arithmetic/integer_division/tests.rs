@@ -1,5 +1,5 @@
 use pumpkin_checking::ConflictCheck;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::checkers::IntegerDivisionChecker;
 use pumpkin_core::state::State;
 

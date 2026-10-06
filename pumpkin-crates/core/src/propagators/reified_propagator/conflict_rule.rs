@@ -1,9 +1,9 @@
 use std::borrow::Cow;
 use std::marker::PhantomData;
 
-use pumpkin_checking::BoxedChecker;
+use pumpkin_checking::BoxedConflictChecker;
 use pumpkin_checking::BoxedRetentionChecker;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::RetentionChecker;
 use pumpkin_checking::checkers::ReifiedChecker;
 use pumpkin_checking::checkers::ReifiedRetentionChecker;
@@ -25,11 +25,11 @@ impl<Rule: ConflictRule> ConflictRule for HalfReified<Rule> {
         Cow::Owned(format!("HalfReified({})", Rule::name()))
     }
 
-    fn create_inference_checker(
+    fn create_conflict_checker(
         constraint_description: &Self::Description,
-    ) -> impl InferenceChecker<Predicate> + 'static {
+    ) -> impl ConflictChecker<Predicate> + 'static {
         ReifiedChecker {
-            inner: BoxedChecker::new(Box::new(Rule::create_inference_checker(
+            inner: BoxedConflictChecker::new(Box::new(Rule::create_conflict_checker(
                 &constraint_description.inner,
             ))),
             reification_literal: constraint_description.reification_literal,

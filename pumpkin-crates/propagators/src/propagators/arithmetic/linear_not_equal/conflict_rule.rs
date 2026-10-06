@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::marker::PhantomData;
 
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::RetentionChecker;
 use pumpkin_checking::checkers::LinearNotEqualChecker;
 use pumpkin_core::predicates::Predicate;
@@ -32,9 +32,9 @@ impl<Var: IntegerVariable + 'static> ConflictRule for LinearNotEqualRule<Var> {
         Cow::Borrowed("linear_not_equals")
     }
 
-    fn create_inference_checker(
+    fn create_conflict_checker(
         constraint_description: &LinearNotEqualDescription<Var>,
-    ) -> impl InferenceChecker<Predicate> + 'static {
+    ) -> impl ConflictChecker<Predicate> + 'static {
         Self::checker(constraint_description)
     }
 

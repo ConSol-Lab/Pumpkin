@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use pumpkin_checking::BoxedChecker;
+use pumpkin_checking::BoxedConflictChecker;
 use pumpkin_checking::BoxedRetentionChecker;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 
 use crate::checkers::CheckerStore;
 use crate::checkers::RetentionCheckerId;
@@ -218,7 +218,7 @@ impl State {
     /// Register `Rule` for the constraint with `constraint_tag` and `description`, implemented by
     /// `propagator`. Returns the [`InferenceCode`] of its inferences.
     ///
-    /// The inference checker of the rule is added when `check-propagations` is enabled, and its
+    /// The conflict checker of the rule is added when `check-propagations` is enabled, and its
     /// retention checker when `check-consistency` is enabled.
     pub fn register_rule<Rule: ConflictRule>(
         &mut self,
@@ -257,9 +257,9 @@ impl State {
         propagator: PropagatorId,
     ) -> Option<RetentionCheckerId> {
         if cfg!(feature = "check-propagations") {
-            self.checkers.add_inference_checker(
+            self.checkers.add_conflict_checker(
                 inference_code,
-                BoxedChecker::new(Box::new(Rule::create_inference_checker(
+                BoxedConflictChecker::new(Box::new(Rule::create_conflict_checker(
                     constraint_description,
                 ))),
             );
@@ -533,19 +533,19 @@ impl State {
         handle
     }
 
-    /// Add an inference checker for the inferences with `inference_code`, outside of a
+    /// Add a conflict checker for the inferences with `inference_code`, outside of a
     /// [`ConflictRule`].
     ///
-    /// For tests, which make inferences without a rule. Multiple inference checkers may be added
+    /// For tests, which make inferences without a rule. Multiple conflict checkers may be added
     /// for the same inference code. In that case, if any checker accepts the inference, the
     /// inference is accepted.
-    pub(crate) fn add_inference_checker(
+    pub(crate) fn add_conflict_checker(
         &mut self,
         inference_code: InferenceCode,
-        checker: impl InferenceChecker<Predicate> + 'static,
+        checker: impl ConflictChecker<Predicate> + 'static,
     ) {
         self.checkers
-            .add_inference_checker(inference_code, BoxedChecker::new(Box::new(checker)));
+            .add_conflict_checker(inference_code, BoxedConflictChecker::new(Box::new(checker)));
     }
 }
 
@@ -861,7 +861,7 @@ impl State {
     ///
     /// Does nothing when the conflict is an empty domain.
     ///
-    /// Panics when the inference checker rejects the conflict.
+    /// Panics when the conflict checker rejects the conflict.
     #[cfg(feature = "check-propagations")]
     fn check_conflict(&mut self, conflict: &Conflict) {
         if let Conflict::Propagator(propagator_conflict) = conflict {
@@ -940,7 +940,7 @@ impl State {
     }
 
     /// For every item on the trail starting at index `first_propagation_index`,
-    /// run the inference checker for it.
+    /// run the conflict checker for it.
     ///
     /// This method should be called after every propagator invocation,
     /// so all elements on the trail starting at `first_propagation_index` should be propagations.
@@ -1510,9 +1510,9 @@ mod tests {
             std::borrow::Cow::Borrowed("checked")
         }
 
-        fn create_inference_checker(
+        fn create_conflict_checker(
             _: &CheckedPropagator<Checker>,
-        ) -> impl pumpkin_checking::InferenceChecker<crate::predicates::Predicate> + 'static
+        ) -> impl pumpkin_checking::ConflictChecker<crate::predicates::Predicate> + 'static
         {
             NoInferences
         }
@@ -1525,13 +1525,13 @@ mod tests {
         }
     }
 
-    /// The inference checker of a propagator that makes no inferences.
+    /// The conflict checker of a propagator that makes no inferences.
     #[cfg(feature = "check-consistency")]
     #[derive(Debug, Clone)]
     struct NoInferences;
 
     #[cfg(feature = "check-consistency")]
-    impl pumpkin_checking::InferenceChecker<crate::predicates::Predicate> for NoInferences {
+    impl pumpkin_checking::ConflictChecker<crate::predicates::Predicate> for NoInferences {
         fn check(
             &self,
             _: pumpkin_checking::VariableState<crate::predicates::Predicate>,

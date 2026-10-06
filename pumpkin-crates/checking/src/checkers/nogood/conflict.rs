@@ -3,11 +3,11 @@ use std::fmt::Debug;
 use super::NogoodChecker;
 use crate::AtomicConstraint;
 use crate::ConflictCheck;
+use crate::ConflictChecker;
 use crate::DomainView;
-use crate::InferenceChecker;
 use crate::VariableState;
 
-impl<Atomic> InferenceChecker<Atomic> for NogoodChecker<Atomic>
+impl<Atomic> ConflictChecker<Atomic> for NogoodChecker<Atomic>
 where
     Atomic: AtomicConstraint + Clone + Debug,
 {
