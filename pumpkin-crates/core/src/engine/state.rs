@@ -479,8 +479,10 @@ impl State {
     /// Add a propagator that does not implement a single rule fixed at its construction.
     ///
     /// Such a propagator registers the rules of its constraints itself, through
-    /// [`State::register_rule`], as the constraints arrive. Only the nogood propagator is built
-    /// this way.
+    /// [`State::register_rule`], as the constraints arrive.
+    /// Only the nogood propagator is built this way, because during solving,
+    /// nogoods are added and removed rather than being fixed from the start like with
+    /// most other constraints.
     pub(crate) fn add_propagator_without_rule<P>(
         &mut self,
         create: impl FnOnce(PropagatorConstructorContext) -> PropagatorSpec<P>,
