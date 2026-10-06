@@ -5,25 +5,11 @@ use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::RetentionChecker;
 use pumpkin_checking::checkers::DisjunctiveCheckerTask;
 use pumpkin_checking::checkers::DisjunctiveEdgeFindingChecker;
-use pumpkin_core::checkers::Scope;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConflictRule;
-use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::variables::IntegerVariable;
 
-use super::disjunctive_task::ArgDisjunctiveTask;
-
-/// The description of the disjunctive constraint: no two of the tasks overlap.
-#[derive(Clone, Debug)]
-pub struct DisjunctiveDescription<Var> {
-    pub tasks: Vec<ArgDisjunctiveTask<Var>>,
-}
-
-impl<Var: IntegerVariable> ConstraintDescription for DisjunctiveDescription<Var> {
-    fn scope(&self) -> Scope {
-        Scope::from_variables(self.tasks.iter().map(|task| &task.start_time))
-    }
-}
+use super::DisjunctiveDescription;
 
 /// The edge-finding rule of the disjunctive constraint.
 #[derive(Clone, Copy, Debug)]

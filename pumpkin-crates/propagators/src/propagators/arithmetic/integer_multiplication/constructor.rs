@@ -8,9 +8,9 @@ use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::variables::IntegerVariable;
 
+use super::conflict_rule::IntegerMultiplicationRule;
+use super::constraint_description::IntegerMultiplicationDescription;
 use super::propagator::IntegerMultiplicationPropagator;
-use super::rule::IntegerMultiplicationDescription;
-use super::rule::IntegerMultiplicationRule;
 
 pub(super) const ID_A: LocalId = LocalId::from(0);
 pub(super) const ID_B: LocalId = LocalId::from(1);
