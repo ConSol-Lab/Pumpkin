@@ -91,13 +91,13 @@ impl PropagationMode {
             PropagationMode::UnitPropagation => state
                 .add_removable_rule_checkers::<UnitNogoodRule>(
                     constraint_tag,
-                    &constraint_description,
+                    constraint_description,
                     propagator,
                 ),
             PropagationMode::ExtendedNogoodPropagation => state
                 .add_removable_rule_checkers::<ExtendedNogoodRule>(
                     constraint_tag,
-                    &constraint_description,
+                    constraint_description,
                     propagator,
                 ),
         }

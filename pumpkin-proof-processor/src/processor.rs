@@ -1046,6 +1046,13 @@ mod tests {
                 (LocalId::from(1), self.other.get_domain()),
             ])
         }
+
+        fn check_solution(
+            &self,
+            _: &dyn DomainView<Predicate>,
+        ) -> pumpkin_core::propagation::SolutionCheck {
+            pumpkin_core::propagation::SolutionCheck::ConstraintSatisfied
+        }
     }
 
     struct AlwaysConflictRule;

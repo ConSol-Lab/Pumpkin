@@ -18,7 +18,7 @@ use crate::propagation::PropagatorConstructor;
 /// A propagator names the rule it implements through [`PropagatorConstructor::Rule`]. The name of
 /// the rule identifies its inferences in proofs.
 pub trait ConflictRule {
-    type Description: ConstraintDescription;
+    type Description: ConstraintDescription + 'static;
 
     fn name() -> Cow<'static, str>;
 

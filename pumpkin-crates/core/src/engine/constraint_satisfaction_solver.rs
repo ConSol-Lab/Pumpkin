@@ -634,6 +634,9 @@ impl ConstraintSatisfactionSolver {
             // Otherwise there are no more decisions to be made,
             // all predicates have been applied without a conflict,
             // meaning the problem is feasible.
+            #[cfg(feature = "check-solutions")]
+            self.state.check_solution();
+
             self.solver_state.declare_solution_found();
             return Err(CSPSolverExecutionFlag::Feasible);
         };

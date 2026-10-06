@@ -7,7 +7,11 @@ use pumpkin_checking::ConflictChecker;
 
 use crate::checkers::RemovableRuleCheckers;
 use crate::checkers::RuleCheckerStore;
-#[cfg(any(feature = "check-propagations", feature = "check-consistency"))]
+#[cfg(any(
+    feature = "check-propagations",
+    feature = "check-consistency",
+    feature = "check-solutions"
+))]
 use crate::checkers::is_rule_checked;
 use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
@@ -57,7 +61,11 @@ use crate::variables::DomainId;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
 
-#[cfg(any(feature = "check-propagations", feature = "check-consistency"))]
+#[cfg(any(
+    feature = "check-propagations",
+    feature = "check-consistency",
+    feature = "check-solutions"
+))]
 mod checking;
 
 /// The [`State`] is the container of variables and propagators.
@@ -198,7 +206,7 @@ impl State {
     pub(crate) fn add_removable_rule_checkers<Rule: ConflictRule>(
         &mut self,
         constraint_tag: ConstraintTag,
-        constraint_description: &Rule::Description,
+        constraint_description: Rule::Description,
         propagator: PropagatorId,
     ) -> RemovableRuleCheckers {
         let inference_code = self.rule_code::<Rule>(constraint_tag);
@@ -207,17 +215,22 @@ impl State {
 
     /// Add the checkers of `Rule` for the constraint with `constraint_description`.
     ///
-    /// The conflict checker is added under `check-propagations` and the retention checker under
-    /// `check-consistency`, unless the rule is filtered out by `is_rule_checked`.
+    /// The conflict checker is added under `check-propagations`, the retention checker under
+    /// `check-consistency` and the description for the solution check under `check-solutions`,
+    /// unless the rule is filtered out by `is_rule_checked`.
     #[cfg_attr(
-        not(feature = "check-consistency"),
+        not(any(feature = "check-consistency", feature = "check-solutions")),
         allow(
             unused_variables,
             reason = "the checkers exist only under the check features"
         )
     )]
     #[cfg_attr(
-        not(any(feature = "check-propagations", feature = "check-consistency")),
+        not(any(
+            feature = "check-propagations",
+            feature = "check-consistency",
+            feature = "check-solutions"
+        )),
         allow(
             clippy::needless_pass_by_ref_mut,
             reason = "the checkers exist only under the check features"
@@ -226,10 +239,14 @@ impl State {
     fn add_rule_checkers<Rule: ConflictRule>(
         &mut self,
         inference_code: InferenceCode,
-        constraint_description: &Rule::Description,
+        constraint_description: Rule::Description,
         propagator: PropagatorId,
     ) -> RemovableRuleCheckers {
-        #[cfg(any(feature = "check-propagations", feature = "check-consistency"))]
+        #[cfg(any(
+            feature = "check-propagations",
+            feature = "check-consistency",
+            feature = "check-solutions"
+        ))]
         let is_checked = is_rule_checked(&Rule::name());
 
         RemovableRuleCheckers {
@@ -241,7 +258,7 @@ impl State {
                     .add_removable_conflict_checker(
                         inference_code,
                         BoxedConflictChecker::new(Box::new(Rule::create_conflict_checker(
-                            constraint_description,
+                            &constraint_description,
                         ))),
                     )
             }),
@@ -250,8 +267,16 @@ impl State {
                 self.rule_checkers.retention_checkers.register_removable(
                     constraint_description.scope(),
                     BoxedRetentionChecker::new(Rule::create_retention_checker(
-                        constraint_description,
+                        &constraint_description,
                     )),
+                    propagator,
+                    inference_code,
+                )
+            }),
+            #[cfg(feature = "check-solutions")]
+            solution_checker: is_checked.then(|| {
+                self.rule_checkers.solution_checkers.add(
+                    std::rc::Rc::new(constraint_description),
                     propagator,
                     inference_code,
                 )
@@ -451,7 +476,7 @@ impl State {
         // A propagator is never removed, so neither are its checkers.
         let _ = self.add_rule_checkers::<Constructor::Rule>(
             inference_code,
-            &constraint_description,
+            constraint_description,
             handle.propagator_id(),
         );
 
@@ -1290,6 +1315,13 @@ mod tests {
     impl<Checker> crate::propagation::ConstraintDescription for CheckedPropagator<Checker> {
         fn scope(&self) -> crate::checkers::Scope {
             crate::checkers::Scope::from_variables([self.variable].iter())
+        }
+
+        fn check_solution(
+            &self,
+            _: &dyn pumpkin_checking::DomainView<crate::predicates::Predicate>,
+        ) -> crate::propagation::SolutionCheck {
+            crate::propagation::SolutionCheck::ConstraintSatisfied
         }
     }
 

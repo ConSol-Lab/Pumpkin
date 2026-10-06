@@ -1,7 +1,11 @@
 use enumset::EnumSet;
 
 use crate::basic_types::PredicateId;
-#[cfg(any(feature = "check-propagations", feature = "check-consistency"))]
+#[cfg(any(
+    feature = "check-propagations",
+    feature = "check-consistency",
+    feature = "check-solutions"
+))]
 use crate::checkers::RemovableRuleCheckers;
 use crate::checkers::RuleCheckerStore;
 use crate::engine::Assignments;
@@ -130,7 +134,11 @@ impl<'a> PropagationContext<'a> {
     }
 
     /// Remove the checkers of a constraint that the propagator deleted.
-    #[cfg(any(feature = "check-propagations", feature = "check-consistency"))]
+    #[cfg(any(
+        feature = "check-propagations",
+        feature = "check-consistency",
+        feature = "check-solutions"
+    ))]
     pub(crate) fn remove_rule_checkers(&mut self, rule_checkers: RemovableRuleCheckers) {
         self.rule_checkers.remove(rule_checkers);
     }

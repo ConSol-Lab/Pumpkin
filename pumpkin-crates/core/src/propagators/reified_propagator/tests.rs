@@ -249,6 +249,10 @@ impl ConstraintDescription for GenericDescription {
     fn scope(&self) -> Scope {
         Scope::from_variables(self.0.iter())
     }
+
+    fn check_solution(&self, _: &dyn DomainView<Predicate>) -> crate::propagation::SolutionCheck {
+        crate::propagation::SolutionCheck::ConstraintSatisfied
+    }
 }
 
 /// The rule of a [`GenericPropagator`], whose inferences are given by each test; its checkers

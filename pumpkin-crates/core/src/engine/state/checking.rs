@@ -1,12 +1,14 @@
-//! The runtime checks of [`State`], which run when [`State::propagate_to_fixed_point`] returns.
-//!
-//! They are a debugging tool: the conflict checks under `check-propagations` and the retention
-//! checks under `check-consistency`.
+//! The runtime checks of [`State`]. They are a debugging tool:
+//! - the conflict checks under `check-propagations` and the retention checks under
+//!   `check-consistency`, which run when [`State::propagate_to_fixed_point`] returns;
+//! - the solution check under `check-solutions`, which runs when the solver finds a solution.
 
 #[cfg(feature = "check-consistency")]
 use crate::checkers::RetentionCoverage;
 #[cfg(feature = "check-consistency")]
 use crate::checkers::RetentionFailure;
+#[cfg(feature = "check-solutions")]
+use crate::checkers::SolutionFailure;
 #[cfg(feature = "check-propagations")]
 use crate::checkers::is_rule_checked;
 #[cfg(feature = "check-propagations")]
@@ -17,6 +19,8 @@ use crate::proof::InferenceCode;
 use crate::propagation::Domains;
 #[cfg(feature = "check-propagations")]
 use crate::propagation::ExplanationContext;
+#[cfg(feature = "check-solutions")]
+use crate::propagation::SolutionCheck;
 #[cfg(feature = "check-propagations")]
 use crate::state::Conflict;
 use crate::state::State;
@@ -211,5 +215,40 @@ impl State {
              The checker describes what it expected in a message logged at the error level, \
              which is only visible when a logger is installed."
         )
+    }
+}
+
+#[cfg(feature = "check-solutions")]
+impl State {
+    /// Check that the assignment satisfies the description of every constraint.
+    ///
+    /// Panics, naming the rule and the propagator of the first constraint it does not satisfy.
+    pub(crate) fn check_solution(&self) {
+        if let Err(failure) = self
+            .rule_checkers
+            .solution_checkers
+            .check(&self.assignments)
+        {
+            self.report_solution_failure(&failure);
+        }
+    }
+
+    fn report_solution_failure(&self, failure: &SolutionFailure) -> ! {
+        let rule = self.rule_name(failure.inference_code);
+        let propagator = self.propagators[failure.propagator].name();
+
+        match failure.outcome {
+            SolutionCheck::UnfixedVariable => panic!(
+                "The solver reported a solution, but a variable of the constraint of the rule \
+                 '{rule}' of the propagator '{propagator}' is not fixed."
+            ),
+            SolutionCheck::ConstraintSatisfied => {
+                unreachable!("a satisfied constraint is not a failure")
+            }
+            SolutionCheck::ConstraintViolated => panic!(
+                "The solver reported a solution that violates the constraint of the rule '{rule}' \
+                 of the propagator '{propagator}'."
+            ),
+        }
     }
 }

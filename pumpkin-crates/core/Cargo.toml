@@ -43,6 +43,8 @@ check-consistency = []
 # changed. Slower, and independent of which propagators were notified.
 check-consistency-all = ["check-consistency"]
 check-propagations = []
+# Check that every solution satisfies the description of every constraint.
+check-solutions = []
 check-deductions = []
 debug-checks = []
 clap = ["dep:clap"]
