@@ -1,5 +1,4 @@
 use std::cmp::max;
-use std::ops::Not;
 
 use bitfield_struct::bitfield;
 use log::warn;
@@ -524,17 +523,6 @@ impl Propagator for NogoodPropagator {
 
     fn synchronise(&mut self, _context: NotificationContext<'_>) {
         self.updated_predicate_ids.clear()
-    }
-
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> Result<(), Conflict> {
-        // Very inefficient version!
-
-        // The algorithm goes through every nogood explicitly
-        // and computes from scratch.
-        for nogood_id in self.nogood_predicates.nogoods_ids() {
-            self.debug_propagate_nogood_from_scratch(nogood_id, &mut context)?;
-        }
-        Ok(())
     }
 
     /// Returns the slice representing a conjunction of predicates that explain the propagation
@@ -1931,134 +1919,6 @@ impl NogoodPropagator {
 
 /// Debug methods
 impl NogoodPropagator {
-    fn debug_propagate_nogood_from_scratch(
-        &self,
-        nogood_id: NogoodId,
-        context: &mut PropagationContext,
-    ) -> Result<(), Conflict> {
-        // This is an inefficient implementation for testing purposes
-        let nogood = &self.nogood_predicates.get_nogood(nogood_id);
-        let info_id = self.nogood_predicates.get_nogood_index(&nogood_id);
-        let inference_code = &self.inference_codes[info_id];
-
-        if self.nogood_info[info_id].is_deleted {
-            // The nogood has already been deleted, meaning that it could be that the call to
-            // `propagate` would not find any propagations using it due to the watchers being
-            // deleted
-            return Ok(());
-        }
-
-        // First we get the number of falsified predicates
-        let has_falsified_predicate = nogood.iter().any(|predicate| {
-            let predicate = context.get_predicate(*predicate);
-            context.evaluate_predicate(predicate) == Some(false)
-        });
-
-        // If at least one predicate is false, then the nogood can be skipped
-        if has_falsified_predicate {
-            return Ok(());
-        }
-
-        match self.propagation_mode {
-            PropagationMode::ExtendedNogoodPropagation => {
-                // We find all of the unasssigned predicates and get their domains
-                //
-                // If there is a falsified predicate then we do not propagate; also, if
-                // the nogood can be unit propagated, then
-                // we do not propagate
-                let mut is_falsified = false;
-                let mut num_unassigned = 0;
-                let unassigned_predicate_ids = nogood
-                    .iter()
-                    .filter_map(|predicate_id| {
-                        if context.is_predicate_id_falsified(*predicate_id) {
-                            is_falsified = true;
-                            None
-                        } else if context.is_predicate_id_satisfied(*predicate_id) {
-                            None
-                        } else {
-                            num_unassigned += 1;
-                            let predicate = context.get_predicate(*predicate_id);
-                            Some(predicate.get_domain())
-                        }
-                    })
-                    .collect::<HashSet<_>>();
-                if num_unassigned > 1 && !is_falsified && unassigned_predicate_ids.len() == 1 {
-                    NogoodPropagator::extended_nogood_propagation(
-                        context,
-                        nogood,
-                        *unassigned_predicate_ids.iter().next().unwrap(),
-                        inference_code,
-                        &mut NogoodPropagatorStatistics::default(),
-                        Some(nogood_id),
-                    )?;
-                }
-            }
-            PropagationMode::UnitPropagation => {}
-        }
-
-        let num_satisfied_predicates = nogood
-            .iter()
-            .filter(|predicate| {
-                let predicate = context.get_predicate(**predicate);
-                context.evaluate_predicate(predicate) == Some(true)
-            })
-            .count();
-
-        let nogood_len = nogood.len();
-
-        // If all predicates in the nogood are satisfied, there is a conflict.
-        if num_satisfied_predicates == nogood_len {
-            return Err(PropagatorConflict {
-                conjunction: nogood
-                    .iter()
-                    .map(|predicate_id| context.get_predicate(*predicate_id))
-                    .collect::<PropositionalConjunction>(),
-                inference_code: *inference_code,
-            }
-            .into());
-        }
-        // If all but one predicate are satisfied, then we can propagate.
-        //
-        // Note that this only makes sense since we know that there are no falsifying predicates at
-        // this point.
-        else if num_satisfied_predicates == nogood_len - 1 {
-            // Note that we negate the remaining unassigned predicate!
-            let propagated_predicate = nogood
-                .iter()
-                .find_map(|predicate_id| {
-                    let predicate = context.get_predicate(*predicate_id);
-
-                    context
-                        .evaluate_predicate(predicate)
-                        .is_none()
-                        .then_some(predicate)
-                })
-                .unwrap()
-                .not();
-
-            assert!(
-                nogood
-                    .iter()
-                    .any(|p| context.get_predicate(*p) == propagated_predicate.not())
-            );
-
-            // Cannot use lazy explanations when propagating from scratch
-            // since the propagated predicate may not be at position zero.
-            // but we cannot change the nogood since this function is with nonmutable self.
-            //
-            // So an eager reason is constructed
-            let reason = nogood
-                .iter()
-                .map(|&p| context.get_predicate(p))
-                .filter(|&p| p != !propagated_predicate)
-                .collect::<PropositionalConjunction>();
-
-            context.post(propagated_predicate, (reason, inference_code))?;
-        }
-        Ok(())
-    }
-
     /// Checks for each nogood whether the first two predicates in the nogood are being watched
     fn debug_is_properly_watched(&self) -> bool {
         let is_watching = |predicate_id: PredicateId, nogood_id: NogoodId| -> bool {

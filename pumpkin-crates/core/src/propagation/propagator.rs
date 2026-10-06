@@ -54,10 +54,9 @@ clone_trait_object!(Propagator);
 /// A propagator removes values from domains which will never be in any solution, or raises
 /// explicit conflicts.
 ///
-/// The only required functions are [`Propagator::name`],
-///  and [`Propagator::propagate_from_scratch`]; all other
-/// functions have default implementations. For initial development, the required functions are
-/// enough, but a more mature implementation considers all functions in most cases.
+/// The only required functions are [`Propagator::name`] and [`Propagator::propagate`]; all
+/// other functions have default implementations. For initial development, the required functions
+/// are enough, but a more mature implementation considers all functions in most cases.
 ///
 /// See the [`crate::propagation`] documentation for more details.
 pub trait Propagator: Downcast + DynClone {
@@ -66,31 +65,7 @@ pub trait Propagator: Downcast + DynClone {
     /// This is a convenience method that is used for printing.
     fn name(&self) -> &str;
 
-    /// Performs propagation from scratch (i.e., without relying on updating
-    /// internal data structures, as opposed to [`Propagator::propagate`]).
-    ///
-    /// The main aims of this method are to remove values from the domains of variables (using
-    /// [`PropagationContext::post`]) which cannot be part of any solution given the current
-    /// domains and to detect conflicts.
-    ///
-    /// In case no conflict has been detected this function should
-    /// return [`Result::Ok`], otherwise it should return a [`Result::Err`] with a [`Conflict`]
-    /// which contains the reason for the failure; either because a propagation caused an
-    /// an empty domain ([`Conflict::EmptyDomain`] as a result of [`PropagationContext::post`]) or
-    /// because the logic of the propagator found the current state to be inconsistent
-    /// ([`Conflict::Propagator`] ).
-    ///
-    /// It is usually best to implement this propagation method in the simplest
-    /// but correct way. When this crate is compiled with the `debug-checks` feature, this method
-    /// will be called to double check the reasons for failures and propagations that have been
-    /// reported by this propagator.
-    ///
-    /// Propagators are not required to propagate until a fixed point. It will be called again by
-    /// the solver until no further propagations happen.
-    fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP;
-
-    /// Performs propagation with state (i.e., with being able to mutate internal data structures,
-    /// as opposed to [`Propagator::propagate_from_scratch`]).
+    /// Performs propagation, and may update the internal data structures of the propagator.
     ///
     /// The main aims of this method are to remove values from the domains of variables (using
     /// [`PropagationContext::post`]) which cannot be part of any solution given the current
@@ -106,10 +81,9 @@ pub trait Propagator: Downcast + DynClone {
     /// Propagators are not required to propagate until a fixed point. It will be called
     /// again by the solver until no further propagations happen.
     ///
-    /// By default, this function calls [`Propagator::propagate_from_scratch`].
-    fn propagate(&mut self, context: PropagationContext) -> PropagationStatusCP {
-        self.propagate_from_scratch(context)
-    }
+    /// The propagations and conflicts are verified by the checkers of the rule of the propagator
+    /// when the `check-propagations` and `check-consistency` features are enabled.
+    fn propagate(&mut self, context: PropagationContext) -> PropagationStatusCP;
 
     /// Returns whether the propagator should be enqueued for propagation when a [`DomainEvent`]
     /// happens to one of the variables the propagator is subscribed to (as registered during

@@ -45,7 +45,7 @@ where
         "Element"
     }
 
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         self.propagate_index_bounds_within_array(&mut context)?;
 
         self.propagate_rhs_bounds_based_on_array(&mut context)?;

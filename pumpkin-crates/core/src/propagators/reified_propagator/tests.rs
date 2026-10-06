@@ -304,7 +304,7 @@ where
         "Generic Propagator"
     }
 
-    fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
+    fn propagate(&mut self, context: PropagationContext) -> PropagationStatusCP {
         (self.propagation)(context)
     }
 

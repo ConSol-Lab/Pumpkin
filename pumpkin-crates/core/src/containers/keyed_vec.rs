@@ -122,10 +122,6 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
         self.elements.iter()
     }
 
-    pub(crate) fn keys(&self) -> impl Iterator<Item = Key> {
-        (0..self.elements.len()).map(Key::create_from_index)
-    }
-
     pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = &'_ mut Value> {
         self.elements.iter_mut()
     }

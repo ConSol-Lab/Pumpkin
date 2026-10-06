@@ -177,7 +177,7 @@ where
         if self.first_propagation_loop {
             // If it is the first propagation loop then we do full propagation
             self.first_propagation_loop = false;
-            return self.propagate_from_scratch(context);
+            return self.propagate_fully(context);
         }
 
         if let Some(conflict) = self.detect_inconsistency(context.domains()) {
@@ -266,8 +266,16 @@ where
             inference_code: self.inference_code,
         }
     }
+}
 
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+impl<AVar, BVar> BinaryEqualsPropagator<AVar, BVar>
+where
+    AVar: IntegerVariable + 'static,
+    BVar: IntegerVariable + 'static,
+{
+    /// Make the bounds and the holes of both variables equal, without relying on the events since
+    /// the previous call.
+    fn propagate_fully(&self, mut context: PropagationContext) -> PropagationStatusCP {
         let a_lb = context.lower_bound(&self.a);
         let a_ub = context.upper_bound(&self.a);
 

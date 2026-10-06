@@ -165,64 +165,6 @@ where
 
         Ok(())
     }
-
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
-        let num_fixed = self
-            .terms
-            .iter()
-            .filter(|&x_i| context.is_fixed(x_i))
-            .count();
-        if num_fixed < self.terms.len() - 1 {
-            return Ok(());
-        }
-
-        let lhs = self
-            .terms
-            .iter()
-            .map(|var| context.fixed_value(var).unwrap_or_default() as i64)
-            .sum::<i64>();
-
-        if num_fixed == self.terms.len() - 1 {
-            let value_to_remove = self.rhs as i64 - lhs;
-
-            let unfixed_x_i = self
-                .terms
-                .iter()
-                .position(|x_i| !context.is_fixed(x_i))
-                .unwrap();
-
-            let reason = self
-                .terms
-                .iter()
-                .enumerate()
-                .filter(|&(i, _)| i != unfixed_x_i)
-                .map(|(_, x_i)| predicate![x_i == context.lower_bound(x_i)])
-                .collect::<PropositionalConjunction>();
-            context.post(
-                predicate![
-                    self.terms[unfixed_x_i]
-                        != value_to_remove
-                            .try_into()
-                            .expect("Expected to be able to fit i64 into i32")
-                ],
-                (reason, &self.inference_code),
-            )?;
-        } else if num_fixed == self.terms.len() && lhs == self.rhs as i64 {
-            let conjunction = self
-                .terms
-                .iter()
-                .map(|x_i| predicate![x_i == context.lower_bound(x_i)])
-                .collect();
-
-            return Err(PropagatorConflict {
-                conjunction,
-                inference_code: self.inference_code,
-            }
-            .into());
-        }
-
-        Ok(())
-    }
 }
 
 impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {

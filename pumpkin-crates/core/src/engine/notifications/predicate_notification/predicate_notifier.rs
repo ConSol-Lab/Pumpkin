@@ -32,20 +32,6 @@ pub(crate) struct PredicateNotifier {
 }
 
 impl PredicateNotifier {
-    pub(crate) fn debug_empty_clone(&self) -> Self {
-        let predicate_id_assignments = self.predicate_id_assignments.debug_empty_clone();
-        Self {
-            predicate_to_id: self.predicate_to_id.clone(),
-            predicate_id_assignments,
-            ..Default::default()
-        }
-    }
-
-    pub(crate) fn debug_create_from_assignments(&mut self, assignments: &Assignments) {
-        self.predicate_id_assignments
-            .debug_create_from_assignments(assignments, &self.predicate_to_id);
-    }
-
     /// Returns the satisfied predicates; note that this structure will be cleared once it is
     /// dropped.
     pub(crate) fn drain_satisfied_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {

@@ -1,7 +1,6 @@
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
-use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
@@ -157,63 +156,6 @@ where
 
             if context.upper_bound(x_i) > bound {
                 context.post(predicate![x_i <= bound], i)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
-        let lower_bound_left_hand_side = self
-            .x
-            .iter()
-            .map(|var| context.lower_bound(var) as i64)
-            .sum::<i64>();
-
-        let lower_bound_left_hand_side = match TryInto::<i32>::try_into(lower_bound_left_hand_side)
-        {
-            Ok(bound) => bound,
-            Err(_)
-                if context
-                    .read_trailed_integer(self.lower_bound_left_hand_side)
-                    .is_positive() =>
-            {
-                // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
-                // overflow (hence the check that the lower-bound on the left-hand side is
-                // positive)
-                //
-                // This means that the lower-bounds of the current variables will always be
-                // higher than the right-hand side (with a maximum value of i32). We thus
-                // return a conflict
-                return Err(self.create_conflict(context.domains()).into());
-            }
-            Err(_) => {
-                // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
-                // underflow
-                //
-                // This means that the constraint is always satisfied
-                return Ok(());
-            }
-        };
-
-        for (i, x_i) in self.x.iter().enumerate() {
-            let bound = self.c - (lower_bound_left_hand_side - context.lower_bound(x_i));
-
-            if context.upper_bound(x_i) > bound {
-                let reason: PropositionalConjunction = self
-                    .x
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(j, x_j)| {
-                        if j != i {
-                            Some(predicate![x_j >= context.lower_bound(x_j)])
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-
-                context.post(predicate![x_i <= bound], (reason, &self.inference_code))?;
             }
         }
 

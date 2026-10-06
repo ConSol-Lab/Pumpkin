@@ -36,7 +36,7 @@ where
         "Division"
     }
 
-    fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
+    fn propagate(&mut self, context: PropagationContext) -> PropagationStatusCP {
         perform_propagation(
             context,
             &self.numerator,

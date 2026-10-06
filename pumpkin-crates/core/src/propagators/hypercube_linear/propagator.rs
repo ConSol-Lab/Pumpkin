@@ -17,7 +17,6 @@ use crate::propagation::ReadDomains;
 use crate::propagators::hypercube_linear::HypercubeLinearDescription;
 use crate::propagators::hypercube_linear::HypercubeLinearRule;
 use crate::propagators::hypercube_linear::LinearInequality;
-use crate::pumpkin_assert_simple;
 use crate::state::PropagatorConflict;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
@@ -339,86 +338,6 @@ impl Propagator for HypercubeLinearPropagator {
 
                 self.propagate_linear_inequality(context, slack)?;
             }
-        }
-
-        Ok(())
-    }
-
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
-        if self
-            .hypercube_predicates
-            .iter()
-            .any(|&predicate| context.evaluate_predicate(predicate) == Some(false))
-        {
-            // If the hypercube contains at least one false predicate, the propagator will not do
-            // anything.
-            return Ok(());
-        }
-
-        // Get the predicates that are not assigned to true.
-        let unsatisfied_predicates_in_hypercubes = self
-            .hypercube_predicates
-            .iter()
-            .filter(|&&predicate| context.evaluate_predicate(predicate) != Some(true))
-            .copied()
-            .collect::<Vec<_>>();
-
-        if unsatisfied_predicates_in_hypercubes.len() > 1 {
-            // If more than one predicate remains unassigned, we cannot do anything.
-            return Ok(());
-        }
-
-        let lower_bound_terms = self
-            .linear
-            .terms()
-            .map(|term| i64::from(context.lower_bound(&term)))
-            .sum::<i64>();
-
-        let slack = i64::from(self.linear.bound()) - lower_bound_terms;
-
-        if unsatisfied_predicates_in_hypercubes.len() == 1 {
-            let unassigned_predicate = unsatisfied_predicates_in_hypercubes[0];
-
-            if slack < 0 {
-                let reason = self
-                    .linear
-                    .terms()
-                    .map(|term| predicate![term >= context.lower_bound(&term)])
-                    .chain(
-                        self.hypercube_predicates
-                            .iter()
-                            .copied()
-                            .filter(|&p| p != unassigned_predicate),
-                    )
-                    .collect::<PropositionalConjunction>();
-
-                context.post(!unassigned_predicate, (reason, &self.inference_code))?;
-            } else if let Some(term) = self
-                .linear
-                .term_for_domain(unassigned_predicate.get_domain())
-            {
-                let term_lower_bound = context.lower_bound(&term);
-                let new_upper_bound = match i32::try_from(slack + i64::from(term_lower_bound)) {
-                    Ok(bound) => bound,
-                    Err(_) => return Ok(()),
-                };
-
-                let reason = self
-                    .linear
-                    .terms()
-                    .filter(|&t| t != term)
-                    .map(|term| predicate![term >= context.lower_bound(&term)])
-                    .chain(self.hypercube_predicates.iter().copied())
-                    .collect::<PropositionalConjunction>();
-
-                context.post(
-                    predicate![term <= new_upper_bound],
-                    (reason, &self.inference_code),
-                )?;
-            }
-        } else {
-            pumpkin_assert_simple!(unsatisfied_predicates_in_hypercubes.is_empty());
-            self.propagate_linear_inequality(context, slack)?;
         }
 
         Ok(())

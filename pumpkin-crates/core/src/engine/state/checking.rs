@@ -9,8 +9,6 @@ use crate::checkers::RetentionCoverage;
 use crate::checkers::RetentionFailure;
 #[cfg(feature = "check-propagations")]
 use crate::checkers::is_rule_checked;
-#[cfg(feature = "check-consistency")]
-use crate::engine::DebugHelper;
 #[cfg(feature = "check-propagations")]
 use crate::predicates::Predicate;
 #[cfg(feature = "check-propagations")]
@@ -19,8 +17,6 @@ use crate::proof::InferenceCode;
 use crate::propagation::Domains;
 #[cfg(feature = "check-propagations")]
 use crate::propagation::ExplanationContext;
-#[cfg(feature = "check-consistency")]
-use crate::pumpkin_assert_extreme;
 #[cfg(feature = "check-propagations")]
 use crate::state::Conflict;
 use crate::state::State;
@@ -191,14 +187,6 @@ impl State {
         if let Err(failure) = outcome {
             self.report_retention_failure(&failure);
         }
-
-        // The same claim, verified by re-propagating instead of by asking the checkers.
-        pumpkin_assert_extreme!(DebugHelper::debug_fixed_point_propagation(
-            &self.trailed_values,
-            &self.assignments,
-            &self.propagators,
-            &self.notification_engine
-        ));
     }
 
     /// Panics, naming the rule and the propagator that is not finished and the variables it

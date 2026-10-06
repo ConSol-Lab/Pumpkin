@@ -83,18 +83,6 @@ impl NotificationEngine {
         result
     }
 
-    pub(crate) fn debug_empty_clone(&self, capacity: usize) -> Self {
-        let mut result = Self {
-            predicate_notifier: self.predicate_notifier.debug_empty_clone(),
-            ..Default::default()
-        };
-
-        for _ in 0..capacity {
-            result.grow()
-        }
-        result
-    }
-
     pub(crate) fn grow(&mut self) {
         self.watch_list_domain_events.grow();
         self.events.grow();
@@ -515,11 +503,6 @@ impl NotificationEngine {
         self.predicate_notifier
             .predicate_id_assignments
             .new_checkpoint();
-    }
-
-    pub(crate) fn debug_create_from_assignments(&mut self, assignments: &Assignments) {
-        self.predicate_notifier
-            .debug_create_from_assignments(assignments);
     }
 
     /// Returns whether the [`Predicate`] corresponding to the provided [`PredicateId`] is

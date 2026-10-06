@@ -147,7 +147,7 @@ impl Propagator for DeductionPropagator {
         "ProcessorNogoodPropagator"
     }
 
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         if !self.active {
             for &predicate_id in self.ids.iter() {
                 context.unregister_predicate(predicate_id);

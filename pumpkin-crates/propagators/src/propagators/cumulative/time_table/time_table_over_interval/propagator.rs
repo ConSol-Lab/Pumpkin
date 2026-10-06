@@ -159,15 +159,6 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
     fn name(&self) -> &str {
         "CumulativeTimeTableOverInterval"
     }
-
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
-        propagate_from_scratch_time_table_interval(
-            &mut context,
-            &self.parameters,
-            &self.updatable_structures,
-            self.inference_code.as_ref().unwrap(),
-        )
-    }
 }
 
 /// Creates a time-table consisting of [`ResourceProfile`]s which represent rectangles with a
@@ -408,29 +399,4 @@ fn check_starting_new_profile_invariants<Var: IntegerVariable + 'static>(
     event.change_in_resource_usage > 0
         && current_resource_usage == 0
         && current_profile_tasks.is_empty()
-}
-
-pub(crate) fn propagate_from_scratch_time_table_interval<Var: IntegerVariable + 'static>(
-    context: &mut PropagationContext,
-    parameters: &CumulativeParameters<Var>,
-    updatable_structures: &UpdatableStructures<Var>,
-    inference_code: &InferenceCode,
-) -> PropagationStatusCP {
-    // We first create a time-table over interval and return an error if there was
-    // an overflow of the resource capacity while building the time-table
-    let time_table = create_time_table_over_interval_from_scratch(
-        context.domains(),
-        parameters,
-        inference_code,
-    )?;
-    // Then we check whether propagation can take place
-    let mut updatable_structures_clone =
-        updatable_structures.recreate_from_context(context.domains(), parameters);
-    propagate_based_on_timetable(
-        context,
-        inference_code,
-        time_table.iter(),
-        parameters,
-        &mut updatable_structures_clone,
-    )
 }

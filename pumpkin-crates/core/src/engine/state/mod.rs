@@ -13,7 +13,6 @@ use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::ConstraintProgrammingTrailEntry;
-use crate::engine::DebugHelper;
 use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
 use crate::engine::VariableNames;
@@ -46,9 +45,7 @@ use crate::propagation::PropagatorVarId;
 use crate::propagation::store::PropagatorStore;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
-use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_eq_simple;
-use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
 use crate::results::SolutionReference;
 use crate::state::Conflict;
@@ -770,8 +767,6 @@ impl State {
     fn propagate(&mut self, propagator_id: PropagatorId) -> Result<(), Conflict> {
         self.statistics.num_propagators_called += 1;
 
-        let num_trail_entries_before = self.assignments.num_trail_entries();
-
         let propagation_status = {
             let Self {
                 propagators,
@@ -804,32 +799,9 @@ impl State {
                         &mut self.propagators,
                         &mut self.propagator_queue,
                     );
-                pumpkin_assert_extreme!(
-                    DebugHelper::debug_check_propagations(
-                        num_trail_entries_before,
-                        propagator_id,
-                        &self.trailed_values,
-                        &self.assignments,
-                        &self.reason_store,
-                        &mut self.propagators,
-                        &self.notification_engine
-                    ),
-                    "Checking the propagations performed by the propagator led to inconsistencies!"
-                );
             }
             Err(conflict) => {
                 self.statistics.num_conflicts += 1;
-                if let Conflict::Propagator(inner) = &conflict {
-                    pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
-                        &self.trailed_values,
-                        &self.assignments,
-                        &inner.conjunction,
-                        &self.propagators[propagator_id],
-                        propagator_id,
-                        &self.notification_engine
-                    ));
-                }
-
                 return Err(conflict);
             }
         }
@@ -1378,8 +1350,8 @@ mod tests {
             "Checked"
         }
 
-        fn propagate_from_scratch(
-            &self,
+        fn propagate(
+            &mut self,
             _: crate::propagation::PropagationContext,
         ) -> crate::state::PropagationStatusCP {
             Ok(())

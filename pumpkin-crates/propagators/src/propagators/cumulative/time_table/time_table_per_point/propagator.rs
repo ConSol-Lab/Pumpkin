@@ -153,15 +153,6 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
     fn name(&self) -> &str {
         "CumulativeTimeTablePerPoint"
     }
-
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
-        propagate_from_scratch_time_table_point(
-            &mut context,
-            self.inference_code.as_ref().unwrap(),
-            &self.parameters,
-            &self.updatable_structures,
-        )
-    }
 }
 
 /// Creates a time-table consisting of [`ResourceProfile`]s which represent rectangles with a
@@ -219,26 +210,4 @@ pub(crate) fn create_time_table_per_point_from_scratch<
         "The TimeTablePerPointPropagator method should only create profiles where `start == end`"
     );
     Ok(time_table)
-}
-
-pub(crate) fn propagate_from_scratch_time_table_point<Var: IntegerVariable + 'static>(
-    context: &mut PropagationContext,
-    inference_code: &InferenceCode,
-    parameters: &CumulativeParameters<Var>,
-    updatable_structures: &UpdatableStructures<Var>,
-) -> PropagationStatusCP {
-    // We first create a time-table per point and return an error if there was
-    // an overflow of the resource capacity while building the time-table
-    let time_table =
-        create_time_table_per_point_from_scratch(context.domains(), inference_code, parameters)?;
-    // Then we check whether propagation can take place
-    let mut updatable_structures_clone =
-        updatable_structures.recreate_from_context(context.domains(), parameters);
-    propagate_based_on_timetable(
-        context,
-        inference_code,
-        time_table.values(),
-        parameters,
-        &mut updatable_structures_clone,
-    )
 }

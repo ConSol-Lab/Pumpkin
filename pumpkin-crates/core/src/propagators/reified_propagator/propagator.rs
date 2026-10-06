@@ -86,20 +86,6 @@ impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<Wra
         &self.name
     }
 
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
-        self.propagate_reification(&mut context)?;
-
-        if context.evaluate_literal(self.reification_literal) == Some(true) {
-            context.with_reification(self.reification_literal);
-
-            let result = self.propagator.propagate_from_scratch(context);
-
-            self.map_propagation_status(result)?;
-        }
-
-        Ok(())
-    }
-
     fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> LazyExplanation<'_> {
         let inner = self.propagator.lazy_explanation(code, context);
         let inference_code = inner.inference_code;
