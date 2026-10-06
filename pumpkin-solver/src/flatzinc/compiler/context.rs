@@ -389,6 +389,13 @@ impl CompilationContext<'_> {
         }
     }
 
+    pub fn resolve_bool_variable_from_name(
+        &mut self,
+        expr: String,
+    ) -> Result<Literal, FlatZincError> {
+        self.resolve_bool_variable_from_identifier(&expr)
+    }
+
     pub fn resolve_integer_variable_array_from_name(
         &mut self,
         expr: String,
