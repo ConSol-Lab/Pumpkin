@@ -7,9 +7,12 @@ use crate::DomainView;
 
 /// Verifies that a propagator has nothing left to propagate.
 ///
-/// The checker reads the domains of the variables in its scope, and each of them is bounded. The
-/// check succeeds when no inference of the rule applies in those domains: giving any variable any
-/// value of its domain does not let the rule report a conflict.
+/// The checker reads the domains of the variables in its scope. The check succeeds when no
+/// inference of the rule applies in those domains: giving any variable any value of its domain
+/// does not let the rule report a conflict.
+///
+/// The checkers assume that every domain has finite bounds. This holds for the domains of the
+/// solver, whose bounds are `i32` values, but it is not enforced by [`DomainView`].
 pub trait RetentionChecker<Atomic: AtomicConstraint>: Debug + DynClone {
     /// Whether some inference of the rule still applies in `domains`.
     fn check_retention(&self, domains: &dyn DomainView<Atomic>) -> RetentionCheck;
