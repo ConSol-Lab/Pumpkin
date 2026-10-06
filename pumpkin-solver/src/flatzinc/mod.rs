@@ -22,7 +22,7 @@ use pumpkin_propagators::cumulative::options::CumulativeOptions;
 
 use self::compiler::CompilationContext;
 pub use self::instance::FlatZincInstance;
-use self::instance::Output;
+pub use self::instance::Output;
 use crate::Solver;
 use crate::core::branching::Brancher;
 use crate::core::optimisation::OptimisationDirection;
@@ -106,8 +106,11 @@ fn log_statistics(
     }
 }
 
+/// Logs the statistics and prints the solution in the FlatZinc output format.
+///
+/// For optimisation problems, this only happens if `options_all_solutions` is `true`.
 #[allow(clippy::too_many_arguments, reason = "Should be refactored")]
-fn solution_callback(
+pub fn solution_callback(
     brancher: &impl Brancher,
     resolver: &impl ConflictResolver,
     instance_objective_function: Option<DomainId>,
@@ -485,7 +488,7 @@ mod tests {
     //         true,
     //     );
 
-    //     let outputs = instance.outputs().collect::<Vec<_>>();
+    //     let outputs = instance.outputs();
     //     assert_eq!(1, outputs.len());
 
     //     let output = outputs[0].clone();
@@ -623,7 +626,7 @@ mod tests {
             parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
                 .expect("compilation should succeed");
 
-        let outputs = instance.outputs().collect::<Vec<_>>();
+        let outputs = instance.outputs();
         assert_eq!(1, outputs.len());
 
         assert!(matches!(outputs[0], Output::ArrayOfBool(_)));
@@ -645,7 +648,7 @@ mod tests {
             parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
                 .expect("compilation should succeed");
 
-        let outputs = instance.outputs().collect::<Vec<_>>();
+        let outputs = instance.outputs();
         assert_eq!(1, outputs.len());
     }
 
@@ -663,7 +666,7 @@ mod tests {
             parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
                 .expect("compilation should succeed");
 
-        let outputs = instance.outputs().collect::<Vec<_>>();
+        let outputs = instance.outputs();
         assert_eq!(1, outputs.len());
 
         assert!(matches!(outputs[0], Output::ArrayOfInt(_)));
@@ -685,7 +688,7 @@ mod tests {
             parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
                 .expect("compilation should succeed");
 
-        let outputs = instance.outputs().collect::<Vec<_>>();
+        let outputs = instance.outputs();
         assert_eq!(1, outputs.len());
     }
 }

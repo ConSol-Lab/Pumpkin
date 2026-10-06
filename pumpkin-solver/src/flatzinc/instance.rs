@@ -35,14 +35,21 @@ pub struct FlatZincInstance {
 }
 
 impl FlatZincInstance {
-    #[cfg(test)]
-    pub(crate) fn outputs(&self) -> impl Iterator<Item = &Output> + '_ {
-        self.outputs.iter()
+    /// The variables which should be printed for every solution.
+    pub fn outputs(&self) -> &[Output] {
+        &self.outputs
+    }
+
+    /// The variable which is optimised, if the instance is an optimisation problem.
+    pub fn objective_variable(&self) -> Option<DomainId> {
+        self.objective_function
+            .map(|objective| <(OptimisationDirection, DomainId)>::from(objective).1)
     }
 }
 
+/// A variable (or array of variables) which is printed when a solution is found.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum Output {
+pub enum Output {
     Bool(VariableOutput<Literal>),
     Int(VariableOutput<DomainId>),
     ArrayOfBool(ArrayOutput<Literal>),
@@ -90,7 +97,7 @@ impl Output {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct VariableOutput<T> {
+pub struct VariableOutput<T> {
     id: Rc<str>,
     variable: T,
 }
@@ -102,7 +109,7 @@ impl<T> VariableOutput<T> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ArrayOutput<T> {
+pub struct ArrayOutput<T> {
     id: Rc<str>,
     /// The shape of the array is a sequence of index sets. The number of elements in this sequence
     /// corresponds to the dimensionality of the array, and the element in the sequence at index i
