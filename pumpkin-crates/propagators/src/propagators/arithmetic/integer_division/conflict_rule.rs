@@ -21,12 +21,12 @@ where
     VC: IntegerVariable + 'static,
 {
     fn checker(
-        description: &DivisionDescription<VA, VB, VC>,
+        constraint_description: &DivisionDescription<VA, VB, VC>,
     ) -> IntegerDivisionChecker<VA, VB, VC> {
         IntegerDivisionChecker {
-            numerator: description.numerator.clone(),
-            denominator: description.denominator.clone(),
-            rhs: description.rhs.clone(),
+            numerator: constraint_description.numerator.clone(),
+            denominator: constraint_description.denominator.clone(),
+            rhs: constraint_description.rhs.clone(),
         }
     }
 }
@@ -44,14 +44,14 @@ where
     }
 
     fn create_inference_checker(
-        description: &DivisionDescription<VA, VB, VC>,
+        constraint_description: &DivisionDescription<VA, VB, VC>,
     ) -> impl InferenceChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 
     fn create_retention_checker(
-        description: &DivisionDescription<VA, VB, VC>,
+        constraint_description: &DivisionDescription<VA, VB, VC>,
     ) -> impl RetentionChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 }

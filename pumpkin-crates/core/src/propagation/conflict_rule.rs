@@ -23,10 +23,10 @@ pub trait ConflictRule {
     fn name() -> Cow<'static, str>;
 
     fn create_inference_checker(
-        description: &Self::Description,
+        constraint_description: &Self::Description,
     ) -> impl InferenceChecker<Predicate> + 'static;
 
     fn create_retention_checker(
-        description: &Self::Description,
+        constraint_description: &Self::Description,
     ) -> impl RetentionChecker<Predicate> + 'static;
 }

@@ -20,11 +20,11 @@ where
     BVar: IntegerVariable + 'static,
 {
     fn checker(
-        description: &BinaryNotEqualsDescription<AVar, BVar>,
+        constraint_description: &BinaryNotEqualsDescription<AVar, BVar>,
     ) -> BinaryNotEqualsChecker<AVar, BVar> {
         BinaryNotEqualsChecker {
-            lhs: description.a.clone(),
-            rhs: description.b.clone(),
+            lhs: constraint_description.a.clone(),
+            rhs: constraint_description.b.clone(),
         }
     }
 }
@@ -41,14 +41,14 @@ where
     }
 
     fn create_inference_checker(
-        description: &BinaryNotEqualsDescription<AVar, BVar>,
+        constraint_description: &BinaryNotEqualsDescription<AVar, BVar>,
     ) -> impl InferenceChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 
     fn create_retention_checker(
-        description: &BinaryNotEqualsDescription<AVar, BVar>,
+        constraint_description: &BinaryNotEqualsDescription<AVar, BVar>,
     ) -> impl RetentionChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 }

@@ -23,22 +23,24 @@ impl<Var: IntegerVariable + 'static> ConflictRule for DisjunctiveEdgeFindingRule
     }
 
     fn create_inference_checker(
-        description: &DisjunctiveDescription<Var>,
+        constraint_description: &DisjunctiveDescription<Var>,
     ) -> impl InferenceChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 
     fn create_retention_checker(
-        description: &DisjunctiveDescription<Var>,
+        constraint_description: &DisjunctiveDescription<Var>,
     ) -> impl RetentionChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 }
 
 impl<Var: IntegerVariable + 'static> DisjunctiveEdgeFindingRule<Var> {
-    fn checker(description: &DisjunctiveDescription<Var>) -> DisjunctiveEdgeFindingChecker<Var> {
+    fn checker(
+        constraint_description: &DisjunctiveDescription<Var>,
+    ) -> DisjunctiveEdgeFindingChecker<Var> {
         DisjunctiveEdgeFindingChecker {
-            tasks: description
+            tasks: constraint_description
                 .tasks
                 .iter()
                 .map(|task| DisjunctiveCheckerTask {

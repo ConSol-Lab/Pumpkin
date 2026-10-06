@@ -21,12 +21,12 @@ where
     VC: IntegerVariable + 'static,
 {
     fn checker(
-        description: &IntegerMultiplicationDescription<VA, VB, VC>,
+        constraint_description: &IntegerMultiplicationDescription<VA, VB, VC>,
     ) -> IntegerMultiplicationChecker<VA, VB, VC> {
         IntegerMultiplicationChecker {
-            a: description.a.clone(),
-            b: description.b.clone(),
-            c: description.c.clone(),
+            a: constraint_description.a.clone(),
+            b: constraint_description.b.clone(),
+            c: constraint_description.c.clone(),
         }
     }
 }
@@ -44,14 +44,14 @@ where
     }
 
     fn create_inference_checker(
-        description: &IntegerMultiplicationDescription<VA, VB, VC>,
+        constraint_description: &IntegerMultiplicationDescription<VA, VB, VC>,
     ) -> impl InferenceChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 
     fn create_retention_checker(
-        description: &IntegerMultiplicationDescription<VA, VB, VC>,
+        constraint_description: &IntegerMultiplicationDescription<VA, VB, VC>,
     ) -> impl RetentionChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 }

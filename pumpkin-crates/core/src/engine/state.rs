@@ -223,10 +223,10 @@ impl State {
     pub fn register_rule<Rule: ConflictRule>(
         &mut self,
         constraint_tag: ConstraintTag,
-        description: &Rule::Description,
+        constraint_description: &Rule::Description,
         propagator: PropagatorId,
     ) -> InferenceCode {
-        self.register_removable_rule::<Rule>(constraint_tag, description, propagator)
+        self.register_removable_rule::<Rule>(constraint_tag, constraint_description, propagator)
             .0
     }
 
@@ -238,12 +238,12 @@ impl State {
     pub(crate) fn register_removable_rule<Rule: ConflictRule>(
         &mut self,
         constraint_tag: ConstraintTag,
-        description: &Rule::Description,
+        constraint_description: &Rule::Description,
         propagator: PropagatorId,
     ) -> (InferenceCode, Option<RetentionCheckerId>) {
         let inference_code = self.rule_code::<Rule>(constraint_tag);
         let retention_checker =
-            self.add_rule_checkers::<Rule>(inference_code, description, propagator);
+            self.add_rule_checkers::<Rule>(inference_code, constraint_description, propagator);
         (inference_code, retention_checker)
     }
 
@@ -253,20 +253,22 @@ impl State {
     fn add_rule_checkers<Rule: ConflictRule>(
         &mut self,
         inference_code: InferenceCode,
-        description: &Rule::Description,
+        constraint_description: &Rule::Description,
         propagator: PropagatorId,
     ) -> Option<RetentionCheckerId> {
         if cfg!(feature = "check-propagations") {
             self.checkers.add_inference_checker(
                 inference_code,
-                BoxedChecker::new(Box::new(Rule::create_inference_checker(description))),
+                BoxedChecker::new(Box::new(Rule::create_inference_checker(
+                    constraint_description,
+                ))),
             );
         }
 
         if cfg!(feature = "check-consistency") {
             self.retention_checkers.register(
-                description.scope(),
-                BoxedRetentionChecker::new(Rule::create_retention_checker(description)),
+                constraint_description.scope(),
+                BoxedRetentionChecker::new(Rule::create_retention_checker(constraint_description)),
                 propagator,
                 inference_code,
             )
@@ -456,7 +458,7 @@ impl State {
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
-        let description = constructor.constraint_description();
+        let constraint_description = constructor.constraint_description();
         let inference_code = self.rule_code::<Constructor::Rule>(constructor.constraint_tag());
 
         let handle =
@@ -467,7 +469,7 @@ impl State {
         // A propagator is never removed, so neither is its retention checker.
         let _ = self.add_rule_checkers::<Constructor::Rule>(
             inference_code,
-            &description,
+            &constraint_description,
             handle.propagator_id(),
         );
 
@@ -1514,10 +1516,10 @@ mod tests {
         }
 
         fn create_retention_checker(
-            description: &CheckedPropagator<Checker>,
+            constraint_description: &CheckedPropagator<Checker>,
         ) -> impl pumpkin_checking::RetentionChecker<crate::predicates::Predicate> + 'static
         {
-            description.checker.clone()
+            constraint_description.checker.clone()
         }
     }
 

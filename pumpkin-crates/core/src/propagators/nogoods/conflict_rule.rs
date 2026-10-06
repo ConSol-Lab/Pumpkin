@@ -27,18 +27,18 @@ impl ConflictRule for UnitNogoodRule {
     }
 
     fn create_inference_checker(
-        description: &NogoodDescription,
+        constraint_description: &NogoodDescription,
     ) -> impl InferenceChecker<Predicate> + 'static {
         NogoodChecker {
-            nogood: description.nogood.clone(),
+            nogood: constraint_description.nogood.clone(),
         }
     }
 
     fn create_retention_checker(
-        description: &NogoodDescription,
+        constraint_description: &NogoodDescription,
     ) -> impl RetentionChecker<Predicate> + 'static {
         NogoodChecker {
-            nogood: description.nogood.clone(),
+            nogood: constraint_description.nogood.clone(),
         }
     }
 }
@@ -58,16 +58,16 @@ impl ConflictRule for ExtendedNogoodRule {
     }
 
     fn create_inference_checker(
-        description: &NogoodDescription,
+        constraint_description: &NogoodDescription,
     ) -> impl InferenceChecker<Predicate> + 'static {
-        UnitNogoodRule::create_inference_checker(description)
+        UnitNogoodRule::create_inference_checker(constraint_description)
     }
 
     fn create_retention_checker(
-        description: &NogoodDescription,
+        constraint_description: &NogoodDescription,
     ) -> impl RetentionChecker<Predicate> + 'static {
         ExtendedNogoodChecker {
-            nogood: description.nogood.clone(),
+            nogood: constraint_description.nogood.clone(),
         }
     }
 }
@@ -84,20 +84,20 @@ impl PropagationMode {
         nogood: &[Predicate],
         propagator: PropagatorId,
     ) -> (InferenceCode, Option<RetentionCheckerId>) {
-        let description = NogoodDescription {
+        let constraint_description = NogoodDescription {
             nogood: nogood.into(),
         };
 
         match self {
             PropagationMode::UnitPropagation => state.register_removable_rule::<UnitNogoodRule>(
                 constraint_tag,
-                &description,
+                &constraint_description,
                 propagator,
             ),
             PropagationMode::ExtendedNogoodPropagation => state
                 .register_removable_rule::<ExtendedNogoodRule>(
                     constraint_tag,
-                    &description,
+                    &constraint_description,
                     propagator,
                 ),
         }

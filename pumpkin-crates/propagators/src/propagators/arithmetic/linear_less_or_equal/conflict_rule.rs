@@ -22,14 +22,20 @@ impl<Var: IntegerVariable + 'static> ConflictRule for LinearLessOrEqualRule<Var>
     }
 
     fn create_inference_checker(
-        description: &LinearLessOrEqualDescription<Var>,
+        constraint_description: &LinearLessOrEqualDescription<Var>,
     ) -> impl InferenceChecker<Predicate> + 'static {
-        LinearLessOrEqualChecker::new(description.terms.clone(), description.bound)
+        LinearLessOrEqualChecker::new(
+            constraint_description.terms.clone(),
+            constraint_description.bound,
+        )
     }
 
     fn create_retention_checker(
-        description: &LinearLessOrEqualDescription<Var>,
+        constraint_description: &LinearLessOrEqualDescription<Var>,
     ) -> impl RetentionChecker<Predicate> + 'static {
-        LinearLessOrEqualChecker::new(description.terms.clone(), description.bound)
+        LinearLessOrEqualChecker::new(
+            constraint_description.terms.clone(),
+            constraint_description.bound,
+        )
     }
 }

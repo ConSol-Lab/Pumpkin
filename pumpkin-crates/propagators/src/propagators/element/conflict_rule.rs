@@ -27,15 +27,15 @@ where
     }
 
     fn create_inference_checker(
-        description: &ElementDescription<VX, VI, VE>,
+        constraint_description: &ElementDescription<VX, VI, VE>,
     ) -> impl InferenceChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 
     fn create_retention_checker(
-        description: &ElementDescription<VX, VI, VE>,
+        constraint_description: &ElementDescription<VX, VI, VE>,
     ) -> impl RetentionChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 }
 
@@ -45,11 +45,13 @@ where
     VI: IntegerVariable + 'static,
     VE: IntegerVariable + 'static,
 {
-    fn checker(description: &ElementDescription<VX, VI, VE>) -> ElementChecker<VX, VI, VE> {
+    fn checker(
+        constraint_description: &ElementDescription<VX, VI, VE>,
+    ) -> ElementChecker<VX, VI, VE> {
         ElementChecker::new(
-            description.array.clone(),
-            description.index.clone(),
-            description.rhs.clone(),
+            constraint_description.array.clone(),
+            constraint_description.index.clone(),
+            constraint_description.rhs.clone(),
         )
     }
 }

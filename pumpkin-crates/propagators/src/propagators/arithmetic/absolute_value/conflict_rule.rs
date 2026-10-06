@@ -19,10 +19,12 @@ where
     VA: IntegerVariable + 'static,
     VB: IntegerVariable + 'static,
 {
-    fn checker(description: &AbsoluteValueDescription<VA, VB>) -> AbsoluteValueChecker<VA, VB> {
+    fn checker(
+        constraint_description: &AbsoluteValueDescription<VA, VB>,
+    ) -> AbsoluteValueChecker<VA, VB> {
         AbsoluteValueChecker {
-            signed: description.signed.clone(),
-            absolute: description.absolute.clone(),
+            signed: constraint_description.signed.clone(),
+            absolute: constraint_description.absolute.clone(),
         }
     }
 }
@@ -39,14 +41,14 @@ where
     }
 
     fn create_inference_checker(
-        description: &AbsoluteValueDescription<VA, VB>,
+        constraint_description: &AbsoluteValueDescription<VA, VB>,
     ) -> impl InferenceChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 
     fn create_retention_checker(
-        description: &AbsoluteValueDescription<VA, VB>,
+        constraint_description: &AbsoluteValueDescription<VA, VB>,
     ) -> impl RetentionChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 }

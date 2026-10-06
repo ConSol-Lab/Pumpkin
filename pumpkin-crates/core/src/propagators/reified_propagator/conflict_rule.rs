@@ -26,20 +26,24 @@ impl<Rule: ConflictRule> ConflictRule for HalfReified<Rule> {
     }
 
     fn create_inference_checker(
-        description: &Self::Description,
+        constraint_description: &Self::Description,
     ) -> impl InferenceChecker<Predicate> + 'static {
         ReifiedChecker {
-            inner: BoxedChecker::new(Box::new(Rule::create_inference_checker(&description.inner))),
-            reification_literal: description.reification_literal,
+            inner: BoxedChecker::new(Box::new(Rule::create_inference_checker(
+                &constraint_description.inner,
+            ))),
+            reification_literal: constraint_description.reification_literal,
         }
     }
 
     fn create_retention_checker(
-        description: &Self::Description,
+        constraint_description: &Self::Description,
     ) -> impl RetentionChecker<Predicate> + 'static {
         ReifiedRetentionChecker {
-            inner: BoxedRetentionChecker::new(Rule::create_retention_checker(&description.inner)),
-            reification_literal: description.reification_literal,
+            inner: BoxedRetentionChecker::new(Rule::create_retention_checker(
+                &constraint_description.inner,
+            )),
+            reification_literal: constraint_description.reification_literal,
         }
     }
 }

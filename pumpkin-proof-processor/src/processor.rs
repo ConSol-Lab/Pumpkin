@@ -1055,9 +1055,9 @@ mod tests {
         }
 
         fn create_inference_checker(
-            description: &AlwaysConflictChecker,
+            constraint_description: &AlwaysConflictChecker,
         ) -> impl InferenceChecker<Predicate> + 'static {
-            description.clone()
+            constraint_description.clone()
         }
 
         fn create_retention_checker(

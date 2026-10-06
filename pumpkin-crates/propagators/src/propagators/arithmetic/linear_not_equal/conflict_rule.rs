@@ -15,10 +15,12 @@ use super::LinearNotEqualDescription;
 pub struct LinearNotEqualRule<Var>(PhantomData<Var>);
 
 impl<Var: IntegerVariable + 'static> LinearNotEqualRule<Var> {
-    fn checker(description: &LinearNotEqualDescription<Var>) -> LinearNotEqualChecker<Var> {
+    fn checker(
+        constraint_description: &LinearNotEqualDescription<Var>,
+    ) -> LinearNotEqualChecker<Var> {
         LinearNotEqualChecker {
-            terms: description.terms.as_ref().into(),
-            bound: description.rhs,
+            terms: constraint_description.terms.as_ref().into(),
+            bound: constraint_description.rhs,
         }
     }
 }
@@ -31,14 +33,14 @@ impl<Var: IntegerVariable + 'static> ConflictRule for LinearNotEqualRule<Var> {
     }
 
     fn create_inference_checker(
-        description: &LinearNotEqualDescription<Var>,
+        constraint_description: &LinearNotEqualDescription<Var>,
     ) -> impl InferenceChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 
     fn create_retention_checker(
-        description: &LinearNotEqualDescription<Var>,
+        constraint_description: &LinearNotEqualDescription<Var>,
     ) -> impl RetentionChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 }

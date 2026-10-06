@@ -24,22 +24,22 @@ impl<Var: IntegerVariable + 'static> ConflictRule for TimeTableRule<Var> {
     }
 
     fn create_inference_checker(
-        description: &CumulativeDescription<Var>,
+        constraint_description: &CumulativeDescription<Var>,
     ) -> impl InferenceChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 
     fn create_retention_checker(
-        description: &CumulativeDescription<Var>,
+        constraint_description: &CumulativeDescription<Var>,
     ) -> impl RetentionChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 }
 
 impl<Var: IntegerVariable + 'static> TimeTableRule<Var> {
-    fn checker(description: &CumulativeDescription<Var>) -> TimeTableChecker<Var> {
+    fn checker(constraint_description: &CumulativeDescription<Var>) -> TimeTableChecker<Var> {
         TimeTableChecker {
-            tasks: description
+            tasks: constraint_description
                 .tasks
                 .iter()
                 .map(|task| CheckerTask {
@@ -48,7 +48,7 @@ impl<Var: IntegerVariable + 'static> TimeTableRule<Var> {
                     resource_usage: task.resource_usage,
                 })
                 .collect(),
-            capacity: description.capacity,
+            capacity: constraint_description.capacity,
         }
     }
 }

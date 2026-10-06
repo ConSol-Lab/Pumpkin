@@ -22,26 +22,26 @@ impl ConflictRule for HypercubeLinearRule {
     }
 
     fn create_inference_checker(
-        description: &HypercubeLinearDescription,
+        constraint_description: &HypercubeLinearDescription,
     ) -> impl InferenceChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 
     fn create_retention_checker(
-        description: &HypercubeLinearDescription,
+        constraint_description: &HypercubeLinearDescription,
     ) -> impl RetentionChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 }
 
 impl HypercubeLinearRule {
     fn checker(
-        description: &HypercubeLinearDescription,
+        constraint_description: &HypercubeLinearDescription,
     ) -> HypercubeLinearChecker<Predicate, AffineView<DomainId>> {
         HypercubeLinearChecker {
-            hypercube: description.hypercube.iter_predicates().collect(),
-            terms: description.linear.terms().collect(),
-            bound: description.linear.bound(),
+            hypercube: constraint_description.hypercube.iter_predicates().collect(),
+            terms: constraint_description.linear.terms().collect(),
+            bound: constraint_description.linear.bound(),
         }
     }
 }

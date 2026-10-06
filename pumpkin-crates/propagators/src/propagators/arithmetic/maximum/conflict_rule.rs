@@ -20,11 +20,11 @@ where
     Rhs: IntegerVariable + 'static,
 {
     fn checker(
-        description: &MaximumDescription<ElementVar, Rhs>,
+        constraint_description: &MaximumDescription<ElementVar, Rhs>,
     ) -> MaximumChecker<ElementVar, Rhs> {
         MaximumChecker {
-            array: description.array.clone(),
-            rhs: description.rhs.clone(),
+            array: constraint_description.array.clone(),
+            rhs: constraint_description.rhs.clone(),
         }
     }
 }
@@ -41,14 +41,14 @@ where
     }
 
     fn create_inference_checker(
-        description: &MaximumDescription<ElementVar, Rhs>,
+        constraint_description: &MaximumDescription<ElementVar, Rhs>,
     ) -> impl InferenceChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 
     fn create_retention_checker(
-        description: &MaximumDescription<ElementVar, Rhs>,
+        constraint_description: &MaximumDescription<ElementVar, Rhs>,
     ) -> impl RetentionChecker<Predicate> + 'static {
-        Self::checker(description)
+        Self::checker(constraint_description)
     }
 }
