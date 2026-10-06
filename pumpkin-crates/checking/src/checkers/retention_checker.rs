@@ -25,18 +25,6 @@ pub enum RetentionCheck {
     PropagationMissed,
 }
 
-impl RetentionCheck {
-    /// [`RetentionCheck::PropagationMissed`] when `propagation_missed` holds, and
-    /// [`RetentionCheck::NothingToPropagate`] otherwise.
-    pub fn missed_if(propagation_missed: bool) -> RetentionCheck {
-        if propagation_missed {
-            RetentionCheck::PropagationMissed
-        } else {
-            RetentionCheck::NothingToPropagate
-        }
-    }
-}
-
 /// Wrapper around `Box<dyn RetentionChecker<Atomic>>` that implements [`Clone`].
 #[derive(Debug)]
 pub struct BoxedRetentionChecker<Atomic: AtomicConstraint>(Box<dyn RetentionChecker<Atomic>>);

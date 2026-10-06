@@ -59,6 +59,10 @@ where
         let c_lower = self.rhs.induced_lower_bound(state);
         let c_upper = self.rhs.induced_upper_bound(state);
 
-        ConflictCheck::detected_if(computed_c_upper < c_lower || computed_c_lower > c_upper)
+        if computed_c_upper < c_lower || computed_c_lower > c_upper {
+            ConflictCheck::ConflictDetected
+        } else {
+            ConflictCheck::NoConflictDetected
+        }
     }
 }

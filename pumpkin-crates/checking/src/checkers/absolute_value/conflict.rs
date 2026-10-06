@@ -40,8 +40,10 @@ where
         };
 
         // The intervals should not match, otherwise there is no conflict.
-        ConflictCheck::detected_if(
-            computed_signed_lower != absolute_lower || computed_signed_upper != absolute_upper,
-        )
+        if computed_signed_lower == absolute_lower && computed_signed_upper == absolute_upper {
+            ConflictCheck::NoConflictDetected
+        } else {
+            ConflictCheck::ConflictDetected
+        }
     }
 }

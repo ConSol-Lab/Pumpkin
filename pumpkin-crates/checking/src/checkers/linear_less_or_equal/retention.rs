@@ -49,6 +49,10 @@ where
             is_tight
         });
 
-        RetentionCheck::missed_if(!all_tight)
+        if all_tight {
+            RetentionCheck::NothingToPropagate
+        } else {
+            RetentionCheck::PropagationMissed
+        }
     }
 }

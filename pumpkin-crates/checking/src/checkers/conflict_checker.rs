@@ -30,18 +30,6 @@ pub enum ConflictCheck {
     NoConflictDetected,
 }
 
-impl ConflictCheck {
-    /// [`ConflictCheck::ConflictDetected`] when `is_conflict` holds, and
-    /// [`ConflictCheck::NoConflictDetected`] otherwise.
-    pub fn detected_if(is_conflict: bool) -> ConflictCheck {
-        if is_conflict {
-            ConflictCheck::ConflictDetected
-        } else {
-            ConflictCheck::NoConflictDetected
-        }
-    }
-}
-
 /// Wrapper around `Box<dyn ConflictChecker<Atomic>>` that implements [`Clone`].
 #[derive(Debug)]
 pub struct BoxedConflictChecker<Atomic: AtomicConstraint>(Box<dyn ConflictChecker<Atomic>>);

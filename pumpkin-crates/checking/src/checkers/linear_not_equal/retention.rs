@@ -27,17 +27,16 @@ where
         // 1. Check if the constraint is conflicting, which is the case if all terms are fixed and
         //    sum to the bound
         if unfixed_terms.is_empty() {
-            let is_violated = fixed_sum == i64::from(self.bound);
-
-            if is_violated {
+            if fixed_sum == i64::from(self.bound) {
                 log::error!(
                     "The fixed terms {:?} sum to the forbidden value {} of the linear disequality",
                     self.terms,
                     self.bound
                 );
+                return RetentionCheck::PropagationMissed;
             }
 
-            return RetentionCheck::missed_if(is_violated);
+            return RetentionCheck::NothingToPropagate;
         }
 
         // 2. If at least two terms are unfixed then nothing can be propagated
@@ -54,14 +53,15 @@ where
             Err(_) => true,
         };
 
-        if !is_removed {
+        if is_removed {
+            RetentionCheck::NothingToPropagate
+        } else {
             log::error!(
                 "The value {forbidden} could be removed from {unfixed_term:?} by the linear disequality {:?} != {}",
                 self.terms,
                 self.bound
             );
+            RetentionCheck::PropagationMissed
         }
-
-        RetentionCheck::missed_if(!is_removed)
     }
 }

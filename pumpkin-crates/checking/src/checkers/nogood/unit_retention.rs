@@ -25,7 +25,9 @@ impl<Atomic: AtomicConstraint> RetentionChecker<Atomic> for NogoodChecker<Atomic
                 .iter()
                 .any(|atomic| truth_value(atomic, state) == Some(false));
 
-        if !is_consistent {
+        if is_consistent {
+            RetentionCheck::NothingToPropagate
+        } else {
             log::error!(
                 "The nogood {:?} is not unit-propagation consistent; truth values: {:?}",
                 self.nogood,
@@ -34,8 +36,7 @@ impl<Atomic: AtomicConstraint> RetentionChecker<Atomic> for NogoodChecker<Atomic
                     .map(|atomic| (atomic, truth_value(atomic, state)))
                     .collect::<Vec<_>>()
             );
+            RetentionCheck::PropagationMissed
         }
-
-        RetentionCheck::missed_if(!is_consistent)
     }
 }

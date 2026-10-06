@@ -74,8 +74,9 @@ where
         if self.terms.is_empty() {
             if slack < 0 {
                 log::error!("The linear inequality 0 <= {} is violated", self.bound);
+                return RetentionCheck::PropagationMissed;
             }
-            return RetentionCheck::missed_if(slack < 0);
+            return RetentionCheck::NothingToPropagate;
         }
 
         for term in self.terms.iter() {

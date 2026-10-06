@@ -104,8 +104,10 @@ where
                 }
             }
             ConflictCheck::ConflictDetected
+        } else if overload_checking(&self.tasks, state) {
+            ConflictCheck::ConflictDetected
         } else {
-            ConflictCheck::detected_if(overload_checking(&self.tasks, state))
+            ConflictCheck::NoConflictDetected
         }
     }
 }

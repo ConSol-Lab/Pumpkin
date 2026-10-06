@@ -27,6 +27,10 @@ where
             .map(|variable| variable.induced_lower_bound(variable_state).into())
             .sum();
 
-        ConflictCheck::detected_if(left_hand_side > i64::from(self.bound))
+        if left_hand_side > i64::from(self.bound) {
+            ConflictCheck::ConflictDetected
+        } else {
+            ConflictCheck::NoConflictDetected
+        }
     }
 }

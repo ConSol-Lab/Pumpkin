@@ -17,6 +17,10 @@ where
         _: &[Atomic],
         _: Option<&Atomic>,
     ) -> ConflictCheck {
-        ConflictCheck::detected_if(self.nogood.iter().all(|atomic| state.is_true(atomic)))
+        if self.nogood.iter().all(|atomic| state.is_true(atomic)) {
+            ConflictCheck::ConflictDetected
+        } else {
+            ConflictCheck::NoConflictDetected
+        }
     }
 }

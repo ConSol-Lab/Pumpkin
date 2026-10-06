@@ -66,6 +66,10 @@ where
         let intersected_domain =
             Domain::new(intersection_lower_bound, intersection_upper_bound, holes);
 
-        ConflictCheck::detected_if(!intersected_domain.is_consistent())
+        if intersected_domain.is_consistent() {
+            ConflictCheck::NoConflictDetected
+        } else {
+            ConflictCheck::ConflictDetected
+        }
     }
 }

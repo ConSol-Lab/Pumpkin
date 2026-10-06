@@ -24,32 +24,36 @@ where
                         self.lhs,
                         self.rhs
                     );
+                    RetentionCheck::PropagationMissed
+                } else {
+                    RetentionCheck::NothingToPropagate
                 }
-                RetentionCheck::missed_if(lhs == rhs)
             }
             (Some(value), None) => {
                 // 2. One side is fixed: assert that its value is removed from the other side
-                let is_removed = !self.rhs.induced_domain_contains(state, value);
-                if !is_removed {
+                if self.rhs.induced_domain_contains(state, value) {
                     log::error!(
                         "The value {value} could be removed from {:?} since {:?} is fixed to it",
                         self.rhs,
                         self.lhs
                     );
+                    RetentionCheck::PropagationMissed
+                } else {
+                    RetentionCheck::NothingToPropagate
                 }
-                RetentionCheck::missed_if(!is_removed)
             }
             (None, Some(value)) => {
                 // 2. One side is fixed: assert that its value is removed from the other side
-                let is_removed = !self.lhs.induced_domain_contains(state, value);
-                if !is_removed {
+                if self.lhs.induced_domain_contains(state, value) {
                     log::error!(
                         "The value {value} could be removed from {:?} since {:?} is fixed to it",
                         self.lhs,
                         self.rhs
                     );
+                    RetentionCheck::PropagationMissed
+                } else {
+                    RetentionCheck::NothingToPropagate
                 }
-                RetentionCheck::missed_if(!is_removed)
             }
             // 3. Neither side is fixed: nothing can be propagated
             (None, None) => RetentionCheck::NothingToPropagate,

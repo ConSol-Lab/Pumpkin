@@ -89,9 +89,10 @@ where
                 self.denominator,
                 self.rhs
             );
+            RetentionCheck::PropagationMissed
+        } else {
+            RetentionCheck::NothingToPropagate
         }
-
-        RetentionCheck::missed_if(missed)
     }
 }
 

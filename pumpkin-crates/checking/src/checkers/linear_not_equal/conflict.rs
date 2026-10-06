@@ -29,6 +29,10 @@ where
             left_hand_side += i64::from(value);
         }
 
-        ConflictCheck::detected_if(left_hand_side == i64::from(self.bound))
+        if left_hand_side == i64::from(self.bound) {
+            ConflictCheck::ConflictDetected
+        } else {
+            ConflictCheck::NoConflictDetected
+        }
     }
 }

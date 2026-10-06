@@ -49,7 +49,11 @@ where
             None => check_c() || check_a() || check_b(),
         };
 
-        ConflictCheck::detected_if(is_conflict)
+        if is_conflict {
+            ConflictCheck::ConflictDetected
+        } else {
+            ConflictCheck::NoConflictDetected
+        }
     }
 }
 

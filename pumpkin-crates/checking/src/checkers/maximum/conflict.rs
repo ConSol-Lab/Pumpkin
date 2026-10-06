@@ -34,9 +34,12 @@ where
         // If the intersection between the domain of `rhs` and `[lowest_maximum,
         // highest_maximum]` is empty, there is a conflict.
 
-        ConflictCheck::detected_if(
-            lowest_maximum > self.rhs.induced_upper_bound(state)
-                || highest_maximum < self.rhs.induced_lower_bound(state),
-        )
+        if lowest_maximum > self.rhs.induced_upper_bound(state)
+            || highest_maximum < self.rhs.induced_lower_bound(state)
+        {
+            ConflictCheck::ConflictDetected
+        } else {
+            ConflictCheck::NoConflictDetected
+        }
     }
 }

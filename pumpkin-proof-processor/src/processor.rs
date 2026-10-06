@@ -1030,7 +1030,11 @@ mod tests {
             _premises: &[Predicate],
             _consequent: Option<&Predicate>,
         ) -> ConflictCheck {
-            ConflictCheck::detected_if(state.is_true(&self.watched) && state.is_true(&self.other))
+            if state.is_true(&self.watched) && state.is_true(&self.other) {
+                ConflictCheck::ConflictDetected
+            } else {
+                ConflictCheck::NoConflictDetected
+            }
         }
     }
 

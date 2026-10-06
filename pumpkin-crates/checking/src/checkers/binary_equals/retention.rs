@@ -25,7 +25,9 @@ where
             && holes_within(state, &self.lhs, lower, upper)
                 == holes_within(state, &self.rhs, lower, upper);
 
-        if !are_equal {
+        if are_equal {
+            RetentionCheck::NothingToPropagate
+        } else {
             log::error!(
                 "The domains of {:?} and {:?} differ although the two are equal: {:?} and {:?}",
                 self.lhs,
@@ -41,9 +43,8 @@ where
                     .flatten()
                     .collect::<Vec<_>>()
             );
+            RetentionCheck::PropagationMissed
         }
-
-        RetentionCheck::missed_if(!are_equal)
     }
 }
 

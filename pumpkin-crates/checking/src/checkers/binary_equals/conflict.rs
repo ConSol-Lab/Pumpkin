@@ -40,6 +40,10 @@ where
             consistent &= state.apply(&atomic);
         }
 
-        ConflictCheck::detected_if(!consistent)
+        if consistent {
+            ConflictCheck::NoConflictDetected
+        } else {
+            ConflictCheck::ConflictDetected
+        }
     }
 }

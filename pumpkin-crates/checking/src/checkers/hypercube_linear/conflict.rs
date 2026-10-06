@@ -31,6 +31,10 @@ where
         let linear_slack = i64::from(self.bound) - term_sum;
         let linear_conflicting = linear_slack < 0;
 
-        ConflictCheck::detected_if(hypercube_satisfied && linear_conflicting)
+        if hypercube_satisfied && linear_conflicting {
+            ConflictCheck::ConflictDetected
+        } else {
+            ConflictCheck::NoConflictDetected
+        }
     }
 }

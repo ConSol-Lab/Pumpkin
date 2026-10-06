@@ -72,13 +72,14 @@ where
             .count() as i64;
         let no_value_allowed = num_excluded == num_values;
 
-        if !no_value_allowed {
+        if no_value_allowed {
+            RetentionCheck::NothingToPropagate
+        } else {
             log::error!(
                 "The values of {free_domain:?} in [{lower}, {upper}] could be removed by the nogood {:?}",
                 self.nogood
             );
+            RetentionCheck::PropagationMissed
         }
-
-        RetentionCheck::missed_if(!no_value_allowed)
     }
 }
