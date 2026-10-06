@@ -9,8 +9,7 @@ use super::notifications::NotificationEngine;
 use super::predicates::predicate::Predicate;
 use super::reason::ReasonStore;
 use crate::basic_types::PropositionalConjunction;
-#[cfg(feature = "check-consistency")]
-use crate::checkers::RetentionCheckerStore;
+use crate::checkers::RuleCheckerStore;
 use crate::engine::cp::Assignments;
 use crate::propagation::ExplanationContext;
 use crate::propagation::PropagationContext;
@@ -81,8 +80,7 @@ impl DebugHelper {
 
             let num_entries_on_trail_before_propagation = assignments_clone.num_trail_entries();
 
-            #[cfg(feature = "check-consistency")]
-            let mut retention_checkers = RetentionCheckerStore::default();
+            let mut rule_checkers = RuleCheckerStore::default();
 
             let mut reason_store = Default::default();
             let context = PropagationContext::new(
@@ -91,8 +89,7 @@ impl DebugHelper {
                 &mut reason_store,
                 &mut notification_engine_clone,
                 PropagatorId(propagator_id as u32),
-                #[cfg(feature = "check-consistency")]
-                &mut retention_checkers,
+                &mut rule_checkers,
             );
             let propagation_status_cp = propagator.propagate_from_scratch(context);
 
@@ -262,8 +259,7 @@ impl DebugHelper {
             notification_engine_clone.debug_create_from_assignments(&assignments_clone);
 
             if adding_predicates_was_successful {
-                #[cfg(feature = "check-consistency")]
-                let mut retention_checkers = RetentionCheckerStore::default();
+                let mut rule_checkers = RuleCheckerStore::default();
 
                 // Now propagate using the debug propagation method.
                 let mut reason_store = Default::default();
@@ -273,8 +269,7 @@ impl DebugHelper {
                     &mut reason_store,
                     &mut notification_engine_clone,
                     propagator_id,
-                    #[cfg(feature = "check-consistency")]
-                    &mut retention_checkers,
+                    &mut rule_checkers,
                 );
                 let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
 
@@ -384,8 +379,7 @@ impl DebugHelper {
                 loop {
                     let num_predicates_before = assignments_clone.num_trail_entries();
 
-                    #[cfg(feature = "check-consistency")]
-                    let mut retention_checkers = RetentionCheckerStore::default();
+                    let mut rule_checkers = RuleCheckerStore::default();
 
                     let context = PropagationContext::new(
                         &mut trailed_values_clone,
@@ -393,8 +387,7 @@ impl DebugHelper {
                         &mut reason_store,
                         &mut notification_engine_clone,
                         propagator_id,
-                        #[cfg(feature = "check-consistency")]
-                        &mut retention_checkers,
+                        &mut rule_checkers,
                     );
                     let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
 
@@ -453,8 +446,7 @@ impl DebugHelper {
         notification_engine_clone.debug_create_from_assignments(&assignments_clone);
 
         if adding_predicates_was_successful {
-            #[cfg(feature = "check-consistency")]
-            let mut retention_checkers = RetentionCheckerStore::default();
+            let mut rule_checkers = RuleCheckerStore::default();
 
             //  now propagate using the debug propagation method
             let mut reason_store = Default::default();
@@ -464,8 +456,7 @@ impl DebugHelper {
                 &mut reason_store,
                 &mut notification_engine_clone,
                 propagator_id,
-                #[cfg(feature = "check-consistency")]
-                &mut retention_checkers,
+                &mut rule_checkers,
             );
             let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
             assert!(

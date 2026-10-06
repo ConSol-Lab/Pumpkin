@@ -1,10 +1,9 @@
 use enumset::EnumSet;
 
 use crate::basic_types::PredicateId;
-#[cfg(feature = "check-consistency")]
-use crate::checkers::RetentionCheckerId;
-#[cfg(feature = "check-consistency")]
-use crate::checkers::RetentionCheckerStore;
+#[cfg(any(feature = "check-propagations", feature = "check-consistency"))]
+use crate::checkers::RemovableRuleCheckers;
+use crate::checkers::RuleCheckerStore;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::EmptyDomainConflict;
@@ -93,9 +92,7 @@ pub struct PropagationContext<'a> {
     pub(crate) propagator_id: PropagatorId,
     pub(crate) notification_engine: &'a mut NotificationEngine,
     reification_literal: Option<Literal>,
-
-    #[cfg(feature = "check-consistency")]
-    pub(crate) retention_checkers: &'a mut RetentionCheckerStore,
+    pub(crate) rule_checkers: &'a mut RuleCheckerStore,
 }
 
 impl<'a> HasAssignments for PropagationContext<'a> {
@@ -119,7 +116,7 @@ impl<'a> PropagationContext<'a> {
         reason_store: &'a mut ReasonStore,
         notification_engine: &'a mut NotificationEngine,
         propagator_id: PropagatorId,
-        #[cfg(feature = "check-consistency")] retention_checkers: &'a mut RetentionCheckerStore,
+        rule_checkers: &'a mut RuleCheckerStore,
     ) -> Self {
         PropagationContext {
             trailed_values,
@@ -128,15 +125,14 @@ impl<'a> PropagationContext<'a> {
             propagator_id,
             notification_engine,
             reification_literal: None,
-            #[cfg(feature = "check-consistency")]
-            retention_checkers,
+            rule_checkers,
         }
     }
 
-    /// Remove the retention checker of a constraint that the propagator deleted.
-    #[cfg(feature = "check-consistency")]
-    pub(crate) fn remove_retention_checker(&mut self, checker: RetentionCheckerId) {
-        self.retention_checkers.remove(checker);
+    /// Remove the checkers of a constraint that the propagator deleted.
+    #[cfg(any(feature = "check-propagations", feature = "check-consistency"))]
+    pub(crate) fn remove_rule_checkers(&mut self, rule_checkers: RemovableRuleCheckers) {
+        self.rule_checkers.remove(rule_checkers);
     }
 
     /// Register the propagator to be enqueued when the provided [`Predicate`] becomes true.
@@ -249,8 +245,7 @@ impl<'a> PropagationContext<'a> {
             propagator_id: self.propagator_id,
             notification_engine: self.notification_engine,
             reification_literal: self.reification_literal,
-            #[cfg(feature = "check-consistency")]
-            retention_checkers: self.retention_checkers,
+            rule_checkers: self.rule_checkers,
         }
     }
 }

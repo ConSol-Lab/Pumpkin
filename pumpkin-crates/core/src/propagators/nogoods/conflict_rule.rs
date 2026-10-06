@@ -6,10 +6,9 @@ use pumpkin_checking::checkers::ExtendedNogoodChecker;
 use pumpkin_checking::checkers::NogoodChecker;
 
 use super::NogoodDescription;
-use crate::checkers::RetentionCheckerId;
+use crate::checkers::RemovableRuleCheckers;
 use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
-use crate::proof::InferenceCode;
 use crate::propagation::ConflictRule;
 use crate::propagation::PropagatorId;
 use crate::propagators::nogoods::PropagationMode;
@@ -73,29 +72,30 @@ impl ConflictRule for ExtendedNogoodRule {
 }
 
 impl PropagationMode {
-    /// Register the rule with which the nogood propagator propagates `nogood` in this mode.
+    /// Add the checkers of the rule with which the nogood propagator propagates `nogood` in this
+    /// mode.
     ///
-    /// Returns the [`InferenceCode`] of the nogood and the identifier of its retention checker,
-    /// which the propagator removes when it deletes the nogood.
-    pub(crate) fn register_nogood(
+    /// The propagator removes the returned checkers when it deletes the nogood.
+    pub(crate) fn add_nogood_checkers(
         self,
         state: &mut State,
         constraint_tag: ConstraintTag,
         nogood: &[Predicate],
         propagator: PropagatorId,
-    ) -> (InferenceCode, Option<RetentionCheckerId>) {
+    ) -> RemovableRuleCheckers {
         let constraint_description = NogoodDescription {
             nogood: nogood.into(),
         };
 
         match self {
-            PropagationMode::UnitPropagation => state.register_removable_rule::<UnitNogoodRule>(
-                constraint_tag,
-                &constraint_description,
-                propagator,
-            ),
+            PropagationMode::UnitPropagation => state
+                .add_removable_rule_checkers::<UnitNogoodRule>(
+                    constraint_tag,
+                    &constraint_description,
+                    propagator,
+                ),
             PropagationMode::ExtendedNogoodPropagation => state
-                .register_removable_rule::<ExtendedNogoodRule>(
+                .add_removable_rule_checkers::<ExtendedNogoodRule>(
                     constraint_tag,
                     &constraint_description,
                     propagator,

@@ -4,13 +4,12 @@ use pumpkin_checking::BoxedConflictChecker;
 use pumpkin_checking::BoxedRetentionChecker;
 use pumpkin_checking::ConflictChecker;
 
-use crate::checkers::CheckerStore;
-use crate::checkers::RetentionCheckerId;
-use crate::checkers::RetentionCheckerStore;
+use crate::checkers::RemovableRuleCheckers;
 #[cfg(feature = "check-consistency")]
 use crate::checkers::RetentionCoverage;
 #[cfg(feature = "check-consistency")]
 use crate::checkers::RetentionFailure;
+use crate::checkers::RuleCheckerStore;
 use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
@@ -45,6 +44,8 @@ use crate::propagation::PropagatorId;
 use crate::propagation::PropagatorSpec;
 use crate::propagation::PropagatorVarId;
 use crate::propagation::store::PropagatorStore;
+use crate::propagators::nogoods::NogoodPropagator;
+use crate::propagators::nogoods::NogoodPropagatorConstructor;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_extreme;
@@ -90,10 +91,8 @@ pub struct State {
 
     statistics: StateStatistics,
 
-    /// Runtime checkers to run in the propagation loop.
-    checkers: CheckerStore,
-    /// The retention checkers, which verify that propagation is complete, and their queue.
-    pub(crate) retention_checkers: RetentionCheckerStore,
+    /// The checkers of the registered rules, which verify that propagation is sound and complete.
+    pub(crate) rule_checkers: RuleCheckerStore,
 }
 
 create_statistics_struct!(StateStatistics {
@@ -124,8 +123,7 @@ impl Default for State {
             statistics: StateStatistics::default(),
             constraint_tags: KeyGenerator::default(),
             inference_rules: InferenceRules::default(),
-            checkers: CheckerStore::default(),
-            retention_checkers: Default::default(),
+            rule_checkers: RuleCheckerStore::default(),
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are
@@ -204,10 +202,7 @@ impl State {
     }
 
     /// The [`InferenceCode`] of the inferences made with `Rule` for the constraint with
-    /// `constraint_tag`, without registering any checkers.
-    ///
-    /// Used for inferences that are logged in the proof but never propagated, so there is nothing
-    /// to check at runtime. Use [`State::register_rule`] otherwise.
+    /// `constraint_tag`. Adds no checkers.
     pub fn rule_code<Rule: ConflictRule>(
         &mut self,
         constraint_tag: ConstraintTag,
@@ -215,49 +210,58 @@ impl State {
         InferenceCode::new(constraint_tag, self.inference_rules.id(&Rule::name()))
     }
 
-    /// Register `Rule` for the constraint with `constraint_tag` and `description`, implemented by
-    /// `propagator`. Returns the [`InferenceCode`] of its inferences.
+    /// Add the checkers of `Rule` for a constraint of `propagator` that can be removed later, such
+    /// as a learned nogood.
     ///
-    /// The conflict checker of the rule is added when `check-propagations` is enabled, and its
-    /// retention checker when `check-consistency` is enabled.
-    pub fn register_rule<Rule: ConflictRule>(
+    /// The returned [`RemovableRuleCheckers`] hold the [`InferenceCode`] of the inferences of the
+    /// constraint, and identify its checkers so that they are removed with the constraint.
+    #[cfg_attr(
+        not(feature = "check-consistency"),
+        allow(
+            unused_variables,
+            reason = "the checkers exist only under the check features"
+        )
+    )]
+    pub(crate) fn add_removable_rule_checkers<Rule: ConflictRule>(
         &mut self,
         constraint_tag: ConstraintTag,
         constraint_description: &Rule::Description,
         propagator: PropagatorId,
-    ) -> InferenceCode {
-        self.register_removable_rule::<Rule>(constraint_tag, constraint_description, propagator)
-            .0
-    }
-
-    /// Register `Rule` as in [`State::register_rule`], for a constraint that can be deleted
-    /// later.
-    ///
-    /// Also returns the identifier of the retention checker of the rule, if one was added, which
-    /// is removed with [`RetentionCheckerStore::remove`] when the constraint is deleted.
-    pub(crate) fn register_removable_rule<Rule: ConflictRule>(
-        &mut self,
-        constraint_tag: ConstraintTag,
-        constraint_description: &Rule::Description,
-        propagator: PropagatorId,
-    ) -> (InferenceCode, Option<RetentionCheckerId>) {
+    ) -> RemovableRuleCheckers {
         let inference_code = self.rule_code::<Rule>(constraint_tag);
-        let retention_checker =
-            self.add_rule_checkers::<Rule>(inference_code, constraint_description, propagator);
-        (inference_code, retention_checker)
+
+        RemovableRuleCheckers {
+            inference_code,
+            #[cfg(feature = "check-propagations")]
+            conflict_checker: self
+                .rule_checkers
+                .conflict_checkers
+                .add_removable_conflict_checker(
+                    inference_code,
+                    BoxedConflictChecker::new(Box::new(Rule::create_conflict_checker(
+                        constraint_description,
+                    ))),
+                ),
+            #[cfg(feature = "check-consistency")]
+            retention_checker: self.rule_checkers.retention_checkers.register_removable(
+                constraint_description.scope(),
+                BoxedRetentionChecker::new(Rule::create_retention_checker(constraint_description)),
+                propagator,
+                inference_code,
+            ),
+        }
     }
 
-    /// Add the checkers of `Rule` for the constraint with `description` under `inference_code`.
-    ///
-    /// Returns the identifier of the retention checker, if one was added.
+    /// Add the checkers of `Rule` for the constraint with `constraint_description`, for a
+    /// constraint that is never removed.
     fn add_rule_checkers<Rule: ConflictRule>(
         &mut self,
         inference_code: InferenceCode,
         constraint_description: &Rule::Description,
         propagator: PropagatorId,
-    ) -> Option<RetentionCheckerId> {
+    ) {
         if cfg!(feature = "check-propagations") {
-            self.checkers.add_conflict_checker(
+            self.rule_checkers.conflict_checkers.add_conflict_checker(
                 inference_code,
                 BoxedConflictChecker::new(Box::new(Rule::create_conflict_checker(
                     constraint_description,
@@ -266,14 +270,12 @@ impl State {
         }
 
         if cfg!(feature = "check-consistency") {
-            self.retention_checkers.register(
+            self.rule_checkers.retention_checkers.register(
                 constraint_description.scope(),
                 BoxedRetentionChecker::new(Rule::create_retention_checker(constraint_description)),
                 propagator,
                 inference_code,
-            )
-        } else {
-            None
+            );
         }
     }
 
@@ -447,6 +449,9 @@ impl State {
     /// subscribe to the appropriate domain events so that the propagator is called when
     /// necessary.
     ///
+    /// The checkers of the rule of the propagator are added as well. They are a debugging tool,
+    /// created only when the `check-propagations` or `check-consistency` feature is enabled.
+    ///
     /// While the propagator is added to the queue for propagation, this function does _not_
     /// trigger a round of propagation. An explicit call to [`State::propagate_to_fixed_point`] is
     /// necessary to run the new propagator for the first time.
@@ -462,12 +467,11 @@ impl State {
         let inference_code = self.rule_code::<Constructor::Rule>(constructor.constraint_tag());
 
         let handle =
-            self.add_propagator_without_rule(|context| constructor.create(context, inference_code));
+            self.initialise_propagator(|context| constructor.create(context, inference_code));
 
-        // The rule is checked for this propagator only after it is created, since the retention
-        // checkers of a propagator can be excluded by its name.
-        // A propagator is never removed, so neither is its retention checker.
-        let _ = self.add_rule_checkers::<Constructor::Rule>(
+        // Added after the propagator exists, because whether its retention checker is kept
+        // depends on the name of the propagator; see `retention_checking_covers`.
+        self.add_rule_checkers::<Constructor::Rule>(
             inference_code,
             &constraint_description,
             handle.propagator_id(),
@@ -476,14 +480,20 @@ impl State {
         handle
     }
 
-    /// Add a propagator that does not implement a single rule fixed at its construction.
+    /// Add the nogood propagator.
     ///
-    /// Such a propagator registers the rules of its constraints itself, through
-    /// [`State::register_rule`], as the constraints arrive.
-    /// Only the nogood propagator is built this way, because during solving,
-    /// nogoods are added and removed rather than being fixed from the start like with
-    /// most other constraints.
-    pub(crate) fn add_propagator_without_rule<P>(
+    /// Unlike [`State::add_propagator`], no checkers are added here: the nogoods arrive and are
+    /// removed during solving, and the checkers of each are added with
+    /// [`State::add_removable_rule_checkers`].
+    pub(crate) fn add_nogood_propagator(
+        &mut self,
+        constructor: NogoodPropagatorConstructor,
+    ) -> PropagatorHandle<NogoodPropagator> {
+        self.initialise_propagator(|context| constructor.create(context))
+    }
+
+    /// Create the propagator, subscribe it to its domain events, store it, and enqueue it.
+    fn initialise_propagator<P>(
         &mut self,
         create: impl FnOnce(PropagatorConstructorContext) -> PropagatorSpec<P>,
     ) -> PropagatorHandle<P>
@@ -511,7 +521,8 @@ impl State {
         }
 
         if cfg!(feature = "check-consistency") && !retention_checking_covers(propagator.name()) {
-            self.retention_checkers
+            self.rule_checkers
+                .retention_checkers
                 .exclude(original_handle.propagator_id());
         }
 
@@ -544,7 +555,8 @@ impl State {
         inference_code: InferenceCode,
         checker: impl ConflictChecker<Predicate> + 'static,
     ) {
-        self.checkers
+        self.rule_checkers
+            .conflict_checkers
             .add_conflict_checker(inference_code, BoxedConflictChecker::new(Box::new(checker)));
     }
 }
@@ -589,8 +601,7 @@ impl State {
             assignments,
             reason_store,
             notification_engine,
-            #[cfg(feature = "check-consistency")]
-            retention_checkers,
+            rule_checkers,
             ..
         } = self;
         let propagator = propagators.get_propagator_mut(handle);
@@ -600,8 +611,7 @@ impl State {
             reason_store,
             notification_engine,
             handle.propagator_id(),
-            #[cfg(feature = "check-consistency")]
-            retention_checkers,
+            rule_checkers,
         );
         (propagator, context)
     }
@@ -792,8 +802,7 @@ impl State {
                 assignments,
                 reason_store,
                 notification_engine,
-                #[cfg(feature = "check-consistency")]
-                retention_checkers,
+                rule_checkers,
                 ..
             } = self;
             let propagator = &mut propagators[propagator_id];
@@ -803,8 +812,7 @@ impl State {
                 reason_store,
                 notification_engine,
                 propagator_id,
-                #[cfg(feature = "check-consistency")]
-                retention_checkers,
+                rule_checkers,
             );
             propagator.propagate(context)
         };
@@ -886,7 +894,9 @@ impl State {
                 .get_trail_entry(index)
                 .predicate
                 .get_domain();
-            self.retention_checkers.on_domain_event(domain);
+            self.rule_checkers
+                .retention_checkers
+                .on_domain_event(domain);
         }
 
         let coverage = if cfg!(feature = "check-consistency-all") {
@@ -894,7 +904,7 @@ impl State {
         } else {
             RetentionCoverage::Notified
         };
-        let outcome = self.retention_checkers.run(
+        let outcome = self.rule_checkers.retention_checkers.run(
             coverage,
             Domains::new(&self.assignments, &mut self.trailed_values),
         );
@@ -1033,7 +1043,10 @@ impl State {
     ) {
         let premises: Vec<_> = premises.into_iter().collect();
 
-        let checkers = self.checkers.for_inference_code(inference_code);
+        let checkers = self
+            .rule_checkers
+            .conflict_checkers
+            .for_inference_code(inference_code);
         assert!(
             checkers.len() > 0,
             "missing checker for inference code {inference_code:?}"
@@ -1398,8 +1411,7 @@ impl State {
             assignments,
             reason_store,
             notification_engine,
-            #[cfg(feature = "check-consistency")]
-            retention_checkers,
+            rule_checkers,
             ..
         } = self;
         PropagationContext::new(
@@ -1408,8 +1420,7 @@ impl State {
             reason_store,
             notification_engine,
             PropagatorId(0),
-            #[cfg(feature = "check-consistency")]
-            retention_checkers,
+            rule_checkers,
         )
     }
 }
@@ -1615,15 +1626,16 @@ mod tests {
         state.propagate_to_fixed_point().expect("no conflict");
 
         let checker = state
+            .rule_checkers
             .retention_checkers
-            .register(
+            .register_removable(
                 crate::checkers::Scope::from_variables([x].iter()),
                 pumpkin_checking::BoxedRetentionChecker::new(UnfinishedChecker),
                 PropagatorId::create_from_index(0),
                 crate::proof::InferenceCode::unknown_rule(tag),
             )
             .expect("the propagator is not excluded");
-        state.retention_checkers.remove(checker);
+        state.rule_checkers.retention_checkers.remove(checker);
 
         state.new_checkpoint();
         let _ = state

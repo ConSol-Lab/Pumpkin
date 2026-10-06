@@ -282,7 +282,7 @@ impl ConstraintSatisfactionSolver {
             },
             solver_options.learning_options.nogood_propagator_priority,
         );
-        let handle = state.add_propagator_without_rule(|context| nogood_propagator.create(context));
+        let handle = state.add_nogood_propagator(nogood_propagator);
 
         ConstraintSatisfactionSolver {
             solver_state: CSPSolverState::default(),
@@ -908,7 +908,7 @@ impl ConstraintSatisfactionSolver {
             .get_propagator(self.nogood_propagator_handle)
             .expect("Nogood propagator handle should refer to nogood propagator")
             .propagation_mode();
-        let (inference_code, retention_checker) = propagation_mode.register_nogood(
+        let rule_checkers = propagation_mode.add_nogood_checkers(
             &mut self.state,
             constraint_tag,
             &nogood,
@@ -922,7 +922,7 @@ impl ConstraintSatisfactionSolver {
         let nogood_propagator =
             nogood_propagator.expect("Nogood propagator handle should refer to nogood propagator");
 
-        nogood_propagator.add_nogood(nogood, inference_code, retention_checker, &mut context);
+        nogood_propagator.add_nogood(nogood, rule_checkers, &mut context);
 
         #[allow(deprecated, reason = "Will be refactored")]
         self.state.enqueue_propagator(self.nogood_propagator_handle);

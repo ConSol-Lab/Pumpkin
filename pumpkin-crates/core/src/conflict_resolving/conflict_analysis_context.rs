@@ -302,7 +302,7 @@ impl ConflictAnalysisContext<'_> {
             .get_propagator(self.nogood_propagator_handle)
             .expect("nogood propagator handle should refer to nogood propagator")
             .propagation_mode();
-        let (inference_code, retention_checker) = propagation_mode.register_nogood(
+        let rule_checkers = propagation_mode.add_nogood_checkers(
             self.state,
             constraint_tag,
             &learned_nogood.predicates,
@@ -314,7 +314,7 @@ impl ConflictAnalysisContext<'_> {
         if learned_nogood.len() == 1 {
             let _ = self
                 .unit_nogood_inference_codes
-                .insert(!learned_nogood[0], inference_code);
+                .insert(!learned_nogood[0], rule_checkers.inference_code());
         }
 
         #[cfg(feature = "check-propagations")]
@@ -328,8 +328,7 @@ impl ConflictAnalysisContext<'_> {
 
         nogood_propagator.add_asserting_nogood(
             learned_nogood.to_vec(),
-            inference_code,
-            retention_checker,
+            rule_checkers,
             &mut propagation_context,
         );
 

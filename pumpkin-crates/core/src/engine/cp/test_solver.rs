@@ -47,7 +47,7 @@ impl Default for TestSolver {
             PropagationMode::UnitPropagation,
             crate::propagation::Priority::High,
         );
-        let handle = state.add_propagator_without_rule(|context| nogood_propagator.create(context));
+        let handle = state.add_nogood_propagator(nogood_propagator);
         let mut solver = Self {
             state,
             constraint_tags: Default::default(),
@@ -249,8 +249,7 @@ impl TestSolver {
             assignments,
             reason_store,
             notification_engine,
-            #[cfg(feature = "check-consistency")]
-            retention_checkers,
+            rule_checkers,
             ..
         } = &mut self.state;
 
@@ -260,8 +259,7 @@ impl TestSolver {
             reason_store,
             notification_engine,
             propagator,
-            #[cfg(feature = "check-consistency")]
-            retention_checkers,
+            rule_checkers,
         );
 
         propagators[propagator].propagate(context)
@@ -282,8 +280,7 @@ impl TestSolver {
                     assignments,
                     reason_store,
                     notification_engine,
-                    #[cfg(feature = "check-consistency")]
-                    retention_checkers,
+                    rule_checkers,
                     ..
                 } = &mut self.state;
 
@@ -293,8 +290,7 @@ impl TestSolver {
                     reason_store,
                     notification_engine,
                     propagator,
-                    #[cfg(feature = "check-consistency")]
-                    retention_checkers,
+                    rule_checkers,
                 );
 
                 propagators[propagator].propagate(context)?;

@@ -74,11 +74,25 @@ impl RetentionCheckerStore {
     }
 
     /// Add a new `checker` to the store with the given `scope`, for the rule and constraint of
-    /// `inference_code`.
+    /// `inference_code`, for a constraint that is never removed.
     ///
-    /// Returns the identifier through which the checker can be removed, or `None` when the
-    /// checker is dropped because its propagator has been excluded.
+    /// The checker is dropped when its propagator has been excluded.
     pub fn register(
+        &mut self,
+        scope: Scope,
+        checker: BoxedRetentionChecker<Predicate>,
+        propagator: PropagatorId,
+        inference_code: InferenceCode,
+    ) {
+        let _ = self.register_removable(scope, checker, propagator, inference_code);
+    }
+
+    /// Add a new `checker` as with [`RetentionCheckerStore::register`], for a constraint that can
+    /// be removed later.
+    ///
+    /// Returns the identifier through which [`RetentionCheckerStore::remove`] removes the checker,
+    /// or `None` when the checker is dropped because its propagator has been excluded.
+    pub fn register_removable(
         &mut self,
         scope: Scope,
         checker: BoxedRetentionChecker<Predicate>,
