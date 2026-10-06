@@ -396,6 +396,13 @@ impl CompilationContext<'_> {
         self.resolve_bool_variable_from_identifier(&expr)
     }
 
+    pub fn resolve_int_variable_from_name(
+        &mut self,
+        expr: String,
+    ) -> Result<DomainId, FlatZincError> {
+        self.resolve_integer_variable_from_identifier(&expr)
+    }
+
     pub fn resolve_integer_variable_array_from_name(
         &mut self,
         expr: String,
