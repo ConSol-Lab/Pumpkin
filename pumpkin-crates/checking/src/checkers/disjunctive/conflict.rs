@@ -62,7 +62,7 @@ where
 {
     fn check(
         &self,
-        state: VariableState<Atomic>,
+        state: &VariableState<Atomic>,
         _premises: &[Atomic],
         consequent: Option<&Atomic>,
     ) -> ConflictCheck {
@@ -82,12 +82,12 @@ where
 
             let lb: i32 = task
                 .start_time
-                .induced_lower_bound(&state)
+                .induced_lower_bound(state)
                 .try_into()
                 .expect("expected non-infinity value");
             let ub: i32 = task
                 .start_time
-                .induced_upper_bound(&state)
+                .induced_upper_bound(state)
                 .try_into()
                 .expect("expected non-infinity value");
 
@@ -105,7 +105,7 @@ where
             }
             ConflictCheck::ConflictDetected
         } else {
-            ConflictCheck::detected_if(overload_checking(&self.tasks, &state))
+            ConflictCheck::detected_if(overload_checking(&self.tasks, state))
         }
     }
 }

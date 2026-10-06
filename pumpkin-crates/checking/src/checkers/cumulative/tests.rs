@@ -46,7 +46,7 @@ fn conflict() {
     };
 
     assert_eq!(
-        checker.check(state, &premises, None),
+        checker.check(&state, &premises, None),
         ConflictCheck::ConflictDetected
     );
 }
@@ -85,7 +85,7 @@ fn hole_in_domain() {
     };
 
     assert_eq!(
-        checker.check(state, &premises, consequent.as_ref()),
+        checker.check(&state, &premises, consequent.as_ref()),
         ConflictCheck::ConflictDetected
     );
 }
@@ -141,7 +141,7 @@ fn lower_bound_chain() {
     };
 
     assert_eq!(
-        checker.check(state, &premises, consequent.as_ref()),
+        checker.check(&state, &premises, consequent.as_ref()),
         ConflictCheck::ConflictDetected
     );
 }
@@ -197,7 +197,7 @@ fn upper_bound_chain() {
     };
 
     assert_eq!(
-        checker.check(state, &premises, consequent.as_ref()),
+        checker.check(&state, &premises, consequent.as_ref()),
         ConflictCheck::ConflictDetected
     );
 }
@@ -236,7 +236,7 @@ fn hole_in_domain_not_accepted() {
     };
 
     assert_eq!(
-        checker.check(state, &premises, consequent.as_ref()),
+        checker.check(&state, &premises, consequent.as_ref()),
         ConflictCheck::NoConflictDetected
     );
 }
@@ -292,7 +292,7 @@ fn lower_bound_chain_not_accepted() {
     };
 
     assert_eq!(
-        checker.check(state, &premises, consequent.as_ref()),
+        checker.check(&state, &premises, consequent.as_ref()),
         ConflictCheck::NoConflictDetected
     );
 }
@@ -348,7 +348,7 @@ fn upper_bound_chain_not_accepted() {
     };
 
     assert_eq!(
-        checker.check(state, &premises, consequent.as_ref()),
+        checker.check(&state, &premises, consequent.as_ref()),
         ConflictCheck::NoConflictDetected
     );
 }
@@ -399,7 +399,7 @@ fn simple_test() {
     };
 
     assert_eq!(
-        checker.check(state, &premises, consequent.as_ref()),
+        checker.check(&state, &premises, consequent.as_ref()),
         ConflictCheck::ConflictDetected
     );
 }
@@ -465,7 +465,7 @@ fn test_holes_in_domain() {
     };
 
     assert_eq!(
-        checker.check(state, &premises, consequent.as_ref()),
+        checker.check(&state, &premises, consequent.as_ref()),
         ConflictCheck::ConflictDetected
     );
 }

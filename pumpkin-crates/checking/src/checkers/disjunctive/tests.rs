@@ -67,7 +67,7 @@ fn test_simple_propagation() {
     };
 
     assert_eq!(
-        checker.check(state, &premises, consequent.as_ref()),
+        checker.check(&state, &premises, consequent.as_ref()),
         ConflictCheck::ConflictDetected
     );
 }
@@ -115,7 +115,7 @@ fn test_conflict() {
     };
 
     assert_eq!(
-        checker.check(state, &premises, None),
+        checker.check(&state, &premises, None),
         ConflictCheck::ConflictDetected
     );
 }
@@ -177,7 +177,7 @@ fn test_simple_propagation_not_accepted() {
     };
 
     assert_eq!(
-        checker.check(state, &premises, consequent.as_ref()),
+        checker.check(&state, &premises, consequent.as_ref()),
         ConflictCheck::NoConflictDetected
     );
 }
@@ -225,7 +225,7 @@ fn test_conflict_not_accepted() {
     };
 
     assert_eq!(
-        checker.check(state, &premises, None),
+        checker.check(&state, &premises, None),
         ConflictCheck::NoConflictDetected
     );
 }

@@ -281,7 +281,7 @@ struct AcceptEverything;
 impl ConflictChecker<Predicate> for AcceptEverything {
     fn check(
         &self,
-        _: VariableState<Predicate>,
+        _: &VariableState<Predicate>,
         _: &[Predicate],
         _: Option<&Predicate>,
     ) -> ConflictCheck {

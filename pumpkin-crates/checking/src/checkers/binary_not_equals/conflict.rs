@@ -13,14 +13,14 @@ where
 {
     fn check(
         &self,
-        state: VariableState<Atomic>,
+        state: &VariableState<Atomic>,
         _: &[Atomic],
         _: Option<&Atomic>,
     ) -> ConflictCheck {
         // There is a conflict if both variables are fixed to the same values.
 
         ConflictCheck::detected_if(
-            self.lhs.induced_fixed_value(&state) == self.rhs.induced_fixed_value(&state),
+            self.lhs.induced_fixed_value(state) == self.rhs.induced_fixed_value(state),
         )
     }
 }

@@ -72,7 +72,7 @@ impl TestSolver {
         impl ConflictChecker<Predicate> for Checker {
             fn check(
                 &self,
-                _: pumpkin_checking::VariableState<Predicate>,
+                _: &pumpkin_checking::VariableState<Predicate>,
                 _: &[Predicate],
                 _: Option<&Predicate>,
             ) -> pumpkin_checking::ConflictCheck {

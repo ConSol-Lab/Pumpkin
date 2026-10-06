@@ -14,14 +14,14 @@ where
 {
     fn check(
         &self,
-        state: VariableState<Atomic>,
+        state: &VariableState<Atomic>,
         _: &[Atomic],
         _: Option<&Atomic>,
     ) -> ConflictCheck {
-        let signed_lower = self.signed.induced_lower_bound(&state);
-        let signed_upper = self.signed.induced_upper_bound(&state);
-        let absolute_lower = self.absolute.induced_lower_bound(&state);
-        let absolute_upper = self.absolute.induced_upper_bound(&state);
+        let signed_lower = self.signed.induced_lower_bound(state);
+        let signed_upper = self.signed.induced_upper_bound(state);
+        let absolute_lower = self.absolute.induced_lower_bound(state);
+        let absolute_upper = self.absolute.induced_upper_bound(state);
 
         if absolute_lower < 0 {
             // The absolute value cannot have negative values.

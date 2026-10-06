@@ -24,7 +24,7 @@ pub(crate) fn verify_nogood(
         nogood: nogood.iter().cloned().collect(),
     };
 
-    if checker.check(state, &fact.premises, fact.consequent.as_ref())
+    if checker.check(&state, &fact.premises, fact.consequent.as_ref())
         == ConflictCheck::ConflictDetected
     {
         Ok(())

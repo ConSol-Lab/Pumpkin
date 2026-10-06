@@ -13,7 +13,7 @@ where
 {
     fn check(
         &self,
-        state: VariableState<Atomic>,
+        state: &VariableState<Atomic>,
         _: &[Atomic],
         _: Option<&Atomic>,
     ) -> ConflictCheck {
@@ -22,7 +22,7 @@ where
         let mut left_hand_side = IntExt::Int(0);
 
         for term in self.terms.iter() {
-            let Some(value) = term.induced_fixed_value(&state) else {
+            let Some(value) = term.induced_fixed_value(state) else {
                 return ConflictCheck::NoConflictDetected;
             };
 

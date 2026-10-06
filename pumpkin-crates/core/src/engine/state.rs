@@ -1534,7 +1534,7 @@ mod tests {
     impl pumpkin_checking::ConflictChecker<crate::predicates::Predicate> for NoInferences {
         fn check(
             &self,
-            _: pumpkin_checking::VariableState<crate::predicates::Predicate>,
+            _: &pumpkin_checking::VariableState<crate::predicates::Predicate>,
             _: &[crate::predicates::Predicate],
             _: Option<&crate::predicates::Predicate>,
         ) -> pumpkin_checking::ConflictCheck {

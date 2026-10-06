@@ -45,7 +45,7 @@ impl PropagationChecker {
 
         match self
             .conflict_checker
-            .check(variable_state, premises, consequent.as_ref())
+            .check(&variable_state, premises, consequent.as_ref())
         {
             ConflictCheck::ConflictDetected => Ok(()),
             ConflictCheck::NoConflictDetected => Err(InvalidInference::Unsound),

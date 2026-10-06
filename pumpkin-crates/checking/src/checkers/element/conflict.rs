@@ -15,7 +15,7 @@ where
 {
     fn check(
         &self,
-        state: VariableState<Atomic>,
+        state: &VariableState<Atomic>,
         _: &[Atomic],
         _: Option<&Atomic>,
     ) -> ConflictCheck {
@@ -32,12 +32,12 @@ where
             .array
             .iter()
             .enumerate()
-            .filter(|(idx, _)| self.index.induced_domain_contains(&state, *idx as i32))
+            .filter(|(idx, _)| self.index.induced_domain_contains(state, *idx as i32))
             .map(|(_, element)| element)
             .collect();
 
         for element in supported_elements {
-            self.union.borrow_mut().add(&state, element);
+            self.union.borrow_mut().add(state, element);
         }
 
         assert!(
@@ -50,17 +50,17 @@ where
             .union
             .borrow()
             .lower_bound()
-            .max(self.rhs.induced_lower_bound(&state));
+            .max(self.rhs.induced_lower_bound(state));
         let intersection_upper_bound = self
             .union
             .borrow()
             .upper_bound()
-            .min(self.rhs.induced_upper_bound(&state));
+            .min(self.rhs.induced_upper_bound(state));
         let holes = self
             .union
             .borrow()
             .holes()
-            .chain(self.rhs.induced_holes(&state))
+            .chain(self.rhs.induced_holes(state))
             .collect();
 
         let intersected_domain =

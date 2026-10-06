@@ -12,11 +12,11 @@ where
 {
     fn check(
         &self,
-        state: VariableState<Atomic>,
+        state: &VariableState<Atomic>,
         premises: &[Atomic],
         consequent: Option<&Atomic>,
     ) -> ConflictCheck {
-        if self.reification_literal.induced_domain_contains(&state, 0) {
+        if self.reification_literal.induced_domain_contains(state, 0) {
             return ConflictCheck::NoConflictDetected;
         }
 

@@ -21,13 +21,16 @@ impl<Var, Atomic> ConflictChecker<Atomic> for TimeTableChecker<Var>
 where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
+    Atomic::Identifier: Clone,
 {
     fn check(
         &self,
-        mut state: VariableState<Atomic>,
+        state: &VariableState<Atomic>,
         _: &[Atomic],
         consequent: Option<&Atomic>,
     ) -> ConflictCheck {
+        let mut state = state.clone();
+
         // The profile is a key-value store. The keys correspond to time-points, and the values to
         // the relative change in resource consumption. A BTreeMap is used to maintain a
         // sorted order of the time points.

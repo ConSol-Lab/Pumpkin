@@ -1026,7 +1026,7 @@ mod tests {
     impl ConflictChecker<Predicate> for AlwaysConflictChecker {
         fn check(
             &self,
-            state: VariableState<Predicate>,
+            state: &VariableState<Predicate>,
             _premises: &[Predicate],
             _consequent: Option<&Predicate>,
         ) -> ConflictCheck {

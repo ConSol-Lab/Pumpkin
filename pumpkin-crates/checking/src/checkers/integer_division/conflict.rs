@@ -15,7 +15,7 @@ where
 {
     fn check(
         &self,
-        state: VariableState<Atomic>,
+        state: &VariableState<Atomic>,
         _premises: &[Atomic],
         _consequent: Option<&Atomic>,
     ) -> ConflictCheck {
@@ -24,10 +24,10 @@ where
         //
         // See https://en.wikipedia.org/wiki/Interval_arithmetic#Interval_operators.
 
-        let x1 = self.numerator.induced_lower_bound(&state);
-        let x2 = self.numerator.induced_upper_bound(&state);
-        let y1 = self.denominator.induced_lower_bound(&state);
-        let y2 = self.denominator.induced_upper_bound(&state);
+        let x1 = self.numerator.induced_lower_bound(state);
+        let x2 = self.numerator.induced_upper_bound(state);
+        let y1 = self.denominator.induced_lower_bound(state);
+        let y2 = self.denominator.induced_upper_bound(state);
 
         assert!(
             y2 < 0 || y1 > 0,
@@ -56,8 +56,8 @@ where
         .max()
         .expect("Expected at least one element to be defined");
 
-        let c_lower = self.rhs.induced_lower_bound(&state);
-        let c_upper = self.rhs.induced_upper_bound(&state);
+        let c_lower = self.rhs.induced_lower_bound(state);
+        let c_upper = self.rhs.induced_upper_bound(state);
 
         ConflictCheck::detected_if(computed_c_upper < c_lower || computed_c_lower > c_upper)
     }

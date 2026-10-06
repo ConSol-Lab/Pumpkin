@@ -16,7 +16,7 @@ where
 {
     fn check(
         &self,
-        state: VariableState<Atomic>,
+        state: &VariableState<Atomic>,
         _: &[Atomic],
         _: Option<&Atomic>,
     ) -> ConflictCheck {
@@ -25,7 +25,7 @@ where
         let term_sum = self
             .terms
             .iter()
-            .map(|term| IntExt::<i64>::from(term.induced_lower_bound(&state)))
+            .map(|term| IntExt::<i64>::from(term.induced_lower_bound(state)))
             .sum::<IntExt<i64>>();
 
         let linear_slack = i64::from(self.bound) - term_sum;

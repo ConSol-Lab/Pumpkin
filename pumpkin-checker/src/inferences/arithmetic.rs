@@ -38,7 +38,7 @@ pub(crate) fn verify_binary_equals(
 
     let checker = BinaryEqualsChecker { lhs, rhs };
 
-    if checker.check(state, &fact.premises, fact.consequent.as_ref())
+    if checker.check(&state, &fact.premises, fact.consequent.as_ref())
         == ConflictCheck::ConflictDetected
     {
         Ok(())

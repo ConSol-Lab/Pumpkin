@@ -11,13 +11,16 @@ where
     Atomic: AtomicConstraint,
     Lhs: CheckerVariable<Atomic>,
     Rhs: CheckerVariable<Atomic>,
+    Atomic::Identifier: Clone,
 {
     fn check(
         &self,
-        mut state: VariableState<Atomic>,
+        state: &VariableState<Atomic>,
         _: &[Atomic],
         _: Option<&Atomic>,
     ) -> ConflictCheck {
+        let mut state = state.clone();
+
         // We apply the domain of variable 2 to variable 1. If the state remains consistent, then
         // the step is unsound!
         let mut consistent = true;

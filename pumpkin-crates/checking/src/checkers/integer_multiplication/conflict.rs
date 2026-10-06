@@ -17,16 +17,16 @@ where
 {
     fn check(
         &self,
-        state: VariableState<Atomic>,
+        state: &VariableState<Atomic>,
         _premises: &[Atomic],
         consequent: Option<&Atomic>,
     ) -> ConflictCheck {
-        let a_min = self.a.induced_lower_bound(&state).into();
-        let a_max = self.a.induced_upper_bound(&state).into();
-        let b_min = self.b.induced_lower_bound(&state).into();
-        let b_max = self.b.induced_upper_bound(&state).into();
-        let c_min = self.c.induced_lower_bound(&state).into();
-        let c_max = self.c.induced_upper_bound(&state).into();
+        let a_min = self.a.induced_lower_bound(state).into();
+        let a_max = self.a.induced_upper_bound(state).into();
+        let b_min = self.b.induced_lower_bound(state).into();
+        let b_max = self.b.induced_upper_bound(state).into();
+        let c_min = self.c.induced_lower_bound(state).into();
+        let c_max = self.c.induced_upper_bound(state).into();
 
         let check_c = || {
             let (lo, hi) = product_bound_ext(a_min, a_max, b_min, b_max);

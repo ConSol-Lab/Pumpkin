@@ -55,7 +55,7 @@ fn verify_linear_inference(
 ) -> Result<(), InvalidInference> {
     let checker = LinearLessOrEqualChecker::new(linear.terms.clone().into(), linear.bound);
 
-    if checker.check(state, &fact.premises, fact.consequent.as_ref())
+    if checker.check(&state, &fact.premises, fact.consequent.as_ref())
         == ConflictCheck::ConflictDetected
     {
         Ok(())

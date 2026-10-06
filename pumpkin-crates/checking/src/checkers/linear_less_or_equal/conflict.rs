@@ -13,7 +13,7 @@ where
 {
     fn check(
         &self,
-        variable_state: VariableState<Atomic>,
+        variable_state: &VariableState<Atomic>,
         _: &[Atomic],
         _: Option<&Atomic>,
     ) -> ConflictCheck {
@@ -24,7 +24,7 @@ where
         let left_hand_side: IntExt<i64> = self
             .terms
             .iter()
-            .map(|variable| variable.induced_lower_bound(&variable_state).into())
+            .map(|variable| variable.induced_lower_bound(variable_state).into())
             .sum();
 
         ConflictCheck::detected_if(left_hand_side > i64::from(self.bound))

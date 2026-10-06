@@ -14,7 +14,7 @@ pub trait ConflictChecker<Atomic: AtomicConstraint>: Debug + DynClone {
     /// present, is false. The inference is accepted when a conflict is detected.
     fn check(
         &self,
-        state: VariableState<Atomic>,
+        state: &VariableState<Atomic>,
         premises: &[Atomic],
         consequent: Option<&Atomic>,
     ) -> ConflictCheck;
@@ -62,10 +62,10 @@ impl<Atomic: AtomicConstraint> BoxedConflictChecker<Atomic> {
     /// See [`ConflictChecker::check`].
     pub fn check(
         &self,
-        variable_state: VariableState<Atomic>,
+        state: &VariableState<Atomic>,
         premises: &[Atomic],
         consequent: Option<&Atomic>,
     ) -> ConflictCheck {
-        self.0.check(variable_state, premises, consequent)
+        self.0.check(state, premises, consequent)
     }
 }

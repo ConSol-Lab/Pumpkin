@@ -14,20 +14,20 @@ where
 {
     fn check(
         &self,
-        state: VariableState<Atomic>,
+        state: &VariableState<Atomic>,
         _: &[Atomic],
         _: Option<&Atomic>,
     ) -> ConflictCheck {
         let lowest_maximum = self
             .array
             .iter()
-            .map(|element| element.induced_lower_bound(&state))
+            .map(|element| element.induced_lower_bound(state))
             .max()
             .unwrap_or(IntExt::NegativeInf);
         let highest_maximum = self
             .array
             .iter()
-            .map(|element| element.induced_upper_bound(&state))
+            .map(|element| element.induced_upper_bound(state))
             .max()
             .unwrap_or(IntExt::PositiveInf);
 
@@ -35,8 +35,8 @@ where
         // highest_maximum]` is empty, there is a conflict.
 
         ConflictCheck::detected_if(
-            lowest_maximum > self.rhs.induced_upper_bound(&state)
-                || highest_maximum < self.rhs.induced_lower_bound(&state),
+            lowest_maximum > self.rhs.induced_upper_bound(state)
+                || highest_maximum < self.rhs.induced_lower_bound(state),
         )
     }
 }
