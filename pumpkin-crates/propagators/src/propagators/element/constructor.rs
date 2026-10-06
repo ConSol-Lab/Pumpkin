@@ -1,11 +1,11 @@
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
-use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::ElementDescription;
@@ -42,20 +42,20 @@ where
         self,
         _: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> PropagatorSpec<Self::PropagatorImpl> {
+    ) -> ConstructedPropagator<Self::PropagatorImpl> {
         let ElementDescription { array, index, rhs } = self.constraint_description;
 
-        let mut registration = EventsToRegister::builder();
+        let mut events_to_register = EventsToRegister::builder();
         for (i, x_i) in array.iter().enumerate() {
-            registration = registration.add(
+            events_to_register = events_to_register.add(
                 x_i,
                 DomainEvents::ANY_INT,
                 LocalId::from(i as u32 + ID_X_OFFSET),
             );
         }
 
-        registration = registration.add(&index, DomainEvents::ANY_INT, ID_INDEX);
-        registration = registration.add(&rhs, DomainEvents::ANY_INT, ID_RHS);
+        events_to_register = events_to_register.add(&index, DomainEvents::ANY_INT, ID_INDEX);
+        events_to_register = events_to_register.add(&rhs, DomainEvents::ANY_INT, ID_RHS);
 
         let propagator = ElementPropagator {
             array,
@@ -65,8 +65,8 @@ where
             rhs_reason_buffer: vec![],
         };
 
-        PropagatorSpec {
-            registration: registration.build(),
+        ConstructedPropagator {
+            events_to_register: events_to_register.build(),
             propagator,
         }
     }

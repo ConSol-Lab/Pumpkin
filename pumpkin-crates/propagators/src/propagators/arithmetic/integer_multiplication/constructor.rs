@@ -1,11 +1,11 @@
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
-use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::conflict_rule::IntegerMultiplicationRule;
@@ -46,10 +46,10 @@ where
         self,
         _: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> PropagatorSpec<Self::PropagatorImpl> {
+    ) -> ConstructedPropagator<Self::PropagatorImpl> {
         let IntegerMultiplicationDescription { a, b, c } = self.constraint_description;
 
-        let registration = EventsToRegister::builder()
+        let events_to_register = EventsToRegister::builder()
             .add(&a, DomainEvents::ANY_INT, ID_A)
             .add(&b, DomainEvents::ANY_INT, ID_B)
             .add(&c, DomainEvents::ANY_INT, ID_C)
@@ -57,8 +57,8 @@ where
 
         let propagator = IntegerMultiplicationPropagator::new(a, b, c, inference_code);
 
-        PropagatorSpec {
-            registration,
+        ConstructedPropagator {
+            events_to_register,
             propagator,
         }
     }

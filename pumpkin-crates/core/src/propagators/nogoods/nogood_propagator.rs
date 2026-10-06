@@ -23,6 +23,7 @@ use crate::engine::reason::ReasonStore;
 use crate::predicate;
 use crate::predicates::PredicateType;
 use crate::proof::InferenceCode;
+use crate::propagation::ConstructedPropagator;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::EventsToRegister;
 use crate::propagation::ExplanationContext;
@@ -33,7 +34,6 @@ use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructorContext;
-use crate::propagation::PropagatorSpec;
 use crate::propagation::ReadDomains;
 use crate::propagators::nogoods::PropagationBuffer;
 use crate::propagators::nogoods::PropagationMode;
@@ -183,7 +183,7 @@ impl NogoodPropagatorConstructor {
     pub(crate) fn create(
         self,
         context: PropagatorConstructorContext,
-    ) -> PropagatorSpec<NogoodPropagator> {
+    ) -> ConstructedPropagator<NogoodPropagator> {
         let propagator = NogoodPropagator {
             statistics: NogoodPropagatorStatistics::default(),
             handle: PropagatorHandle::new(context.propagator_id),
@@ -205,8 +205,8 @@ impl NogoodPropagatorConstructor {
             propagation_buffer: Default::default(),
         };
 
-        PropagatorSpec {
-            registration: EventsToRegister::empty(),
+        ConstructedPropagator {
+            events_to_register: EventsToRegister::empty(),
             propagator,
         }
     }

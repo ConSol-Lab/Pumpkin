@@ -5,6 +5,7 @@ use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::ConstructedPropagator;
 use crate::propagation::DomainEvents;
 use crate::propagation::EventsToRegister;
 use crate::propagation::LocalId;
@@ -12,7 +13,6 @@ use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
-use crate::propagation::PropagatorSpec;
 use crate::propagation::ReadDomains;
 use crate::propagators::hypercube_linear::HypercubeLinearDescription;
 use crate::propagators::hypercube_linear::HypercubeLinearRule;
@@ -44,7 +44,7 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
         self,
         mut context: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> PropagatorSpec<Self::PropagatorImpl> {
+    ) -> ConstructedPropagator<Self::PropagatorImpl> {
         let HypercubeLinearDescription { hypercube, linear } = self.constraint_description;
 
         let hypercube_predicates = hypercube.iter_predicates().collect::<Box<[_]>>();
@@ -69,11 +69,11 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
             inference_code,
         };
 
-        // TODO: This will be expanded with registration of predicates.
-        let registration = EventsToRegister::empty();
+        // TODO: This will be expanded with events_to_register of predicates.
+        let events_to_register = EventsToRegister::empty();
 
-        PropagatorSpec {
-            registration,
+        ConstructedPropagator {
+            events_to_register,
             propagator,
         }
     }
@@ -164,8 +164,9 @@ impl HypercubeLinearPropagator {
     /// Register the bound events on the integer variables in the linear inequality.
     fn register_bound_events_on_linear(&self, mut context: PropagationContext<'_>) {
         for (idx, term) in self.linear.terms().enumerate() {
-            // The implementation of register_domain_event already handles duplicate registration,
-            // so we do not need to check whether we are already registered.
+            // The implementation of register_domain_event already handles duplicate
+            // events_to_register, so we do not need to check whether we are already
+            // registered.
             context.register_domain_event(
                 term,
                 DomainEvents::LOWER_BOUND,
@@ -177,8 +178,9 @@ impl HypercubeLinearPropagator {
     /// Stop being enqueued for the bound events on the terms in the linear inequality.
     fn unregister_bound_events_on_linear(&self, mut context: PropagationContext<'_>) {
         for (idx, term) in self.linear.terms().enumerate() {
-            // The implementation of register_domain_event already handles duplicate registration,
-            // so we do not need to check whether we are already registered.
+            // The implementation of register_domain_event already handles duplicate
+            // events_to_register, so we do not need to check whether we are already
+            // registered.
             context.unregister_domain_event(term, LocalId::from(idx as u32));
         }
     }

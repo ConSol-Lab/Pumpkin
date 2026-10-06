@@ -31,6 +31,7 @@ use crate::proof::InferenceRules;
 use crate::propagation::ConflictRule;
 #[cfg(feature = "check-consistency")]
 use crate::propagation::ConstraintDescription;
+use crate::propagation::ConstructedPropagator;
 use crate::propagation::CurrentNogood;
 use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
@@ -40,7 +41,6 @@ use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorId;
-use crate::propagation::PropagatorSpec;
 use crate::propagation::PropagatorVarId;
 use crate::propagation::store::PropagatorStore;
 use crate::propagators::nogoods::NogoodPropagator;
@@ -475,7 +475,7 @@ impl State {
     /// Note that this does not do any propagation.
     fn initialise_propagator<P>(
         &mut self,
-        create: impl FnOnce(PropagatorConstructorContext) -> PropagatorSpec<P>,
+        create: impl FnOnce(PropagatorConstructorContext) -> ConstructedPropagator<P>,
     ) -> PropagatorHandle<P>
     where
         P: Propagator + Clone + 'static,
@@ -485,12 +485,12 @@ impl State {
         let constructor_context =
             PropagatorConstructorContext::new(original_handle.propagator_id(), self);
 
-        let PropagatorSpec {
-            registration,
+        let ConstructedPropagator {
+            events_to_register,
             propagator,
         } = create(constructor_context);
 
-        for (domain_id, events, local_id) in registration.iter() {
+        for (domain_id, events, local_id) in events_to_register.iter() {
             let propagator_var = PropagatorVarId {
                 propagator: original_handle.propagator_id(),
                 variable: local_id,
@@ -1269,8 +1269,8 @@ mod tests {
             self,
             _: crate::propagation::PropagatorConstructorContext,
             _: crate::proof::InferenceCode,
-        ) -> crate::propagation::PropagatorSpec<Self::PropagatorImpl> {
-            let registration = crate::propagation::EventsToRegister::builder()
+        ) -> crate::propagation::ConstructedPropagator<Self::PropagatorImpl> {
+            let events_to_register = crate::propagation::EventsToRegister::builder()
                 .add(
                     &self.variable,
                     crate::propagation::DomainEvents::ANY_INT,
@@ -1278,8 +1278,8 @@ mod tests {
                 )
                 .build();
 
-            crate::propagation::PropagatorSpec {
-                registration,
+            crate::propagation::ConstructedPropagator {
+                events_to_register,
                 propagator: self,
             }
         }

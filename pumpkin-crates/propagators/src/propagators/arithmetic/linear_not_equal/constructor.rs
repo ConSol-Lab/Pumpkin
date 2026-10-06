@@ -1,13 +1,13 @@
 use enumset::enum_set;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
-use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::LinearNotEqualDescription;
@@ -41,12 +41,13 @@ where
         self,
         mut context: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> PropagatorSpec<Self::PropagatorImpl> {
+    ) -> ConstructedPropagator<Self::PropagatorImpl> {
         let LinearNotEqualDescription { terms, rhs } = self.constraint_description;
 
-        let mut registration = EventsToRegister::builder();
+        let mut events_to_register = EventsToRegister::builder();
         for (i, x_i) in terms.iter().enumerate() {
-            registration = registration.add(x_i, DomainEvents::ASSIGN, LocalId::from(i as u32));
+            events_to_register =
+                events_to_register.add(x_i, DomainEvents::ASSIGN, LocalId::from(i as u32));
             context.register_backtrack(
                 x_i.clone(),
                 DomainEvents::new(enum_set!(DomainEvent::Assign | DomainEvent::Removal)),
@@ -66,8 +67,8 @@ where
 
         propagator.recalculate_fixed_variables(context.domains());
 
-        PropagatorSpec {
-            registration: registration.build(),
+        ConstructedPropagator {
+            events_to_register: events_to_register.build(),
             propagator,
         }
     }

@@ -1,11 +1,11 @@
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
-use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::BinaryNotEqualsDescription;
@@ -39,11 +39,11 @@ where
         self,
         _: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> PropagatorSpec<Self::PropagatorImpl> {
+    ) -> ConstructedPropagator<Self::PropagatorImpl> {
         let BinaryNotEqualsDescription { a, b } = self.constraint_description;
 
         // We only care about the case where one of the two is assigned
-        let registration = EventsToRegister::builder()
+        let events_to_register = EventsToRegister::builder()
             .add(&a, DomainEvents::ASSIGN, LocalId::from(0))
             .add(&b, DomainEvents::ASSIGN, LocalId::from(1))
             .build();
@@ -55,8 +55,8 @@ where
             inference_code,
         };
 
-        PropagatorSpec {
-            registration,
+        ConstructedPropagator {
+            events_to_register,
             propagator,
         }
     }

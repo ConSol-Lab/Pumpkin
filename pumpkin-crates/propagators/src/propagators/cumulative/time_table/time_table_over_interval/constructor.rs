@@ -1,8 +1,8 @@
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
-use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::TimeTableOverIntervalPropagator;
@@ -30,15 +30,15 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor
         mut self,
         mut context: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> PropagatorSpec<Self::PropagatorImpl> {
+    ) -> ConstructedPropagator<Self::PropagatorImpl> {
         self.updatable_structures
             .initialise_bounds_and_remove_fixed(context.domains(), &self.parameters);
-        let registration = register_tasks(&self.parameters.tasks, context.reborrow(), false);
+        let events_to_register = register_tasks(&self.parameters.tasks, context.reborrow(), false);
 
         self.inference_code = Some(inference_code);
 
-        PropagatorSpec {
-            registration,
+        ConstructedPropagator {
+            events_to_register,
             propagator: self,
         }
     }

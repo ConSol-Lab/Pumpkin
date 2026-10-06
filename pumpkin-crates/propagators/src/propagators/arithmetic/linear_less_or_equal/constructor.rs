@@ -1,11 +1,11 @@
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
-use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -39,16 +39,16 @@ where
         self,
         mut context: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> PropagatorSpec<Self::PropagatorImpl> {
+    ) -> ConstructedPropagator<Self::PropagatorImpl> {
         let LinearLessOrEqualDescription { terms: x, bound: c } = self.constraint_description;
 
         let mut lower_bound_left_hand_side = 0_i64;
         let mut current_bounds = vec![];
 
-        let mut registration = EventsToRegister::builder();
+        let mut events_to_register = EventsToRegister::builder();
         for (i, x_i) in x.iter().enumerate() {
-            registration =
-                registration.add(x_i, DomainEvents::LOWER_BOUND, LocalId::from(i as u32));
+            events_to_register =
+                events_to_register.add(x_i, DomainEvents::LOWER_BOUND, LocalId::from(i as u32));
             lower_bound_left_hand_side += context.lower_bound(x_i) as i64;
             current_bounds.push(context.new_trailed_integer(context.lower_bound(x_i) as i64));
         }
@@ -64,8 +64,8 @@ where
             reason_buffer: Vec::default(),
         };
 
-        PropagatorSpec {
-            registration: registration.build(),
+        ConstructedPropagator {
+            events_to_register: events_to_register.build(),
             propagator,
         }
     }
