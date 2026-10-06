@@ -18,14 +18,14 @@ use crate::variables::DomainId;
 #[derive(Clone, Debug, Default)]
 pub struct RetentionCheckerStore {
     /// The checkers in the store; `None` for a checker that was removed.
-    store: KeyedVec<CheckerId, Option<Entry>>,
+    store: KeyedVec<RetentionCheckerId, Option<Entry>>,
     /// Map from [`DomainId`] to the relevant checkers via their ID.
-    watch_list: KeyedVec<DomainId, Vec<CheckerId>>,
+    watch_list: KeyedVec<DomainId, Vec<RetentionCheckerId>>,
     /// The checkers to run the next time.
-    queue: Vec<CheckerId>,
+    queue: Vec<RetentionCheckerId>,
     /// Marks which checkers are enqueued to prevent duplicate checkers in
     /// [`RetentionCheckerStore::queue`].
-    enqueued: KeyedBitSet<CheckerId>,
+    enqueued: KeyedBitSet<RetentionCheckerId>,
     /// The propagators whose checkers are discarded when they are registered.
     excluded: KeyedVec<PropagatorId, bool>,
 }
@@ -118,14 +118,14 @@ impl RetentionCheckerStore {
             inference_code,
         }));
 
-        Some(RetentionCheckerId(checker_id))
+        Some(checker_id)
     }
 
     /// Remove the checker with the given identifier, for a constraint that no longer exists.
     ///
     /// It is dropped from the watch lists of its domains the next time they change.
     pub fn remove(&mut self, checker: RetentionCheckerId) {
-        self.store[checker.0] = None;
+        self.store[checker] = None;
     }
 
     /// Called when the domain is modified.
@@ -173,7 +173,7 @@ impl RetentionCheckerStore {
                 self.clear_queue();
 
                 for index in 0..self.store.len() {
-                    self.check(CheckerId::create_from_index(index), &domains)?;
+                    self.check(RetentionCheckerId::create_from_index(index), &domains)?;
                 }
             }
         }
@@ -187,7 +187,11 @@ impl RetentionCheckerStore {
         self.enqueued.clear();
     }
 
-    fn check(&self, checker_id: CheckerId, domains: &Domains<'_>) -> Result<(), RetentionFailure> {
+    fn check(
+        &self,
+        checker_id: RetentionCheckerId,
+        domains: &Domains<'_>,
+    ) -> Result<(), RetentionFailure> {
         // A removed checker can still be enqueued, since it only leaves the queue when it runs.
         let Some(entry) = &self.store[checker_id] else {
             return Ok(());
@@ -208,20 +212,16 @@ impl RetentionCheckerStore {
     }
 }
 
-/// Identifies a checker in the [`RetentionCheckerStore`], so that it can be removed.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RetentionCheckerId(CheckerId);
-
-/// An identifier for added checkers.
+/// Identifies a checker in the [`RetentionCheckerStore`], for instance so that it can be removed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct CheckerId(u32);
+pub struct RetentionCheckerId(u32);
 
-impl StorageKey for CheckerId {
+impl StorageKey for RetentionCheckerId {
     fn index(&self) -> usize {
         self.0 as usize
     }
 
     fn create_from_index(index: usize) -> Self {
-        CheckerId(index as u32)
+        RetentionCheckerId(index as u32)
     }
 }
