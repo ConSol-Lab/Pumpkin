@@ -108,6 +108,10 @@ pub struct ConstraintSatisfactionSolver {
     pub(crate) internal_parameters: SatisfactionSolverOptions,
     /// A map from predicates that are propagated at the root to inference codes in the proof.
     pub(crate) unit_nogood_inference_codes: HashMap<Predicate, InferenceCode>,
+    /// Whether a solution is checked against the descriptions of the constraints; off when
+    /// "feasible" only means a fixpoint without a conflict, as in `Solver::propagate_to_fixpoint`.
+    #[cfg(feature = "check-solutions")]
+    pub(crate) is_solution_checked: bool,
 }
 
 impl Default for ConstraintSatisfactionSolver {
@@ -293,6 +297,8 @@ impl ConstraintSatisfactionSolver {
             solver_statistics: SolverStatistics::default(),
             unit_nogood_inference_codes: Default::default(),
             internal_parameters: solver_options,
+            #[cfg(feature = "check-solutions")]
+            is_solution_checked: true,
             state,
         }
     }
@@ -636,7 +642,9 @@ impl ConstraintSatisfactionSolver {
             // all predicates have been applied without a conflict,
             // meaning the problem is feasible.
             #[cfg(feature = "check-solutions")]
-            self.state.check_solution();
+            if self.is_solution_checked {
+                self.state.check_solution();
+            }
 
             self.solver_state.declare_solution_found();
             return Err(CSPSolverExecutionFlag::Feasible);
