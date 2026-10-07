@@ -26,11 +26,6 @@ impl<Key: StorageKey> KeyedBitSet<Key> {
         self.bitset.remove(key.index())
     }
 
-    /// The keys in the set. The set is not changed.
-    pub fn drain(&self) -> impl Iterator<Item = Key> {
-        self.bitset.iter().map(Key::create_from_index)
-    }
-
     pub fn clear(&mut self) {
         self.bitset.make_empty();
     }
