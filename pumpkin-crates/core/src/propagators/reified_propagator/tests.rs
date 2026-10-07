@@ -84,6 +84,8 @@ fn a_detected_inconsistency_is_given_as_reason_for_propagating_reification_liter
 #[test]
 fn a_true_literal_is_added_to_reason_for_propagation() {
     let mut solver = TestSolver::default();
+    let inference_code =
+        solver.accept_inferences_by(ConstraintTag::create_from_index(0), "test_propagation");
 
     let reification_literal = solver.new_literal();
     let var = solver.new_variable(1, 5);
@@ -93,13 +95,7 @@ fn a_true_literal_is_added_to_reason_for_propagation() {
             propagator: GenericPropagator::new(
                 vec![var],
                 move |mut ctx: PropagationContext| {
-                    ctx.post(
-                        predicate![var >= 3],
-                        (
-                            conjunction!(),
-                            &InferenceCode::unknown_rule(ConstraintTag::create_from_index(0)),
-                        ),
-                    )?;
+                    ctx.post(predicate![var >= 3], (conjunction!(), &inference_code))?;
                     Ok(())
                 },
                 |_: Domains| None,
@@ -119,6 +115,44 @@ fn a_true_literal_is_added_to_reason_for_propagation() {
         reason,
         PropositionalConjunction::from(reification_literal.get_true_predicate())
     );
+}
+
+/// The rule of the propagation, the nogood `[var <= 0]`, does not imply `[var >= 3]`, so the
+/// propagation is rejected when it is posted.
+#[cfg(feature = "check-inferences")]
+#[test]
+#[should_panic(expected = "fails on inference")]
+fn an_unsound_eager_propagation_is_caught_when_it_is_posted() {
+    let mut solver = TestSolver::default();
+    let reification_literal = solver.new_literal();
+    let var = solver.new_variable(1, 5);
+
+    let inference_code = solver
+        .state
+        .inference_code_for_rule(ConstraintTag::create_from_index(0), "unsound");
+    solver.state.add_conflict_checker(
+        inference_code,
+        pumpkin_checking::checkers::NogoodChecker {
+            nogood: Box::from([predicate![var <= 0]]),
+        },
+    );
+
+    let propagator = solver
+        .new_propagator(ReifiedPropagatorArgs {
+            propagator: GenericPropagator::new(
+                vec![var],
+                move |mut ctx: PropagationContext| {
+                    ctx.post(predicate![var >= 3], (conjunction!(), &inference_code))?;
+                    Ok(())
+                },
+                |_: Domains| None,
+            ),
+            reification_literal,
+        })
+        .expect("no conflict");
+
+    let _ = solver.set_literal(reification_literal, true);
+    let _ = solver.propagate(propagator);
 }
 
 #[test]

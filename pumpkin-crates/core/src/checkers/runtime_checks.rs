@@ -1,3 +1,9 @@
+#[cfg(all(feature = "check-inferences", feature = "check-inferences-proof"))]
+compile_error!(
+    "the features check-inferences and check-inferences-proof are two modes of inference \
+     checking; enable one of them"
+);
+
 use std::sync::Once;
 
 use log::warn;
@@ -10,6 +16,11 @@ pub fn active_runtime_checks() -> Vec<&'static str> {
 
     if cfg!(feature = "check-inferences") {
         checks.push("inference checks (check-inferences)");
+    }
+    if cfg!(feature = "check-inferences-proof") {
+        checks.push(
+            "inference checks of the inferences used by conflict analysis (check-inferences-proof)",
+        );
     }
     if cfg!(feature = "check-retention-all") {
         checks.push("retention checks of every checker at each fixpoint (check-retention-all)");
@@ -39,7 +50,7 @@ pub(crate) fn report_runtime_checks() {
         assert!(
             rules.is_empty() || cfg!(feature = "checkers"),
             "PUMPKIN_CHECK_RULES selects the rules {}, but no rule is checked: enable \
-             check-inferences, check-retention or check-solutions",
+             check-inferences, check-inferences-proof, check-retention or check-solutions",
             rules.join(", ")
         );
 

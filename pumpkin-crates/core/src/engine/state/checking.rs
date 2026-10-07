@@ -1,8 +1,13 @@
 //! The runtime checks of [`State`]. They are a debugging tool:
-//! - the conflict checks under `check-inferences` and the retention checks under `check-retention`,
-//!   which run when [`State::propagate_to_fixed_point`] returns;
+//! - the inference checks under `check-inferences` or `check-inferences-proof`, which run when a
+//!   propagation is posted, when a propagator reports a conflict, or when conflict analysis
+//!   computes a reason;
+//! - the retention checks under `check-retention`, which run after a propagator call in which the
+//!   propagator did not enqueue itself again, and at a fixpoint;
 //! - the solution check under `check-solutions`, which runs when the solver finds a solution.
 
+#[cfg(feature = "inference-checkers")]
+use crate::checkers::Inference;
 #[cfg(feature = "check-retention")]
 use crate::checkers::RetentionCoverage;
 #[cfg(feature = "check-retention")]
@@ -10,155 +15,54 @@ use crate::checkers::RetentionFailure;
 #[cfg(feature = "check-solutions")]
 use crate::checkers::SolutionFailure;
 #[cfg(feature = "inference-checkers")]
-use crate::checkers::is_rule_checked;
+use crate::checkers::check_inference;
 #[cfg(feature = "inference-checkers")]
-use crate::predicates::Predicate;
-#[cfg(feature = "inference-checkers")]
-use crate::proof::InferenceCode;
+use crate::engine::reason::ReasonRef;
 #[cfg(feature = "check-retention")]
 use crate::propagation::Domains;
-#[cfg(feature = "inference-checkers")]
-use crate::propagation::ExplanationContext;
 #[cfg(feature = "check-retention")]
 use crate::propagation::PropagatorId;
 #[cfg(feature = "check-solutions")]
 use crate::propagation::SolutionCheck;
 #[cfg(feature = "inference-checkers")]
-use crate::state::Conflict;
+use crate::state::PropagatorConflict;
 use crate::state::State;
 
 #[cfg(feature = "inference-checkers")]
 impl State {
-    /// Check every propagation on the trail from `start_index`, and the conflict when
-    /// propagation ended in one that a propagator reported.
-    ///
-    /// Panics when a check fails.
-    pub(super) fn check_inferences(&mut self, start_index: usize, result: &Result<(), Conflict>) {
-        let mut reason = vec![];
-
-        for trail_index in start_index..self.assignments.num_trail_entries() {
-            let entry = self.assignments.get_trail_entry(trail_index);
-
-            // A decision has no reason, and is not an inference.
-            let Some(reason_reference) = entry.reason else {
-                continue;
-            };
-
-            reason.clear();
-            let inference_code = self.reason_store.get_or_compute(
-                reason_reference,
-                ExplanationContext::without_working_nogood(
-                    &self.assignments,
-                    trail_index,
-                    &mut self.notification_engine,
-                ),
-                &mut self.propagators,
-                &mut reason,
-            );
-
-            if let Err(invalid_inference) =
-                self.check_timing(&reason, Some((entry.predicate, trail_index)))
-            {
-                panic!(
-                    "the inference {reason:?} -> {} with inference code {inference_code:?} is \
-                     invalid in the solver state: {invalid_inference:?}",
-                    entry.predicate
-                );
-            }
-
-            self.run_checker(&reason, Some(entry.predicate), inference_code);
-        }
-
-        if let Err(Conflict::Propagator(conflict)) = result {
-            let premises = conflict.conjunction.iter().copied().collect::<Vec<_>>();
-
-            if let Err(invalid_inference) = self.check_timing(&premises, None) {
-                panic!(
-                    "the conflict {premises:?} with inference code {:?} is invalid in the solver \
-                     state: {invalid_inference:?}",
-                    conflict.inference_code
-                );
-            }
-
-            self.run_checker(&premises, None, conflict.inference_code);
-        }
-    }
-
-    /// Check that every premise is true, and for a propagation, that each premise was true
-    /// before the propagation at the given trail index and that the propagated predicate is
-    /// true.
-    fn check_timing(
+    /// Check an inference whose reason conflict analysis computed: every such inference under
+    /// `check-inferences-proof`, and only those with a lazy reason under `check-inferences`, since
+    /// the others were checked when they were posted.
+    pub(crate) fn check_explained_inference(
         &self,
-        premises: &[Predicate],
-        propagation: Option<(Predicate, usize)>,
-    ) -> Result<(), InvalidInference> {
-        for &premise in premises {
-            if self.assignments.evaluate_predicate(premise) != Some(true) {
-                return Err(InvalidInference::UnsatisfiedPremise(premise));
-            }
-
-            if let Some((_, trail_index)) = propagation
-                && self
-                    .assignments
-                    .get_trail_position(&premise)
-                    .is_some_and(|premise_position| premise_position >= trail_index)
-            {
-                return Err(InvalidInference::PremiseAfterConsequent(premise));
-            }
-        }
-
-        if let Some((consequent, _)) = propagation
-            && self.assignments.evaluate_predicate(consequent) != Some(true)
-        {
-            return Err(InvalidInference::ConsequentNotApplied(consequent));
-        }
-
-        Ok(())
-    }
-
-    /// Run the conflict checkers of `inference_code` on the inference.
-    ///
-    /// Panics when the rule has no checker, or when none of its checkers accepts the inference.
-    fn run_checker(
-        &self,
-        premises: &[Predicate],
-        consequent: Option<Predicate>,
-        inference_code: InferenceCode,
+        reason_reference: ReasonRef,
+        inference: Inference<'_>,
     ) {
-        if !is_rule_checked(self.rule_name(inference_code)) {
-            return;
+        let is_lazy = self.reason_store.get_lazy_code(reason_reference).is_some();
+
+        if cfg!(feature = "check-inferences-proof") || is_lazy {
+            check_inference(
+                &self.assignments,
+                &self.rule_checkers.conflict_checkers,
+                inference,
+            );
         }
+    }
 
-        let checkers = self
-            .rule_checkers
-            .conflict_checkers
-            .for_inference_code(&inference_code);
-        assert!(
-            checkers.len() > 0,
-            "missing checker for inference code {inference_code:?}"
-        );
-
-        let results = checkers
-            .map(|checker| checker.check_inference(premises, consequent.as_ref()))
-            .collect::<Vec<_>>();
-
-        assert!(
-            results.iter().any(Result::is_ok),
-            "checker for inference code {inference_code:?} fails on inference {premises:?} -> {consequent:?}: {results:?}"
+    /// Check a conflict that a propagator reported: under `check-inferences` when the propagator
+    /// returns it, under `check-inferences-proof` when conflict analysis starts from it.
+    pub(crate) fn check_reported_conflict(&self, conflict: &PropagatorConflict) {
+        check_inference(
+            &self.assignments,
+            &self.rule_checkers.conflict_checkers,
+            Inference {
+                premises: conflict.conjunction.as_slice(),
+                consequent: None,
+                consequent_position: None,
+                inference_code: conflict.inference_code,
+            },
         );
     }
-}
-
-/// Why an inference is invalid in the solver state, independent of its rule.
-#[cfg(feature = "inference-checkers")]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum InvalidInference {
-    /// The premise is not true.
-    UnsatisfiedPremise(Predicate),
-    /// The premise became true only at or after the propagation it explains.
-    PremiseAfterConsequent(Predicate),
-    /// The propagated predicate is not true after the propagation.
-    ConsequentNotApplied(Predicate),
 }
 
 #[cfg(feature = "check-retention")]

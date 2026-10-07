@@ -233,6 +233,13 @@ impl State {
         #[cfg(feature = "checkers")]
         let is_checked = is_rule_checked(&Rule::name());
 
+        #[cfg(feature = "inference-checkers")]
+        if !is_checked {
+            self.rule_checkers
+                .conflict_checkers
+                .mark_rule_unchecked(inference_code.rule());
+        }
+
         RemovableRuleCheckers {
             inference_code,
             #[cfg(feature = "inference-checkers")]
@@ -821,6 +828,10 @@ impl State {
             }
             Err(conflict) => {
                 self.statistics.num_conflicts += 1;
+                #[cfg(feature = "check-inferences")]
+                if let Conflict::Propagator(propagator_conflict) = &conflict {
+                    self.check_reported_conflict(propagator_conflict);
+                }
                 return Err(conflict);
             }
         }
@@ -841,7 +852,7 @@ impl State {
     /// Once the [`State`] is conflicting, then the only operation that is defined is
     /// [`State::restore_to`]. All other operations and queries on the state are unspecified.
     pub fn propagate_to_fixed_point(&mut self) -> Result<(), Conflict> {
-        #[cfg(any(feature = "inference-checkers", feature = "check-retention"))]
+        #[cfg(feature = "check-retention")]
         let checking_start_index = self.notification_engine.last_notified_trail_index();
 
         // The decision, and what was posted outside of propagation since the previous fixpoint.
@@ -849,9 +860,6 @@ impl State {
         self.notify_retention_checkers(checking_start_index);
 
         let result = self.propagate_to_fixed_point_internal();
-
-        #[cfg(feature = "inference-checkers")]
-        self.check_inferences(checking_start_index, &result);
 
         // After a conflict the domains are not at a fixpoint, so the retention checkers do not run.
         #[cfg(feature = "check-retention")]
@@ -960,6 +968,8 @@ impl State {
         // 1) The predicate is explicitly present on the trail.
         if trail_entry.predicate == predicate {
             let reason_ref = trail_entry.reason?;
+            #[cfg(feature = "inference-checkers")]
+            let num_premises_before = reason_buffer.as_ref().len();
 
             let explanation_context = ExplanationContext::new(
                 &self.assignments,
@@ -973,6 +983,17 @@ impl State {
                 explanation_context,
                 &mut self.propagators,
                 reason_buffer,
+            );
+
+            #[cfg(feature = "inference-checkers")]
+            self.check_explained_inference(
+                reason_ref,
+                crate::checkers::Inference {
+                    premises: &reason_buffer.as_ref()[num_premises_before..],
+                    consequent: Some(predicate),
+                    consequent_position: Some(trail_position),
+                    inference_code,
+                },
             );
 
             Some(inference_code)
@@ -1565,6 +1586,16 @@ mod tests {
 
         let tag = state.new_constraint_tag();
         let inference_code = state.inference_code_for_rule(tag, "test_rule");
+        // The inference is the nogood `[y >= 5] /\ [x <= 4]`, and its premise holds.
+        state.add_conflict_checker(
+            inference_code,
+            pumpkin_checking::checkers::NogoodChecker {
+                nogood: Box::from([predicate!(y >= 5), predicate!(x <= 4)]),
+            },
+        );
+        let _ = state
+            .post(predicate!(y >= 5))
+            .expect("the value is in the domain");
         let result = state.post_with_reason(
             predicate!(x >= 5),
             conjunction!([y >= 5]),

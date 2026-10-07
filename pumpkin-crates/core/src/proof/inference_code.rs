@@ -84,6 +84,12 @@ pub struct RuleId(u32);
 
 impl RuleId {
     const UNKNOWN: RuleId = RuleId(0);
+
+    /// Whether this is the rule of [`InferenceCode::unknown_rule`].
+    #[cfg(feature = "inference-checkers")]
+    pub(crate) fn is_unknown(self) -> bool {
+        self == RuleId::UNKNOWN
+    }
 }
 
 /// The names of the inference rules used by a solver, each with the [`RuleId`] that the solver

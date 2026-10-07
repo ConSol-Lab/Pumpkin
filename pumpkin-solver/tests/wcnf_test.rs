@@ -23,12 +23,12 @@ test_wcnf_instance!(simple, 1);
 test_wcnf_instance!(karate, 4);
 test_wcnf_instance!(riskmap, 9);
 test_wcnf_instance!(johnson8_2_4, 24);
-#[cfg(not(feature = "check-inferences"))]
+#[cfg(not(any(feature = "check-inferences", feature = "check-inferences-proof")))]
 test_wcnf_instance!(johnson8_4_4, 56);
 test_wcnf_instance!(normalized_g2x2, 2);
 test_wcnf_instance!(normalized_g9x3, 7);
 // test_wcnf_instance!(normalized_g9x9, 20);
-#[cfg(not(feature = "check-inferences"))]
+#[cfg(not(any(feature = "check-inferences", feature = "check-inferences-proof")))]
 test_wcnf_instance!(ram_k3_n9, 1);
 
 struct MaxSATChecker {

@@ -250,6 +250,34 @@ impl<'a> PropagationContext<'a> {
     }
 }
 
+#[cfg(feature = "check-inferences")]
+impl PropagationContext<'_> {
+    /// Check a propagation with an eager reason when it is posted. A propagation with a lazy reason
+    /// is checked when conflict analysis computes its reason.
+    fn check_posted_inference(
+        assignments: &Assignments,
+        rule_checkers: &RuleCheckerStore,
+        consequent: Predicate,
+        reason: &StoredReason,
+        consequent_position: Option<usize>,
+    ) {
+        let StoredReason::Eager(premises, inference_code) = reason else {
+            return;
+        };
+
+        crate::checkers::check_inference(
+            assignments,
+            &rule_checkers.conflict_checkers,
+            crate::checkers::Inference {
+                premises: premises.as_slice(),
+                consequent: Some(consequent),
+                consequent_position,
+                inference_code: *inference_code,
+            },
+        );
+    }
+}
+
 impl PropagationContext<'_> {
     /// Assign the truth-value of the given [`Predicate`] to `true` in the current partial
     /// assignment.
@@ -273,19 +301,37 @@ impl PropagationContext<'_> {
         match modification_result {
             Ok(false) => Ok(()),
             Ok(true) => {
-                let _ = slot.populate(
-                    self.propagator_id,
-                    build_reason(reason, self.reification_literal),
+                let stored_reason = build_reason(reason, self.reification_literal);
+                #[cfg(feature = "check-inferences")]
+                Self::check_posted_inference(
+                    self.assignments,
+                    self.rule_checkers,
+                    predicate,
+                    &stored_reason,
+                    Some(self.assignments.num_trail_entries() - 1),
                 );
+
+                let _ = slot.populate(self.propagator_id, stored_reason);
                 Ok(())
             }
             Err(EmptyDomain) => {
-                let _ = slot.populate(
-                    self.propagator_id,
-                    build_reason(reason, self.reification_literal),
-                );
+                let stored_reason = build_reason(reason, self.reification_literal);
+                #[cfg(feature = "check-inferences")]
+                let checked_reason = stored_reason.clone();
+
+                let _ = slot.populate(self.propagator_id, stored_reason);
                 let (trigger_predicate, trigger_reason) =
                     self.assignments.remove_last_trail_element();
+
+                // Checked once the emptied domain is restored, in which the premises still hold.
+                #[cfg(feature = "check-inferences")]
+                Self::check_posted_inference(
+                    self.assignments,
+                    self.rule_checkers,
+                    predicate,
+                    &checked_reason,
+                    None,
+                );
 
                 Err(EmptyDomainConflict {
                     trigger_predicate,

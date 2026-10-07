@@ -91,6 +91,9 @@ impl ConflictAnalysisContext<'_> {
     pub fn get_conflict_nogood(&mut self) -> Vec<Predicate> {
         let conflict_nogood = match self.solver_state.get_conflict_info() {
             StoredConflictInfo::Propagator(conflict) => {
+                #[cfg(feature = "check-inferences-proof")]
+                self.state.check_reported_conflict(&conflict);
+
                 let _ = self.proof_log.log_inference(
                     &mut self.state.constraint_tags,
                     &self.state.inference_rules,
@@ -428,8 +431,11 @@ impl ConflictAnalysisContext<'_> {
         // Look up the reason for the bound that changed.
         // The reason for changing the bound cannot be a decision, so we can safely unwrap.
         let mut empty_domain_reason: Vec<Predicate> = vec![];
+        let trigger_reason = conflict.trigger_reason.expect(
+            "in conflict analysis the empty domain conflict is always triggered by a propagation",
+        );
         let trigger_inference_code = self.state.reason_store.get_or_compute(
-            conflict.trigger_reason.expect("in conflict analysis the empty domain conflict is always triggered by a propagation"),
+            trigger_reason,
             ExplanationContext::without_working_nogood(
                 &self.state.assignments,
                 self.state.assignments.num_trail_entries(), // Note that we do not do a
@@ -439,6 +445,18 @@ impl ConflictAnalysisContext<'_> {
             ),
             &mut self.state.propagators,
             &mut empty_domain_reason,
+        );
+
+        // The trigger predicate empties the domain, so it is not applied.
+        #[cfg(feature = "inference-checkers")]
+        self.state.check_explained_inference(
+            trigger_reason,
+            crate::checkers::Inference {
+                premises: &empty_domain_reason,
+                consequent: Some(conflict.trigger_predicate),
+                consequent_position: None,
+                inference_code: trigger_inference_code,
+            },
         );
 
         // We also need to log this last propagation to the proof log as an inference.
