@@ -206,6 +206,22 @@ impl State {
         self.add_rule_checkers::<Rule>(inference_code, constraint_description, propagator)
     }
 
+    /// Add the checkers of `Rule` for a constraint whose inferences are posted through
+    /// [`State::get_propagation_context`] rather than by a propagator, as tests of the
+    /// explanations of a propagator do. Returns the [`InferenceCode`] of those inferences.
+    pub fn add_rule_checkers_for_propagation_context<Rule: ConflictRule>(
+        &mut self,
+        constraint_tag: ConstraintTag,
+        constraint_description: Rule::Description,
+    ) -> InferenceCode {
+        self.add_removable_rule_checkers::<Rule>(
+            constraint_tag,
+            constraint_description,
+            PropagatorId(0),
+        )
+        .inference_code()
+    }
+
     /// Add the checkers of `Rule` for the constraint with `constraint_description`.
     ///
     /// The conflict checker is added under `check-inferences`, the retention checker under
@@ -1480,13 +1496,14 @@ mod tests {
         let mut state = State::default();
         let x = state.new_interval_variable(1, 10, None);
         let tag = state.new_constraint_tag();
+        let inference_code = state.inference_code_for_rule(tag, "test_rule");
         state.propagate_to_fixed_point().expect("no conflict");
 
         let checker = state.rule_checkers.retention_checkers.register_removable(
             crate::checkers::Scope::from_variables([x].iter()),
             pumpkin_checking::BoxedRetentionChecker::new(UnfinishedChecker),
             PropagatorId::create_from_index(0),
-            crate::proof::InferenceCode::unknown_rule(tag),
+            inference_code,
         );
         state.rule_checkers.retention_checkers.remove(checker);
 

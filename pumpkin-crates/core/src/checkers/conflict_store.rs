@@ -128,7 +128,10 @@ mod tests {
     #[test]
     fn removing_a_checker_keeps_the_others_of_its_inference_code() {
         let mut store = ConflictCheckerStore::default();
-        let inference_code = InferenceCode::unknown_rule(ConstraintTag::create_from_index(0));
+        let inference_code = InferenceCode::new(
+            ConstraintTag::create_from_index(0),
+            crate::proof::InferenceRules::default().id("test_rule"),
+        );
 
         let removed = store.add_removable_conflict_checker(inference_code, accept_everything());
         store.add_conflict_checker(inference_code, accept_everything());
@@ -141,7 +144,10 @@ mod tests {
     #[test]
     fn removing_the_last_checker_of_an_inference_code_leaves_none() {
         let mut store = ConflictCheckerStore::default();
-        let inference_code = InferenceCode::unknown_rule(ConstraintTag::create_from_index(0));
+        let inference_code = InferenceCode::new(
+            ConstraintTag::create_from_index(0),
+            crate::proof::InferenceRules::default().id("test_rule"),
+        );
 
         let removed = store.add_removable_conflict_checker(inference_code, accept_everything());
 

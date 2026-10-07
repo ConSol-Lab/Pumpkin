@@ -57,14 +57,6 @@ impl InferenceCode {
         InferenceCode(tag, rule)
     }
 
-    /// Create an inference code with the rule [`UNKNOWN_RULE`], which every solver knows.
-    ///
-    /// This should be avoided as much as possible. This is likely only useful for writing unit
-    /// tests.
-    pub fn unknown_rule(tag: ConstraintTag) -> Self {
-        InferenceCode(tag, RuleId::UNKNOWN)
-    }
-
     /// Get the constraint tag.
     pub fn tag(&self) -> ConstraintTag {
         self.0
@@ -75,41 +67,16 @@ impl InferenceCode {
     }
 }
 
-/// The name of the rule of [`InferenceCode::unknown_rule`].
-pub const UNKNOWN_RULE: &str = "unknown";
-
 /// Identifies an inference rule in the solver that assigned it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct RuleId(u32);
 
-impl RuleId {
-    const UNKNOWN: RuleId = RuleId(0);
-
-    /// Whether this is the rule of [`InferenceCode::unknown_rule`].
-    #[cfg(feature = "inference-checkers")]
-    pub(crate) fn is_unknown(self) -> bool {
-        self == RuleId::UNKNOWN
-    }
-}
-
 /// The names of the inference rules used by a solver, each with the [`RuleId`] that the solver
 /// assigned to it. A name is assigned an identifier when it is first used.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct InferenceRules {
     names: Vec<Box<str>>,
     ids: HashMap<Box<str>, RuleId>,
-}
-
-impl Default for InferenceRules {
-    fn default() -> Self {
-        let mut rules = InferenceRules {
-            names: vec![],
-            ids: HashMap::default(),
-        };
-        let unknown = rules.id(UNKNOWN_RULE);
-        debug_assert_eq!(unknown, RuleId::UNKNOWN);
-        rules
-    }
 }
 
 impl InferenceRules {
@@ -143,6 +110,5 @@ mod tests {
 
         assert_eq!(first, second);
         assert_eq!(rules.name(first), "HalfReified(linear)");
-        assert_ne!(first, RuleId::UNKNOWN);
     }
 }

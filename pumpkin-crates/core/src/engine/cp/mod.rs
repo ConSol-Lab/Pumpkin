@@ -51,7 +51,10 @@ mod tests {
                 predicate![domain >= 2],
                 (
                     conjunction!(),
-                    &InferenceCode::unknown_rule(ConstraintTag::create_from_index(0)),
+                    &InferenceCode::new(
+                        ConstraintTag::create_from_index(0),
+                        crate::proof::InferenceRules::default().id("test_rule"),
+                    ),
                 ),
             );
             assert!(result.is_ok());
@@ -84,7 +87,10 @@ mod tests {
                 predicate![domain <= 15],
                 (
                     conjunction!(),
-                    &InferenceCode::unknown_rule(ConstraintTag::create_from_index(0)),
+                    &InferenceCode::new(
+                        ConstraintTag::create_from_index(0),
+                        crate::proof::InferenceRules::default().id("test_rule"),
+                    ),
                 ),
             );
             assert!(result.is_ok());
@@ -117,7 +123,10 @@ mod tests {
                 predicate![domain != 15],
                 (
                     conjunction!(),
-                    &InferenceCode::unknown_rule(ConstraintTag::create_from_index(0)),
+                    &InferenceCode::new(
+                        ConstraintTag::create_from_index(0),
+                        crate::proof::InferenceRules::default().id("test_rule"),
+                    ),
                 ),
             );
             assert!(result.is_ok());

@@ -197,7 +197,10 @@ mod tests {
     use crate::proof::ConstraintTag;
 
     fn dummy_inference_code() -> InferenceCode {
-        InferenceCode::unknown_rule(ConstraintTag::from_non_zero(NonZero::new(1).unwrap()))
+        InferenceCode::new(
+            ConstraintTag::from_non_zero(NonZero::new(1).unwrap()),
+            crate::proof::InferenceRules::default().id("test_rule"),
+        )
     }
 
     #[test]

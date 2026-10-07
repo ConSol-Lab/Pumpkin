@@ -18,7 +18,6 @@ use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::proof::UNKNOWN_RULE;
 use crate::propagation::ConflictRule;
 use crate::propagation::ConstraintDescription;
 use crate::propagation::DomainEvents;
@@ -49,7 +48,7 @@ fn a_detected_inconsistency_is_given_as_reason_for_propagating_reification_liter
     let t2 = triggered_conflict.clone();
 
     let inference_code =
-        solver.accept_inferences_by(ConstraintTag::create_from_index(0), UNKNOWN_RULE);
+        solver.accept_inferences_by(ConstraintTag::create_from_index(0), "test_rule");
     let i1 = inference_code;
     let i2 = inference_code;
 
@@ -164,7 +163,7 @@ fn a_true_literal_is_added_to_a_conflict_conjunction() {
 
     let var = solver.new_variable(1, 1);
     let inference_code =
-        solver.accept_inferences_by(ConstraintTag::create_from_index(0), UNKNOWN_RULE);
+        solver.accept_inferences_by(ConstraintTag::create_from_index(0), "test_rule");
 
     let inconsistency = solver
         .new_propagator(ReifiedPropagatorArgs {
@@ -206,7 +205,7 @@ fn notify_propagator_is_enqueued_if_inconsistency_can_be_detected() {
     let var = solver.new_variable(1, 5);
 
     let inference_code =
-        solver.accept_inferences_by(ConstraintTag::create_from_index(0), UNKNOWN_RULE);
+        solver.accept_inferences_by(ConstraintTag::create_from_index(0), "test_rule");
 
     let propagator = solver
         .new_propagator(ReifiedPropagatorArgs {

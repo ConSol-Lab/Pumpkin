@@ -536,12 +536,9 @@ where
 pub(crate) mod test_propagation_handler {
     use std::rc::Rc;
 
-    use pumpkin_core::containers::StorageKey;
     use pumpkin_core::predicate;
     use pumpkin_core::predicates::Predicate;
     use pumpkin_core::predicates::PropositionalConjunction;
-    use pumpkin_core::proof::ConstraintTag;
-    use pumpkin_core::proof::InferenceCode;
     use pumpkin_core::propagation::LocalId;
     use pumpkin_core::state::CurrentNogood;
     use pumpkin_core::state::State;
@@ -550,28 +547,55 @@ pub(crate) mod test_propagation_handler {
     use super::CumulativeExplanationType;
     use super::CumulativePropagationHandler;
     use super::create_conflict_explanation;
+    use crate::cumulative::ArgTask;
     use crate::cumulative::ResourceProfile;
     use crate::cumulative::Task;
+    use crate::cumulative::time_table::CumulativeDescription;
+    use crate::cumulative::time_table::TimeTableRule;
 
     pub(crate) struct TestPropagationHandler {
-        propagation_handler: CumulativePropagationHandler,
+        explanation_type: CumulativeExplanationType,
         state: State,
         reason_buffer: Vec<Predicate>,
     }
 
     impl TestPropagationHandler {
         pub(crate) fn new(explanation_type: CumulativeExplanationType) -> Self {
-            let propagation_handler = CumulativePropagationHandler::new(
-                explanation_type,
-                InferenceCode::unknown_rule(ConstraintTag::create_from_index(0)),
-            );
-
             let state = State::default();
             Self {
-                propagation_handler,
+                explanation_type,
                 state,
                 reason_buffer: Default::default(),
             }
+        }
+
+        /// A propagation handler whose inferences are checked by the time-table rule of `tasks` on
+        /// a resource with `capacity`.
+        fn handler_checked_by_time_table(
+            &mut self,
+            tasks: &[&Task<DomainId>],
+            capacity: i32,
+        ) -> CumulativePropagationHandler {
+            let constraint_tag = self.state.new_constraint_tag();
+            let constraint_description = CumulativeDescription {
+                tasks: tasks
+                    .iter()
+                    .map(|task| ArgTask {
+                        start_time: task.start_variable,
+                        processing_time: task.processing_time,
+                        resource_usage: task.resource_usage,
+                    })
+                    .collect(),
+                capacity,
+            };
+            let inference_code = self
+                .state
+                .add_rule_checkers_for_propagation_context::<TimeTableRule<DomainId>>(
+                    constraint_tag,
+                    constraint_description,
+                );
+
+            CumulativePropagationHandler::new(self.explanation_type, inference_code)
         }
 
         pub(crate) fn set_up_conflict_example(&mut self) -> (PropositionalConjunction, DomainId) {
@@ -584,6 +608,8 @@ pub(crate) mod test_propagation_handler {
                 id: LocalId::from(1),
             };
 
+            let propagation_handler = self.handler_checked_by_time_table(&[&profile_task], 1);
+
             let profile = ResourceProfile {
                 start: 15,
                 end: 17,
@@ -593,9 +619,9 @@ pub(crate) mod test_propagation_handler {
 
             let reason = create_conflict_explanation(
                 self.state.get_domains(),
-                &self.propagation_handler.inference_code,
+                &propagation_handler.inference_code,
                 &profile,
-                self.propagation_handler.explanation_type,
+                propagation_handler.explanation_type,
                 1,
             );
 
@@ -622,6 +648,9 @@ pub(crate) mod test_propagation_handler {
                 id: LocalId::from(1),
             };
 
+            let propagation_handler =
+                self.handler_checked_by_time_table(&[&propagating_task, &profile_task], 1);
+
             let profile = ResourceProfile {
                 start: 16,
                 end: 18,
@@ -629,14 +658,12 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
-            let result = self
-                .propagation_handler
-                .propagate_lower_bound_with_explanations(
-                    &mut self.state.get_propagation_context(),
-                    &profile,
-                    &Rc::new(propagating_task),
-                    1,
-                );
+            let result = propagation_handler.propagate_lower_bound_with_explanations(
+                &mut self.state.get_propagation_context(),
+                &profile,
+                &Rc::new(propagating_task),
+                1,
+            );
             assert!(result.is_ok());
             assert_eq!(self.state.lower_bound(x), 19);
 
@@ -665,18 +692,22 @@ pub(crate) mod test_propagation_handler {
                 resource_usage: 1,
                 id: LocalId::from(1),
             };
-            let profile_y = ResourceProfile {
-                start: 16,
-                end: 18,
-                profile_tasks: vec![Rc::new(profile_task_y)],
-                height: 1,
-            };
 
             let profile_task_z = Task {
                 start_variable: z,
                 processing_time: 7,
                 resource_usage: 1,
                 id: LocalId::from(2),
+            };
+            let propagation_handler = self.handler_checked_by_time_table(
+                &[&propagating_task, &profile_task_y, &profile_task_z],
+                1,
+            );
+            let profile_y = ResourceProfile {
+                start: 16,
+                end: 18,
+                profile_tasks: vec![Rc::new(profile_task_y)],
+                height: 1,
             };
             let profile_z = ResourceProfile {
                 start: 19,
@@ -685,14 +716,12 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
-            let result = self
-                .propagation_handler
-                .propagate_chain_of_lower_bounds_with_explanations(
-                    &mut self.state.get_propagation_context(),
-                    &[&profile_y, &profile_z],
-                    &Rc::new(propagating_task),
-                    1,
-                );
+            let result = propagation_handler.propagate_chain_of_lower_bounds_with_explanations(
+                &mut self.state.get_propagation_context(),
+                &[&profile_y, &profile_z],
+                &Rc::new(propagating_task),
+                1,
+            );
             assert!(result.is_ok());
             assert_eq!(self.state.lower_bound(x), 22);
 
@@ -721,6 +750,9 @@ pub(crate) mod test_propagation_handler {
                 id: LocalId::from(1),
             };
 
+            let propagation_handler =
+                self.handler_checked_by_time_table(&[&propagating_task, &profile_task], 1);
+
             let profile = ResourceProfile {
                 start: 16,
                 end: 18,
@@ -728,14 +760,12 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
-            let result = self
-                .propagation_handler
-                .propagate_upper_bound_with_explanations(
-                    &mut self.state.get_propagation_context(),
-                    &profile,
-                    &Rc::new(propagating_task),
-                    1,
-                );
+            let result = propagation_handler.propagate_upper_bound_with_explanations(
+                &mut self.state.get_propagation_context(),
+                &profile,
+                &Rc::new(propagating_task),
+                1,
+            );
             assert!(result.is_ok());
             assert_eq!(self.state.upper_bound(x), 10);
 
@@ -764,18 +794,24 @@ pub(crate) mod test_propagation_handler {
                 resource_usage: 1,
                 id: LocalId::from(1),
             };
-            let profile_y = ResourceProfile {
-                start: 16,
-                end: 18,
-                profile_tasks: vec![Rc::new(profile_task_y)],
-                height: 1,
-            };
 
             let profile_task_z = Task {
                 start_variable: z,
                 processing_time: 6,
                 resource_usage: 1,
                 id: LocalId::from(2),
+            };
+            // The propagation below passes capacity 2, but its profiles of height 1 only overload a
+            // resource of capacity 1 with this task, so the inference is sound for capacity 1 only.
+            let propagation_handler = self.handler_checked_by_time_table(
+                &[&propagating_task, &profile_task_y, &profile_task_z],
+                1,
+            );
+            let profile_y = ResourceProfile {
+                start: 16,
+                end: 18,
+                profile_tasks: vec![Rc::new(profile_task_y)],
+                height: 1,
             };
             let profile_z = ResourceProfile {
                 start: 9,
@@ -784,14 +820,12 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
-            let result = self
-                .propagation_handler
-                .propagate_chain_of_upper_bounds_with_explanations(
-                    &mut self.state.get_propagation_context(),
-                    &[&profile_z, &profile_y],
-                    &Rc::new(propagating_task),
-                    2,
-                );
+            let result = propagation_handler.propagate_chain_of_upper_bounds_with_explanations(
+                &mut self.state.get_propagation_context(),
+                &[&profile_z, &profile_y],
+                &Rc::new(propagating_task),
+                2,
+            );
             assert!(result.is_ok());
             assert_eq!(self.state.upper_bound(x), 3);
 

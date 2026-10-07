@@ -34,11 +34,8 @@ pub(crate) fn check_inference(
     let inference_code = inference.inference_code;
     let checkers = conflict_checkers.for_inference_code(&inference_code);
     if checkers.len() == 0 {
-        // An inference made without a rule, as tests do, can only be checked when a test adds a
-        // checker for it.
-        let rule = inference_code.rule();
         assert!(
-            conflict_checkers.is_rule_unchecked(rule) || rule.is_unknown(),
+            conflict_checkers.is_rule_unchecked(inference_code.rule()),
             "missing checker for inference code {inference_code:?}"
         );
         return;
