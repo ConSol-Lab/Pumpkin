@@ -3,8 +3,7 @@
 use flatzinc::ConstraintItem;
 use log::warn;
 
-use crate::FlatZincOptions;
-use crate::ProofType;
+use crate::flatzinc::CompilationOptions;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::ast::SingleVarDecl;
@@ -15,7 +14,7 @@ use crate::flatzinc::compiler::context::VariableEquivalences;
 pub(crate) fn run(
     ast: &FlatZincAst,
     context: &mut CompilationContext,
-    options: &FlatZincOptions,
+    options: &CompilationOptions,
 ) -> Result<(), FlatZincError> {
     handle_variable_equality_expressions(ast, context, options)?;
     remove_int_eq_constraints(context, options)?;
@@ -34,8 +33,8 @@ pub(crate) fn run(
 /// associated constraint tag. Since logging a full proof is not the default, it is likely only
 /// done when somebody wants to use the full proof. That is why we panic here instead of log a
 /// warning, since the proof would most likely be incorrect.
-fn panic_if_logging_proof(options: &FlatZincOptions) {
-    if matches!(options.proof_type, Some(ProofType::Full)) {
+fn panic_if_logging_proof(options: &CompilationOptions) {
+    if options.is_logging_full_proof {
         panic!("Variable assignment expressions unsupported when logging a full proof.")
     }
 }
@@ -43,7 +42,7 @@ fn panic_if_logging_proof(options: &FlatZincOptions) {
 fn handle_variable_equality_expressions(
     ast: &FlatZincAst,
     context: &mut CompilationContext,
-    options: &FlatZincOptions,
+    options: &CompilationOptions,
 ) -> Result<(), FlatZincError> {
     for single_var_decl in &ast.single_variables {
         match single_var_decl {
@@ -112,9 +111,9 @@ fn handle_variable_equality_expressions(
 
 fn remove_int_eq_constraints(
     context: &mut CompilationContext,
-    options: &FlatZincOptions,
+    options: &CompilationOptions,
 ) -> Result<(), FlatZincError> {
-    if matches!(options.proof_type, Some(ProofType::Full)) {
+    if options.is_logging_full_proof {
         return Ok(());
     }
 
@@ -236,9 +235,9 @@ mod tests {
     use flatzinc::ConstraintItem;
     use flatzinc::Expr;
     use flatzinc::SolveItem;
-    use pumpkin_solver::Solver;
 
     use super::*;
+    use crate::Solver;
 
     #[test]
     fn int_eq_constraints_cause_merging_of_equivalence_classes() {
@@ -274,7 +273,7 @@ mod tests {
         let ast = ast_builder.build().expect("valid ast");
         let mut solver = Solver::default();
         let mut context = CompilationContext::new(&mut solver);
-        let options = FlatZincOptions::default();
+        let options = CompilationOptions::default();
 
         super::super::reserve_constraint_tags::run(&ast, &mut context)
             .expect("step should not fail");
@@ -323,8 +322,8 @@ mod tests {
         let ast = ast_builder.build().expect("valid ast");
         let mut solver = Solver::default();
         let mut context = CompilationContext::new(&mut solver);
-        let options = FlatZincOptions {
-            proof_type: Some(ProofType::Full),
+        let options = CompilationOptions {
+            is_logging_full_proof: true,
             ..Default::default()
         };
 

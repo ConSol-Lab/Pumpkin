@@ -6,10 +6,10 @@ use flatzinc::Annotation;
 use pumpkin_core::Solver;
 use pumpkin_core::containers::HashMap;
 use pumpkin_core::variables::DomainId;
-use pumpkin_solver::core::variables::Literal;
 
 use super::context::CompilationContext;
 use super::context::Domain;
+use crate::core::variables::Literal;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::ast::SingleVarDecl;

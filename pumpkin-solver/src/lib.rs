@@ -371,6 +371,8 @@ pub mod checking {
     pub use pumpkin_checking::*;
 }
 
+pub mod flatzinc;
+
 pub mod core {
     //! The core interfaces and structures used by the pumpkin solver.
     pub use pumpkin_core::*;

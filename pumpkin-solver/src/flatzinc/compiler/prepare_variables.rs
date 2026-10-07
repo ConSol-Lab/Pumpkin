@@ -89,9 +89,8 @@ pub(crate) fn run(
 #[cfg(test)]
 mod tests {
 
-    use pumpkin_solver::Solver;
-
     use super::*;
+    use crate::Solver;
     use crate::flatzinc::ast::SearchStrategy;
     use crate::flatzinc::ast::SingleVarDecl;
     use crate::flatzinc::compiler::context::Domain;

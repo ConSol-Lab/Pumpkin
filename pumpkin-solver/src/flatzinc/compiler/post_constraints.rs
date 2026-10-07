@@ -3,25 +3,25 @@
 use std::rc::Rc;
 
 use pumpkin_propagators::disjunctive::ArgDisjunctiveTask;
-use pumpkin_solver::core::constraints::Constraint;
-use pumpkin_solver::core::constraints::NegatableConstraint;
-use pumpkin_solver::core::predicate;
-use pumpkin_solver::core::predicates::Predicate;
-use pumpkin_solver::core::proof::ConstraintTag;
-use pumpkin_solver::core::variables::AffineView;
-use pumpkin_solver::core::variables::DomainId;
-use pumpkin_solver::core::variables::TransformableVariable;
 
 use super::context::CompilationContext;
+use crate::core::constraints::Constraint;
+use crate::core::constraints::NegatableConstraint;
+use crate::core::predicate;
+use crate::core::predicates::Predicate;
+use crate::core::proof::ConstraintTag;
+use crate::core::variables::AffineView;
+use crate::core::variables::DomainId;
+use crate::core::variables::TransformableVariable;
+use crate::flatzinc::CompilationOptions;
 use crate::flatzinc::FlatZincError;
-use crate::flatzinc::FlatZincOptions;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::compiler::context::Set;
 
 pub(crate) fn run(
     _: &FlatZincAst,
     context: &mut CompilationContext,
-    options: &FlatZincOptions,
+    options: &CompilationOptions,
 ) -> Result<(), FlatZincError> {
     for (constraint_tag, constraint_item) in std::mem::take(&mut context.constraints) {
         let flatzinc::ConstraintItem { id, exprs, annos } = &constraint_item;
@@ -393,7 +393,7 @@ fn compile_disjunctive_strict(
 fn compile_cumulative(
     context: &mut CompilationContext<'_>,
     exprs: &[flatzinc::Expr],
-    options: &FlatZincOptions,
+    options: &CompilationOptions,
     constraint_tag: ConstraintTag,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 4, "pumpkin_cumulative");
