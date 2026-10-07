@@ -11,18 +11,18 @@ use crate::propagation::Domains;
 use crate::propagation::PropagatorId;
 use crate::variables::DomainId;
 
-/// Holds the retention checkers of the solver, enqueues those whose domains change, and runs them
-/// in [`RetentionCheckerStore::run`].
+/// Holds the retention checkers of the solver, and keeps the checkers whose domains changed pending
+/// until their propagator reports a fixpoint ([`RetentionCheckerStore::run_pending_of`]) or
+/// propagation reaches one ([`RetentionCheckerStore::run`]).
 #[derive(Clone, Debug, Default)]
 pub struct RetentionCheckerStore {
     /// The checkers in the store; `None` for a checker that was removed.
     store: KeyedVec<RetentionCheckerId, Option<Entry>>,
     /// The checkers that watch each domain.
     watch_list: KeyedVec<DomainId, Vec<RetentionCheckerId>>,
-    /// The checkers to run the next time.
-    queue: Vec<RetentionCheckerId>,
-    /// Marks which checkers are enqueued to prevent duplicate checkers in
-    /// [`RetentionCheckerStore::queue`].
+    /// For each propagator, its checkers whose domains changed since they last ran.
+    pending: KeyedVec<PropagatorId, Vec<RetentionCheckerId>>,
+    /// The checkers in [`RetentionCheckerStore::pending`], to keep each there at most once.
     enqueued: KeyedBitSet<RetentionCheckerId>,
 }
 
@@ -108,14 +108,13 @@ impl RetentionCheckerStore {
         self.store[checker] = None;
     }
 
-    /// Enqueue the checkers that watch `domain_id` and are not yet enqueued.
+    /// Make the checkers that watch `domain_id` pending, if they are not already.
     pub fn on_domain_event(&mut self, domain_id: DomainId) {
         let Self {
             store,
             watch_list,
-            queue,
+            pending,
             enqueued,
-            ..
         } = self;
 
         let Some(list) = watch_list.get_mut(domain_id) else {
@@ -125,16 +124,39 @@ impl RetentionCheckerStore {
         list.retain(|&checker_id| store[checker_id].is_some());
 
         for &checker_id in list.iter() {
+            let Some(entry) = &store[checker_id] else {
+                continue;
+            };
             if !enqueued.insert(checker_id) {
                 continue;
             }
 
-            queue.push(checker_id);
+            pending.accomodate(entry.propagator, vec![]);
+            pending[entry.propagator].push(checker_id);
         }
     }
 
-    /// Run the checkers selected by `coverage`,
-    /// stopping at the first one that reports that its propagator is not finished.
+    /// Run the pending checkers of `propagator`, which reports that it is at a fixpoint, stopping
+    /// at the first one that reports that the propagator is not finished.
+    pub fn run_pending_of(
+        &mut self,
+        propagator: PropagatorId,
+        domains: Domains<'_>,
+    ) -> Result<(), RetentionFailure> {
+        let Some(pending) = self.pending.get_mut(propagator) else {
+            return Ok(());
+        };
+
+        for checker_id in std::mem::take(pending) {
+            assert!(self.enqueued.remove(checker_id));
+            self.check(checker_id, &domains)?;
+        }
+
+        Ok(())
+    }
+
+    /// Run the checkers selected by `coverage` when propagation reaches a fixpoint, stopping at the
+    /// first one that reports that its propagator is not finished.
     pub fn run(
         &mut self,
         coverage: RetentionCoverage,
@@ -142,9 +164,13 @@ impl RetentionCheckerStore {
     ) -> Result<(), RetentionFailure> {
         match coverage {
             RetentionCoverage::Notified => {
-                while let Some(checker_id) = self.queue.pop() {
-                    assert!(self.enqueued.remove(checker_id));
-                    self.check(checker_id, &domains)?;
+                for index in 0..self.pending.len() {
+                    for checker_id in
+                        std::mem::take(&mut self.pending[PropagatorId::create_from_index(index)])
+                    {
+                        assert!(self.enqueued.remove(checker_id));
+                        self.check(checker_id, &domains)?;
+                    }
                 }
             }
             RetentionCoverage::All => {
@@ -160,7 +186,7 @@ impl RetentionCheckerStore {
     }
 
     pub fn clear_queue(&mut self) {
-        self.queue.clear();
+        self.pending.iter_mut().for_each(Vec::clear);
         self.enqueued.clear();
     }
 
@@ -169,7 +195,8 @@ impl RetentionCheckerStore {
         checker_id: RetentionCheckerId,
         domains: &Domains<'_>,
     ) -> Result<(), RetentionFailure> {
-        // A removed checker can still be enqueued, since it only leaves the queue when it runs.
+        // A removed checker can still be pending, since it only leaves the pending list when it
+        // runs.
         let Some(entry) = &self.store[checker_id] else {
             return Ok(());
         };

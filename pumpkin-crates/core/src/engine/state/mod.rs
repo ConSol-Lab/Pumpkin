@@ -775,6 +775,9 @@ impl State {
     fn propagate(&mut self, propagator_id: PropagatorId) -> Result<(), Conflict> {
         self.statistics.num_propagators_called += 1;
 
+        #[cfg(feature = "check-retention")]
+        let num_trail_entries_before = self.assignments.num_trail_entries();
+
         let propagation_status = {
             let Self {
                 propagators,
@@ -807,6 +810,14 @@ impl State {
                         &mut self.propagators,
                         &mut self.propagator_queue,
                     );
+
+                #[cfg(feature = "check-retention")]
+                {
+                    self.notify_retention_checkers(num_trail_entries_before);
+                    if !self.propagator_queue.is_propagator_enqueued(propagator_id) {
+                        self.run_retention_checkers_of(propagator_id);
+                    }
+                }
             }
             Err(conflict) => {
                 self.statistics.num_conflicts += 1;
@@ -833,6 +844,10 @@ impl State {
         #[cfg(any(feature = "inference-checkers", feature = "check-retention"))]
         let checking_start_index = self.notification_engine.last_notified_trail_index();
 
+        // The decision, and what was posted outside of propagation since the previous fixpoint.
+        #[cfg(feature = "check-retention")]
+        self.notify_retention_checkers(checking_start_index);
+
         let result = self.propagate_to_fixed_point_internal();
 
         #[cfg(feature = "inference-checkers")]
@@ -841,7 +856,7 @@ impl State {
         // After a conflict the domains are not at a fixpoint, so the retention checkers do not run.
         #[cfg(feature = "check-retention")]
         if result.is_ok() {
-            self.run_retention_checkers(checking_start_index);
+            self.run_retention_checkers_at_fixpoint();
         }
 
         result
@@ -1255,6 +1270,9 @@ mod tests {
     struct CheckedPropagator<Checker> {
         variable: crate::variables::DomainId,
         checker: Checker,
+        /// Whether the propagator registers for the events of its variable, so that it is called
+        /// when the variable changes.
+        is_woken: bool,
     }
 
     #[cfg(feature = "check-retention")]
@@ -1278,13 +1296,17 @@ mod tests {
             _: crate::propagation::PropagatorConstructorContext,
             _: crate::proof::InferenceCode,
         ) -> crate::propagation::ConstructedPropagator<Self::PropagatorImpl> {
-            let events_to_register = crate::propagation::EventsToRegister::builder()
-                .add(
-                    &self.variable,
-                    crate::propagation::DomainEvents::ANY_INT,
-                    crate::propagation::LocalId::from(0),
-                )
-                .build();
+            let events_to_register = if self.is_woken {
+                crate::propagation::EventsToRegister::builder()
+                    .add(
+                        &self.variable,
+                        crate::propagation::DomainEvents::ANY_INT,
+                        crate::propagation::LocalId::from(0),
+                    )
+                    .build()
+            } else {
+                crate::propagation::EventsToRegister::empty()
+            };
 
             crate::propagation::ConstructedPropagator {
                 events_to_register,
@@ -1401,6 +1423,7 @@ mod tests {
         let _ = state.add_propagator(CheckedPropagator {
             variable: untouched,
             checker: UnfinishedChecker,
+            is_woken: true,
         });
         state.propagate_to_fixed_point().expect("no conflict");
 
@@ -1443,9 +1466,11 @@ mod tests {
         state.propagate_to_fixed_point().expect("no conflict");
     }
 
-    #[cfg(feature = "check-retention")]
+    #[cfg(all(feature = "check-retention", not(feature = "check-retention-all")))]
     #[test]
-    #[should_panic(expected = "the retention checker of the rule 'checked' of the propagator")]
+    #[should_panic(
+        expected = "did not enqueue itself again after it was called, but the retention checker of its rule 'checked'"
+    )]
     fn a_retention_failure_names_the_rule() {
         let mut state = State::default();
         let x = state.new_interval_variable(1, 10, None);
@@ -1453,6 +1478,30 @@ mod tests {
         let _ = state.add_propagator(CheckedPropagator {
             variable: x,
             checker: UnfinishedChecker,
+            is_woken: true,
+        });
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.new_checkpoint();
+        let _ = state
+            .post(predicate!(x >= 5))
+            .expect("the value is in the domain");
+        let _ = state.propagate_to_fixed_point();
+    }
+
+    /// A propagator that is not woken by a change to its domains is caught only at the fixpoint,
+    /// which tells it apart from a propagator that is called but does not finish.
+    #[cfg(feature = "check-retention")]
+    #[test]
+    #[should_panic(expected = "The propagator was not called after these domains changed")]
+    fn a_propagator_that_is_not_woken_is_caught_at_the_fixpoint() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(1, 10, None);
+        state.propagate_to_fixed_point().expect("no conflict");
+        let _ = state.add_propagator(CheckedPropagator {
+            variable: x,
+            checker: UnfinishedChecker,
+            is_woken: false,
         });
         state.propagate_to_fixed_point().expect("no conflict");
 
@@ -1489,6 +1538,7 @@ mod tests {
         let _ = state.add_propagator(CheckedPropagator {
             variable: x,
             checker: CountingChecker(Arc::clone(&runs)),
+            is_woken: true,
         });
 
         state.propagate_to_fixed_point().expect("no conflict");
