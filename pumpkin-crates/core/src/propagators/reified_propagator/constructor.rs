@@ -1,11 +1,11 @@
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::ConflictRule;
-use crate::propagation::ConstructedPropagator;
 use crate::propagation::DomainEvents;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::PropagatorWithEvents;
 use crate::propagators::HalfReified;
 use crate::propagators::HalfReifiedDescription;
 use crate::propagators::ReifiedPropagator;
@@ -43,14 +43,14 @@ where
         self,
         context: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> ConstructedPropagator<Self::PropagatorImpl> {
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
         let ReifiedPropagatorArgs {
             propagator,
             reification_literal,
         } = self;
 
         // The wrapped propagator makes the inferences of the half reified rule.
-        let ConstructedPropagator {
+        let PropagatorWithEvents {
             mut events_to_register,
             propagator,
         } = propagator.create(context, inference_code);
@@ -80,7 +80,7 @@ where
             reason_buffer: vec![],
         };
 
-        ConstructedPropagator {
+        PropagatorWithEvents {
             events_to_register,
             propagator,
         }

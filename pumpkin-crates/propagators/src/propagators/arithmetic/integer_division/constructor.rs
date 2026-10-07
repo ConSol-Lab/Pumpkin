@@ -1,11 +1,11 @@
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
-use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorWithEvents;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -44,7 +44,7 @@ where
         self,
         context: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> ConstructedPropagator<Self::PropagatorImpl> {
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
         let DivisionDescription {
             numerator,
             denominator,
@@ -69,7 +69,7 @@ where
             inference_code,
         };
 
-        ConstructedPropagator {
+        PropagatorWithEvents {
             events_to_register,
             propagator,
         }

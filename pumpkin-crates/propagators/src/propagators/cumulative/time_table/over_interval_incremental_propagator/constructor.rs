@@ -1,8 +1,8 @@
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
-use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorWithEvents;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::TimeTableOverIntervalIncrementalPropagator;
@@ -32,7 +32,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstruc
         mut self,
         mut context: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> ConstructedPropagator<Self::PropagatorImpl> {
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
         // We only register for notifications of backtrack events if incremental backtracking is
         // enabled
         let events_to_register = register_tasks(
@@ -49,7 +49,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstruc
 
         self.inference_code = Some(inference_code);
 
-        ConstructedPropagator {
+        PropagatorWithEvents {
             events_to_register,
             propagator: self,
         }

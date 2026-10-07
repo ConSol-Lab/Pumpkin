@@ -1,11 +1,11 @@
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
-use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorWithEvents;
 use pumpkin_core::variables::IntegerVariable;
 
 use crate::arithmetic::MaximumDescription;
@@ -39,7 +39,7 @@ where
         self,
         _: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> ConstructedPropagator<Self::PropagatorImpl> {
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
         let MaximumDescription { array, rhs } = self.constraint_description;
 
         let mut events_to_register = EventsToRegister::builder();
@@ -57,7 +57,7 @@ where
             inference_code,
         };
 
-        ConstructedPropagator {
+        PropagatorWithEvents {
             events_to_register: events_to_register.build(),
             propagator,
         }

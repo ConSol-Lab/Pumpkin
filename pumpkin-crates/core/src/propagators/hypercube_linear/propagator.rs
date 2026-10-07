@@ -5,7 +5,6 @@ use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::propagation::ConstructedPropagator;
 use crate::propagation::DomainEvents;
 use crate::propagation::EventsToRegister;
 use crate::propagation::LocalId;
@@ -13,6 +12,7 @@ use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::PropagatorWithEvents;
 use crate::propagation::ReadDomains;
 use crate::propagators::hypercube_linear::HypercubeLinearDescription;
 use crate::propagators::hypercube_linear::HypercubeLinearRule;
@@ -44,7 +44,7 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
         self,
         mut context: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> ConstructedPropagator<Self::PropagatorImpl> {
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
         let HypercubeLinearDescription { hypercube, linear } = self.constraint_description;
 
         let hypercube_predicates = hypercube.iter_predicates().collect::<Box<[_]>>();
@@ -72,7 +72,7 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
         // TODO: This will be expanded with events_to_register of predicates.
         let events_to_register = EventsToRegister::empty();
 
-        ConstructedPropagator {
+        PropagatorWithEvents {
             events_to_register,
             propagator,
         }

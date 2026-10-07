@@ -4,7 +4,6 @@ use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
-use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::PredicateId;
 use pumpkin_core::propagation::Priority;
@@ -12,6 +11,7 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorWithEvents;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::propagators::nogoods::NogoodDescription;
 use pumpkin_core::propagators::nogoods::UnitNogoodRule;
@@ -72,7 +72,7 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
         self,
         mut context: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> ConstructedPropagator<Self::PropagatorImpl> {
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
         let DeductionPropagatorConstructor {
             nogood,
             constraint_tag: _,
@@ -93,7 +93,7 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
             propagation_mode,
         };
 
-        ConstructedPropagator {
+        PropagatorWithEvents {
             events_to_register: EventsToRegister::empty(),
             propagator,
         }

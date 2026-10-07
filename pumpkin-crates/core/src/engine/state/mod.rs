@@ -31,7 +31,6 @@ use crate::proof::InferenceRules;
 use crate::propagation::ConflictRule;
 #[cfg(feature = "check-retention")]
 use crate::propagation::ConstraintDescription;
-use crate::propagation::ConstructedPropagator;
 use crate::propagation::CurrentNogood;
 use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
@@ -42,6 +41,7 @@ use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorId;
 use crate::propagation::PropagatorVarId;
+use crate::propagation::PropagatorWithEvents;
 use crate::propagation::store::PropagatorStore;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
@@ -496,7 +496,7 @@ impl State {
     /// Note that this does not do any propagation.
     fn initialise_propagator<P>(
         &mut self,
-        create: impl FnOnce(PropagatorConstructorContext) -> ConstructedPropagator<P>,
+        create: impl FnOnce(PropagatorConstructorContext) -> PropagatorWithEvents<P>,
     ) -> PropagatorHandle<P>
     where
         P: Propagator + Clone + 'static,
@@ -506,7 +506,7 @@ impl State {
         let constructor_context =
             PropagatorConstructorContext::new(original_handle.propagator_id(), self);
 
-        let ConstructedPropagator {
+        let PropagatorWithEvents {
             events_to_register,
             propagator,
         } = create(constructor_context);
@@ -1326,7 +1326,7 @@ mod tests {
             self,
             _: crate::propagation::PropagatorConstructorContext,
             _: crate::proof::InferenceCode,
-        ) -> crate::propagation::ConstructedPropagator<Self::PropagatorImpl> {
+        ) -> crate::propagation::PropagatorWithEvents<Self::PropagatorImpl> {
             let events_to_register = if self.is_woken {
                 crate::propagation::EventsToRegister::builder()
                     .add(
@@ -1339,7 +1339,7 @@ mod tests {
                 crate::propagation::EventsToRegister::empty()
             };
 
-            crate::propagation::ConstructedPropagator {
+            crate::propagation::PropagatorWithEvents {
                 events_to_register,
                 propagator: self,
             }

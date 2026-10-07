@@ -2,11 +2,11 @@ use pumpkin_core::containers::HashSet;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
-use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorWithEvents;
 use pumpkin_core::variables::IntegerVariable;
 
 use crate::arithmetic::BinaryEqualsDescription;
@@ -40,7 +40,7 @@ where
         self,
         _: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> ConstructedPropagator<Self::PropagatorImpl> {
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
         let BinaryEqualsDescription { a, b } = self.constraint_description;
 
         let events_to_register = EventsToRegister::builder()
@@ -62,7 +62,7 @@ where
             reason: Predicate::trivially_false(),
         };
 
-        ConstructedPropagator {
+        PropagatorWithEvents {
             events_to_register,
             propagator,
         }

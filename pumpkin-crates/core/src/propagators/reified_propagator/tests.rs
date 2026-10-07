@@ -21,7 +21,6 @@ use crate::proof::InferenceCode;
 use crate::proof::UNKNOWN_RULE;
 use crate::propagation::ConflictRule;
 use crate::propagation::ConstraintDescription;
-use crate::propagation::ConstructedPropagator;
 use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
@@ -31,6 +30,7 @@ use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::PropagatorWithEvents;
 use crate::propagation::ReadDomains;
 use crate::propagators::ReifiedPropagatorArgs;
 use crate::state::Conflict;
@@ -261,14 +261,14 @@ where
         self,
         _: PropagatorConstructorContext,
         _: InferenceCode,
-    ) -> ConstructedPropagator<Self::PropagatorImpl> {
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
         let mut events_to_register = EventsToRegister::empty();
 
         for (index, variable) in self.variables_to_register.iter().enumerate() {
             events_to_register.add(variable, DomainEvents::ANY_INT, LocalId::from(index as u32));
         }
 
-        ConstructedPropagator {
+        PropagatorWithEvents {
             events_to_register,
             propagator: self,
         }

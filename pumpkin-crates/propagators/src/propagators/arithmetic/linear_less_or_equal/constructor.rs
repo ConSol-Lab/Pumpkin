@@ -1,11 +1,11 @@
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
-use pumpkin_core::propagation::ConstructedPropagator;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+use pumpkin_core::propagation::PropagatorWithEvents;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -39,7 +39,7 @@ where
         self,
         mut context: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> ConstructedPropagator<Self::PropagatorImpl> {
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
         let LinearLessOrEqualDescription { terms: x, bound: c } = self.constraint_description;
 
         let mut lower_bound_left_hand_side = 0_i64;
@@ -64,7 +64,7 @@ where
             reason_buffer: Vec::default(),
         };
 
-        ConstructedPropagator {
+        PropagatorWithEvents {
             events_to_register: events_to_register.build(),
             propagator,
         }

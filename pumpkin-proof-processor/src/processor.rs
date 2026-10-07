@@ -755,13 +755,13 @@ mod tests {
     use pumpkin_core::checkers::Scope;
     use pumpkin_core::propagation::ConflictRule;
     use pumpkin_core::propagation::ConstraintDescription;
-    use pumpkin_core::propagation::ConstructedPropagator;
     use pumpkin_core::propagation::EventsToRegister;
     use pumpkin_core::propagation::LocalId;
     use pumpkin_core::propagation::PropagationContext;
     use pumpkin_core::propagation::Propagator;
     use pumpkin_core::propagation::PropagatorConstructor;
     use pumpkin_core::propagation::PropagatorConstructorContext;
+    use pumpkin_core::propagation::PropagatorWithEvents;
     use pumpkin_core::propagation::ReadDomains;
     use pumpkin_core::state::PropagationStatusCP;
     use pumpkin_propagators::arithmetic::BinaryEqualsDescription;
@@ -999,14 +999,14 @@ mod tests {
             self,
             mut context: PropagatorConstructorContext,
             inference_code: InferenceCode,
-        ) -> ConstructedPropagator<Self::PropagatorImpl> {
+        ) -> PropagatorWithEvents<Self::PropagatorImpl> {
             let AlwaysConflictConstructor { watched, other, .. } = self;
 
             // This propagator must not react to `other` becoming true. It only
             // needs to fire once `watched` becomes true.
             let _ = context.register_predicate(watched);
 
-            ConstructedPropagator {
+            PropagatorWithEvents {
                 events_to_register: EventsToRegister::empty(),
                 propagator: AlwaysConflictPropagator {
                     watched,

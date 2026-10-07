@@ -54,13 +54,13 @@ pub trait PropagatorConstructor {
     ///
     /// The `inference_code` identifies the inferences of the propagator with its rule.
     ///
-    /// Returns a [`ConstructedPropagator`] that contains the propagator instance and the events for
+    /// Returns a [`PropagatorWithEvents`] that contains the propagator instance and the events for
     /// which the propagator should be enqueued.
     fn create(
         self,
         context: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> ConstructedPropagator<Self::PropagatorImpl>;
+    ) -> PropagatorWithEvents<Self::PropagatorImpl>;
 }
 
 /// The result of [`PropagatorConstructor::create`].
@@ -68,7 +68,7 @@ pub trait PropagatorConstructor {
 /// Contains an initialized [`Propagator`] and the events that should cause the propagator to be
 /// enqueued.
 #[derive(Clone, Debug)]
-pub struct ConstructedPropagator<P> {
+pub struct PropagatorWithEvents<P> {
     /// The domain events that enqueue the propagator.
     pub events_to_register: EventsToRegister,
     pub propagator: P,
