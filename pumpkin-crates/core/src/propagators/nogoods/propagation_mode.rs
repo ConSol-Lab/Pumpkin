@@ -327,13 +327,13 @@ impl PropagationMode {
         statistics: &NogoodPropagatorStatistics,
         propagation_buffer: &mut PropagationBuffer,
     ) {
-        #[cfg(feature = "check-propagations")]
+        #[cfg(feature = "inference-checkers")]
         let mut nogood = input_nogood
             .iter()
             .map(|predicate| context.get_id(*predicate))
             .collect::<Vec<_>>();
 
-        #[cfg(not(feature = "check-propagations"))]
+        #[cfg(not(feature = "inference-checkers"))]
         let mut nogood = nogood
             .iter()
             .map(|predicate| context.get_id(*predicate))

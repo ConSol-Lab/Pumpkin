@@ -90,11 +90,7 @@ pub struct NogoodPropagator {
 
     /// The checkers of each stored nogood, which are removed when clause management deletes the
     /// nogood.
-    #[cfg(any(
-        feature = "check-propagations",
-        feature = "check-consistency",
-        feature = "check-solutions"
-    ))]
+    #[cfg(feature = "checkers")]
     rule_checkers: KeyedVec<NogoodIndex, Option<RemovableRuleCheckers>>,
     /// What form of propagation is performed (e.g., unit propagation, or extended nogood
     /// propagation).
@@ -201,11 +197,7 @@ impl NogoodPropagatorConstructor {
             lbd_helper: Default::default(),
             bumped_nogoods: Default::default(),
             temp_nogood_reason: Default::default(),
-            #[cfg(any(
-                feature = "check-propagations",
-                feature = "check-consistency",
-                feature = "check-solutions"
-            ))]
+            #[cfg(feature = "checkers")]
             rule_checkers: Default::default(),
             propagation_mode: self.propagation_mode,
             semantic_minimiser: Default::default(),
@@ -345,19 +337,11 @@ impl Propagator for NogoodPropagator {
             context.notification_engine,
         );
 
-        #[cfg(any(
-            feature = "check-propagations",
-            feature = "check-consistency",
-            feature = "check-solutions"
-        ))]
+        #[cfg(feature = "checkers")]
         if removed_a_nogood {
             self.remove_rule_checkers_of_deleted_nogoods(&mut context);
         }
-        #[cfg(not(any(
-            feature = "check-propagations",
-            feature = "check-consistency",
-            feature = "check-solutions"
-        )))]
+        #[cfg(not(feature = "checkers"))]
         let _ = removed_a_nogood;
 
         if self.watch_lists.len() <= context.num_predicate_ids() {
@@ -1134,11 +1118,7 @@ impl NogoodPropagator {
             .push(NogoodInfo::new_learned_nogood_info(lbd));
         let _ = self.inference_codes.push(rule_checkers.inference_code());
 
-        #[cfg(any(
-            feature = "check-propagations",
-            feature = "check-consistency",
-            feature = "check-solutions"
-        ))]
+        #[cfg(feature = "checkers")]
         let _ = self.rule_checkers.push(Some(rule_checkers));
 
         let watcher = Watcher {
@@ -1310,11 +1290,7 @@ impl NogoodPropagator {
         //
         // The preprocessing ensures that all predicates are unassigned.
         else {
-            #[cfg(any(
-                feature = "check-propagations",
-                feature = "check-consistency",
-                feature = "check-solutions"
-            ))]
+            #[cfg(feature = "checkers")]
             let num_nogoods_before = self.nogood_info.len();
 
             self.propagation_mode.add_permanent_nogood_non_unit(
@@ -1332,11 +1308,7 @@ impl NogoodPropagator {
 
             // Extended nogood propagation buffers nogoods over a single domain instead of storing
             // them. The checkers must stay index-aligned with `nogood_info`.
-            #[cfg(any(
-                feature = "check-propagations",
-                feature = "check-consistency",
-                feature = "check-solutions"
-            ))]
+            #[cfg(feature = "checkers")]
             if self.nogood_info.len() > num_nogoods_before {
                 let _ = self.rule_checkers.push(Some(rule_checkers));
             }
@@ -1424,11 +1396,7 @@ fn get_domain_info(
     )
 }
 
-#[cfg(any(
-    feature = "check-propagations",
-    feature = "check-consistency",
-    feature = "check-solutions"
-))]
+#[cfg(feature = "checkers")]
 impl NogoodPropagator {
     /// Remove the checkers of every nogood that has been marked as deleted in `nogood_info`.
     ///

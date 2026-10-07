@@ -1,31 +1,31 @@
 //! The runtime checks of [`State`]. They are a debugging tool:
-//! - the conflict checks under `check-propagations` and the retention checks under
-//!   `check-consistency`, which run when [`State::propagate_to_fixed_point`] returns;
+//! - the conflict checks under `check-inferences` and the retention checks under `check-retention`,
+//!   which run when [`State::propagate_to_fixed_point`] returns;
 //! - the solution check under `check-solutions`, which runs when the solver finds a solution.
 
-#[cfg(feature = "check-consistency")]
+#[cfg(feature = "check-retention")]
 use crate::checkers::RetentionCoverage;
-#[cfg(feature = "check-consistency")]
+#[cfg(feature = "check-retention")]
 use crate::checkers::RetentionFailure;
 #[cfg(feature = "check-solutions")]
 use crate::checkers::SolutionFailure;
-#[cfg(feature = "check-propagations")]
+#[cfg(feature = "inference-checkers")]
 use crate::checkers::is_rule_checked;
-#[cfg(feature = "check-propagations")]
+#[cfg(feature = "inference-checkers")]
 use crate::predicates::Predicate;
-#[cfg(feature = "check-propagations")]
+#[cfg(feature = "inference-checkers")]
 use crate::proof::InferenceCode;
-#[cfg(feature = "check-consistency")]
+#[cfg(feature = "check-retention")]
 use crate::propagation::Domains;
-#[cfg(feature = "check-propagations")]
+#[cfg(feature = "inference-checkers")]
 use crate::propagation::ExplanationContext;
 #[cfg(feature = "check-solutions")]
 use crate::propagation::SolutionCheck;
-#[cfg(feature = "check-propagations")]
+#[cfg(feature = "inference-checkers")]
 use crate::state::Conflict;
 use crate::state::State;
 
-#[cfg(feature = "check-propagations")]
+#[cfg(feature = "inference-checkers")]
 impl State {
     /// Check every propagation on the trail from `start_index`, and the conflict when
     /// propagation ended in one that a propagator reported.
@@ -148,7 +148,7 @@ impl State {
 }
 
 /// Why an inference is invalid in the solver state, independent of its rule.
-#[cfg(feature = "check-propagations")]
+#[cfg(feature = "inference-checkers")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum InvalidInference {
     /// The premise is not true.
@@ -159,7 +159,7 @@ enum InvalidInference {
     ConsequentNotApplied(Predicate),
 }
 
-#[cfg(feature = "check-consistency")]
+#[cfg(feature = "check-retention")]
 impl State {
     /// Ask every retention checker watching a domain that changed since `start_index` whether its
     /// propagator has anything left to propagate.
@@ -178,7 +178,7 @@ impl State {
                 .on_domain_event(domain);
         }
 
-        let coverage = if cfg!(feature = "check-consistency-all") {
+        let coverage = if cfg!(feature = "check-retention-all") {
             RetentionCoverage::All
         } else {
             RetentionCoverage::Notified

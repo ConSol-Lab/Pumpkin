@@ -1,17 +1,13 @@
 use std::sync::Arc;
 
 use pumpkin_checking::BoxedConflictChecker;
-#[cfg(feature = "check-consistency")]
+#[cfg(feature = "check-retention")]
 use pumpkin_checking::BoxedRetentionChecker;
 use pumpkin_checking::ConflictChecker;
 
 use crate::checkers::RemovableRuleCheckers;
 use crate::checkers::RuleCheckerStore;
-#[cfg(any(
-    feature = "check-propagations",
-    feature = "check-consistency",
-    feature = "check-solutions"
-))]
+#[cfg(feature = "checkers")]
 use crate::checkers::is_rule_checked;
 use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
@@ -33,7 +29,7 @@ use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::InferenceRules;
 use crate::propagation::ConflictRule;
-#[cfg(feature = "check-consistency")]
+#[cfg(feature = "check-retention")]
 use crate::propagation::ConstraintDescription;
 use crate::propagation::ConstructedPropagator;
 use crate::propagation::CurrentNogood;
@@ -61,11 +57,7 @@ use crate::variables::DomainId;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
 
-#[cfg(any(
-    feature = "check-propagations",
-    feature = "check-consistency",
-    feature = "check-solutions"
-))]
+#[cfg(feature = "checkers")]
 mod checking;
 
 /// The [`State`] is the container of variables and propagators.
@@ -215,22 +207,18 @@ impl State {
 
     /// Add the checkers of `Rule` for the constraint with `constraint_description`.
     ///
-    /// The conflict checker is added under `check-propagations`, the retention checker under
-    /// `check-consistency` and the description for the solution check under `check-solutions`,
+    /// The conflict checker is added under `check-inferences`, the retention checker under
+    /// `check-retention` and the description for the solution check under `check-solutions`,
     /// unless the rule is filtered out by `is_rule_checked`.
     #[cfg_attr(
-        not(any(feature = "check-consistency", feature = "check-solutions")),
+        not(any(feature = "check-retention", feature = "check-solutions")),
         allow(
             unused_variables,
             reason = "the checkers exist only under the check features"
         )
     )]
     #[cfg_attr(
-        not(any(
-            feature = "check-propagations",
-            feature = "check-consistency",
-            feature = "check-solutions"
-        )),
+        not(feature = "checkers"),
         allow(
             clippy::needless_pass_by_ref_mut,
             reason = "the checkers exist only under the check features"
@@ -242,16 +230,12 @@ impl State {
         constraint_description: Rule::Description,
         propagator: PropagatorId,
     ) -> RemovableRuleCheckers {
-        #[cfg(any(
-            feature = "check-propagations",
-            feature = "check-consistency",
-            feature = "check-solutions"
-        ))]
+        #[cfg(feature = "checkers")]
         let is_checked = is_rule_checked(&Rule::name());
 
         RemovableRuleCheckers {
             inference_code,
-            #[cfg(feature = "check-propagations")]
+            #[cfg(feature = "inference-checkers")]
             conflict_checker: is_checked.then(|| {
                 self.rule_checkers
                     .conflict_checkers
@@ -262,7 +246,7 @@ impl State {
                         ))),
                     )
             }),
-            #[cfg(feature = "check-consistency")]
+            #[cfg(feature = "check-retention")]
             retention_checker: is_checked.then(|| {
                 self.rule_checkers.retention_checkers.register_removable(
                     constraint_description.scope(),
@@ -454,7 +438,7 @@ impl State {
     /// necessary.
     ///
     /// The checkers of the rule of the propagator are added as well. They are a debugging tool,
-    /// created only when the `check-propagations` or `check-consistency` feature is enabled.
+    /// created only when the `check-inferences` or `check-retention` feature is enabled.
     ///
     /// While the propagator is added to the queue for propagation, this function does _not_
     /// trigger a round of propagation. An explicit call to [`State::propagate_to_fixed_point`] is
@@ -846,16 +830,16 @@ impl State {
     /// Once the [`State`] is conflicting, then the only operation that is defined is
     /// [`State::restore_to`]. All other operations and queries on the state are unspecified.
     pub fn propagate_to_fixed_point(&mut self) -> Result<(), Conflict> {
-        #[cfg(any(feature = "check-propagations", feature = "check-consistency"))]
+        #[cfg(any(feature = "inference-checkers", feature = "check-retention"))]
         let checking_start_index = self.notification_engine.last_notified_trail_index();
 
         let result = self.propagate_to_fixed_point_internal();
 
-        #[cfg(feature = "check-propagations")]
+        #[cfg(feature = "inference-checkers")]
         self.check_inferences(checking_start_index, &result);
 
         // After a conflict the domains are not at a fixpoint, so the retention checkers do not run.
-        #[cfg(feature = "check-consistency")]
+        #[cfg(feature = "check-retention")]
         if result.is_ok() {
             self.run_retention_checkers(checking_start_index);
         }
@@ -1247,11 +1231,11 @@ mod tests {
     use crate::state::State;
 
     /// A retention checker that accepts everything and counts how often it was consulted.
-    #[cfg(feature = "check-consistency")]
+    #[cfg(feature = "check-retention")]
     #[derive(Debug, Clone)]
     struct CountingChecker(std::sync::Arc<std::sync::atomic::AtomicUsize>);
 
-    #[cfg(feature = "check-consistency")]
+    #[cfg(feature = "check-retention")]
     impl pumpkin_checking::RetentionChecker<crate::predicates::Predicate> for CountingChecker {
         fn check_retention(
             &self,
@@ -1266,14 +1250,14 @@ mod tests {
     ///
     /// Every retention checker belongs to a propagator, so a test that wants one has to attach it
     /// to a propagator as well.
-    #[cfg(feature = "check-consistency")]
+    #[cfg(feature = "check-retention")]
     #[derive(Debug, Clone)]
     struct CheckedPropagator<Checker> {
         variable: crate::variables::DomainId,
         checker: Checker,
     }
 
-    #[cfg(feature = "check-consistency")]
+    #[cfg(feature = "check-retention")]
     impl<Checker> crate::propagation::PropagatorConstructor for CheckedPropagator<Checker>
     where
         Checker: pumpkin_checking::RetentionChecker<crate::predicates::Predicate> + Clone + 'static,
@@ -1311,7 +1295,7 @@ mod tests {
 
     /// The description of a [`CheckedPropagator`] is the propagator itself: its variable and
     /// the retention checker of its rule.
-    #[cfg(feature = "check-consistency")]
+    #[cfg(feature = "check-retention")]
     impl<Checker> crate::propagation::ConstraintDescription for CheckedPropagator<Checker> {
         fn scope(&self) -> crate::checkers::Scope {
             crate::checkers::Scope::from_variables([self.variable].iter())
@@ -1326,10 +1310,10 @@ mod tests {
     }
 
     /// The rule of a [`CheckedPropagator`], whose retention checker is the one the test gave.
-    #[cfg(feature = "check-consistency")]
+    #[cfg(feature = "check-retention")]
     struct CheckedRule<Checker>(std::marker::PhantomData<Checker>);
 
-    #[cfg(feature = "check-consistency")]
+    #[cfg(feature = "check-retention")]
     impl<Checker> crate::propagation::ConflictRule for CheckedRule<Checker>
     where
         Checker: pumpkin_checking::RetentionChecker<crate::predicates::Predicate> + Clone + 'static,
@@ -1356,11 +1340,11 @@ mod tests {
     }
 
     /// The conflict checker of a propagator that makes no inferences.
-    #[cfg(feature = "check-consistency")]
+    #[cfg(feature = "check-retention")]
     #[derive(Debug, Clone)]
     struct NoInferences;
 
-    #[cfg(feature = "check-consistency")]
+    #[cfg(feature = "check-retention")]
     impl pumpkin_checking::ConflictChecker<crate::predicates::Predicate> for NoInferences {
         fn check(
             &self,
@@ -1372,7 +1356,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "check-consistency")]
+    #[cfg(feature = "check-retention")]
     impl<Checker> crate::propagation::Propagator for CheckedPropagator<Checker>
     where
         Checker: pumpkin_checking::RetentionChecker<crate::predicates::Predicate> + Clone + 'static,
@@ -1390,11 +1374,11 @@ mod tests {
     }
 
     /// A retention checker that always reports that something is left to propagate.
-    #[cfg(feature = "check-consistency")]
+    #[cfg(feature = "check-retention")]
     #[derive(Debug, Clone)]
     struct UnfinishedChecker;
 
-    #[cfg(feature = "check-consistency")]
+    #[cfg(feature = "check-retention")]
     impl pumpkin_checking::RetentionChecker<crate::predicates::Predicate> for UnfinishedChecker {
         fn check_retention(
             &self,
@@ -1405,7 +1389,7 @@ mod tests {
     }
 
     /// A state with an unfinished checker on a variable that the pending predicate does not touch.
-    #[cfg(feature = "check-consistency")]
+    #[cfg(feature = "check-retention")]
     fn state_with_an_unfinished_checker() -> State {
         let mut state = State::default();
         let touched = state.new_interval_variable(1, 10, None);
@@ -1427,7 +1411,7 @@ mod tests {
         state
     }
 
-    #[cfg(all(feature = "check-consistency", not(feature = "check-consistency-all")))]
+    #[cfg(all(feature = "check-retention", not(feature = "check-retention-all")))]
     #[test]
     fn a_checker_whose_domains_did_not_change_is_not_consulted() {
         let mut state = state_with_an_unfinished_checker();
@@ -1436,7 +1420,7 @@ mod tests {
 
     /// A retention checker removed with its constraint is consulted neither when its domain
     /// changes nor with the wider coverage.
-    #[cfg(feature = "check-consistency")]
+    #[cfg(feature = "check-retention")]
     #[test]
     fn a_removed_retention_checker_is_not_consulted() {
         let mut state = State::default();
@@ -1459,7 +1443,7 @@ mod tests {
         state.propagate_to_fixed_point().expect("no conflict");
     }
 
-    #[cfg(feature = "check-consistency")]
+    #[cfg(feature = "check-retention")]
     #[test]
     #[should_panic(expected = "the retention checker of the rule 'checked' of the propagator")]
     fn a_retention_failure_names_the_rule() {
@@ -1479,7 +1463,7 @@ mod tests {
         let _ = state.propagate_to_fixed_point();
     }
 
-    #[cfg(feature = "check-consistency-all")]
+    #[cfg(feature = "check-retention-all")]
     #[test]
     #[should_panic(expected = "still has something to propagate")]
     fn every_checker_is_consulted_with_the_wider_coverage() {
@@ -1491,7 +1475,7 @@ mod tests {
     /// A propagator that should have reacted to it but did nothing writes no entry of its own,
     /// so unless the checkers watching it are enqueued here,
     /// nothing asks whether it was at a fixpoint.
-    #[cfg(feature = "check-consistency")]
+    #[cfg(feature = "check-retention")]
     #[test]
     fn a_posted_predicate_enqueues_the_retention_checkers_watching_it() {
         use std::sync::Arc;

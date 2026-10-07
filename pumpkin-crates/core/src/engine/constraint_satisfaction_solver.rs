@@ -537,6 +537,8 @@ impl ConstraintSatisfactionSolver {
         brancher: &mut impl Brancher,
         resolver: &mut impl ConflictResolver,
     ) -> CSPSolverExecutionFlag {
+        crate::checkers::report_runtime_checks();
+
         loop {
             if termination.should_stop() {
                 self.solver_state.declare_timeout();

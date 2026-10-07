@@ -82,7 +82,7 @@ pub trait Propagator: Downcast + DynClone {
     /// again by the solver until no further propagations happen.
     ///
     /// The propagations and conflicts are verified by the checkers of the rule of the propagator
-    /// when the `check-propagations` and `check-consistency` features are enabled.
+    /// when the `check-inferences` and `check-retention` features are enabled.
     fn propagate(&mut self, context: PropagationContext) -> PropagationStatusCP;
 
     /// Returns whether the propagator should be enqueued for propagation when a [`DomainEvent`]
