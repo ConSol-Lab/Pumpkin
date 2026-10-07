@@ -24,7 +24,7 @@ impl<AVar: IntegerVariable, BVar: IntegerVariable> ConstraintDescription
             self.a.induced_fixed_value(domains),
             self.b.induced_fixed_value(domains),
         ) else {
-            return SolutionCheck::UnfixedVariable;
+            return SolutionCheck::Unknown;
         };
 
         if a == b {

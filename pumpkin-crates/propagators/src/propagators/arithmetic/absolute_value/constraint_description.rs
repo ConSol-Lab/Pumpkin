@@ -28,7 +28,7 @@ impl<VA: IntegerVariable, VB: IntegerVariable> ConstraintDescription
             self.signed.induced_fixed_value(domains),
             self.absolute.induced_fixed_value(domains),
         ) else {
-            return SolutionCheck::UnfixedVariable;
+            return SolutionCheck::Unknown;
         };
 
         if i64::from(absolute) == i64::from(signed).abs() {

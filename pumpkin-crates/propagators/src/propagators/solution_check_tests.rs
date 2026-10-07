@@ -9,6 +9,7 @@ use pumpkin_core::state::State;
 use pumpkin_core::variables::DomainId;
 
 use super::arithmetic::DivisionDescription;
+use super::arithmetic::LinearLessOrEqualDescription;
 use super::arithmetic::LinearNotEqualDescription;
 use super::arithmetic::MaximumDescription;
 use super::cumulative::ArgTask;
@@ -206,7 +207,7 @@ fn maximum_has_to_equal_an_element() {
 }
 
 #[test]
-fn an_unfixed_variable_is_reported() {
+fn a_disequality_over_an_unfixed_variable_is_unknown() {
     let mut state = State::default();
     let fixed_variable = state.new_interval_variable(-100, 100, None);
     let unfixed_variable = state.new_interval_variable(-100, 100, None);
@@ -218,8 +219,34 @@ fn an_unfixed_variable_is_reported() {
         rhs: 0,
     };
 
-    assert_eq!(
-        description.check_solution(&domains),
-        SolutionCheck::UnfixedVariable
-    );
+    assert_eq!(description.check_solution(&domains), SolutionCheck::Unknown);
+}
+
+#[test]
+fn a_linear_inequality_is_decided_by_the_bounds() {
+    let mut state = State::default();
+    let x = state.new_interval_variable(-100, 100, None);
+    let y = state.new_interval_variable(-100, 100, None);
+    let domains = VariableState::prepare_for_conflict_check(
+        [
+            predicate![x >= 0],
+            predicate![x <= 3],
+            predicate![y >= 1],
+            predicate![y <= 2],
+        ],
+        None,
+    )
+    .expect("the predicates are consistent");
+
+    let check = |bound| {
+        LinearLessOrEqualDescription {
+            terms: Box::from([x, y]),
+            bound,
+        }
+        .check_solution(&domains)
+    };
+
+    assert_eq!(check(5), SolutionCheck::ConstraintSatisfied);
+    assert_eq!(check(0), SolutionCheck::ConstraintViolated);
+    assert_eq!(check(3), SolutionCheck::Unknown);
 }

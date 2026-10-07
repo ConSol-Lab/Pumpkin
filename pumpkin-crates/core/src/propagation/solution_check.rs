@@ -5,10 +5,10 @@ use crate::propagation::ConstraintDescription;
 #[must_use]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SolutionCheck {
-    /// Every variable of the constraint is fixed, and the values satisfy the constraint.
+    /// The constraint holds, whatever values the variables that are not fixed take.
     ConstraintSatisfied,
-    /// Every variable of the constraint is fixed, and the values violate the constraint.
+    /// The constraint is violated, whatever values the variables that are not fixed take.
     ConstraintViolated,
-    /// A variable of the constraint is not fixed, so the domains are not a solution.
-    UnfixedVariable,
+    /// Whether the constraint holds depends on variables that are not fixed.
+    Unknown,
 }

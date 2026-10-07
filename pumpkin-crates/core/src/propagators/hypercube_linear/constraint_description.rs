@@ -1,5 +1,6 @@
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::DomainView;
+use pumpkin_checking::IntExt;
 
 use crate::checkers::Scope;
 use crate::checkers::ScopeItem;
@@ -36,27 +37,33 @@ impl ConstraintDescription for HypercubeLinearDescription {
     }
 
     fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck {
-        let mut is_hypercube_satisfied = true;
-        for predicate in self.hypercube.iter_predicates() {
-            if domains.fixed_value(&predicate.get_domain()).is_none() {
-                return SolutionCheck::UnfixedVariable;
-            }
-            is_hypercube_satisfied &= domains.is_true(&predicate);
-        }
-
-        let Some(sum) = self
+        let bound = i64::from(self.linear.bound());
+        let highest_sum = self
             .linear
             .terms()
-            .map(|term| term.induced_fixed_value(domains).map(i64::from))
-            .sum::<Option<i64>>()
-        else {
-            return SolutionCheck::UnfixedVariable;
-        };
+            .map(|term| IntExt::<i64>::from(term.induced_upper_bound(domains)))
+            .sum::<IntExt<i64>>();
+        let lowest_sum = self
+            .linear
+            .terms()
+            .map(|term| IntExt::<i64>::from(term.induced_lower_bound(domains)))
+            .sum::<IntExt<i64>>();
 
-        if !is_hypercube_satisfied || sum <= i64::from(self.linear.bound()) {
+        let is_hypercube_violated = self
+            .hypercube
+            .iter_predicates()
+            .any(|predicate| domains.is_true(&!predicate));
+        let is_hypercube_satisfied = self
+            .hypercube
+            .iter_predicates()
+            .all(|predicate| domains.is_true(&predicate));
+
+        if is_hypercube_violated || highest_sum <= bound {
             SolutionCheck::ConstraintSatisfied
-        } else {
+        } else if is_hypercube_satisfied && lowest_sum > bound {
             SolutionCheck::ConstraintViolated
+        } else {
+            SolutionCheck::Unknown
         }
     }
 }

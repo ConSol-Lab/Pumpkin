@@ -22,8 +22,6 @@ use crate::engine::reason::ReasonRef;
 use crate::propagation::Domains;
 #[cfg(feature = "check-retention")]
 use crate::propagation::PropagatorId;
-#[cfg(feature = "check-solutions")]
-use crate::propagation::SolutionCheck;
 #[cfg(feature = "inference-checkers")]
 use crate::state::PropagatorConflict;
 use crate::state::State;
@@ -182,18 +180,9 @@ impl State {
         let rule = self.rule_name(failure.inference_code);
         let propagator = self.propagators[failure.propagator].name();
 
-        match failure.outcome {
-            SolutionCheck::UnfixedVariable => panic!(
-                "The solver reported a solution, but a variable of the constraint of the rule \
-                 '{rule}' of the propagator '{propagator}' is not fixed."
-            ),
-            SolutionCheck::ConstraintSatisfied => {
-                unreachable!("a satisfied constraint is not a failure")
-            }
-            SolutionCheck::ConstraintViolated => panic!(
-                "The solver reported a solution that violates the constraint of the rule '{rule}' \
+        panic!(
+            "The solver reported a solution that violates the constraint of the rule '{rule}' \
                  of the propagator '{propagator}'."
-            ),
-        }
+        )
     }
 }

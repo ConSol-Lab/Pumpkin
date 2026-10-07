@@ -39,7 +39,7 @@ where
             self.index.induced_fixed_value(domains),
             self.rhs.induced_fixed_value(domains),
         ) else {
-            return SolutionCheck::UnfixedVariable;
+            return SolutionCheck::Unknown;
         };
 
         // The index starts at zero.
@@ -51,7 +51,7 @@ where
         };
 
         match selected.induced_fixed_value(domains) {
-            None => SolutionCheck::UnfixedVariable,
+            None => SolutionCheck::Unknown,
             Some(value) if value == rhs => SolutionCheck::ConstraintSatisfied,
             Some(_) => SolutionCheck::ConstraintViolated,
         }

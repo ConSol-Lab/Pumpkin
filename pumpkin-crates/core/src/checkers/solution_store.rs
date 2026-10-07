@@ -34,8 +34,6 @@ pub struct SolutionFailure {
     /// The propagator that propagates the constraint.
     pub propagator: PropagatorId,
     pub inference_code: InferenceCode,
-    /// Either [`SolutionCheck::ConstraintViolated`] or [`SolutionCheck::UnfixedVariable`].
-    pub outcome: SolutionCheck,
 }
 
 impl SolutionCheckerStore {
@@ -60,16 +58,19 @@ impl SolutionCheckerStore {
         self.entries[constraint] = None;
     }
 
-    /// Check that `domains` satisfy every constraint, stopping at the first that they do not.
+    /// Check that `domains` violate no constraint, stopping at the first that they do.
+    ///
+    /// A constraint whose outcome depends on variables that are not fixed is not a failure: the
+    /// solver reports a solution when it has no decision left, which can leave variables that do
+    /// not matter unfixed, as with a brancher over a subset of the variables.
     pub fn check(&self, domains: &dyn DomainView<Predicate>) -> Result<(), SolutionFailure> {
         for entry in self.entries.iter().flatten() {
             match entry.constraint_description.check_solution(domains) {
-                SolutionCheck::ConstraintSatisfied => {}
-                outcome @ (SolutionCheck::ConstraintViolated | SolutionCheck::UnfixedVariable) => {
+                SolutionCheck::ConstraintSatisfied | SolutionCheck::Unknown => {}
+                SolutionCheck::ConstraintViolated => {
                     return Err(SolutionFailure {
                         propagator: entry.propagator,
                         inference_code: entry.inference_code,
-                        outcome,
                     });
                 }
             }

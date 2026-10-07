@@ -31,7 +31,7 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> ConstraintDescription
                 .collect::<Option<Vec<_>>>(),
             self.rhs.induced_fixed_value(domains),
         ) else {
-            return SolutionCheck::UnfixedVariable;
+            return SolutionCheck::Unknown;
         };
 
         if elements.iter().max() == Some(&rhs) {

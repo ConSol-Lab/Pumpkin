@@ -37,7 +37,7 @@ where
             self.denominator.induced_fixed_value(domains),
             self.rhs.induced_fixed_value(domains),
         ) else {
-            return SolutionCheck::UnfixedVariable;
+            return SolutionCheck::Unknown;
         };
 
         // The division truncates towards zero.

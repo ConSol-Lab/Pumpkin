@@ -28,7 +28,7 @@ impl<Var: IntegerVariable> ConstraintDescription for DisjunctiveDescription<Var>
             })
             .collect::<Option<Vec<_>>>()
         else {
-            return SolutionCheck::UnfixedVariable;
+            return SolutionCheck::Unknown;
         };
 
         let is_overlapping = intervals.iter().enumerate().any(|(index, &(start, end))| {

@@ -32,6 +32,7 @@ jobs:
           --no-fail-fast                               \
           --features pumpkin-solver/check-inferences   \
           --features pumpkin-core/check-retention      \
+          --features pumpkin-core/check-solutions      \
           --features pumpkin-core/check-deductions
 
   wasm-test:

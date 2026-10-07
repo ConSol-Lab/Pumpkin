@@ -49,7 +49,7 @@ impl<Var: IntegerVariable> ConstraintDescription for CumulativeDescription<Var> 
             .map(|task| task.start_time.induced_fixed_value(domains).map(i64::from))
             .collect::<Option<Vec<_>>>()
         else {
-            return SolutionCheck::UnfixedVariable;
+            return SolutionCheck::Unknown;
         };
 
         // The usage only increases when a task starts, so an overload anywhere is an overload at

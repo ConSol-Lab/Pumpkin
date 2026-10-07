@@ -15,9 +15,10 @@ pub trait ConstraintDescription {
     /// The variables whose domain changes wake up the retention checker of the constraint.
     fn scope(&self) -> Scope;
 
-    /// Whether the values of the variables in `domains` satisfy the constraint.
+    /// Whether `domains` satisfy the constraint.
     ///
-    /// Every variable of the constraint has to be fixed; otherwise the result is
-    /// [`SolutionCheck::UnfixedVariable`].
+    /// A variable that is not fixed does not make the outcome [`SolutionCheck::Unknown`] when the
+    /// constraint is decided without it, such as a nogood with a false predicate. A constraint may
+    /// also answer [`SolutionCheck::Unknown`] when it does not reason about partial assignments.
     fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck;
 }

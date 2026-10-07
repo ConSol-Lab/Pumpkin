@@ -33,7 +33,7 @@ where
             self.b.induced_fixed_value(domains),
             self.c.induced_fixed_value(domains),
         ) else {
-            return SolutionCheck::UnfixedVariable;
+            return SolutionCheck::Unknown;
         };
 
         if i64::from(c) == i64::from(a) * i64::from(b) {

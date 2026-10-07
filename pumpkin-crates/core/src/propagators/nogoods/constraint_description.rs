@@ -34,19 +34,17 @@ impl ConstraintDescription for NogoodDescription {
         if self
             .nogood
             .iter()
-            .any(|predicate| domains.fixed_value(&predicate.get_domain()).is_none())
+            .any(|&predicate| domains.is_true(&!predicate))
         {
-            return SolutionCheck::UnfixedVariable;
-        }
-
-        if self
+            SolutionCheck::ConstraintSatisfied
+        } else if self
             .nogood
             .iter()
             .all(|predicate| domains.is_true(predicate))
         {
             SolutionCheck::ConstraintViolated
         } else {
-            SolutionCheck::ConstraintSatisfied
+            SolutionCheck::Unknown
         }
     }
 }

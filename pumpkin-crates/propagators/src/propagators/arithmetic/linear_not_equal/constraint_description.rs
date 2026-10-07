@@ -28,7 +28,7 @@ impl<Var: IntegerVariable> ConstraintDescription for LinearNotEqualDescription<V
             .map(|term| term.induced_fixed_value(domains).map(i64::from))
             .sum::<Option<i64>>()
         else {
-            return SolutionCheck::UnfixedVariable;
+            return SolutionCheck::Unknown;
         };
 
         if sum == i64::from(self.rhs) {

@@ -1,4 +1,5 @@
 use pumpkin_checking::DomainView;
+use pumpkin_checking::IntExt;
 use pumpkin_core::checkers::Scope;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConstraintDescription;
@@ -18,19 +19,24 @@ impl<Var: IntegerVariable> ConstraintDescription for LinearLessOrEqualDescriptio
     }
 
     fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck {
-        let Some(sum) = self
+        let bound = i64::from(self.bound);
+        let highest_sum = self
             .terms
             .iter()
-            .map(|term| term.induced_fixed_value(domains).map(i64::from))
-            .sum::<Option<i64>>()
-        else {
-            return SolutionCheck::UnfixedVariable;
-        };
+            .map(|term| IntExt::<i64>::from(term.induced_upper_bound(domains)))
+            .sum::<IntExt<i64>>();
+        let lowest_sum = self
+            .terms
+            .iter()
+            .map(|term| IntExt::<i64>::from(term.induced_lower_bound(domains)))
+            .sum::<IntExt<i64>>();
 
-        if sum <= i64::from(self.bound) {
+        if highest_sum <= bound {
             SolutionCheck::ConstraintSatisfied
-        } else {
+        } else if lowest_sum > bound {
             SolutionCheck::ConstraintViolated
+        } else {
+            SolutionCheck::Unknown
         }
     }
 }
