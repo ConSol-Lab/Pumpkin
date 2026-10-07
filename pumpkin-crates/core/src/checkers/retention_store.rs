@@ -98,6 +98,12 @@ impl RetentionCheckerStore {
             inference_code,
         }));
 
+        // The checker is pending from the start, so that it checks the state after the first call
+        // of its propagator even when no domain of its scope changes.
+        let _ = self.enqueued.insert(checker_id);
+        self.pending.accomodate(propagator, vec![]);
+        self.pending[propagator].push(checker_id);
+
         checker_id
     }
 

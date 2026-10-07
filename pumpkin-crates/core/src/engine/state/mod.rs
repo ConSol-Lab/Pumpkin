@@ -1457,6 +1457,28 @@ mod tests {
         }
     }
 
+    /// A retention checker that accepts its first run, the one after the first call of its
+    /// propagator, and reports from then on that something is left to propagate.
+    #[cfg(feature = "check-retention")]
+    #[derive(Debug, Clone, Default)]
+    struct UnfinishedAfterItsFirstRun(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+
+    #[cfg(feature = "check-retention")]
+    impl pumpkin_checking::RetentionChecker<crate::predicates::Predicate>
+        for UnfinishedAfterItsFirstRun
+    {
+        fn check_retention(
+            &self,
+            _: &dyn pumpkin_checking::DomainView<crate::predicates::Predicate>,
+        ) -> pumpkin_checking::RetentionCheck {
+            if self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed) == 0 {
+                pumpkin_checking::RetentionCheck::NothingToPropagate
+            } else {
+                pumpkin_checking::RetentionCheck::PropagationMissed
+            }
+        }
+    }
+
     /// A state with an unfinished checker on a variable that the pending predicate does not touch.
     #[cfg(feature = "check-retention")]
     fn state_with_an_unfinished_checker() -> State {
@@ -1469,7 +1491,7 @@ mod tests {
         state.propagate_to_fixed_point().expect("no conflict");
         let _ = state.add_propagator(CheckedPropagator {
             variable: untouched,
-            checker: UnfinishedChecker,
+            checker: UnfinishedAfterItsFirstRun::default(),
             is_woken: true,
         });
         state.propagate_to_fixed_point().expect("no conflict");
@@ -1525,7 +1547,7 @@ mod tests {
         state.propagate_to_fixed_point().expect("no conflict");
         let _ = state.add_propagator(CheckedPropagator {
             variable: x,
-            checker: UnfinishedChecker,
+            checker: UnfinishedAfterItsFirstRun::default(),
             is_woken: true,
         });
         state.propagate_to_fixed_point().expect("no conflict");
@@ -1534,6 +1556,26 @@ mod tests {
         let _ = state
             .post(predicate!(x >= 5))
             .expect("the value is in the domain");
+        let _ = state.propagate_to_fixed_point();
+    }
+
+    /// A new retention checker is pending from its registration, so a propagator that leaves
+    /// something to propagate in the initial state is caught after its first call, even though
+    /// none of its domains changes.
+    #[cfg(all(feature = "check-retention", not(feature = "check-retention-all")))]
+    #[test]
+    #[should_panic(
+        expected = "did not enqueue itself again after it was called, but the retention checker of its rule 'checked'"
+    )]
+    fn a_new_propagator_is_checked_after_its_first_call() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(1, 10, None);
+        state.propagate_to_fixed_point().expect("no conflict");
+        let _ = state.add_propagator(CheckedPropagator {
+            variable: x,
+            checker: UnfinishedChecker,
+            is_woken: true,
+        });
         let _ = state.propagate_to_fixed_point();
     }
 
@@ -1548,7 +1590,7 @@ mod tests {
         state.propagate_to_fixed_point().expect("no conflict");
         let _ = state.add_propagator(CheckedPropagator {
             variable: x,
-            checker: UnfinishedChecker,
+            checker: UnfinishedAfterItsFirstRun::default(),
             is_woken: false,
         });
         state.propagate_to_fixed_point().expect("no conflict");
