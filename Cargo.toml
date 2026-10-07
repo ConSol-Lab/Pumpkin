@@ -11,6 +11,7 @@ members = [
     "./pumpkin-solver", # The solver binary
     "./pumpkin-proof-processor", # The proof processor
     "./pumpkin-checker", # The uncertified proof checker
+    "./pumpkin-fuzzer", # Randomised testing of propagators against their checkers
     "./pumpkin-solver-py", # The python interface
     "./pumpkin-macros", # Proc-macros used by the pumpkin source (unpublished)
 ]
@@ -39,6 +40,14 @@ codegen-units = 1
 [profile.rel-with-debug]
 inherits = "release"
 debug = true
+
+# For pumpkin-fuzzer, which catches the panics of the runtime checkers. Without link-time
+# optimisation, so that changing a propagator and fuzzing it again is quick.
+[profile.fuzz]
+inherits = "release"
+panic = "unwind"
+lto = false
+codegen-units = 16
 
 [workspace.lints.rust]
 missing_copy_implementations = "warn"
