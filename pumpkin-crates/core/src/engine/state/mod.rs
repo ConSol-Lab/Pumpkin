@@ -1362,14 +1362,18 @@ mod tests {
         }
     }
 
+    /// Written by hand, since the checker carried as a field has no variables to add.
+    #[cfg(feature = "check-retention")]
+    impl<Checker> crate::checkers::ScopeItem for CheckedPropagator<Checker> {
+        fn add_to_scope(&self, scope: &mut crate::checkers::Scope) {
+            scope.add_domain(self.variable);
+        }
+    }
+
     /// The description of a [`CheckedPropagator`] is the propagator itself: its variable and
     /// the retention checker of its rule.
     #[cfg(feature = "check-retention")]
     impl<Checker> crate::propagation::ConstraintDescription for CheckedPropagator<Checker> {
-        fn scope(&self) -> crate::checkers::Scope {
-            crate::checkers::Scope::from_variables([self.variable].iter())
-        }
-
         fn check_solution(
             &self,
             _: &dyn pumpkin_checking::DomainView<crate::predicates::Predicate>,
@@ -1521,8 +1525,10 @@ mod tests {
         let inference_code = state.inference_code_for_rule(tag, "test_rule");
         state.propagate_to_fixed_point().expect("no conflict");
 
+        let mut scope = crate::checkers::Scope::default();
+        scope.add_domain(x);
         let checker = state.rule_checkers.retention_checkers.register_removable(
-            crate::checkers::Scope::from_variables([x].iter()),
+            scope,
             pumpkin_checking::BoxedRetentionChecker::new(UnfinishedChecker),
             PropagatorId::create_from_index(0),
             inference_code,

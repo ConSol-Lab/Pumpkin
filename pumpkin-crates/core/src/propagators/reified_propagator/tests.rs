@@ -278,11 +278,13 @@ where
 #[derive(Clone, Debug)]
 struct GenericDescription(Vec<DomainId>);
 
-impl ConstraintDescription for GenericDescription {
-    fn scope(&self) -> Scope {
-        Scope::from_variables(self.0.iter())
+impl crate::checkers::ScopeItem for GenericDescription {
+    fn add_to_scope(&self, scope: &mut Scope) {
+        self.0.add_to_scope(scope);
     }
+}
 
+impl ConstraintDescription for GenericDescription {
     fn check_solution(&self, _: &dyn DomainView<Predicate>) -> crate::propagation::SolutionCheck {
         crate::propagation::SolutionCheck::ConstraintSatisfied
     }

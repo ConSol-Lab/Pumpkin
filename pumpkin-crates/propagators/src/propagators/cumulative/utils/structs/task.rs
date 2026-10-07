@@ -39,6 +39,7 @@ impl<Var: IntegerVariable + 'static> PartialEq for Task<Var> {
 
 impl<Var: IntegerVariable + 'static> Eq for Task<Var> {}
 
+pumpkin_core::scoped_struct! {
 /// The task which is passed as argument
 #[derive(Clone, Debug)]
 pub struct ArgTask<Var> {
@@ -49,4 +50,5 @@ pub struct ArgTask<Var> {
     pub processing_time: i32,
     /// How much of the resource the given task uses during its non-preemptive execution
     pub resource_usage: i32,
+}
 }

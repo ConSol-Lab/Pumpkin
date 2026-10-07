@@ -1,6 +1,7 @@
 use pumpkin_checking::DomainView;
 
 use crate::checkers::Scope;
+use crate::checkers::ScopeItem;
 use crate::predicates::Predicate;
 #[cfg(doc)]
 use crate::propagation::ConflictRule;
@@ -11,9 +12,16 @@ use crate::propagation::SolutionCheck;
 ///
 /// The checkers of a constraint are built from its description by the [`ConflictRule`] of the
 /// constraint, so they see the same data as the propagator.
-pub trait ConstraintDescription {
+///
+/// The scope comes from [`ScopeItem`], which is usually implemented with [`crate::scoped_struct`]
+/// so that every field of the description is part of it.
+pub trait ConstraintDescription: ScopeItem {
     /// The variables whose domain changes wake up the retention checker of the constraint.
-    fn scope(&self) -> Scope;
+    fn scope(&self) -> Scope {
+        let mut scope = Scope::default();
+        self.add_to_scope(&mut scope);
+        scope
+    }
 
     /// Whether `domains` satisfy the constraint.
     ///

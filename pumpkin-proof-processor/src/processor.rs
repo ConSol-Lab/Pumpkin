@@ -752,11 +752,9 @@ mod tests {
     use pumpkin_checking::RetentionCheck;
     use pumpkin_checking::RetentionChecker;
     use pumpkin_checking::VariableState;
-    use pumpkin_core::checkers::Scope;
     use pumpkin_core::propagation::ConflictRule;
     use pumpkin_core::propagation::ConstraintDescription;
     use pumpkin_core::propagation::EventsToRegister;
-    use pumpkin_core::propagation::LocalId;
     use pumpkin_core::propagation::PropagationContext;
     use pumpkin_core::propagation::Propagator;
     use pumpkin_core::propagation::PropagatorConstructor;
@@ -1017,10 +1015,12 @@ mod tests {
         }
     }
 
-    #[derive(Clone, Debug)]
-    struct AlwaysConflictChecker {
-        watched: Predicate,
-        other: Predicate,
+    pumpkin_core::scoped_struct! {
+        #[derive(Clone, Debug)]
+        struct AlwaysConflictChecker {
+            watched: Predicate,
+            other: Predicate,
+        }
     }
 
     impl ConflictChecker<Predicate> for AlwaysConflictChecker {
@@ -1040,13 +1040,6 @@ mod tests {
 
     /// The checker doubles as the description of the constraint: the two predicates.
     impl ConstraintDescription for AlwaysConflictChecker {
-        fn scope(&self) -> Scope {
-            Scope::from_iter([
-                (LocalId::from(0), self.watched.get_domain()),
-                (LocalId::from(1), self.other.get_domain()),
-            ])
-        }
-
         fn check_solution(
             &self,
             _: &dyn DomainView<Predicate>,

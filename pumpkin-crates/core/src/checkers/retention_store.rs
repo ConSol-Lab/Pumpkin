@@ -86,7 +86,7 @@ impl RetentionCheckerStore {
         let checker_slot = self.store.new_slot();
         let checker_id = checker_slot.key();
 
-        for (_, domain) in scope.domains() {
+        for domain in scope.domains() {
             self.watch_list.accomodate(domain, vec![]);
             self.watch_list[domain].push(checker_id);
         }
@@ -212,7 +212,7 @@ impl RetentionCheckerStore {
             RetentionCheck::PropagationMissed => Err(RetentionFailure {
                 propagator: entry.propagator,
                 inference_code: entry.inference_code,
-                variables: entry.scope.domains().map(|(_, domain)| domain).collect(),
+                variables: entry.scope.domains().collect(),
             }),
         }
     }

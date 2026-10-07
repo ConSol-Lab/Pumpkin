@@ -60,8 +60,8 @@ impl<Inner> AffineView<Inner> {
 }
 
 impl<Inner: ScopeItem> ScopeItem for AffineView<Inner> {
-    fn add_to_scope(&self, scope: &mut Scope, local_id: LocalId) {
-        self.inner.add_to_scope(scope, local_id);
+    fn add_to_scope(&self, scope: &mut Scope) {
+        self.inner.add_to_scope(scope);
     }
 }
 

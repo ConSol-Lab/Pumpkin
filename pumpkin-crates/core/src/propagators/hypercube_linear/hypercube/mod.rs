@@ -2,6 +2,8 @@ use pumpkin_checking::DomainView;
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 
+use crate::checkers::Scope;
+use crate::checkers::ScopeItem;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::variables::DomainId;
@@ -20,6 +22,15 @@ pub struct InconsistentHypercube(DomainId);
 #[derive(Clone, Debug)]
 pub struct Hypercube {
     state: VariableState<Predicate>,
+}
+
+/// Written by hand, since the predicates are kept in a private variable state.
+impl ScopeItem for Hypercube {
+    fn add_to_scope(&self, scope: &mut Scope) {
+        for predicate in self.iter_predicates() {
+            scope.add_domain(predicate.get_domain());
+        }
+    }
 }
 
 impl Hypercube {

@@ -79,8 +79,8 @@ macro_rules! forward {
 }
 
 impl ScopeItem for Literal {
-    fn add_to_scope(&self, scope: &mut Scope, local_id: LocalId) {
-        self.integer_variable.add_to_scope(scope, local_id);
+    fn add_to_scope(&self, scope: &mut Scope) {
+        self.integer_variable.add_to_scope(scope);
     }
 }
 
