@@ -77,6 +77,10 @@ impl<'a> SelectionContext<'a> {
         var.iterate_domain(&self.state.assignments)
     }
 
+    pub fn get_holes<Var: IntegerVariable>(&self, var: &Var) -> impl Iterator<Item = i32> {
+        var.get_holes(&self.state.assignments)
+    }
+
     pub fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
         self.state.truth_value(predicate)
     }
