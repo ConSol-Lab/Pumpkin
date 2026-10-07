@@ -24,7 +24,7 @@ pub(crate) fn run(
 
 /// Used when parsing FlatZinc of the following structure:
 ///
-/// ```
+/// ```text
 /// var 1..5: a;
 /// var 1..5: b = a;
 /// ```
