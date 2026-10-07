@@ -33,6 +33,7 @@ pub use crate::propagation::store::PropagatorHandle;
 use crate::pumpkin_assert_eq_simple;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
+use crate::state::State;
 use crate::statistics::StatisticLogger;
 use crate::statistics::log_statistic;
 use crate::statistics::log_statistic_postfix;
@@ -152,6 +153,12 @@ impl Solver {
 
     pub fn is_logging_proof(&self) -> bool {
         self.satisfaction_solver.is_logging_proof()
+    }
+
+    /// The [`State`] that holds the variables and the propagators of the solver, for tools that
+    /// drive propagation themselves, such as a propagator fuzzer.
+    pub fn into_state(self) -> State {
+        self.satisfaction_solver.state
     }
 }
 

@@ -168,7 +168,7 @@ impl State {
     /// Check that the assignment satisfies the description of every constraint.
     ///
     /// Panics, naming the rule and the propagator of the first constraint it does not satisfy.
-    pub(crate) fn check_solution(&self) {
+    pub fn check_solution(&self) {
         if let Err(failure) = self
             .rule_checkers
             .solution_checkers
