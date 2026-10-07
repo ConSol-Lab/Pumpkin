@@ -71,6 +71,12 @@ impl<'a> SelectionContext<'a> {
         self.lower_bound(var.clone()) == self.upper_bound(var)
     }
 
+    /// Returns an [`Iterator`] over the values in the domain of the provided [`IntegerVariable`]
+    /// (including the lower-bound and upper-bound values).
+    pub fn iterate_domain<Var: IntegerVariable>(&self, var: &Var) -> impl Iterator<Item = i32> {
+        var.iterate_domain(&self.state.assignments)
+    }
+
     pub fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
         self.state.truth_value(predicate)
     }
