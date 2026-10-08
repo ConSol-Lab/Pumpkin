@@ -1,13 +1,8 @@
-use pumpkin_checking::AtomicConstraint;
-use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::ConflictChecker;
-use pumpkin_checking::IntExt;
-
-#[derive(Clone, Debug)]
-pub struct BinaryEqualsChecker<Lhs, Rhs> {
-    pub lhs: Lhs,
-    pub rhs: Rhs,
-}
+use super::BinaryEqualsChecker;
+use crate::AtomicConstraint;
+use crate::CheckerVariable;
+use crate::ConflictChecker;
+use crate::IntExt;
 
 impl<Lhs, Rhs, Atomic> ConflictChecker<Atomic> for BinaryEqualsChecker<Lhs, Rhs>
 where
@@ -17,7 +12,7 @@ where
 {
     fn check(
         &self,
-        mut state: pumpkin_checking::VariableState<Atomic>,
+        mut state: crate::VariableState<Atomic>,
         _: &[Atomic],
         _: Option<&Atomic>,
     ) -> bool {

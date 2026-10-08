@@ -1,6 +1,7 @@
 use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::TestAtomic;
 use pumpkin_checking::VariableState;
+use pumpkin_checking::checkers::ElementChecker;
 use pumpkin_core::conjunction;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
@@ -9,7 +10,6 @@ use pumpkin_core::propagation::CurrentNogood;
 use pumpkin_core::state::State;
 
 use super::ElementArgs;
-use super::ElementChecker;
 use super::ElementDescription;
 use crate::StateExt;
 

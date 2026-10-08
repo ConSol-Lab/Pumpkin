@@ -15,7 +15,5 @@ pub use constraint_description::*;
 pub use constructor::*;
 pub use disjunctive_task::ArgDisjunctiveTask;
 pub use propagator::*;
-pub(crate) mod checker;
-pub use checker::*;
 
 declare_inference_label!(DisjunctiveEdgeFinding);

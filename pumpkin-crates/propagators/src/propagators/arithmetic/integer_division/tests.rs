@@ -1,9 +1,9 @@
 use pumpkin_checking::ConflictChecker;
+use pumpkin_checking::checkers::IntegerDivisionChecker;
 use pumpkin_core::state::State;
 
 use super::DivisionArgs;
 use super::DivisionDescription;
-use super::IntegerDivisionChecker;
 
 #[test]
 fn detects_conflicts() {

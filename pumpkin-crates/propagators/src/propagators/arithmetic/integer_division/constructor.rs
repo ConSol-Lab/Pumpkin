@@ -1,3 +1,4 @@
+use pumpkin_checking::checkers::IntegerDivisionChecker;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::propagation::DomainEvents;
@@ -13,7 +14,6 @@ use pumpkin_core::variables::IntegerVariable;
 use super::Division;
 use super::DivisionDescription;
 use super::DivisionPropagator;
-use super::IntegerDivisionChecker;
 
 /// The [`PropagatorConstructor`] for the [`DivisionPropagator`].
 #[derive(Clone, Debug)]

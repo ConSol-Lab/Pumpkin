@@ -1,10 +1,8 @@
-mod checker;
 mod constraint_description;
 mod hypercube;
 mod linear;
 mod propagator;
 
-pub use checker::*;
 pub use constraint_description::*;
 pub use hypercube::*;
 pub use linear::*;

@@ -4,6 +4,7 @@
 //! inferences are sound w.r.t. an inference rule.
 
 mod atomic_constraint;
+pub mod checkers;
 mod conflict_checker;
 mod deduction_checker;
 mod domain_view;

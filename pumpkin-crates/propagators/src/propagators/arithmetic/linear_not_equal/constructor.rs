@@ -1,4 +1,5 @@
 use enumset::enum_set;
+use pumpkin_checking::checkers::LinearNotEqualChecker;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::propagation::DomainEvent;
@@ -11,7 +12,6 @@ use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
-use super::LinearNotEqualChecker;
 use super::LinearNotEqualDescription;
 use super::LinearNotEqualPropagator;
 
