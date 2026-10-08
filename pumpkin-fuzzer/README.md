@@ -13,7 +13,8 @@ cargo run -p pumpkin-fuzzer --profile fuzz --features checks -- \
 ## Examples
 
 An example is a FlatZinc instance with one constraint, compiled by the solver's own FlatZinc
-compiler, so every constraint the solver can compile can be fuzzed without further code.
+compiler, so every constraint the solver can compile can be fuzzed without further code. A
+propagator without a FlatZinc name is fuzzed from Rust code (see the last section).
 
 - **Extracted**: every constraint of the given FlatZinc files, with the declarations it refers to.
   Constraints equal up to the names of variables are collapsed.
@@ -39,10 +40,28 @@ enables `check-inferences`, `check-retention` and `check-solutions`; `check-infe
 
 - the conflict checkers, on every inference and every reported conflict;
 - the retention checkers, after every call of a propagator and at every fixpoint;
-- the solution checkers, whenever every variable is fixed.
+- the solution checkers, whenever every variable is fixed;
+- the rule self-test, whenever every variable is fixed and the solution checkers accept the
+  assignment: no conflict checker may report that assignment as a conflict, since a solution is no
+  conflict of a sound rule. It needs `check-solutions` and `check-inferences`.
 
 Any other panic is reported as a crash. The `fuzz` profile is `release` with unwinding panics,
 because the checkers report by panicking.
+
+## Parameters
+
+A propagator whose behaviour depends on settings that are not part of its constraint, such as the
+explanation type of the cumulative, implements `PropagatorParameters`: `all()` lists every setting,
+and `is_legal` rejects the combinations it does not support (only needed when there are any). Each
+case draws one legal setting. `--parameters TEXT` keeps only the settings whose `Debug` text
+contains `TEXT`; given more than once, a setting has to contain every text:
+
+```bash
+cargo run -p pumpkin-fuzzer --profile fuzz --features checks -- --constraint pumpkin_cumulative \
+    --random 500 --parameters "explanation_type: Naive" --parameters "generate_sequence: false"
+```
+
+A failure report names the setting, and its replay command and regression test pass it on.
 
 ## Failures
 
@@ -53,3 +72,40 @@ replays it, and a regression test that calls `pumpkin_fuzzer::replay`. The insta
 are also written to `--out` (default `target/fuzzer`).
 
 Cases are independent and seeded (`--seed`), so a failure is reproduced by its moves alone.
+
+## Fuzzing a new propagator
+
+The propagator needs a rule with a conflict checker and a retention checker, and a constraint
+description with `check_solution`; these are the oracles. Then:
+
+1. **From FlatZinc.** Add an arm for the constraint to `post_constraints.rs` of the FlatZinc
+   compiler in `pumpkin-solver`. Examples are then extracted from every FlatZinc file that uses it.
+2. **Random examples.** Add a line to `SIGNATURES` in `generation.rs` with the argument kinds of the
+   constraint (documented there), and fuzz it with `--constraint NAME --random N`.
+3. **Parameters.** If the propagator has settings, implement `PropagatorParameters` for them, and
+   add an arm to `settings` in `parameters.rs` that sets them in the `CompilationOptions`.
+4. Run the fuzzer on the constraint alone first; every failure group comes with a regression test.
+
+A propagator that cannot be built from FlatZinc is fuzzed from Rust code instead, in a test of this
+crate. A build function creates the variables and posts the propagator, drawing what it needs from
+the random generator; each example has its own seed:
+
+```rust
+fn build(rng: &mut SmallRng, solver: &mut Solver, options: MyOptions) {
+    let x = solver.new_named_bounded_integer(0, rng.random_range(0..5), "x");
+    let y = solver.new_named_bounded_integer(0, 5, "y");
+    let constraint_tag = solver.new_constraint_tag();
+    let _ = solver.add_propagator(MyConstructor { x, y, options, constraint_tag });
+}
+
+#[test]
+fn my_propagator() {
+    let configuration = Configuration { cases: 10, ..Configuration::default() };
+    pumpkin_fuzzer::fuzz_propagator_with_parameters("my_propagator", 100, &configuration, build)
+        .assert_no_failures();
+}
+```
+
+`fuzz_propagator` takes a build function without parameters. A failure report gives a regression
+test that calls `replay_propagator` with the build function, the seed and the moves. See
+`tests/propagator_fuzzing.rs`.
