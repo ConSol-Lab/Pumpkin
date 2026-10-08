@@ -1,3 +1,4 @@
+use pumpkin_checking::checkers::IntegerMultiplicationChecker;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::propagation::DomainEvents;
@@ -10,7 +11,6 @@ use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::IntegerMultiplicationDescription;
-use super::checker::IntegerMultiplicationChecker;
 use super::propagator::IntegerMultiplicationPropagator;
 
 declare_inference_label!(IntegerMultiplication);

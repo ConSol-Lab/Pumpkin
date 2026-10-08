@@ -1,3 +1,5 @@
+use pumpkin_checking::checkers::CheckerTask;
+use pumpkin_checking::checkers::TimeTableChecker;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
@@ -5,8 +7,6 @@ use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::TimeTableOverIntervalIncrementalPropagator;
-use crate::cumulative::time_table::CheckerTask;
-use crate::cumulative::time_table::TimeTableChecker;
 #[cfg(doc)]
 use crate::cumulative::time_table::TimeTableOverIntervalPropagator;
 #[cfg(doc)]

@@ -1,31 +1,8 @@
-use std::cell::RefCell;
-
-use pumpkin_checking::AtomicConstraint;
-use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::ConflictChecker;
-use pumpkin_checking::Domain;
-use pumpkin_checking::Union;
-
-#[derive(Clone, Debug)]
-pub struct ElementChecker<VX, VI, VE> {
-    array: Box<[VX]>,
-    index: VI,
-    rhs: VE,
-
-    union: RefCell<Union>,
-}
-
-impl<VX, VI, VE> ElementChecker<VX, VI, VE> {
-    /// Create a new [`ElementChecker`].
-    pub fn new(array: Box<[VX]>, index: VI, rhs: VE) -> Self {
-        ElementChecker {
-            array,
-            index,
-            rhs,
-            union: RefCell::new(Union::empty()),
-        }
-    }
-}
+use super::ElementChecker;
+use crate::AtomicConstraint;
+use crate::CheckerVariable;
+use crate::ConflictChecker;
+use crate::Domain;
 
 impl<VX, VI, VE, Atomic> ConflictChecker<Atomic> for ElementChecker<VX, VI, VE>
 where
@@ -34,12 +11,7 @@ where
     VI: CheckerVariable<Atomic>,
     VE: CheckerVariable<Atomic>,
 {
-    fn check(
-        &self,
-        state: pumpkin_checking::VariableState<Atomic>,
-        _: &[Atomic],
-        _: Option<&Atomic>,
-    ) -> bool {
+    fn check(&self, state: crate::VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
         self.union.borrow_mut().reset();
 
         // A domain consistent checker for element does the following:

@@ -1,3 +1,4 @@
+use pumpkin_checking::checkers::ElementChecker;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
@@ -9,7 +10,6 @@ use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::Element;
-use super::ElementChecker;
 use super::ElementDescription;
 use super::ElementPropagator;
 

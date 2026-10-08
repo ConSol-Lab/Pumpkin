@@ -1,20 +1,14 @@
-use pumpkin_checking::AtomicConstraint;
-use pumpkin_checking::BoxedChecker;
-use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::ConflictChecker;
-
-#[derive(Debug, Clone)]
-pub struct ReifiedChecker<Atomic: AtomicConstraint, Var> {
-    pub inner: BoxedChecker<Atomic>,
-    pub reification_literal: Var,
-}
+use super::ReifiedChecker;
+use crate::AtomicConstraint;
+use crate::CheckerVariable;
+use crate::ConflictChecker;
 
 impl<Atomic: AtomicConstraint + Clone, Var: CheckerVariable<Atomic>> ConflictChecker<Atomic>
     for ReifiedChecker<Atomic, Var>
 {
     fn check(
         &self,
-        state: pumpkin_checking::VariableState<Atomic>,
+        state: crate::VariableState<Atomic>,
         premises: &[Atomic],
         consequent: Option<&Atomic>,
     ) -> bool {

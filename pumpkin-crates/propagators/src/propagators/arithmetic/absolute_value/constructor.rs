@@ -1,3 +1,4 @@
+use pumpkin_checking::checkers::AbsoluteValueChecker;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::propagation::DomainEvents;
@@ -9,7 +10,6 @@ use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
-use super::AbsoluteValueChecker;
 use super::AbsoluteValueDescription;
 use super::AbsoluteValuePropagator;
 
