@@ -15,3 +15,7 @@ pub(crate) use nogood_info::*;
 pub(crate) use nogood_propagator::*;
 pub(crate) use propagation_buffer::*;
 pub use propagation_mode::*;
+
+#[cfg(test)]
+#[allow(deprecated, reason = "Will be refactored")]
+mod tests;

@@ -1,4 +1,7 @@
+mod constructor;
+mod propagator;
 mod synchronisation;
-mod time_table_per_point_incremental;
+#[cfg(test)]
+mod tests;
 
-pub use time_table_per_point_incremental::*;
+pub use propagator::*;
