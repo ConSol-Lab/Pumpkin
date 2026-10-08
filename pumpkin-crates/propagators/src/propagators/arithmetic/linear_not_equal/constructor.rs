@@ -1,7 +1,6 @@
 use enumset::enum_set;
-use pumpkin_checking::checkers::LinearNotEqualChecker;
-use pumpkin_core::declare_inference_label;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
@@ -9,13 +8,11 @@ use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::LinearNotEqualDescription;
 use super::LinearNotEqualPropagator;
-
-declare_inference_label!(LinearNotEquals);
+use super::LinearNotEqualRule;
 
 /// The [`PropagatorConstructor`] for the [`LinearNotEqualPropagator`].
 #[derive(Clone, Debug)]
@@ -30,14 +27,24 @@ where
     Var: IntegerVariable + 'static,
 {
     type PropagatorImpl = LinearNotEqualPropagator<Var>;
+    type Rule = LinearNotEqualRule<Var>;
+
+    fn constraint_description(&self) -> LinearNotEqualDescription<Var> {
+        self.constraint_description.clone()
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
 
     fn create(
         self,
         mut context: PropagatorConstructorContext,
+        inference_code: InferenceCode,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
         let LinearNotEqualPropagatorArgs {
             constraint_description,
-            constraint_tag,
+            constraint_tag: _,
         } = self;
         let LinearNotEqualDescription { terms, rhs } = constraint_description;
 
@@ -50,16 +57,6 @@ where
                 LocalId::from(i as u32),
             );
         }
-
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_conflict_checker(
-            constraint_tag,
-            LinearNotEquals,
-            LinearNotEqualChecker {
-                terms: terms.as_ref().into(),
-                bound: rhs,
-            },
-        );
 
         let mut propagator = LinearNotEqualPropagator {
             terms,
@@ -75,7 +72,6 @@ where
 
         PropagatorSpec {
             registration: registration.build(),
-            checkers: checkers.build(),
             propagator,
         }
     }

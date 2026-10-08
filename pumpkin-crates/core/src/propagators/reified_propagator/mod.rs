@@ -1,3 +1,4 @@
+mod conflict_rule;
 mod constraint_description;
 mod constructor;
 mod propagator;
@@ -5,6 +6,7 @@ mod propagator;
 #[allow(deprecated, reason = "Will be refactored")]
 mod tests;
 
+pub use conflict_rule::*;
 pub use constraint_description::*;
 pub use constructor::*;
 pub use propagator::*;
