@@ -1,18 +1,21 @@
+//! Contains a [`TerminationCondition`] which triggers when the process receives a termination
+//! signal (SIGINT or SIGTERM).
+
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use crate::core::termination::TerminationCondition;
 
-/// A [`TerminationCondition`] which triggers due to a SIGINT signal.
+/// A [`TerminationCondition`] which triggers due to a SIGINT or SIGTERM signal.
 #[derive(Clone, Debug)]
-pub(crate) struct OsSignal {
+pub struct OsSignal {
     signal_received: Arc<AtomicBool>,
 }
 
 impl OsSignal {
     /// Create a termination and install the event listeners.
-    pub(crate) fn install() -> OsSignal {
+    pub fn install() -> OsSignal {
         // The signals to listen to for termination.
         const TERMINATION_SIGNALS: &[std::ffi::c_int] =
             &[signal_hook::consts::SIGINT, signal_hook::consts::SIGTERM];

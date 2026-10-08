@@ -379,7 +379,7 @@ pub mod core {
 pub mod file_format;
 pub mod flatzinc;
 pub mod logging;
-mod os_signal_termination;
+pub mod os_signal_termination;
 
 use std::fs::File;
 use std::path::Path;
