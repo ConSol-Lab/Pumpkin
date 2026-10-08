@@ -185,10 +185,24 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
             return self
                 .inner
                 .induced_holes(variable_state)
-                .map(|value| self.map(value));
+                .map(|value| self.map(value))
+                .collect::<Vec<_>>()
+                .into_iter();
         }
 
-        todo!("how to iterate holes of a scaled domain");
+        // With a scale other than 1 or -1, every value between the bounds that is not the image of
+        // a value in the inner domain is a hole. Without finite bounds they cannot be listed.
+        let (IntExt::Int(lower_bound), IntExt::Int(upper_bound)) = (
+            self.induced_lower_bound(variable_state),
+            self.induced_upper_bound(variable_state),
+        ) else {
+            return Vec::new().into_iter();
+        };
+
+        (lower_bound + 1..upper_bound)
+            .filter(|&value| !self.induced_domain_contains(variable_state, value))
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 
     fn iter_induced_domain<'this, 'state, View>(
@@ -468,5 +482,28 @@ mod tests {
 
         assert_eq!(predicate!(view <= -3), predicate!(domain >= 2));
         assert_eq!(predicate!(view >= 5), predicate!(domain <= -3));
+    }
+
+    #[test]
+    fn the_holes_of_a_scaled_view_are_the_values_it_skips() {
+        let mut state = crate::state::State::default();
+        let domain = state.new_interval_variable(0, 3, None);
+        let view = domain.scaled(2).offset(1);
+
+        let domains = pumpkin_checking::VariableState::prepare_for_conflict_check(
+            [
+                predicate!(domain >= 0),
+                predicate!(domain <= 3),
+                predicate!(domain != 1),
+            ],
+            None,
+        )
+        .expect("the predicates are consistent");
+
+        // The view takes the values 1, 5 and 7.
+        assert_eq!(
+            view.induced_holes(&domains).collect::<Vec<_>>(),
+            vec![2, 3, 4, 6]
+        );
     }
 }
