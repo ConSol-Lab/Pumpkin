@@ -1,3 +1,5 @@
+use crate::ConflictCheck;
+use crate::ConflictChecker;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
 use crate::checkers::ElementChecker;
@@ -81,5 +83,19 @@ fn retention_holds_when_every_selectable_element_meets_the_rhs() {
     assert_eq!(
         checker().check_retention(&state),
         RetentionCheck::NothingToPropagate
+    );
+}
+
+#[test]
+fn an_index_that_selects_no_element_is_a_conflict() {
+    // To check the inference [index >= 0], the checker assumes its negation, index <= -1, under
+    // which the index selects no element of the array.
+    let consequent = test_atomic!([index >= 0]);
+    let state = crate::VariableState::prepare_for_conflict_check([], Some(consequent))
+        .expect("no conflicting atomics");
+
+    assert_eq!(
+        checker().check(&state, &[], Some(&consequent)),
+        ConflictCheck::ConflictDetected
     );
 }

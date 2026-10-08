@@ -40,10 +40,10 @@ where
             self.union.borrow_mut().add(state, element);
         }
 
-        assert!(
-            self.union.borrow().is_consistent(),
-            "at least one element has a non-empty domain or else variable state would be inconsistent"
-        );
+        // No element can equal the right-hand side when the index selects none of them.
+        if !self.union.borrow().is_consistent() {
+            return ConflictCheck::ConflictDetected;
+        }
 
         // Compute `|union cap rhs| == 0`.
         let intersection_lower_bound = self
