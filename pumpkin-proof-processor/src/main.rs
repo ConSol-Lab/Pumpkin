@@ -23,7 +23,9 @@ use pumpkin_core::containers::StorageKey;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::state::State;
 use pumpkin_core::variables::TransformableVariable;
+use pumpkin_propagators::arithmetic::BinaryNotEqualsDescription;
 use pumpkin_propagators::arithmetic::BinaryNotEqualsPropagatorArgs;
+use pumpkin_propagators::arithmetic::LinearLessOrEqualDescription;
 use pumpkin_propagators::arithmetic::LinearLessOrEqualPropagatorArgs;
 use pumpkin_propagators::cumulative::ArgTask;
 use pumpkin_propagators::cumulative::options::CumulativePropagatorOptions;
@@ -140,8 +142,10 @@ fn post_constraint(
             }
 
             let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
-                x: terms.into(),
-                c: *bound,
+                constraint_description: LinearLessOrEqualDescription {
+                    terms: terms.into(),
+                    bound: *bound,
+                },
                 constraint_tag,
             });
         }
@@ -166,14 +170,18 @@ fn post_constraint(
             let negated_terms = terms.iter().map(|var| var.scaled(-1)).collect::<Box<[_]>>();
 
             let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
-                x: negated_terms,
-                c: -*bound,
+                constraint_description: LinearLessOrEqualDescription {
+                    terms: negated_terms,
+                    bound: -*bound,
+                },
                 constraint_tag,
             });
 
             let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
-                x: terms.into(),
-                c: *bound,
+                constraint_description: LinearLessOrEqualDescription {
+                    terms: terms.into(),
+                    bound: *bound,
+                },
                 constraint_tag,
             });
         }
@@ -229,8 +237,10 @@ fn post_constraint(
             for i in 0..variables.len() {
                 for j in i + 1..variables.len() {
                     let _ = state.add_propagator(BinaryNotEqualsPropagatorArgs {
-                        a: variables[i],
-                        b: variables[j],
+                        constraint_description: BinaryNotEqualsDescription {
+                            a: variables[i],
+                            b: variables[j],
+                        },
                         constraint_tag,
                     });
                 }

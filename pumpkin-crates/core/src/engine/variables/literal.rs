@@ -2,12 +2,14 @@ use std::ops::Not;
 
 use enumset::EnumSet;
 use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::DomainView;
 use pumpkin_checking::IntExt;
-use pumpkin_checking::VariableState;
 
 use super::DomainId;
 use super::IntegerVariable;
 use super::TransformableVariable;
+use crate::checkers::Scope;
+use crate::checkers::ScopeItem;
 use crate::engine::Assignments;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
@@ -76,6 +78,12 @@ macro_rules! forward {
     }
 }
 
+impl ScopeItem for Literal {
+    fn add_to_scope(&self, scope: &mut Scope) {
+        self.integer_variable.add_to_scope(scope);
+    }
+}
+
 impl EventTarget for Literal {
     fn register(
         &self,
@@ -95,28 +103,56 @@ impl CheckerVariable<Predicate> for Literal {
     forward!(integer_variable, fn atomic_not_equal(&self, value: i32) -> Predicate);
     forward!(integer_variable, fn atomic_equal(&self, value: i32) -> Predicate);
 
-    forward!(integer_variable, fn induced_lower_bound(&self, variable_state: &VariableState<Predicate>) -> IntExt);
-    forward!(integer_variable, fn induced_upper_bound(&self, variable_state: &VariableState<Predicate>) -> IntExt);
-    forward!(integer_variable, fn induced_fixed_value(&self, variable_state: &VariableState<Predicate>) -> Option<i32>);
-    forward!(integer_variable, fn induced_domain_contains(&self, variable_state: &VariableState<Predicate>, value: i32) -> bool);
-    forward!(
-        integer_variable,
-        fn <'this, 'state> induced_holes(
-            &'this self,
-            variable_state: &'state VariableState<Predicate>
-        ) -> impl Iterator<Item = i32> + 'state
-        where
-            'this: 'state,
-    );
-    forward!(
-        integer_variable,
-        fn <'this, 'state> iter_induced_domain(
-            &'this self,
-            variable_state: &'state VariableState<Predicate>
-        ) -> Option<impl Iterator<Item = i32> + 'state>
-        where
-            'this: 'state,
-    );
+    fn induced_lower_bound<View>(&self, domains: &View) -> IntExt
+    where
+        View: DomainView<Predicate> + ?Sized,
+    {
+        self.integer_variable.induced_lower_bound(domains)
+    }
+
+    fn induced_upper_bound<View>(&self, domains: &View) -> IntExt
+    where
+        View: DomainView<Predicate> + ?Sized,
+    {
+        self.integer_variable.induced_upper_bound(domains)
+    }
+
+    fn induced_fixed_value<View>(&self, domains: &View) -> Option<i32>
+    where
+        View: DomainView<Predicate> + ?Sized,
+    {
+        self.integer_variable.induced_fixed_value(domains)
+    }
+
+    fn induced_domain_contains<View>(&self, domains: &View, value: i32) -> bool
+    where
+        View: DomainView<Predicate> + ?Sized,
+    {
+        self.integer_variable
+            .induced_domain_contains(domains, value)
+    }
+
+    fn induced_holes<'this, 'state, View>(
+        &'this self,
+        domains: &'state View,
+    ) -> impl Iterator<Item = i32> + 'state
+    where
+        'this: 'state,
+        View: DomainView<Predicate> + ?Sized,
+    {
+        self.integer_variable.induced_holes(domains)
+    }
+
+    fn iter_induced_domain<'this, 'state, View>(
+        &'this self,
+        domains: &'state View,
+    ) -> Option<impl Iterator<Item = i32> + 'state>
+    where
+        'this: 'state,
+        View: DomainView<Predicate> + ?Sized,
+    {
+        self.integer_variable.iter_induced_domain(domains)
+    }
 }
 
 impl IntegerVariable for Literal {

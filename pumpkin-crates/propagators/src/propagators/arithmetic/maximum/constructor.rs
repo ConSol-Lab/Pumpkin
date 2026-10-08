@@ -10,12 +10,12 @@ use pumpkin_core::variables::IntegerVariable;
 
 use super::Maximum;
 use super::MaximumChecker;
+use super::MaximumDescription;
 use super::MaximumPropagator;
 
 #[derive(Clone, Debug)]
 pub struct MaximumArgs<ElementVar, Rhs> {
-    pub array: Box<[ElementVar]>,
-    pub rhs: Rhs,
+    pub constraint_description: MaximumDescription<ElementVar, Rhs>,
     pub constraint_tag: ConstraintTag,
 }
 
@@ -28,10 +28,10 @@ where
 
     fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let MaximumArgs {
-            array,
-            rhs,
+            constraint_description,
             constraint_tag,
         } = self;
+        let MaximumDescription { array, rhs } = constraint_description;
 
         let mut registration = EventsToRegister::builder();
         for (idx, var) in array.iter().enumerate() {

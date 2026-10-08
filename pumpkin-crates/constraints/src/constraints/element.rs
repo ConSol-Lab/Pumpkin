@@ -2,6 +2,7 @@ use pumpkin_core::constraints::Constraint;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_propagators::element::ElementArgs;
+use pumpkin_propagators::element::ElementDescription;
 
 /// Creates the [element](https://sofdem.github.io/gccat/gccat/Celement.html) [`Constraint`] which states that `array[index] = rhs`.
 pub fn element<ElementVar: IntegerVariable + 'static>(
@@ -11,9 +12,11 @@ pub fn element<ElementVar: IntegerVariable + 'static>(
     constraint_tag: ConstraintTag,
 ) -> impl Constraint {
     ElementArgs {
-        array: array.into_iter().collect(),
-        index,
-        rhs,
+        constraint_description: ElementDescription {
+            array: array.into_iter().collect(),
+            index,
+            rhs,
+        },
         constraint_tag,
     }
 }

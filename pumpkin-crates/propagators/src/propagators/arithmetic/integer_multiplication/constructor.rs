@@ -9,6 +9,7 @@ use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
+use super::IntegerMultiplicationDescription;
 use super::checker::IntegerMultiplicationChecker;
 use super::propagator::IntegerMultiplicationPropagator;
 
@@ -23,9 +24,7 @@ const ID_C: LocalId = LocalId::from(2);
 /// Creates the propagator for `a * b = c`.
 #[derive(Clone, Debug)]
 pub struct IntegerMultiplicationConstructor<VA, VB, VC> {
-    pub a: VA,
-    pub b: VB,
-    pub c: VC,
+    pub constraint_description: IntegerMultiplicationDescription<VA, VB, VC>,
     pub constraint_tag: ConstraintTag,
 }
 
@@ -39,11 +38,10 @@ where
 
     fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let IntegerMultiplicationConstructor {
-            a,
-            b,
-            c,
+            constraint_description,
             constraint_tag,
         } = self;
+        let IntegerMultiplicationDescription { a, b, c } = constraint_description;
 
         let registration = EventsToRegister::builder()
             .add(&a, DomainEvents::ANY_INT, ID_A)

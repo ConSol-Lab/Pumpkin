@@ -6,8 +6,11 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Literal;
 use pumpkin_core::variables::TransformableVariable;
+use pumpkin_propagators::arithmetic::BinaryEqualsDescription;
 use pumpkin_propagators::arithmetic::BinaryEqualsPropagatorArgs;
+use pumpkin_propagators::arithmetic::BinaryNotEqualsDescription;
 use pumpkin_propagators::arithmetic::BinaryNotEqualsPropagatorArgs;
+use pumpkin_propagators::arithmetic::LinearNotEqualDescription;
 use pumpkin_propagators::arithmetic::LinearNotEqualPropagatorArgs;
 
 use super::less_than_or_equals;
@@ -87,8 +90,10 @@ where
     fn post(self, solver: &mut Solver) {
         if self.terms.len() == 2 && !solver.is_logging_proof() {
             let _ = solver.add_propagator(BinaryEqualsPropagatorArgs {
-                a: self.terms[0].clone(),
-                b: self.terms[1].scaled(-1).offset(self.rhs),
+                constraint_description: BinaryEqualsDescription {
+                    a: self.terms[0].clone(),
+                    b: self.terms[1].scaled(-1).offset(self.rhs),
+                },
                 constraint_tag: self.constraint_tag,
             });
         } else {
@@ -107,8 +112,10 @@ where
         if self.terms.len() == 2 && !solver.is_logging_proof() {
             let _ = solver.add_propagator(ReifiedPropagatorArgs {
                 propagator: BinaryEqualsPropagatorArgs {
-                    a: self.terms[0].clone(),
-                    b: self.terms[1].scaled(-1).offset(self.rhs),
+                    constraint_description: BinaryEqualsDescription {
+                        a: self.terms[0].clone(),
+                        b: self.terms[1].scaled(-1).offset(self.rhs),
+                    },
                     constraint_tag: self.constraint_tag,
                 },
                 reification_literal,
@@ -156,14 +163,18 @@ where
 
         if terms.len() == 2 {
             let _ = solver.add_propagator(BinaryNotEqualsPropagatorArgs {
-                a: terms[0].clone(),
-                b: terms[1].scaled(-1).offset(self.rhs),
+                constraint_description: BinaryNotEqualsDescription {
+                    a: terms[0].clone(),
+                    b: terms[1].scaled(-1).offset(self.rhs),
+                },
                 constraint_tag: self.constraint_tag,
             });
         } else {
             LinearNotEqualPropagatorArgs {
-                terms: terms.into(),
-                rhs,
+                constraint_description: LinearNotEqualDescription {
+                    terms: terms.into(),
+                    rhs,
+                },
                 constraint_tag,
             }
             .post(solver)
@@ -180,16 +191,20 @@ where
         if terms.len() == 2 {
             let _ = solver.add_propagator(ReifiedPropagatorArgs {
                 propagator: BinaryNotEqualsPropagatorArgs {
-                    a: terms[0].clone(),
-                    b: terms[1].scaled(-1).offset(self.rhs),
+                    constraint_description: BinaryNotEqualsDescription {
+                        a: terms[0].clone(),
+                        b: terms[1].scaled(-1).offset(self.rhs),
+                    },
                     constraint_tag: self.constraint_tag,
                 },
                 reification_literal,
             });
         } else {
             LinearNotEqualPropagatorArgs {
-                terms: terms.into(),
-                rhs,
+                constraint_description: LinearNotEqualDescription {
+                    terms: terms.into(),
+                    rhs,
+                },
                 constraint_tag,
             }
             .implied_by(solver, reification_literal)

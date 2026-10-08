@@ -1,5 +1,6 @@
 mod arena_allocator;
 mod checker;
+mod constraint_description;
 mod learning_options;
 mod nogood_id;
 mod nogood_info;
@@ -9,6 +10,7 @@ mod propagation_mode;
 mod semantic_minimiser;
 
 pub use checker::*;
+pub use constraint_description::*;
 pub use learning_options::*;
 pub(crate) use nogood_id::*;
 pub(crate) use nogood_info::*;

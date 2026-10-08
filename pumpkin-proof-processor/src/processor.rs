@@ -745,6 +745,7 @@ mod tests {
     use drcp_format::reader::ReadAtomic;
     use drcp_format::reader::ReadStep;
     use pumpkin_checking::ConflictChecker;
+    use pumpkin_checking::DomainView;
     use pumpkin_checking::VariableState;
     use pumpkin_core::declare_inference_label;
     use pumpkin_core::propagation::EventsToRegister;
@@ -756,6 +757,7 @@ mod tests {
     use pumpkin_core::propagation::ReadDomains;
     use pumpkin_core::propagation::RuntimeCheckers;
     use pumpkin_core::state::PropagationStatusCP;
+    use pumpkin_propagators::arithmetic::BinaryEqualsDescription;
     use pumpkin_propagators::arithmetic::BinaryEqualsPropagatorArgs;
 
     use super::*;
@@ -799,8 +801,7 @@ mod tests {
 
         let constraint_tag = state.new_constraint_tag();
         let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
-            a: x1,
-            b: x2,
+            constraint_description: BinaryEqualsDescription { a: x1, b: x2 },
             constraint_tag,
         });
 

@@ -87,3 +87,28 @@ fn trivially_unsatisfied_linear_are_okay() {
         linear.terms().collect::<Vec<_>>()
     );
 }
+
+#[test]
+fn the_scope_holds_the_variable_of_every_term() {
+    let mut state = State::default();
+
+    let x = state.new_interval_variable(1, 10, Some("x".into()));
+    let y = state.new_interval_variable(1, 10, Some("y".into()));
+
+    let linear = LinearInequality::new(
+        [
+            (NonZero::new(2).unwrap(), x),
+            (NonZero::new(-3).unwrap(), y),
+        ],
+        8,
+    )
+    .expect("not trivially true");
+
+    let mut scope = Scope::default();
+    linear.add_to_scope(&mut scope);
+
+    assert_eq!(
+        [x, y].into_iter().collect::<HashSet<_>>(),
+        scope.domains().collect::<HashSet<_>>(),
+    );
+}

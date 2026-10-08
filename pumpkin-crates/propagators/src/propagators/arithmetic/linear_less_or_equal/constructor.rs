@@ -11,6 +11,7 @@ use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::LinearLessOrEqualConflictChecker;
+use super::LinearLessOrEqualDescription;
 use super::LinearLessOrEqualPropagator;
 
 declare_inference_label!(LinearBounds);
@@ -18,8 +19,7 @@ declare_inference_label!(LinearBounds);
 /// The [`PropagatorConstructor`] for the [`LinearLessOrEqualPropagator`].
 #[derive(Clone, Debug)]
 pub struct LinearLessOrEqualPropagatorArgs<Var> {
-    pub x: Box<[Var]>,
-    pub c: i32,
+    pub constraint_description: LinearLessOrEqualDescription<Var>,
     pub constraint_tag: ConstraintTag,
 }
 
@@ -34,10 +34,10 @@ where
         mut context: PropagatorConstructorContext,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
         let LinearLessOrEqualPropagatorArgs {
-            x,
-            c,
+            constraint_description,
             constraint_tag,
         } = self;
+        let LinearLessOrEqualDescription { terms: x, bound: c } = constraint_description;
 
         let mut lower_bound_left_hand_side = 0_i64;
         let mut current_bounds = vec![];

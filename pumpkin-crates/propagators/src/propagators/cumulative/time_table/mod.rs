@@ -57,6 +57,7 @@
 //! 149–157.
 
 mod checker;
+mod constraint_description;
 mod explanations;
 mod over_interval_incremental_propagator;
 mod per_point_incremental_propagator;
@@ -66,6 +67,7 @@ mod time_table_per_point;
 mod time_table_util;
 
 pub use checker::*;
+pub use constraint_description::*;
 pub use explanations::CumulativeExplanationType;
 pub use over_interval_incremental_propagator::*;
 pub use per_point_incremental_propagator::*;

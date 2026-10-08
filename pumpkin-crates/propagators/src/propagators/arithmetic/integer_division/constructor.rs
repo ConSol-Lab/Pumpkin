@@ -11,15 +11,14 @@ use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::Division;
+use super::DivisionDescription;
 use super::DivisionPropagator;
 use super::IntegerDivisionChecker;
 
 /// The [`PropagatorConstructor`] for the [`DivisionPropagator`].
 #[derive(Clone, Debug)]
 pub struct DivisionArgs<VA, VB, VC> {
-    pub numerator: VA,
-    pub denominator: VB,
-    pub rhs: VC,
+    pub constraint_description: DivisionDescription<VA, VB, VC>,
     pub constraint_tag: ConstraintTag,
 }
 
@@ -37,11 +36,14 @@ where
 
     fn create(self, context: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let DivisionArgs {
+            constraint_description,
+            constraint_tag,
+        } = self;
+        let DivisionDescription {
             numerator,
             denominator,
             rhs,
-            constraint_tag,
-        } = self;
+        } = constraint_description;
 
         pumpkin_assert_simple!(
             !context.contains(&denominator, 0),

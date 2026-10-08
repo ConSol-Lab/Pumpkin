@@ -8,6 +8,7 @@ use pumpkin_core::variables::DomainId;
 use pumpkin_core::variables::TransformableVariable;
 
 use super::super::IntegerMultiplicationConstructor;
+use super::IntegerMultiplicationDescription;
 use crate::StateExt;
 
 fn reason_for(state: &mut State, predicate: Predicate) -> PropositionalConjunction {
@@ -19,9 +20,7 @@ fn reason_for(state: &mut State, predicate: Predicate) -> PropositionalConjuncti
 fn new_propagator(state: &mut State, a: DomainId, b: DomainId, c: DomainId) {
     let constraint_tag = state.new_constraint_tag();
     let _ = state.add_propagator(IntegerMultiplicationConstructor {
-        a,
-        b,
-        c,
+        constraint_description: IntegerMultiplicationDescription { a, b, c },
         constraint_tag,
     });
 }
@@ -64,9 +63,7 @@ fn propagates_correctly_through_a_negative_affine_view() {
 
     let constraint_tag = state.new_constraint_tag();
     let _ = state.add_propagator(IntegerMultiplicationConstructor {
-        a,
-        b,
-        c,
+        constraint_description: IntegerMultiplicationDescription { a, b, c },
         constraint_tag,
     });
 
