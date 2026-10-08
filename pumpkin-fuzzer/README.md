@@ -109,3 +109,21 @@ fn my_propagator() {
 `fuzz_propagator` takes a build function without parameters. A failure report gives a regression
 test that calls `replay_propagator` with the build function, the seed and the moves. See
 `tests/propagator_fuzzing.rs`.
+
+## Mutation testing
+
+[cargo-mutants](https://mutants.rs) checks whether the oracles detect defects in one propagator and
+its checkers: it changes their code one mutation at a time and runs a fuzzer test on each. A mutant
+that survives is a weak checker, a gap in the examples, or a change without effect. Run it in a
+separate worktree, since `--in-place` edits the sources:
+
+```bash
+cargo mutants --in-place --baseline skip --timeout 300 \
+    -f 'pumpkin-crates/propagators/src/propagators/arithmetic/linear_less_or_equal/propagator.rs' \
+    -f 'pumpkin-crates/checking/src/checkers/linear_less_or_equal/*.rs' \
+    --test-package pumpkin-fuzzer --profile fuzz --features pumpkin-fuzzer/checks \
+    -- --test propagator_fuzzing -- linear_less_or_equal_built_in_rust
+```
+
+`--baseline skip` is needed because cargo-mutants 27 builds the baseline with the mutated packages
+instead of `--test-package`, which lack the `checks` feature; run the test once unmutated instead.
