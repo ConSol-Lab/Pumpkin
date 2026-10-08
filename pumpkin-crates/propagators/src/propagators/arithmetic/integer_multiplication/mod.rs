@@ -7,3 +7,6 @@ mod shared;
 pub use checker::IntegerMultiplicationChecker;
 pub use constructor::IntegerMultiplicationConstructor;
 pub use propagator::IntegerMultiplicationPropagator;
+
+#[cfg(test)]
+mod tests;

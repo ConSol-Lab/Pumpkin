@@ -3,13 +3,16 @@
 //! Currently, it contains only an edge-finding propagator.
 use pumpkin_core::declare_inference_label;
 
-pub(crate) mod disjunctive_propagator;
+mod constructor;
 pub(crate) mod disjunctive_task;
+mod propagator;
+#[cfg(test)]
+mod tests;
 mod theta_lambda_tree;
 mod theta_tree;
-pub use disjunctive_propagator::DisjunctiveConstructor;
-pub use disjunctive_propagator::DisjunctivePropagator;
+pub use constructor::*;
 pub use disjunctive_task::ArgDisjunctiveTask;
+pub use propagator::*;
 pub(crate) mod checker;
 pub use checker::*;
 

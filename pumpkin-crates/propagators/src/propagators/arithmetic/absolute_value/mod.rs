@@ -1,7 +1,9 @@
+mod checker;
 mod constructor;
 mod propagator;
-mod synchronisation;
 #[cfg(test)]
 mod tests;
 
+pub use checker::*;
+pub use constructor::*;
 pub use propagator::*;
