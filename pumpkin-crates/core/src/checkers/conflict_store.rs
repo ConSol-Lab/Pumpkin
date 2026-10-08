@@ -43,6 +43,13 @@ impl ConflictCheckerStore {
             .unwrap_or(itertools::Either::Right(std::iter::empty()))
     }
 
+    /// Every conflict checker, with its inference code.
+    pub fn iter(&self) -> impl Iterator<Item = (&InferenceCode, &BoxedConflictChecker<Predicate>)> {
+        self.conflict_checkers
+            .iter()
+            .flat_map(|(code, checkers)| checkers.iter().map(move |(_, checker)| (code, checker)))
+    }
+
     /// Add a new conflict checker for the inference code, for a constraint that is never removed.
     ///
     /// An inference code can have multiple checkers, for instance when several constraints share a

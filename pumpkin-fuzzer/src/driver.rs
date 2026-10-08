@@ -122,6 +122,9 @@ pub enum Oracle {
     RetentionAtFixpoint,
     /// The solution checker found that a full assignment violates a constraint.
     SolutionChecker,
+    /// A conflict checker reported a conflict on a full assignment that satisfies every
+    /// constraint, so its rule is unsound.
+    RuleSelfTest,
     /// The solver panicked outside the checkers.
     Crash,
 }
@@ -140,6 +143,8 @@ impl Oracle {
             Oracle::RetentionAtFixpoint
         } else if message.contains("The solver reported a solution") {
             Oracle::SolutionChecker
+        } else if message.contains("reports a conflict on an assignment that satisfies every") {
+            Oracle::RuleSelfTest
         } else {
             Oracle::Crash
         }
@@ -382,6 +387,12 @@ impl Session {
             self.statistics.solutions += 1;
             #[cfg(feature = "check-solutions")]
             self.state.check_solution();
+            // An assignment the solution check accepts is no conflict of a sound rule.
+            #[cfg(all(
+                feature = "check-solutions",
+                any(feature = "check-inferences", feature = "check-inferences-proof")
+            ))]
+            self.state.check_rules_accept_solution();
         }
     }
 
