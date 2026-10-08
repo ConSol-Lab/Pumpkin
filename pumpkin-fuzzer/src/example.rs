@@ -1,24 +1,56 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt::Debug;
 use std::fmt::Write;
+use std::rc::Rc;
+
+use pumpkin_core::rand::rngs::SmallRng;
+use pumpkin_solver::Solver;
 
 use crate::statements::Statement;
 use crate::statements::classify;
 use crate::statements::identifiers;
 
-/// A FlatZinc instance with one constraint, which the fuzzer compiles and propagates on its own.
+/// A FlatZinc instance with one constraint, which the fuzzer compiles and propagates on its own, or
+/// a propagator built by Rust code.
 #[derive(Clone, Debug)]
 pub struct Example {
-    /// Where the example comes from: a line of a FlatZinc file, a random generation or a mutation
-    /// of another example.
+    /// Where the example comes from: a line of a FlatZinc file, a random generation, a mutation of
+    /// another example or a seed of a [`Builder`].
     pub origin: String,
     /// The name of the constraint, such as `int_lin_le`.
     pub constraint_name: String,
     /// The complete instance: the declarations the constraint refers to, the constraint and a
-    /// solve item.
+    /// solve item. Empty when the example has a [`Builder`].
     pub source: String,
     /// How many constraints of the sources are equal to this one up to the names of variables.
     pub occurrences: usize,
+    /// Builds the example instead of the FlatZinc `source`.
+    pub builder: Option<Builder>,
+}
+
+/// Builds an example with Rust code, for a propagator that cannot be built from FlatZinc.
+#[derive(Clone)]
+pub struct Builder {
+    /// The seed of the random generator that `build` draws from.
+    pub seed: u64,
+    /// The names of the legal settings of the parameters of the propagator; empty when it takes
+    /// none.
+    pub setting_names: Vec<String>,
+    /// Creates the variables and posts the propagator, with the setting of the given name.
+    pub build: BuildFunction,
+}
+
+/// See [`Builder::build`].
+pub type BuildFunction = Rc<dyn Fn(&mut SmallRng, &mut Solver, &str)>;
+
+impl Debug for Builder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Builder")
+            .field("seed", &self.seed)
+            .field("setting_names", &self.setting_names)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Example {
@@ -63,6 +95,7 @@ impl Example {
             constraint_name: name.to_owned(),
             source,
             occurrences: 1,
+            builder: None,
         })
     }
 
@@ -153,6 +186,7 @@ mod tests {
             constraint_name: String::new(),
             source: source.to_owned(),
             occurrences: 1,
+            builder: None,
         }
     }
 

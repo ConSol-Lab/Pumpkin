@@ -5,6 +5,10 @@ use pumpkin_core::propagation::PropagatorParameters;
 use pumpkin_solver::flatzinc::CompilationOptions;
 use pumpkin_solver::propagators::cumulative::options::CumulativeOptions;
 
+#[cfg(doc)]
+use crate::example::Builder;
+use crate::example::Example;
+
 /// One setting of the parameters of the propagator of an example, applied through the options of
 /// the FlatZinc compiler.
 #[derive(Clone, Debug, Default)]
@@ -37,6 +41,27 @@ pub fn settings(constraint_name: &str, filters: &[String]) -> Vec<Setting> {
     settings
         .into_iter()
         .filter(|setting| filters.iter().all(|filter| setting.name.contains(filter)))
+        .collect()
+}
+
+/// The legal settings of the propagator of `example` whose names contain every text in `filters`:
+/// those its [`Builder`] lists, or [`settings`] of its FlatZinc constraint.
+pub(crate) fn settings_of_example(example: &Example, filters: &[String]) -> Vec<Setting> {
+    let Some(builder) = &example.builder else {
+        return settings(&example.constraint_name, filters);
+    };
+    if builder.setting_names.is_empty() {
+        return vec![Setting::default()];
+    }
+
+    builder
+        .setting_names
+        .iter()
+        .filter(|name| filters.iter().all(|filter| name.contains(filter)))
+        .map(|name| Setting {
+            name: name.clone(),
+            compilation_options: CompilationOptions::default(),
+        })
         .collect()
 }
 

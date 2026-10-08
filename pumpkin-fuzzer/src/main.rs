@@ -156,7 +156,7 @@ fn main() {
     let failing_examples = failures.len();
     let groups = report::group(failures);
     for (number, group) in groups.iter().enumerate().take(arguments.max_reported) {
-        match report::describe(group, number + 1, &arguments.out) {
+        match report::describe(group, number + 1, Some(&arguments.out)) {
             Ok(description) => println!("{description}"),
             Err(error) => println!(
                 "Failure {}: the reproducer could not be written: {error}",

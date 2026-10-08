@@ -120,6 +120,7 @@ pub fn random_example(rng: &mut SmallRng, names: &[String], origin: String) -> O
         constraint_name: name.to_owned(),
         source,
         occurrences: 1,
+        builder: None,
     })
 }
 
@@ -329,6 +330,7 @@ pub fn mutate(rng: &mut SmallRng, example: &Example, origin: String) -> Option<E
         constraint_name: example.constraint_name.clone(),
         source,
         occurrences: 1,
+        builder: None,
     })
 }
 

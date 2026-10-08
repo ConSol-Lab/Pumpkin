@@ -16,8 +16,13 @@ pub mod extraction;
 pub mod generation;
 pub mod logging;
 pub mod parameters;
+pub mod propagator_fuzzing;
 pub mod report;
 mod statements;
 
 pub use driver::replay;
 pub use driver::replay_with_parameters;
+pub use propagator_fuzzing::fuzz_propagator;
+pub use propagator_fuzzing::fuzz_propagator_with_parameters;
+pub use propagator_fuzzing::replay_propagator;
+pub use propagator_fuzzing::replay_propagator_with_parameters;

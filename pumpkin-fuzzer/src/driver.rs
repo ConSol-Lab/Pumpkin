@@ -2,11 +2,13 @@
 //! runtime checkers of the solver are the only oracles: they panic when a propagation, a fixpoint
 //! or a solution is wrong, and the driver catches the panic.
 
+use std::cell::Cell;
+use std::cell::RefCell;
 use std::fmt::Display;
 use std::fmt::Write;
 use std::panic::AssertUnwindSafe;
 use std::panic::catch_unwind;
-use std::sync::Mutex;
+use std::sync::Once;
 
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateConstructor;
@@ -210,6 +212,18 @@ pub struct Configuration {
     pub parameter_filters: Vec<String>,
 }
 
+impl Default for Configuration {
+    fn default() -> Self {
+        Configuration {
+            cases: 20,
+            steps: 40,
+            seed: 0,
+            shrink_budget: 300,
+            parameter_filters: vec![],
+        }
+    }
+}
+
 /// What fuzzing one example gave.
 #[derive(Debug)]
 pub enum ExampleOutcome {
@@ -238,32 +252,52 @@ impl Statistics {
     }
 }
 
-static PANIC: Mutex<Option<String>> = Mutex::new(None);
+thread_local! {
+    /// Whether this thread runs a case, whose panics are failures to record instead of print.
+    static IS_RUNNING_CASE: Cell<bool> = const { Cell::new(false) };
+    /// The message of the last panic of a case on this thread.
+    static PANIC: RefCell<Option<String>> = const { RefCell::new(None) };
+}
 
-/// Records the message of a panic instead of printing it, so that the report can quote it.
+/// Installs, once per process, a panic hook that records the message of a panic in a case instead
+/// of printing it, so that the report can quote it. Other panics go to the previous hook.
 pub fn install_panic_hook() {
-    std::panic::set_hook(Box::new(|info| {
-        let location = info
-            .location()
-            .map(|location| format!(" (at {location})"))
-            .unwrap_or_default();
-        let payload = info
-            .payload()
-            .downcast_ref::<&str>()
-            .map(|message| (*message).to_owned())
-            .or_else(|| info.payload().downcast_ref::<String>().cloned())
-            .unwrap_or_else(|| "a panic without a message".to_owned());
-        if let Ok(mut panic) = PANIC.lock() {
-            *panic = Some(format!("{payload}{location}"));
-        }
-    }));
+    static INSTALL: Once = Once::new();
+    INSTALL.call_once(|| {
+        let previous_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            if !IS_RUNNING_CASE.with(Cell::get) {
+                previous_hook(info);
+                return;
+            }
+
+            let location = info
+                .location()
+                .map(|location| format!(" (at {location})"))
+                .unwrap_or_default();
+            let payload = info
+                .payload()
+                .downcast_ref::<&str>()
+                .map(|message| (*message).to_owned())
+                .or_else(|| info.payload().downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "a panic without a message".to_owned());
+            PANIC.with(|panic| *panic.borrow_mut() = Some(format!("{payload}{location}")));
+        }));
+    });
+}
+
+/// Runs a case, catching a panic, whose message [`take_panic_message`] then gives.
+fn run_case<Result>(case: impl FnOnce() -> Result) -> std::thread::Result<Result> {
+    install_panic_hook();
+    IS_RUNNING_CASE.with(|is_running_case| is_running_case.set(true));
+    let outcome = catch_unwind(AssertUnwindSafe(case));
+    IS_RUNNING_CASE.with(|is_running_case| is_running_case.set(false));
+    outcome
 }
 
 fn take_panic_message() -> String {
     PANIC
-        .lock()
-        .ok()
-        .and_then(|mut panic| panic.take())
+        .with(|panic| panic.borrow_mut().take())
         .unwrap_or_else(|| "a panic without a message".to_owned())
 }
 
@@ -285,7 +319,10 @@ enum Opening {
 impl Session {
     fn open(example: &Example, setting: &Setting) -> Opening {
         let mut solver = Solver::default();
-        if let Err(error) = parse_and_compile(
+        if let Some(builder) = &example.builder {
+            let mut rng = SmallRng::seed_from_u64(builder.seed);
+            (builder.build)(&mut rng, &mut solver, &setting.name);
+        } else if let Err(error) = parse_and_compile(
             &mut solver,
             example.source.as_bytes(),
             setting.compilation_options,
@@ -506,7 +543,7 @@ pub fn fuzz_example(
     example_index: usize,
 ) -> ExampleOutcome {
     let mut statistics = Statistics::default();
-    let settings = parameters::settings(&example.constraint_name, &configuration.parameter_filters);
+    let settings = parameters::settings_of_example(example, &configuration.parameter_filters);
     if settings.is_empty() {
         return ExampleOutcome::Rejected(
             "no setting of the parameters of its propagator matches --parameters".to_owned(),
@@ -528,7 +565,7 @@ pub fn fuzz_example(
         let mut moves = vec![];
 
         let _ = logging::take();
-        let outcome = catch_unwind(AssertUnwindSafe(|| {
+        let outcome = run_case(|| {
             let mut session = match Session::open(example, setting) {
                 Opening::Ready(session) => session,
                 Opening::Rejected(reason) => return Err(ExampleOutcome::Rejected(reason)),
@@ -542,7 +579,7 @@ pub fn fuzz_example(
                 session.apply(&next_move);
             }
             Ok(session.statistics)
-        }));
+        });
 
         match outcome {
             Ok(Ok(case_statistics)) => {
@@ -589,7 +626,7 @@ fn replay_moves(example: &Example, setting: &Setting, moves: &[Move]) -> Replay 
     let mut domains_before_last = String::new();
     let _ = logging::take();
 
-    let outcome = catch_unwind(AssertUnwindSafe(|| {
+    let outcome = run_case(|| {
         let Opening::Ready(mut session) = Session::open(example, setting) else {
             return;
         };
@@ -598,7 +635,7 @@ fn replay_moves(example: &Example, setting: &Setting, moves: &[Move]) -> Replay 
             applied += 1;
             session.apply(next_move);
         }
-    }));
+    });
 
     let logs = logging::take();
     Replay {
@@ -693,7 +730,7 @@ fn shrink(
 /// with the default parameters, and panics like the solver does if a checker rejects what the
 /// solver does. Meant for regression tests that the fuzzer writes.
 pub fn replay(source: &str, moves: &str) {
-    replay_with_setting(source, &Setting::default(), moves);
+    replay_example(&flatzinc_example(source), None, moves);
 }
 
 /// [`replay`] with the setting of the parameters of the propagator named `parameters`, as a
@@ -701,6 +738,10 @@ pub fn replay(source: &str, moves: &str) {
 ///
 /// Panics if `parameters` does not select exactly one setting of the constraint in `source`.
 pub fn replay_with_parameters(source: &str, parameters: &str, moves: &str) {
+    replay_example(&flatzinc_example(source), Some(parameters), moves);
+}
+
+fn flatzinc_example(source: &str) -> Example {
     let constraint_name = source
         .lines()
         .find_map(|line| match classify(line) {
@@ -708,22 +749,32 @@ pub fn replay_with_parameters(source: &str, parameters: &str, moves: &str) {
             _ => None,
         })
         .unwrap_or_default();
-    let settings = parameters::settings(constraint_name, &[parameters.to_owned()]);
-    assert!(
-        settings.len() == 1,
-        "'{parameters}' selects {} settings of the parameters of '{constraint_name}', not one",
-        settings.len()
-    );
 
-    replay_with_setting(source, &settings[0], moves);
-}
-
-fn replay_with_setting(source: &str, setting: &Setting, moves: &str) {
-    let example = Example {
+    Example {
         origin: "replay".to_owned(),
-        constraint_name: String::new(),
+        constraint_name: constraint_name.to_owned(),
         source: source.to_owned(),
         occurrences: 1,
+        builder: None,
+    }
+}
+
+/// Replays `moves` on `example` with the setting named `parameters`, or with the default setting.
+///
+/// Panics if `parameters` does not select exactly one setting of the propagator of `example`.
+pub(crate) fn replay_example(example: &Example, parameters: Option<&str>, moves: &str) {
+    let setting = match parameters {
+        None => Setting::default(),
+        Some(parameters) => {
+            let mut settings = parameters::settings_of_example(example, &[parameters.to_owned()]);
+            assert!(
+                settings.len() == 1,
+                "'{parameters}' selects {} settings of the parameters of '{}', not one",
+                settings.len(),
+                example.constraint_name
+            );
+            settings.swap_remove(0)
+        }
     };
     let moves = moves
         .lines()
@@ -731,7 +782,7 @@ fn replay_with_setting(source: &str, setting: &Setting, moves: &str) {
         .map(|line| Move::parse(line).unwrap_or_else(|| panic!("'{line}' is not a move")))
         .collect::<Vec<_>>();
 
-    let Opening::Ready(mut session) = Session::open(&example, setting) else {
+    let Opening::Ready(mut session) = Session::open(example, &setting) else {
         return;
     };
     for next_move in &moves {

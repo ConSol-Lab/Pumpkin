@@ -51,9 +51,14 @@ pub fn group(failures: Vec<Failure>) -> Vec<FailureGroup> {
     groups
 }
 
-/// Writes the instance and the moves of the representative to `directory`, and returns the
-/// description of the group.
-pub fn describe(group: &FailureGroup, number: usize, directory: &Path) -> std::io::Result<String> {
+/// Describes the group. When `directory` is given and the example is a FlatZinc instance, the
+/// instance and the moves of the representative are written to it, for a replay from the command
+/// line.
+pub fn describe(
+    group: &FailureGroup,
+    number: usize,
+    directory: Option<&Path>,
+) -> std::io::Result<String> {
     let failure = &group.representative;
     let moves = failure
         .moves
@@ -61,11 +66,17 @@ pub fn describe(group: &FailureGroup, number: usize, directory: &Path) -> std::i
         .map(|applied_move| format!("{applied_move}\n"))
         .collect::<String>();
 
-    std::fs::create_dir_all(directory)?;
-    let instance_path = directory.join(format!("failure-{number}.fzn"));
-    let moves_path = directory.join(format!("failure-{number}.moves"));
-    std::fs::write(&instance_path, &failure.example.source)?;
-    std::fs::write(&moves_path, &moves)?;
+    let files = match directory {
+        Some(directory) if failure.example.builder.is_none() => {
+            std::fs::create_dir_all(directory)?;
+            let instance_path = directory.join(format!("failure-{number}.fzn"));
+            let moves_path = directory.join(format!("failure-{number}.moves"));
+            std::fs::write(&instance_path, &failure.example.source)?;
+            std::fs::write(&moves_path, &moves)?;
+            Some((instance_path, moves_path))
+        }
+        _ => None,
+    };
 
     let mut text = String::new();
     let mut line = |content: String| {
@@ -83,12 +94,20 @@ pub fn describe(group: &FailureGroup, number: usize, directory: &Path) -> std::i
         line(format!("  logged: {log}"));
     }
     line(String::new());
-    line(format!(
-        "Example: {} (one of {} equal up to naming)",
-        failure.example.origin, failure.example.occurrences
-    ));
-    for source_line in failure.example.source.lines() {
-        line(format!("    {source_line}"));
+    match &failure.example.builder {
+        Some(builder) => line(format!(
+            "Example: {}, built by Rust code with seed {}",
+            failure.example.origin, builder.seed
+        )),
+        None => {
+            line(format!(
+                "Example: {} (one of {} equal up to naming)",
+                failure.example.origin, failure.example.occurrences
+            ));
+            for source_line in failure.example.source.lines() {
+                line(format!("    {source_line}"));
+            }
+        }
     }
     if !failure.setting.is_default() {
         line(format!("Parameters: {}", failure.setting.name));
@@ -131,18 +150,51 @@ pub fn describe(group: &FailureGroup, number: usize, directory: &Path) -> std::i
     }
     line(String::new());
 
-    let parameters_argument = if failure.setting.is_default() {
-        String::new()
-    } else {
-        format!(" --parameters \"{}\"", failure.setting.name)
-    };
-    line("Reproduce:".to_owned());
-    line(format!(
-        "    cargo run -p pumpkin-fuzzer --profile fuzz --features checks -- --replay {} --moves {}{parameters_argument}",
-        instance_path.display(),
-        moves_path.display()
-    ));
+    if let Some((instance_path, moves_path)) = files {
+        let parameters_argument = if failure.setting.is_default() {
+            String::new()
+        } else {
+            format!(" --parameters \"{}\"", failure.setting.name)
+        };
+        line("Reproduce:".to_owned());
+        line(format!(
+            "    cargo run -p pumpkin-fuzzer --profile fuzz --features checks -- --replay {} --moves {}{parameters_argument}",
+            instance_path.display(),
+            moves_path.display()
+        ));
+    }
     line("As a regression test:".to_owned());
+    line(regression_test(failure, &moves));
+
+    Ok(text)
+}
+
+fn regression_test(failure: &Failure, moves: &str) -> String {
+    let mut arguments = vec![];
+    let function = match &failure.example.builder {
+        Some(builder) => {
+            arguments.push("build".to_owned());
+            arguments.push(builder.seed.to_string());
+            if failure.setting.is_default() {
+                "replay_propagator"
+            } else {
+                "replay_propagator_with_parameters"
+            }
+        }
+        None => {
+            arguments.push(format!("{:?}", failure.example.source));
+            if failure.setting.is_default() {
+                "replay"
+            } else {
+                "replay_with_parameters"
+            }
+        }
+    };
+    if !failure.setting.is_default() {
+        arguments.push(format!("{:?}", failure.setting.name));
+    }
+    arguments.push(format!("{moves:?}"));
+
     let mut test = String::new();
     writeln!(test, "    #[test]").expect("writing to a string succeeds");
     writeln!(
@@ -151,24 +203,20 @@ pub fn describe(group: &FailureGroup, number: usize, directory: &Path) -> std::i
         failure.example.constraint_name.to_lowercase()
     )
     .expect("writing to a string succeeds");
-    if failure.setting.is_default() {
-        writeln!(test, "        pumpkin_fuzzer::replay(").expect("writing to a string succeeds");
-        writeln!(test, "            {:?},", failure.example.source)
-            .expect("writing to a string succeeds");
-    } else {
-        writeln!(test, "        pumpkin_fuzzer::replay_with_parameters(")
-            .expect("writing to a string succeeds");
-        writeln!(test, "            {:?},", failure.example.source)
-            .expect("writing to a string succeeds");
-        writeln!(test, "            {:?},", failure.setting.name)
-            .expect("writing to a string succeeds");
+    if failure.example.builder.is_some() {
+        writeln!(
+            test,
+            "        // `build` is the function that was given to `fuzz_propagator`."
+        )
+        .expect("writing to a string succeeds");
     }
-    writeln!(test, "            {moves:?},").expect("writing to a string succeeds");
+    writeln!(test, "        pumpkin_fuzzer::{function}(").expect("writing to a string succeeds");
+    for argument in arguments {
+        writeln!(test, "            {argument},").expect("writing to a string succeeds");
+    }
     writeln!(test, "        );").expect("writing to a string succeeds");
     write!(test, "    }}").expect("writing to a string succeeds");
-    line(test);
-
-    Ok(text)
+    test
 }
 
 fn text_push_indented(line: &mut impl FnMut(String), text: &str) {
