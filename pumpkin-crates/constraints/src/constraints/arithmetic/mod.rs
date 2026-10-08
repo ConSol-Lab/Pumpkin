@@ -7,9 +7,13 @@ use pumpkin_core::constraints::Constraint;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_propagators::arithmetic::AbsoluteValueArgs;
+use pumpkin_propagators::arithmetic::AbsoluteValueDescription;
 use pumpkin_propagators::arithmetic::DivisionArgs;
+use pumpkin_propagators::arithmetic::DivisionDescription;
 use pumpkin_propagators::arithmetic::IntegerMultiplicationConstructor;
+use pumpkin_propagators::arithmetic::IntegerMultiplicationDescription;
 use pumpkin_propagators::arithmetic::MaximumArgs;
+use pumpkin_propagators::arithmetic::MaximumDescription;
 
 /// Creates the [`Constraint`] `a + b = c`.
 pub fn plus<Var: IntegerVariable + 'static>(
@@ -29,9 +33,7 @@ pub fn times(
     constraint_tag: ConstraintTag,
 ) -> impl Constraint {
     IntegerMultiplicationConstructor {
-        a,
-        b,
-        c,
+        constraint_description: IntegerMultiplicationDescription { a, b, c },
         constraint_tag,
     }
 }
@@ -49,9 +51,11 @@ pub fn division(
     constraint_tag: ConstraintTag,
 ) -> impl Constraint {
     DivisionArgs {
-        numerator,
-        denominator,
-        rhs,
+        constraint_description: DivisionDescription {
+            numerator,
+            denominator,
+            rhs,
+        },
         constraint_tag,
     }
 }
@@ -63,8 +67,7 @@ pub fn absolute(
     constraint_tag: ConstraintTag,
 ) -> impl Constraint {
     AbsoluteValueArgs {
-        signed,
-        absolute,
+        constraint_description: AbsoluteValueDescription { signed, absolute },
         constraint_tag,
     }
 }
@@ -76,8 +79,10 @@ pub fn maximum<Var: IntegerVariable + 'static>(
     constraint_tag: ConstraintTag,
 ) -> impl Constraint {
     MaximumArgs {
-        array: array.into_iter().collect(),
-        rhs,
+        constraint_description: MaximumDescription {
+            array: array.into_iter().collect(),
+            rhs,
+        },
         constraint_tag,
     }
 }

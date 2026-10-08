@@ -60,3 +60,22 @@ fn iterating_predicates_ignores_subsumed_predicates() {
         hypercube.iter_predicates().collect::<HashSet<_>>(),
     );
 }
+
+#[test]
+fn the_scope_holds_the_variable_of_every_predicate() {
+    let mut state = State::default();
+
+    let x = state.new_interval_variable(1, 10, Some("x".into()));
+    let y = state.new_interval_variable(1, 10, Some("y".into()));
+
+    let hypercube =
+        Hypercube::new([predicate![x >= 2], predicate![y <= 5]]).expect("not inconsistent");
+
+    let mut scope = Scope::default();
+    hypercube.add_to_scope(&mut scope);
+
+    assert_eq!(
+        [x, y].into_iter().collect::<HashSet<_>>(),
+        scope.domains().collect::<HashSet<_>>(),
+    );
+}

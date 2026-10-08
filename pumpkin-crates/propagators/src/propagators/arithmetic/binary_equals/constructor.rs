@@ -12,6 +12,7 @@ use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::BinaryEqualsChecker;
+use super::BinaryEqualsDescription;
 use super::BinaryEqualsPropagator;
 
 declare_inference_label!(BinaryEquals);
@@ -19,8 +20,7 @@ declare_inference_label!(BinaryEquals);
 /// The [`PropagatorConstructor`] for the [`BinaryEqualsPropagator`].
 #[derive(Clone, Debug)]
 pub struct BinaryEqualsPropagatorArgs<AVar, BVar> {
-    pub a: AVar,
-    pub b: BVar,
+    pub constraint_description: BinaryEqualsDescription<AVar, BVar>,
     pub constraint_tag: ConstraintTag,
 }
 
@@ -33,10 +33,10 @@ where
 
     fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let BinaryEqualsPropagatorArgs {
-            a,
-            b,
+            constraint_description,
             constraint_tag,
         } = self;
+        let BinaryEqualsDescription { a, b } = constraint_description;
 
         let registration = EventsToRegister::builder()
             .add(&a, DomainEvents::ANY_INT, LocalId::from(0))

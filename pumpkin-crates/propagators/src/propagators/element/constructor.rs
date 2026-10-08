@@ -10,13 +10,12 @@ use pumpkin_core::variables::IntegerVariable;
 
 use super::Element;
 use super::ElementChecker;
+use super::ElementDescription;
 use super::ElementPropagator;
 
 #[derive(Clone, Debug)]
 pub struct ElementArgs<VX, VI, VE> {
-    pub array: Box<[VX]>,
-    pub index: VI,
-    pub rhs: VE,
+    pub constraint_description: ElementDescription<VX, VI, VE>,
     pub constraint_tag: ConstraintTag,
 }
 
@@ -30,11 +29,10 @@ where
 
     fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let ElementArgs {
-            array,
-            index,
-            rhs,
+            constraint_description,
             constraint_tag,
         } = self;
+        let ElementDescription { array, index, rhs } = constraint_description;
 
         let mut registration = EventsToRegister::builder();
         for (i, x_i) in array.iter().enumerate() {

@@ -6,6 +6,7 @@ use pumpkin_core::propagation::CurrentNogood;
 use pumpkin_core::state::State;
 
 use super::MaximumArgs;
+use super::MaximumDescription;
 use crate::StateExt;
 
 #[test]
@@ -20,8 +21,10 @@ fn upper_bound_of_rhs_matches_maximum_upper_bound_of_array_at_initialise() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(MaximumArgs {
-        array: [a, b, c].into(),
-        rhs,
+        constraint_description: MaximumDescription {
+            array: [a, b, c].into(),
+            rhs,
+        },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("no empty domain");
@@ -50,8 +53,10 @@ fn lower_bound_of_rhs_is_maximum_of_lower_bounds_in_array() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(MaximumArgs {
-        array: [a, b, c].into(),
-        rhs,
+        constraint_description: MaximumDescription {
+            array: [a, b, c].into(),
+            rhs,
+        },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("no empty domain");
@@ -80,8 +85,10 @@ fn upper_bound_of_all_array_elements_at_most_rhs_max_at_initialise() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(MaximumArgs {
-        array: array.clone(),
-        rhs,
+        constraint_description: MaximumDescription {
+            array: array.clone(),
+            rhs,
+        },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("no empty domain");
@@ -112,8 +119,10 @@ fn single_variable_propagate() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(MaximumArgs {
-        array: array.clone(),
-        rhs,
+        constraint_description: MaximumDescription {
+            array: array.clone(),
+            rhs,
+        },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("no empty domain");

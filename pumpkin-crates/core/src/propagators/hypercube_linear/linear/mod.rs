@@ -1,5 +1,7 @@
 use std::num::NonZero;
 
+use crate::checkers::Scope;
+use crate::checkers::ScopeItem;
 use crate::containers::HashMap;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
@@ -10,6 +12,12 @@ use crate::variables::TransformableVariable;
 pub struct LinearInequality {
     terms: Box<[AffineView<DomainId>]>,
     bound: i32,
+}
+
+impl ScopeItem for LinearInequality {
+    fn add_to_scope(&self, scope: &mut Scope) {
+        self.terms.add_to_scope(scope);
+    }
 }
 
 impl LinearInequality {

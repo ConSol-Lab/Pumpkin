@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use enumset::enum_set;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::proof::ConstraintTag;
@@ -14,6 +12,7 @@ use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::LinearNotEqualChecker;
+use super::LinearNotEqualDescription;
 use super::LinearNotEqualPropagator;
 
 declare_inference_label!(LinearNotEquals);
@@ -21,10 +20,7 @@ declare_inference_label!(LinearNotEquals);
 /// The [`PropagatorConstructor`] for the [`LinearNotEqualPropagator`].
 #[derive(Clone, Debug)]
 pub struct LinearNotEqualPropagatorArgs<Var> {
-    /// The terms of the sum
-    pub terms: Rc<[Var]>,
-    /// The right-hand side of the sum
-    pub rhs: i32,
+    pub constraint_description: LinearNotEqualDescription<Var>,
     /// The constraint tag of the constraint this propagator is propagating for.
     pub constraint_tag: ConstraintTag,
 }
@@ -40,10 +36,10 @@ where
         mut context: PropagatorConstructorContext,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
         let LinearNotEqualPropagatorArgs {
-            terms,
-            rhs,
+            constraint_description,
             constraint_tag,
         } = self;
+        let LinearNotEqualDescription { terms, rhs } = constraint_description;
 
         let mut registration = EventsToRegister::builder();
         for (i, x_i) in terms.iter().enumerate() {

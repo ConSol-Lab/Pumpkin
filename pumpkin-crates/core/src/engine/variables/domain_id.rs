@@ -1,7 +1,10 @@
 use enumset::EnumSet;
 use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::DomainView;
 
 use super::TransformableVariable;
+use crate::checkers::Scope;
+use crate::checkers::ScopeItem;
 use crate::containers::StorageKey;
 use crate::engine::Assignments;
 use crate::engine::notifications::DomainEvent;
@@ -32,6 +35,12 @@ impl DomainId {
 
     pub fn id(&self) -> u32 {
         self.id
+    }
+}
+
+impl ScopeItem for DomainId {
+    fn add_to_scope(&self, scope: &mut Scope) {
+        scope.add_domain(*self);
     }
 }
 
@@ -75,51 +84,52 @@ impl CheckerVariable<Predicate> for DomainId {
         predicate![self != value]
     }
 
-    fn induced_lower_bound(
-        &self,
-        variable_state: &pumpkin_checking::VariableState<Predicate>,
-    ) -> pumpkin_checking::IntExt {
+    fn induced_lower_bound<View>(&self, variable_state: &View) -> pumpkin_checking::IntExt
+    where
+        View: DomainView<Predicate> + ?Sized,
+    {
         variable_state.lower_bound(self)
     }
 
-    fn induced_upper_bound(
-        &self,
-        variable_state: &pumpkin_checking::VariableState<Predicate>,
-    ) -> pumpkin_checking::IntExt {
+    fn induced_upper_bound<View>(&self, variable_state: &View) -> pumpkin_checking::IntExt
+    where
+        View: DomainView<Predicate> + ?Sized,
+    {
         variable_state.upper_bound(self)
     }
 
-    fn induced_fixed_value(
-        &self,
-        variable_state: &pumpkin_checking::VariableState<Predicate>,
-    ) -> Option<i32> {
+    fn induced_fixed_value<View>(&self, variable_state: &View) -> Option<i32>
+    where
+        View: DomainView<Predicate> + ?Sized,
+    {
         variable_state.fixed_value(self)
     }
 
-    fn induced_domain_contains(
-        &self,
-        variable_state: &pumpkin_checking::VariableState<Predicate>,
-        value: i32,
-    ) -> bool {
+    fn induced_domain_contains<View>(&self, variable_state: &View, value: i32) -> bool
+    where
+        View: DomainView<Predicate> + ?Sized,
+    {
         variable_state.contains(self, value)
     }
 
-    fn induced_holes<'this, 'state>(
+    fn induced_holes<'this, 'state, View>(
         &'this self,
-        variable_state: &'state pumpkin_checking::VariableState<Predicate>,
+        variable_state: &'state View,
     ) -> impl Iterator<Item = i32> + 'state
     where
         'this: 'state,
+        View: DomainView<Predicate> + ?Sized,
     {
         variable_state.holes(self)
     }
 
-    fn iter_induced_domain<'this, 'state>(
+    fn iter_induced_domain<'this, 'state, View>(
         &'this self,
-        variable_state: &'state pumpkin_checking::VariableState<Predicate>,
+        variable_state: &'state View,
     ) -> Option<impl Iterator<Item = i32> + 'state>
     where
         'this: 'state,
+        View: DomainView<Predicate> + ?Sized,
     {
         variable_state.iter_domain(self)
     }

@@ -2,6 +2,7 @@ use pumpkin_checking::ConflictChecker;
 use pumpkin_core::state::State;
 
 use super::DivisionArgs;
+use super::DivisionDescription;
 use super::IntegerDivisionChecker;
 
 #[test]
@@ -13,9 +14,11 @@ fn detects_conflicts() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(DivisionArgs {
-        numerator,
-        denominator,
-        rhs,
+        constraint_description: DivisionDescription {
+            numerator,
+            denominator,
+            rhs,
+        },
         constraint_tag,
     });
 

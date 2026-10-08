@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::ConflictChecker;
+use pumpkin_checking::DomainView;
 
 #[derive(Debug, Clone)]
 pub struct NogoodChecker<Atomic> {

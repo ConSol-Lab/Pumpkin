@@ -7,6 +7,7 @@ use pumpkin_core::state::Conflict;
 use pumpkin_core::state::State;
 use pumpkin_core::variables::TransformableVariable;
 
+use super::LinearNotEqualDescription;
 use super::LinearNotEqualPropagatorArgs;
 use crate::StateExt;
 
@@ -19,8 +20,10 @@ fn test_value_is_removed() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(LinearNotEqualPropagatorArgs {
-        terms: [x.scaled(1), y.scaled(-1)].into(),
-        rhs: 0,
+        constraint_description: LinearNotEqualDescription {
+            terms: [x.scaled(1), y.scaled(-1)].into(),
+            rhs: 0,
+        },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("non-empty domain");
@@ -39,8 +42,10 @@ fn test_empty_domain_is_detected() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(LinearNotEqualPropagatorArgs {
-        terms: [x.scaled(1), y.scaled(-1)].into(),
-        rhs: 0,
+        constraint_description: LinearNotEqualDescription {
+            terms: [x.scaled(1), y.scaled(-1)].into(),
+            rhs: 0,
+        },
         constraint_tag,
     });
     let err = state.propagate_to_fixed_point().expect_err("empty domain");
@@ -62,8 +67,10 @@ fn explanation_for_propagation() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(LinearNotEqualPropagatorArgs {
-        terms: [x, y].into(),
-        rhs: 0,
+        constraint_description: LinearNotEqualDescription {
+            terms: [x, y].into(),
+            rhs: 0,
+        },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("non-empty domain");
@@ -88,8 +95,10 @@ fn satisfied_constraint_does_not_trigger_conflict() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(LinearNotEqualPropagatorArgs {
-        terms: [x.scaled(1), y.scaled(-1)].into(),
-        rhs: 0,
+        constraint_description: LinearNotEqualDescription {
+            terms: [x.scaled(1), y.scaled(-1)].into(),
+            rhs: 0,
+        },
         constraint_tag,
     });
 
