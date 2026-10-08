@@ -50,6 +50,10 @@ impl<'a> SelectionContext<'a> {
         self.state.upper_bound(var.clone()) - self.state.lower_bound(var)
     }
 
+    pub fn get_state(&self) -> &State {
+        self.state
+    }
+
     /// Returns the lower bound of the provided [`IntegerVariable`]
     pub fn lower_bound<Var: IntegerVariable>(&self, var: Var) -> i32 {
         self.state.lower_bound(var)
