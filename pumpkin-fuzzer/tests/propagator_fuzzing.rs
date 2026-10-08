@@ -4,6 +4,7 @@
 
 use pumpkin_core::rand::RngExt;
 use pumpkin_core::rand::rngs::SmallRng;
+use pumpkin_core::variables::TransformableVariable;
 use pumpkin_fuzzer::driver::Configuration;
 use pumpkin_fuzzer::fuzz_propagator;
 use pumpkin_fuzzer::fuzz_propagator_with_parameters;
@@ -62,7 +63,14 @@ fn build_linear_less_or_equal(rng: &mut SmallRng, solver: &mut Solver) {
         .map(|index| {
             let lower_bound = rng.random_range(-3..3);
             let upper_bound = lower_bound + rng.random_range(0..5);
-            solver.new_named_bounded_integer(lower_bound, upper_bound, format!("x{index}"))
+            let variable =
+                solver.new_named_bounded_integer(lower_bound, upper_bound, format!("x{index}"));
+            let coefficient = if rng.random_bool(0.5) {
+                rng.random_range(1..4)
+            } else {
+                -rng.random_range(1..4)
+            };
+            variable.scaled(coefficient)
         })
         .collect::<Vec<_>>();
     let constraint_tag = solver.new_constraint_tag();
