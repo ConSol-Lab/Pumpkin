@@ -76,7 +76,7 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
             .collect();
 
         let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
+        let inference_code = checkers.add_conflict_checker(
             constraint_tag,
             Nogood,
             NogoodChecker {

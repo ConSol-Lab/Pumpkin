@@ -7,8 +7,8 @@ use std::cell::RefCell;
 use bitfield_struct::bitfield;
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::Domain;
-use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::Union;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
@@ -72,7 +72,7 @@ where
         registration = registration.add(&rhs, DomainEvents::ANY_INT, ID_RHS);
 
         let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
+        let inference_code = checkers.add_conflict_checker(
             constraint_tag,
             Element,
             ElementChecker::new(array.clone(), index.clone(), rhs.clone()),
@@ -344,7 +344,7 @@ impl<VX, VI, VE> ElementChecker<VX, VI, VE> {
     }
 }
 
-impl<VX, VI, VE, Atomic> InferenceChecker<Atomic> for ElementChecker<VX, VI, VE>
+impl<VX, VI, VE, Atomic> ConflictChecker<Atomic> for ElementChecker<VX, VI, VE>
 where
     Atomic: AtomicConstraint,
     VX: CheckerVariable<Atomic>,

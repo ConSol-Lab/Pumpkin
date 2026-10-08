@@ -1,6 +1,6 @@
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::IntExt;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conjunction;
@@ -65,7 +65,7 @@ where
             .build();
 
         let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
+        let inference_code = checkers.add_conflict_checker(
             constraint_tag,
             Division,
             IntegerDivisionChecker {
@@ -433,7 +433,7 @@ pub struct IntegerDivisionChecker<VA, VB, VC> {
     pub rhs: VC,
 }
 
-impl<VA, VB, VC, Atomic> InferenceChecker<Atomic> for IntegerDivisionChecker<VA, VB, VC>
+impl<VA, VB, VC, Atomic> ConflictChecker<Atomic> for IntegerDivisionChecker<VA, VB, VC>
 where
     Atomic: AtomicConstraint,
     VA: CheckerVariable<Atomic>,
