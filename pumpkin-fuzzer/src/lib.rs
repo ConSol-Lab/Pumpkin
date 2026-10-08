@@ -15,7 +15,9 @@ pub mod example;
 pub mod extraction;
 pub mod generation;
 pub mod logging;
+pub mod parameters;
 pub mod report;
 mod statements;
 
 pub use driver::replay;
+pub use driver::replay_with_parameters;

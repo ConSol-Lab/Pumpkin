@@ -17,11 +17,14 @@ use pumpkin_core::state::CurrentNogood;
 use pumpkin_core::state::State;
 use pumpkin_core::variables::DomainId;
 use pumpkin_solver::Solver;
-use pumpkin_solver::flatzinc::CompilationOptions;
 use pumpkin_solver::flatzinc::parse_and_compile;
 
 use crate::example::Example;
 use crate::logging;
+use crate::parameters;
+use crate::parameters::Setting;
+use crate::statements::Statement;
+use crate::statements::classify;
 
 /// A step of a case: a decision on a variable, or a backtrack to an earlier checkpoint.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -161,6 +164,8 @@ pub struct Failure {
     /// retention checker expected.
     pub logs: Vec<String>,
     pub example: Example,
+    /// The setting of the parameters of the propagator in the failing case.
+    pub setting: Setting,
     /// The moves up to and including the one that failed.
     pub moves: Vec<Move>,
     /// The number of moves before shrinking.
@@ -193,13 +198,16 @@ fn message_shape(message: &str) -> String {
         .collect()
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Configuration {
     pub cases: usize,
     pub steps: usize,
     pub seed: u64,
     /// The largest number of replays spent on shrinking one failure.
     pub shrink_budget: usize,
+    /// Only the settings of the parameters of a propagator whose names contain every one of these
+    /// texts are drawn; see [`parameters::settings`].
+    pub parameter_filters: Vec<String>,
 }
 
 /// What fuzzing one example gave.
@@ -275,12 +283,12 @@ enum Opening {
 }
 
 impl Session {
-    fn open(example: &Example) -> Opening {
+    fn open(example: &Example, setting: &Setting) -> Opening {
         let mut solver = Solver::default();
         if let Err(error) = parse_and_compile(
             &mut solver,
             example.source.as_bytes(),
-            CompilationOptions::default(),
+            setting.compilation_options,
         ) {
             return Opening::Rejected(format!("compilation failed: {error}"));
         }
@@ -490,14 +498,20 @@ impl Session {
     }
 }
 
-/// Fuzzes `example` with `configuration.cases` cases, each on a fresh state, and stops at the
-/// first failure, which it shrinks.
+/// Fuzzes `example` with `configuration.cases` cases, each on a fresh state with a setting of the
+/// parameters of the propagator drawn at random, and stops at the first failure, which it shrinks.
 pub fn fuzz_example(
     example: &Example,
     configuration: &Configuration,
     example_index: usize,
 ) -> ExampleOutcome {
     let mut statistics = Statistics::default();
+    let settings = parameters::settings(&example.constraint_name, &configuration.parameter_filters);
+    if settings.is_empty() {
+        return ExampleOutcome::Rejected(
+            "no setting of the parameters of its propagator matches --parameters".to_owned(),
+        );
+    }
 
     for case in 0..configuration.cases {
         let seed = configuration
@@ -506,11 +520,16 @@ pub fn fuzz_example(
             .wrapping_add((example_index as u64) << 20)
             .wrapping_add(case as u64);
         let mut rng = SmallRng::seed_from_u64(seed);
+        let setting = if settings.len() == 1 {
+            &settings[0]
+        } else {
+            &settings[rng.random_range(0..settings.len())]
+        };
         let mut moves = vec![];
 
         let _ = logging::take();
         let outcome = catch_unwind(AssertUnwindSafe(|| {
-            let mut session = match Session::open(example) {
+            let mut session = match Session::open(example, setting) {
                 Opening::Ready(session) => session,
                 Opening::Rejected(reason) => return Err(ExampleOutcome::Rejected(reason)),
                 Opening::InfeasibleAtRoot => return Err(ExampleOutcome::InfeasibleAtRoot),
@@ -536,7 +555,13 @@ pub fn fuzz_example(
                 if moves.is_empty() && is_unsupported(&message) {
                     return ExampleOutcome::Rejected(message);
                 }
-                let failure = shrink(example, moves, message, configuration.shrink_budget);
+                let failure = shrink(
+                    example,
+                    setting,
+                    moves,
+                    message,
+                    configuration.shrink_budget,
+                );
                 return ExampleOutcome::Failed(statistics, Box::new(failure));
             }
         }
@@ -559,13 +584,13 @@ struct Replay {
     logs: Vec<String>,
 }
 
-fn replay_moves(example: &Example, moves: &[Move]) -> Replay {
+fn replay_moves(example: &Example, setting: &Setting, moves: &[Move]) -> Replay {
     let mut applied = 0;
     let mut domains_before_last = String::new();
     let _ = logging::take();
 
     let outcome = catch_unwind(AssertUnwindSafe(|| {
-        let Opening::Ready(mut session) = Session::open(example) else {
+        let Opening::Ready(mut session) = Session::open(example, setting) else {
             return;
         };
         for next_move in moves {
@@ -584,7 +609,13 @@ fn replay_moves(example: &Example, moves: &[Move]) -> Replay {
 }
 
 /// Removes moves while the failure keeps occurring with the same oracle and message shape.
-fn shrink(example: &Example, moves: Vec<Move>, message: String, budget: usize) -> Failure {
+fn shrink(
+    example: &Example,
+    setting: &Setting,
+    moves: Vec<Move>,
+    message: String,
+    budget: usize,
+) -> Failure {
     let moves_before_shrinking = moves.len();
     let oracle = Oracle::classify(&message);
     let shape = message_shape(&message);
@@ -592,7 +623,7 @@ fn shrink(example: &Example, moves: Vec<Move>, message: String, budget: usize) -
 
     let fails_the_same = |candidate: &[Move], replays: &mut usize| -> Option<usize> {
         *replays += 1;
-        let replay = replay_moves(example, candidate);
+        let replay = replay_moves(example, setting, candidate);
         replay.panic.and_then(|(message, applied)| {
             (Oracle::classify(&message) == oracle && message_shape(&message) == shape)
                 .then_some(applied)
@@ -634,7 +665,7 @@ fn shrink(example: &Example, moves: Vec<Move>, message: String, budget: usize) -
         }
     }
 
-    let replay = replay_moves(example, &moves);
+    let replay = replay_moves(example, setting, &moves);
     let message = replay
         .panic
         .as_ref()
@@ -650,6 +681,7 @@ fn shrink(example: &Example, moves: Vec<Move>, message: String, budget: usize) -
             .filter(|line| line.starts_with("[ERROR]") || line.starts_with("[WARN]"))
             .collect(),
         example: example.clone(),
+        setting: setting.clone(),
         moves,
         moves_before_shrinking,
         domains_before: replay.domains_before_last,
@@ -657,10 +689,36 @@ fn shrink(example: &Example, moves: Vec<Move>, message: String, budget: usize) -
     }
 }
 
-/// Replays `moves`, one per line in the notation of [`Move`], on the FlatZinc instance `source`,
-/// and panics like the solver does if a checker rejects what the solver does. Meant for regression
-/// tests that the fuzzer writes.
+/// Replays `moves`, one per line in the notation of [`Move`], on the FlatZinc instance `source`
+/// with the default parameters, and panics like the solver does if a checker rejects what the
+/// solver does. Meant for regression tests that the fuzzer writes.
 pub fn replay(source: &str, moves: &str) {
+    replay_with_setting(source, &Setting::default(), moves);
+}
+
+/// [`replay`] with the setting of the parameters of the propagator named `parameters`, as a
+/// failure report gives it.
+///
+/// Panics if `parameters` does not select exactly one setting of the constraint in `source`.
+pub fn replay_with_parameters(source: &str, parameters: &str, moves: &str) {
+    let constraint_name = source
+        .lines()
+        .find_map(|line| match classify(line) {
+            Statement::Constraint { name } => Some(name),
+            _ => None,
+        })
+        .unwrap_or_default();
+    let settings = parameters::settings(constraint_name, &[parameters.to_owned()]);
+    assert!(
+        settings.len() == 1,
+        "'{parameters}' selects {} settings of the parameters of '{constraint_name}', not one",
+        settings.len()
+    );
+
+    replay_with_setting(source, &settings[0], moves);
+}
+
+fn replay_with_setting(source: &str, setting: &Setting, moves: &str) {
     let example = Example {
         origin: "replay".to_owned(),
         constraint_name: String::new(),
@@ -673,7 +731,7 @@ pub fn replay(source: &str, moves: &str) {
         .map(|line| Move::parse(line).unwrap_or_else(|| panic!("'{line}' is not a move")))
         .collect::<Vec<_>>();
 
-    let Opening::Ready(mut session) = Session::open(&example) else {
+    let Opening::Ready(mut session) = Session::open(&example, setting) else {
         return;
     };
     for next_move in &moves {

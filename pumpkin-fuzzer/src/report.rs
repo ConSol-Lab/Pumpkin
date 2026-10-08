@@ -90,6 +90,9 @@ pub fn describe(group: &FailureGroup, number: usize, directory: &Path) -> std::i
     for source_line in failure.example.source.lines() {
         line(format!("    {source_line}"));
     }
+    if !failure.setting.is_default() {
+        line(format!("Parameters: {}", failure.setting.name));
+    }
     if group.origins.len() > 1 {
         let mut others = group.origins[1..]
             .iter()
@@ -128,9 +131,14 @@ pub fn describe(group: &FailureGroup, number: usize, directory: &Path) -> std::i
     }
     line(String::new());
 
+    let parameters_argument = if failure.setting.is_default() {
+        String::new()
+    } else {
+        format!(" --parameters \"{}\"", failure.setting.name)
+    };
     line("Reproduce:".to_owned());
     line(format!(
-        "    cargo run -p pumpkin-fuzzer --profile fuzz --features checks -- --replay {} --moves {}",
+        "    cargo run -p pumpkin-fuzzer --profile fuzz --features checks -- --replay {} --moves {}{parameters_argument}",
         instance_path.display(),
         moves_path.display()
     ));
@@ -143,9 +151,18 @@ pub fn describe(group: &FailureGroup, number: usize, directory: &Path) -> std::i
         failure.example.constraint_name.to_lowercase()
     )
     .expect("writing to a string succeeds");
-    writeln!(test, "        pumpkin_fuzzer::replay(").expect("writing to a string succeeds");
-    writeln!(test, "            {:?},", failure.example.source)
-        .expect("writing to a string succeeds");
+    if failure.setting.is_default() {
+        writeln!(test, "        pumpkin_fuzzer::replay(").expect("writing to a string succeeds");
+        writeln!(test, "            {:?},", failure.example.source)
+            .expect("writing to a string succeeds");
+    } else {
+        writeln!(test, "        pumpkin_fuzzer::replay_with_parameters(")
+            .expect("writing to a string succeeds");
+        writeln!(test, "            {:?},", failure.example.source)
+            .expect("writing to a string succeeds");
+        writeln!(test, "            {:?},", failure.setting.name)
+            .expect("writing to a string succeeds");
+    }
     writeln!(test, "            {moves:?},").expect("writing to a string succeeds");
     writeln!(test, "        );").expect("writing to a string succeeds");
     write!(test, "    }}").expect("writing to a string succeeds");

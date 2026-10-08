@@ -37,6 +37,12 @@ struct Arguments {
     #[arg(long)]
     constraint: Vec<String>,
 
+    /// Draw only the settings of the parameters of a propagator, such as the explanation type of
+    /// the cumulative, whose `Debug` text contains this text. Repeatable: a setting has to contain
+    /// every text. With `--replay`, it selects the setting, as a failure report gives it.
+    #[arg(long)]
+    parameters: Vec<String>,
+
     /// The number of cases per example; each starts from a freshly compiled state.
     #[arg(long, default_value_t = 20)]
     cases: usize,
@@ -90,7 +96,11 @@ fn main() {
     if let (Some(instance), Some(moves)) = (&arguments.replay, &arguments.moves) {
         let source = std::fs::read_to_string(instance).expect("the instance can be read");
         let moves = std::fs::read_to_string(moves).expect("the moves can be read");
-        pumpkin_fuzzer::replay(&source, &moves);
+        match arguments.parameters.as_slice() {
+            [] => pumpkin_fuzzer::replay(&source, &moves),
+            [parameters] => pumpkin_fuzzer::replay_with_parameters(&source, parameters, &moves),
+            _ => panic!("a replay takes one setting of the parameters"),
+        }
         println!("The replay did not fail.");
         return;
     }
@@ -106,6 +116,7 @@ fn main() {
         steps: arguments.steps,
         seed: arguments.seed,
         shrink_budget: arguments.shrink_budget,
+        parameter_filters: arguments.parameters.clone(),
     };
 
     let start = Instant::now();
