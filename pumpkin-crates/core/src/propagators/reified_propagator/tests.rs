@@ -1,16 +1,27 @@
 #![allow(deprecated, reason = "Will be refactored")]
 
+use std::borrow::Cow;
+
+use pumpkin_checking::ConflictChecker;
+use pumpkin_checking::DomainView;
+use pumpkin_checking::VariableState;
+
 use super::ReifiedPropagatorArgs;
+use crate::checkers::Scope;
+use crate::checkers::ScopeItem;
 use crate::conjunction;
 use crate::containers::StorageKey;
 use crate::engine::PropagationStatusCP;
 use crate::engine::PropagatorConflict;
 use crate::engine::test_solver::TestSolver;
 use crate::predicate;
+use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::Unknown;
+use crate::propagation::ConflictRule;
+use crate::propagation::ConstraintDescription;
 use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
@@ -22,7 +33,7 @@ use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorSpec;
 use crate::propagation::ReadDomains;
-use crate::propagation::RuntimeCheckers;
+use crate::propagation::SolutionCheck;
 use crate::state::Conflict;
 use crate::variables::DomainId;
 
@@ -200,8 +211,21 @@ where
     ConsistencyCheck: Fn(Domains) -> Option<PropagatorConflict> + 'static + Clone,
 {
     type PropagatorImpl = Self;
+    type Rule = GenericRule;
 
-    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
+    fn constraint_description(&self) -> GenericDescription {
+        GenericDescription(self.variables_to_register.clone())
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        ConstraintTag::create_from_index(0)
+    }
+
+    fn create(
+        self,
+        _: PropagatorConstructorContext,
+        _: InferenceCode,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let mut registration = EventsToRegister::empty();
 
         for (index, variable) in self.variables_to_register.iter().enumerate() {
@@ -210,7 +234,6 @@ where
 
         PropagatorSpec {
             registration,
-            checkers: RuntimeCheckers::empty(),
             propagator: self,
         }
     }
@@ -255,5 +278,49 @@ where
         // Necessary for ensuring that the local IDs are correct when notifying
         self.variables_to_register = variables.into();
         self
+    }
+}
+
+/// The description of the constraint of a [`GenericPropagator`]: only its variables.
+#[derive(Clone, Debug)]
+struct GenericDescription(Vec<DomainId>);
+
+impl ScopeItem for GenericDescription {
+    fn add_to_scope(&self, scope: &mut Scope) {
+        self.0.add_to_scope(scope);
+    }
+}
+
+impl ConstraintDescription for GenericDescription {
+    fn check_solution(&self, _: &dyn DomainView<Predicate>) -> SolutionCheck {
+        SolutionCheck::ConstraintSatisfied
+    }
+}
+
+/// The rule of a [`GenericPropagator`], which accepts every inference since the tests decide
+/// what the propagator infers.
+#[derive(Clone, Copy, Debug)]
+struct GenericRule;
+
+impl ConflictRule for GenericRule {
+    type Description = GenericDescription;
+
+    fn name() -> Cow<'static, str> {
+        Cow::Borrowed("generic")
+    }
+
+    fn create_conflict_checker(
+        _: &GenericDescription,
+    ) -> impl ConflictChecker<Predicate> + 'static {
+        AcceptEverything
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct AcceptEverything;
+
+impl ConflictChecker<Predicate> for AcceptEverything {
+    fn check(&self, _: VariableState<Predicate>, _: &[Predicate], _: Option<&Predicate>) -> bool {
+        true
     }
 }

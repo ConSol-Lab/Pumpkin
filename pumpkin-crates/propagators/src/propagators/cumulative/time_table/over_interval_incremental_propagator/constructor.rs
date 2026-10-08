@@ -1,27 +1,37 @@
-use pumpkin_checking::checkers::CheckerTask;
-use pumpkin_checking::checkers::TimeTableChecker;
+use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::TimeTableOverIntervalIncrementalPropagator;
+use crate::cumulative::time_table::CumulativeDescription;
 #[cfg(doc)]
 use crate::cumulative::time_table::TimeTableOverIntervalPropagator;
 #[cfg(doc)]
 use crate::cumulative::time_table::TimeTablePerPointPropagator;
+use crate::cumulative::time_table::TimeTableRule;
 use crate::cumulative::util::register_tasks;
-use crate::propagators::cumulative::time_table::TimeTable;
 
 impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstructor
     for TimeTableOverIntervalIncrementalPropagator<Var, SYNCHRONISE>
 {
     type PropagatorImpl = Self;
+    type Rule = TimeTableRule<Var>;
+
+    fn constraint_description(&self) -> CumulativeDescription<Var> {
+        CumulativeDescription::from_parameters(&self.parameters)
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
 
     fn create(
         mut self,
         mut context: PropagatorConstructorContext,
+        inference_code: InferenceCode,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
         // We only register for notifications of backtrack events if incremental backtracking is
         // enabled
@@ -37,30 +47,10 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstruc
 
         self.is_time_table_outdated = true;
 
-        let mut checkers = RuntimeCheckers::builder();
-        self.inference_code = Some(
-            checkers.add_conflict_checker(
-                self.constraint_tag,
-                TimeTable,
-                TimeTableChecker {
-                    tasks: self
-                        .parameters
-                        .tasks
-                        .iter()
-                        .map(|task| CheckerTask {
-                            start_time: task.start_variable.clone(),
-                            processing_time: task.processing_time,
-                            resource_usage: task.resource_usage,
-                        })
-                        .collect(),
-                    capacity: self.parameters.capacity,
-                },
-            ),
-        );
+        self.inference_code = Some(inference_code);
 
         PropagatorSpec {
             registration,
-            checkers: checkers.build(),
             propagator: self,
         }
     }

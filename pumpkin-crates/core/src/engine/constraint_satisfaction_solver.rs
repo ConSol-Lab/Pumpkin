@@ -5,7 +5,6 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use pumpkin_checking::checkers::NogoodChecker;
 #[allow(
     clippy::disallowed_types,
     reason = "any rand generator is a valid implementation of Random"
@@ -32,7 +31,6 @@ use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::conflict_resolving::ConflictResolver;
 use crate::containers::HashMap;
 use crate::containers::HashSet;
-use crate::declare_inference_label;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::engine::State;
@@ -47,9 +45,11 @@ use crate::proof::explain_root_assignment;
 use crate::proof::finalize_proof;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::store::PropagatorHandle;
+use crate::propagators::nogoods::NogoodDescription;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
 use crate::propagators::nogoods::PropagationMode;
+use crate::propagators::nogoods::UnitNogoodRule;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_ne_moderate;
@@ -270,7 +270,7 @@ impl ConstraintSatisfactionSolver {
 impl ConstraintSatisfactionSolver {
     pub fn new(solver_options: SatisfactionSolverOptions) -> Self {
         let mut state = State::default();
-        let handle = state.add_propagator(NogoodPropagatorConstructor::new(
+        let handle = state.add_nogood_propagator(NogoodPropagatorConstructor::new(
             (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
             solver_options.learning_options,
             match solver_options.analysis_mode {
@@ -851,7 +851,7 @@ impl ConstraintSatisfactionSolver {
             );
 
             if let Ok(constraint_tag) = constraint_tag {
-                let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
+                let inference_code = InferenceCode::for_rule::<UnitNogoodRule>(constraint_tag);
 
                 let _ = self
                     .unit_nogood_inference_codes
@@ -902,15 +902,14 @@ impl ConstraintSatisfactionSolver {
         pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
 
         let inference_code = if cfg!(feature = "check-propagations") {
-            self.state.add_conflict_checker(
+            self.state.add_rule_checker::<UnitNogoodRule>(
                 constraint_tag,
-                NogoodLabel,
-                NogoodChecker {
+                &NogoodDescription {
                     nogood: nogood.clone().into(),
                 },
             )
         } else {
-            InferenceCode::new(constraint_tag, NogoodLabel)
+            InferenceCode::for_rule::<UnitNogoodRule>(constraint_tag)
         };
 
         let (nogood_propagator, mut context) = self
@@ -969,7 +968,7 @@ impl ConstraintSatisfactionSolver {
                 .proof_log
                 .log_inference(
                     &mut self.state.constraint_tags,
-                    InferenceCode::new(constraint_tag, NogoodLabel),
+                    InferenceCode::for_rule::<UnitNogoodRule>(constraint_tag),
                     predicates.iter().copied(),
                     None,
                     &self.state.variable_names,
@@ -1121,8 +1120,6 @@ impl CSPSolverState {
         }
     }
 }
-
-declare_inference_label!(pub(crate) NogoodLabel, "nogood");
 
 #[cfg(test)]
 mod tests {

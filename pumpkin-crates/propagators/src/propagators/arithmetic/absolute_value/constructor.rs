@@ -1,19 +1,16 @@
-use pumpkin_checking::checkers::AbsoluteValueChecker;
-use pumpkin_core::declare_inference_label;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::AbsoluteValueDescription;
 use super::AbsoluteValuePropagator;
-
-declare_inference_label!(AbsoluteValue);
+use super::AbsoluteValueRule;
 
 #[derive(Clone, Debug)]
 pub struct AbsoluteValueArgs<VA, VB> {
@@ -27,11 +24,24 @@ where
     VB: IntegerVariable + 'static,
 {
     type PropagatorImpl = AbsoluteValuePropagator<VA, VB>;
+    type Rule = AbsoluteValueRule<VA, VB>;
 
-    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
+    fn constraint_description(&self) -> AbsoluteValueDescription<VA, VB> {
+        self.constraint_description.clone()
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
+
+    fn create(
+        self,
+        _: PropagatorConstructorContext,
+        inference_code: InferenceCode,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let AbsoluteValueArgs {
             constraint_description,
-            constraint_tag,
+            constraint_tag: _,
         } = self;
         let AbsoluteValueDescription { signed, absolute } = constraint_description;
 
@@ -39,16 +49,6 @@ where
             .add(&signed, DomainEvents::BOUNDS, LocalId::from(0))
             .add(&absolute, DomainEvents::BOUNDS, LocalId::from(1))
             .build();
-
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_conflict_checker(
-            constraint_tag,
-            AbsoluteValue,
-            AbsoluteValueChecker {
-                signed: signed.clone(),
-                absolute: absolute.clone(),
-            },
-        );
 
         let propagator = AbsoluteValuePropagator {
             signed,
@@ -58,7 +58,6 @@ where
 
         PropagatorSpec {
             registration,
-            checkers: checkers.build(),
             propagator,
         }
     }

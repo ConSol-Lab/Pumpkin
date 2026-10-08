@@ -26,6 +26,7 @@ use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::InferenceLabel;
+use crate::propagation::ConflictRule;
 use crate::propagation::CurrentNogood;
 use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
@@ -38,6 +39,8 @@ use crate::propagation::PropagatorId;
 use crate::propagation::PropagatorSpec;
 use crate::propagation::PropagatorVarId;
 use crate::propagation::store::PropagatorStore;
+use crate::propagators::nogoods::NogoodPropagator;
+use crate::propagators::nogoods::NogoodPropagatorConstructor;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_extreme;
@@ -340,17 +343,66 @@ impl State {
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
-        let original_handle: PropagatorHandle<Constructor::PropagatorImpl> =
-            self.propagators.new_propagator().key();
+        let inference_code = if cfg!(feature = "check-propagations") {
+            self.add_rule_checker::<Constructor::Rule>(
+                constructor.constraint_tag(),
+                &constructor.constraint_description(),
+            )
+        } else {
+            InferenceCode::for_rule::<Constructor::Rule>(constructor.constraint_tag())
+        };
+
+        self.initialise_propagator(|context| constructor.create(context, inference_code))
+    }
+
+    /// Add the nogood propagator, which registers the rule of each nogood when the nogood is
+    /// added rather than one rule for the propagator.
+    pub(crate) fn add_nogood_propagator(
+        &mut self,
+        constructor: NogoodPropagatorConstructor,
+    ) -> PropagatorHandle<NogoodPropagator> {
+        self.initialise_propagator(|context| constructor.create(context))
+    }
+
+    /// Register the conflict checker of the rule `Rule` for the constraint with `constraint_tag`,
+    /// and return the inference code of the inferences of the rule for that constraint.
+    ///
+    /// The checker is only stored when the `check-propagations` feature is enabled.
+    pub fn add_rule_checker<Rule: ConflictRule>(
+        &mut self,
+        constraint_tag: ConstraintTag,
+        constraint_description: &Rule::Description,
+    ) -> InferenceCode {
+        let inference_code = InferenceCode::for_rule::<Rule>(constraint_tag);
+        if cfg!(feature = "check-propagations") {
+            self.checkers.add_conflict_checker(
+                inference_code.clone(),
+                BoxedChecker::new(Box::new(Rule::create_conflict_checker(
+                    constraint_description,
+                ))),
+            );
+        }
+        inference_code
+    }
+
+    /// Create the propagator, subscribe it to its domain events, store it, and enqueue it. Note
+    /// that this does not do any propagation.
+    fn initialise_propagator<P>(
+        &mut self,
+        create: impl FnOnce(PropagatorConstructorContext) -> PropagatorSpec<P>,
+    ) -> PropagatorHandle<P>
+    where
+        P: Propagator + Clone + 'static,
+    {
+        let original_handle: PropagatorHandle<P> = self.propagators.new_propagator().key();
 
         let constructor_context =
             PropagatorConstructorContext::new(original_handle.propagator_id(), self);
 
         let PropagatorSpec {
             registration,
-            checkers,
             propagator,
-        } = constructor.create(constructor_context);
+        } = create(constructor_context);
 
         for (domain_id, events, local_id) in registration.iter() {
             let propagator_var = PropagatorVarId {
@@ -360,15 +412,6 @@ impl State {
 
             self.notification_engine
                 .register(domain_id, events, propagator_var);
-        }
-
-        if cfg!(feature = "check-propagations") {
-            // Only register the checkers when this feature is enabled. This is an if statement
-            // instead of a #[cfg(...)] to avoid the 'unused variable' warning that we would
-            // otherwise get on `self.checkers`.
-            for (inference_code, checker) in checkers.into_iter() {
-                self.checkers.add_conflict_checker(inference_code, checker);
-            }
         }
 
         pumpkin_assert_simple!(

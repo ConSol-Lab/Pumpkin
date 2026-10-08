@@ -741,13 +741,16 @@ fn convert_proof_atomic_to_predicate(
 
 #[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
+
     use drcp_format::IntComparison::*;
     use drcp_format::reader::ReadAtomic;
     use drcp_format::reader::ReadStep;
     use pumpkin_checking::ConflictChecker;
     use pumpkin_checking::DomainView;
     use pumpkin_checking::VariableState;
-    use pumpkin_core::declare_inference_label;
+    use pumpkin_core::propagation::ConflictRule;
+    use pumpkin_core::propagation::ConstraintDescription;
     use pumpkin_core::propagation::EventsToRegister;
     use pumpkin_core::propagation::PropagationContext;
     use pumpkin_core::propagation::Propagator;
@@ -755,7 +758,7 @@ mod tests {
     use pumpkin_core::propagation::PropagatorConstructorContext;
     use pumpkin_core::propagation::PropagatorSpec;
     use pumpkin_core::propagation::ReadDomains;
-    use pumpkin_core::propagation::RuntimeCheckers;
+    use pumpkin_core::propagation::SolutionCheck;
     use pumpkin_core::state::PropagationStatusCP;
     use pumpkin_propagators::arithmetic::BinaryEqualsDescription;
     use pumpkin_propagators::arithmetic::BinaryEqualsPropagatorArgs;
@@ -975,38 +978,83 @@ mod tests {
 
     impl PropagatorConstructor for AlwaysConflictConstructor {
         type PropagatorImpl = AlwaysConflictPropagator;
+        type Rule = AlwaysConflictRule;
+
+        fn constraint_description(&self) -> AlwaysConflictDescription {
+            AlwaysConflictDescription {
+                watched: self.watched,
+                other: self.other,
+            }
+        }
+
+        fn constraint_tag(&self) -> ConstraintTag {
+            self.constraint_tag
+        }
 
         fn create(
             self,
             mut context: PropagatorConstructorContext,
+            inference_code: InferenceCode,
         ) -> PropagatorSpec<Self::PropagatorImpl> {
-            declare_inference_label!(AlwaysConflict);
-
             let AlwaysConflictConstructor {
                 watched,
                 other,
-                constraint_tag,
+                constraint_tag: _,
             } = self;
 
             // This propagator must not react to `other` becoming true. It only
             // needs to fire once `watched` becomes true.
             let _ = context.register_predicate(watched);
 
-            let mut checkers = RuntimeCheckers::builder();
-            let inference_code = checkers.add_conflict_checker(
-                constraint_tag,
-                AlwaysConflict,
-                AlwaysConflictChecker { watched, other },
-            );
-
             PropagatorSpec {
                 registration: EventsToRegister::empty(),
-                checkers: checkers.build(),
                 propagator: AlwaysConflictPropagator {
                     watched,
                     other,
                     inference_code,
                 },
+            }
+        }
+    }
+
+    pumpkin_core::scoped_struct! {
+    /// The constraint of [`AlwaysConflictPropagator`]: `watched` and `other` are not both true.
+    #[derive(Clone, Debug)]
+    struct AlwaysConflictDescription {
+        watched: Predicate,
+        other: Predicate,
+    }
+    }
+
+    impl ConstraintDescription for AlwaysConflictDescription {
+        fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck {
+            if domains.is_true(&!self.watched) || domains.is_true(&!self.other) {
+                SolutionCheck::ConstraintSatisfied
+            } else if domains.is_true(&self.watched) && domains.is_true(&self.other) {
+                SolutionCheck::ConstraintViolated
+            } else {
+                SolutionCheck::Unknown
+            }
+        }
+    }
+
+    /// The rule of [`AlwaysConflictPropagator`].
+    #[derive(Clone, Copy, Debug)]
+    struct AlwaysConflictRule;
+
+    impl ConflictRule for AlwaysConflictRule {
+        type Description = AlwaysConflictDescription;
+
+        fn name() -> Cow<'static, str> {
+            Cow::Borrowed("always_conflict")
+        }
+
+        fn create_conflict_checker(
+            constraint_description: &AlwaysConflictDescription,
+        ) -> impl ConflictChecker<Predicate> + 'static {
+            AlwaysConflictChecker {
+                watched: constraint_description.watched,
+                other: constraint_description.other,
             }
         }
     }

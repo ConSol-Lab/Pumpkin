@@ -1,7 +1,5 @@
 use std::fmt::Debug;
 
-use pumpkin_checking::checkers::NogoodChecker;
-
 use crate::Random;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
@@ -16,7 +14,6 @@ use crate::engine::RestartStrategy;
 use crate::engine::State;
 use crate::engine::TrailedValues;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
-use crate::engine::constraint_satisfaction_solver::NogoodLabel;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate::PredicateType;
 use crate::predicate;
@@ -30,7 +27,9 @@ use crate::propagation::CurrentNogood;
 use crate::propagation::ExplanationContext;
 use crate::propagation::HasAssignments;
 use crate::propagation::ReadDomains;
+use crate::propagators::nogoods::NogoodDescription;
 use crate::propagators::nogoods::NogoodPropagator;
+use crate::propagators::nogoods::UnitNogoodRule;
 use crate::pumpkin_assert_eq_simple;
 use crate::state::PropagatorHandle;
 use crate::variables::DomainId;
@@ -297,15 +296,14 @@ impl ConflictAnalysisContext<'_> {
         let constraint_tag = self.log_deduction(learned_nogood.predicates.iter().copied());
 
         let inference_code = if cfg!(feature = "check-propagations") {
-            self.state.add_conflict_checker(
+            self.state.add_rule_checker::<UnitNogoodRule>(
                 constraint_tag,
-                NogoodLabel,
-                NogoodChecker {
+                &NogoodDescription {
                     nogood: learned_nogood.predicates.clone().into(),
                 },
             )
         } else {
-            InferenceCode::new(constraint_tag, NogoodLabel)
+            InferenceCode::for_rule::<UnitNogoodRule>(constraint_tag)
         };
 
         self.restore_to(learned_nogood.backtrack_level);
