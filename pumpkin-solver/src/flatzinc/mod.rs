@@ -59,6 +59,12 @@ pub struct FlatZincOptions {
     /// the head of the croc scaffold the proof log writes.
     pub writes_preamble: bool,
 
+    /// Apply the preprocessing the preamble states instead of deciding it: the views, constants
+    /// and literals it gives are made, the constraints it skips are not posted, and its steps
+    /// head the proof. Used by the proof processor, which reads a scaffold over the variables of
+    /// the solver that wrote the preamble.
+    pub preamble: Option<preamble::Preamble>,
+
     /// Stop after compiling: write the proof steps that state the views, in the format of
     /// fzn-drcp-check, to `head_path`, report what the view pass did, and do not solve.
     pub preprocess_only: bool,

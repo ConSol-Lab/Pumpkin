@@ -1,7 +1,10 @@
 //! The preamble of a croc scaffold: the preprocessing the compiler did, stated for the proof
-//! processor.
+//! processor, which applies it in place of deciding it.
 
 use std::fmt::Write as _;
+use std::io::BufRead;
+
+pub use pumpkin_core::proof::SCAFFOLD_NOGOODS_MARKER;
 
 /// The preprocessing a solver states in the preamble of its scaffold.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -55,6 +58,16 @@ impl Comparator {
             Comparator::NotEqual => "!=",
         }
     }
+
+    fn parse(text: &str) -> Option<Comparator> {
+        match text {
+            "<=" => Some(Comparator::LessOrEqual),
+            ">=" => Some(Comparator::GreaterOrEqual),
+            "==" => Some(Comparator::Equal),
+            "!=" => Some(Comparator::NotEqual),
+            _ => None,
+        }
+    }
 }
 
 /// A model constraint posted as its decomposition, with the fresh variables it introduces.
@@ -71,7 +84,119 @@ pub enum DecompositionKind {
     Table,
 }
 
+/// A line of a preamble that cannot be read.
+#[derive(Debug, thiserror::Error)]
+pub enum PreambleError {
+    #[error("failed to read the preamble: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("preamble line {line}: {message}")]
+    Syntax { line: usize, message: String },
+
+    #[error("the scaffold ends before the line '{SCAFFOLD_NOGOODS_MARKER}' that ends its preamble")]
+    NoMarker,
+}
+
 impl Preamble {
+    /// Whether the preamble states any preprocessing.
+    pub fn is_empty(&self) -> bool {
+        *self == Preamble::default()
+    }
+
+    /// Read the preamble at the head of a croc scaffold, up to and including the marker line,
+    /// leaving the reader at the first line of the nogoods. It reads line by line, so the
+    /// scaffold may be a pipe or a file still being written.
+    pub fn read_head_of_scaffold(reader: &mut impl BufRead) -> Result<Preamble, PreambleError> {
+        Preamble::read_lines(reader, true)
+    }
+
+    /// Read a preamble that makes up the whole of the reader, without the marker line.
+    pub fn read(mut reader: impl BufRead) -> Result<Preamble, PreambleError> {
+        Preamble::read_lines(&mut reader, false)
+    }
+
+    fn read_lines(
+        reader: &mut impl BufRead,
+        until_marker: bool,
+    ) -> Result<Preamble, PreambleError> {
+        let mut preamble = Preamble::default();
+        let mut in_steps = false;
+        let mut index = 0;
+        let mut buffer = String::new();
+        loop {
+            buffer.clear();
+            if reader.read_line(&mut buffer)? == 0 {
+                if until_marker {
+                    return Err(PreambleError::NoMarker);
+                }
+                return Ok(preamble);
+            }
+            index += 1;
+            let line = buffer.strip_suffix('\n').unwrap_or(&buffer);
+            let line = line.strip_suffix('\r').unwrap_or(line).to_owned();
+            if until_marker && line == SCAFFOLD_NOGOODS_MARKER {
+                return Ok(preamble);
+            }
+            if in_steps {
+                preamble.steps.push(line);
+                continue;
+            }
+            let fields: Vec<&str> = line.split_whitespace().collect();
+            let error = |message: &str| PreambleError::Syntax {
+                line: index,
+                message: format!("{message}: '{line}'"),
+            };
+            let number = |text: &str| -> Result<u64, PreambleError> {
+                text.parse()
+                    .map_err(|_| error("expected a constraint number"))
+            };
+            let integer = |text: &str| -> Result<i64, PreambleError> {
+                text.parse().map_err(|_| error("expected an integer"))
+            };
+            match fields.as_slice() {
+                [] => {}
+                [first, ..] if first.starts_with('%') => {}
+                ["view", variable, representative, scale, offset] => preamble.views.push(View {
+                    variable: (*variable).to_owned(),
+                    representative: (*representative).to_owned(),
+                    scale: integer(scale)?,
+                    offset: integer(offset)?,
+                }),
+                ["parameter", name] => preamble.parameters.push((*name).to_owned()),
+                ["constant", variable, value] => preamble
+                    .constants
+                    .push(((*variable).to_owned(), integer(value)?)),
+                ["literal", boolean, variable, comparator, value, constraint] => {
+                    preamble.literals.push(LiteralDefinition {
+                        boolean: (*boolean).to_owned(),
+                        variable: (*variable).to_owned(),
+                        comparator: Comparator::parse(comparator)
+                            .ok_or_else(|| error("expected one of <=, >=, ==, !="))?,
+                        value: integer(value)?,
+                        constraint: number(constraint)?,
+                    })
+                }
+                ["skip", constraint] => preamble.skipped.push(number(constraint)?),
+                ["decomposition", "table", constraint, fresh_variables @ ..] => {
+                    preamble.decompositions.push(Decomposition {
+                        kind: DecompositionKind::Table,
+                        constraint: number(constraint)?,
+                        fresh_variables: fresh_variables
+                            .iter()
+                            .map(|&name| name.to_owned())
+                            .collect(),
+                    })
+                }
+                ["objective", variable, constraint] => {
+                    preamble.objective = Some(((*variable).to_owned(), number(constraint)?))
+                }
+                ["first", identifier] => preamble.first_free = Some(number(identifier)?),
+                ["proof"] => in_steps = true,
+                _ => return Err(error("unknown item")),
+            }
+        }
+    }
+
     pub fn render(&self) -> String {
         let mut text = String::new();
         for view in &self.views {
@@ -132,7 +257,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_preamble_renders_one_item_per_line_before_its_steps() {
+    fn a_rendered_preamble_reads_back() {
         let preamble = Preamble {
             views: vec![View {
                 variable: "y".into(),
@@ -140,14 +265,49 @@ mod tests {
                 scale: -2,
                 offset: 3,
             }],
-            skipped: vec![1],
+            parameters: vec!["view_parameter_0".into()],
+            constants: vec![("z".into(), 4)],
+            literals: vec![LiteralDefinition {
+                boolean: "b".into(),
+                variable: "x".into(),
+                comparator: Comparator::LessOrEqual,
+                value: 2,
+                constraint: 3,
+            }],
+            skipped: vec![1, 2],
+            decompositions: vec![Decomposition {
+                kind: DecompositionKind::Table,
+                constraint: 4,
+                fresh_variables: vec!["_t4_0".into(), "_t4_1".into()],
+            }],
+            objective: Some(("y".into(), 1)),
             first_free: Some(7),
             steps: vec!["s y := -2*x+3 by c:1".into()],
-            ..Preamble::default()
         };
-        assert_eq!(
-            preamble.render(),
-            "view y x -2 3\nskip 1\nfirst 7\nproof\ns y := -2*x+3 by c:1\n"
-        );
+        let read = Preamble::read(preamble.render().as_bytes()).expect("the rendering reads");
+        assert_eq!(read, preamble);
+    }
+
+    #[test]
+    fn the_head_of_a_scaffold_ends_at_the_marker() {
+        let scaffold = "view y x 1 0\nproof\ns y := x by c:1\nnogoods\na 1 [x >= 1]\nn 2 1 0\n";
+        let mut reader = scaffold.as_bytes();
+        let preamble = Preamble::read_head_of_scaffold(&mut reader).expect("the head reads");
+        assert_eq!(preamble.views.len(), 1);
+        assert_eq!(preamble.steps, vec!["s y := x by c:1".to_owned()]);
+        assert_eq!(reader, "a 1 [x >= 1]\nn 2 1 0\n".as_bytes());
+    }
+
+    #[test]
+    fn a_scaffold_without_the_marker_is_refused() {
+        let error =
+            Preamble::read_head_of_scaffold(&mut "proof\na 1 [x >= 1]\n".as_bytes()).unwrap_err();
+        assert!(matches!(error, PreambleError::NoMarker));
+    }
+
+    #[test]
+    fn an_unknown_item_is_refused_with_its_line() {
+        let error = Preamble::read("view x y 1 0\nalias x y\n".as_bytes()).unwrap_err();
+        assert!(matches!(error, PreambleError::Syntax { line: 2, .. }));
     }
 }

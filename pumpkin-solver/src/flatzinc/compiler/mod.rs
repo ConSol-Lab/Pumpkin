@@ -1,3 +1,4 @@
+mod apply_preamble;
 mod check_no_variable_aliases;
 mod collect_domains;
 mod collect_views;
@@ -46,7 +47,10 @@ pub(crate) fn compile(
     prepare_variables::run(&ast, &mut context)?;
     let named_constraints = name_rules::collect(&context);
     match options.proof_format {
-        ProofFormat::Croc => collect_views::run(&ast, &mut context, &options)?,
+        ProofFormat::Croc => match options.preamble.as_ref() {
+            Some(preamble) => apply_preamble::run(&ast, &mut context, preamble)?,
+            None => collect_views::run(&ast, &mut context, &options)?,
+        },
         ProofFormat::Drcp => check_no_variable_aliases::run(&ast, &mut context)?,
     }
     if context.solver.is_logging_proof() && options.proof_format == ProofFormat::Croc {
@@ -57,6 +61,9 @@ pub(crate) fn compile(
     name_rules::run(&mut context, named_constraints)?;
     define_variable_arrays::run(&ast, &mut context)?;
     post_constraints::run(&ast, &mut context, &options)?;
+    if let Some(preamble) = options.preamble.as_ref() {
+        apply_preamble::check_decompositions(&context, preamble)?;
+    }
     let objective_function = create_objective::run(&ast, &mut context)?;
     let search = create_search_strategy::run(&ast, &mut context, objective_function)?;
 

@@ -46,4 +46,7 @@ pub enum FlatZincError {
          the clauses that exclude each solution found are not derivable"
     )]
     ProofOfSolutionEnumeration,
+
+    #[error("the preamble cannot be applied to the model: {0}")]
+    Preamble(String),
 }

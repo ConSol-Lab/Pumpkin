@@ -725,6 +725,7 @@ fn run() -> PumpkinResult<()> {
                         None
                     },
                     verbose: args.verbose,
+                    preamble: None,
                 },
                 NoLearningResolver,
             )?,
@@ -755,6 +756,7 @@ fn run() -> PumpkinResult<()> {
                         None
                     },
                     verbose: args.verbose,
+                    preamble: None,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::OneUIP,
@@ -789,6 +791,7 @@ fn run() -> PumpkinResult<()> {
                         None
                     },
                     verbose: args.verbose,
+                    preamble: None,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::CPIP,
@@ -823,6 +826,7 @@ fn run() -> PumpkinResult<()> {
                         None
                     },
                     verbose: args.verbose,
+                    preamble: None,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::BoundsCPIP,
@@ -857,6 +861,7 @@ fn run() -> PumpkinResult<()> {
                         None
                     },
                     verbose: args.verbose,
+                    preamble: None,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::AllDecision,
