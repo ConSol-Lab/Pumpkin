@@ -1,3 +1,5 @@
+use pumpkin_checking::checkers::DisjunctiveCheckerTask;
+use pumpkin_checking::checkers::DisjunctiveEdgeFindingChecker;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
@@ -13,7 +15,6 @@ use super::DisjunctivePropagator;
 use super::disjunctive_task::ArgDisjunctiveTask;
 use super::disjunctive_task::DisjunctiveTask;
 use super::theta_lambda_tree::ThetaLambdaTree;
-use crate::disjunctive::checker::DisjunctiveEdgeFindingChecker;
 use crate::propagators::disjunctive::DisjunctiveEdgeFinding;
 
 #[derive(Debug)]
@@ -65,7 +66,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
             DisjunctiveEdgeFindingChecker {
                 tasks: tasks
                     .iter()
-                    .map(|task| ArgDisjunctiveTask {
+                    .map(|task| DisjunctiveCheckerTask {
                         start_time: task.start_time.clone(),
                         processing_time: task.processing_time,
                     })

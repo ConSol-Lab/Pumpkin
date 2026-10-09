@@ -1,13 +1,8 @@
-use pumpkin_checking::AtomicConstraint;
-use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::ConflictChecker;
-use pumpkin_checking::IntExt;
-
-#[derive(Clone, Debug)]
-pub struct MaximumChecker<ElementVar, Rhs> {
-    pub array: Box<[ElementVar]>,
-    pub rhs: Rhs,
-}
+use super::MaximumChecker;
+use crate::AtomicConstraint;
+use crate::CheckerVariable;
+use crate::ConflictChecker;
+use crate::IntExt;
 
 impl<ElementVar, Rhs, Atomic> ConflictChecker<Atomic> for MaximumChecker<ElementVar, Rhs>
 where
@@ -15,12 +10,7 @@ where
     ElementVar: CheckerVariable<Atomic>,
     Rhs: CheckerVariable<Atomic>,
 {
-    fn check(
-        &self,
-        state: pumpkin_checking::VariableState<Atomic>,
-        _: &[Atomic],
-        _: Option<&Atomic>,
-    ) -> bool {
+    fn check(&self, state: crate::VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
         let lowest_maximum = self
             .array
             .iter()

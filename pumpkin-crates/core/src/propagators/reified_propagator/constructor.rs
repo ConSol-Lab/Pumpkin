@@ -1,4 +1,5 @@
-use super::ReifiedChecker;
+use pumpkin_checking::checkers::ReifiedChecker;
+
 use super::ReifiedPropagator;
 use crate::propagation::DomainEvents;
 use crate::propagation::Propagator;

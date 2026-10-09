@@ -1,14 +1,9 @@
-use pumpkin_checking::AtomicConstraint;
-use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::ConflictChecker;
-use pumpkin_checking::IntExt;
-use pumpkin_checking::VariableState;
-
-#[derive(Debug, Clone)]
-pub struct LinearNotEqualChecker<Var> {
-    pub terms: Box<[Var]>,
-    pub bound: i32,
-}
+use super::LinearNotEqualChecker;
+use crate::AtomicConstraint;
+use crate::CheckerVariable;
+use crate::ConflictChecker;
+use crate::IntExt;
+use crate::VariableState;
 
 impl<Var, Atomic> ConflictChecker<Atomic> for LinearNotEqualChecker<Var>
 where

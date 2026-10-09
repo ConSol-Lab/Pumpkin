@@ -1,14 +1,8 @@
-use pumpkin_checking::AtomicConstraint;
-use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::ConflictChecker;
-use pumpkin_checking::IntExt;
-
-#[derive(Clone, Debug)]
-pub struct IntegerDivisionChecker<VA, VB, VC> {
-    pub numerator: VA,
-    pub denominator: VB,
-    pub rhs: VC,
-}
+use super::IntegerDivisionChecker;
+use crate::AtomicConstraint;
+use crate::CheckerVariable;
+use crate::ConflictChecker;
+use crate::IntExt;
 
 impl<VA, VB, VC, Atomic> ConflictChecker<Atomic> for IntegerDivisionChecker<VA, VB, VC>
 where
@@ -19,7 +13,7 @@ where
 {
     fn check(
         &self,
-        state: pumpkin_checking::VariableState<Atomic>,
+        state: crate::VariableState<Atomic>,
         _premises: &[Atomic],
         _consequent: Option<&Atomic>,
     ) -> bool {
