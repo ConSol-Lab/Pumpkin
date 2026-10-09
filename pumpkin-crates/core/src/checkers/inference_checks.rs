@@ -33,10 +33,13 @@ pub(crate) fn check_inference(
 
     let inference_code = inference.inference_code;
     let checkers = conflict_checkers.for_inference_code(&inference_code);
-    assert!(
-        checkers.len() > 0,
-        "missing checker for inference code {inference_code:?}"
-    );
+    if checkers.len() == 0 {
+        assert!(
+            conflict_checkers.is_rule_unchecked(inference_code.rule()),
+            "missing checker for inference code {inference_code:?}"
+        );
+        return;
+    }
 
     let results = checkers
         .map(|checker| checker.check_inference(inference.premises, inference.consequent.as_ref()))

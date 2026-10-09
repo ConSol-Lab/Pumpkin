@@ -3,8 +3,10 @@ use pumpkin_checking::BoxedConflictChecker;
 use pumpkin_checking::ConflictChecker;
 
 use crate::containers::HashMap;
+use crate::containers::HashSet;
 use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
+use crate::proof::RuleId;
 
 /// Owns the conflict checkers, which verify that propagations are sound.
 ///
@@ -16,9 +18,21 @@ pub struct ConflictCheckerStore {
         HashMap<InferenceCode, Vec<(ConflictCheckerId, BoxedConflictChecker<Predicate>)>>,
     /// The identifier given to the next checker that is added.
     next_id: ConflictCheckerId,
+    /// The rules that are not checked, so their inferences have no conflict checker.
+    unchecked_rules: HashSet<RuleId>,
 }
 
 impl ConflictCheckerStore {
+    /// Record that the inferences of `rule` are not checked, so that they need no conflict
+    /// checker.
+    pub fn mark_rule_unchecked(&mut self, rule: RuleId) {
+        let _ = self.unchecked_rules.insert(rule);
+    }
+
+    pub fn is_rule_unchecked(&self, rule: RuleId) -> bool {
+        self.unchecked_rules.contains(&rule)
+    }
+
     pub fn for_inference_code(
         &self,
         inference_code: &InferenceCode,

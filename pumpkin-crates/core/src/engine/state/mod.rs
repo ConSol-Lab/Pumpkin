@@ -7,6 +7,8 @@ use pumpkin_checking::ConflictChecker;
 
 use crate::checkers::RemovableRuleCheckers;
 use crate::checkers::RuleCheckerStore;
+#[cfg(feature = "checkers")]
+use crate::checkers::is_rule_checked;
 use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
@@ -223,7 +225,8 @@ impl State {
     /// Add the checkers of `Rule` for the constraint with `constraint_description`.
     ///
     /// The conflict checker is added under `check-inferences`, the retention checker under
-    /// `check-retention` and the description for the solution check under `check-solutions`.
+    /// `check-retention` and the description for the solution check under `check-solutions`,
+    /// unless the rule is filtered out by `is_rule_checked`.
     #[cfg_attr(
         not(any(feature = "check-retention", feature = "check-solutions")),
         allow(
@@ -244,10 +247,20 @@ impl State {
         constraint_description: Rule::Description,
         propagator: PropagatorId,
     ) -> RemovableRuleCheckers {
+        #[cfg(feature = "checkers")]
+        let is_checked = is_rule_checked(&Rule::name());
+
+        #[cfg(feature = "inference-checkers")]
+        if !is_checked {
+            self.rule_checkers
+                .conflict_checkers
+                .mark_rule_unchecked(inference_code.rule());
+        }
+
         RemovableRuleCheckers {
             inference_code,
             #[cfg(feature = "inference-checkers")]
-            conflict_checker: Some(
+            conflict_checker: is_checked.then(|| {
                 self.rule_checkers
                     .conflict_checkers
                     .add_removable_conflict_checker(
@@ -255,21 +268,27 @@ impl State {
                         BoxedConflictChecker::new(Box::new(Rule::create_conflict_checker(
                             &constraint_description,
                         ))),
-                    ),
-            ),
+                    )
+            }),
             #[cfg(feature = "check-retention")]
-            retention_checker: Some(self.rule_checkers.retention_checkers.register_removable(
-                constraint_description.scope(),
-                BoxedRetentionChecker::new(Rule::create_retention_checker(&constraint_description)),
-                propagator,
-                inference_code,
-            )),
+            retention_checker: is_checked.then(|| {
+                self.rule_checkers.retention_checkers.register_removable(
+                    constraint_description.scope(),
+                    BoxedRetentionChecker::new(Rule::create_retention_checker(
+                        &constraint_description,
+                    )),
+                    propagator,
+                    inference_code,
+                )
+            }),
             #[cfg(feature = "check-solutions")]
-            solution_checker: Some(self.rule_checkers.solution_checkers.add(
-                std::rc::Rc::new(constraint_description),
-                propagator,
-                inference_code,
-            )),
+            solution_checker: is_checked.then(|| {
+                self.rule_checkers.solution_checkers.add(
+                    std::rc::Rc::new(constraint_description),
+                    propagator,
+                    inference_code,
+                )
+            }),
         }
     }
 
