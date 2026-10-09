@@ -73,6 +73,46 @@ process_model!(
     "--literal-predicates"
 );
 
+// The symmetry and dominance breaking steps, which the preamble states with the constraints the
+// solver posts for them.
+process_model!(
+    symmetry_star,
+    "symmetry_star",
+    "c UPPER_BOUND 5",
+    "--symmetry-breaking"
+);
+process_model!(
+    symmetry_star_declared,
+    "symmetry_star",
+    "c UPPER_BOUND 5",
+    "--symmetry-breaking",
+    "--declare-replacements",
+    "--literal-predicates"
+);
+process_model!(
+    value_symmetry_colouring,
+    "value_symmetry_colouring",
+    "c UNSAT",
+    "--value-symmetry-breaking"
+);
+
+// The breaking steps whose constraint no kept inference cites, left out on request.
+#[test]
+fn symmetry_star_dropping_unused_steps() {
+    let name = "symmetry_star_dropping_unused_steps";
+    let (model_path, scaffold_path) = solve(name, "symmetry_star", &["--symmetry-breaking"]);
+    for derivation in ["resolution", "refutation"] {
+        let _ = process_and_check(
+            name,
+            &model_path,
+            &scaffold_path,
+            derivation,
+            "c UPPER_BOUND 5",
+            &["--drop-unused-breaking-steps"],
+        );
+    }
+}
+
 // The scaffold read from a pipe while the solver writes it.
 #[cfg(unix)]
 #[test]

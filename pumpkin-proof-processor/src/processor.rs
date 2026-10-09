@@ -83,6 +83,10 @@ pub(crate) struct ProofProcessor {
     /// The number of deductions added to the databases, which numbers the next one.
     registered_deductions: u32,
 
+    /// Whether the steps of the head that add a constraint no kept inference cites are left out
+    /// of a proof in the block format.
+    drop_unused_steps: bool,
+
     /// The facts propagated at the root, by the model's constraints alone, that a derivation
     /// cites, each with the tag of the unit nogood the proof derives for it once, before the
     /// scaffold's nogoods. `None` when the facts are explained wherever they are used, as for a
@@ -303,10 +307,17 @@ impl ProofProcessor {
             databases: None,
             registered_predicates: HashSet::default(),
             registered_deductions: 0,
+            drop_unused_steps: false,
             root_lemmas: None,
             cited_root_facts: vec![],
             derivation_number: 1,
         }
+    }
+
+    /// Leave out of a proof in the block format the steps of the head, the symmetry and
+    /// dominance breaking steps, that add a constraint no kept inference cites.
+    pub(crate) fn set_drop_unused_steps(&mut self, drop_unused_steps: bool) {
+        self.drop_unused_steps = drop_unused_steps;
     }
 
     /// Process the given proof and write the result to the proof writer.
@@ -323,7 +334,7 @@ impl ProofProcessor {
     pub(crate) fn process<R: BufRead, W: Write>(
         mut self,
         proof_reader: ProofReader<R, i32>,
-        output: ProofOutput<W>,
+        mut output: ProofOutput<W>,
     ) -> Result<(), ProofProcessError> {
         self.blocks = matches!(output, ProofOutput::Blocks(_));
         if self.blocks {
@@ -510,6 +521,10 @@ impl ProofProcessor {
             num_inferences,
         );
 
+        if let (true, ProofOutput::Blocks(proof_log)) = (self.drop_unused_steps, &mut output) {
+            self.drop_unused_held_steps(proof_log);
+        }
+
         // Finally, we write the output proof to the file. Since the proof stages are in
         // reverse order, we iterate from the end to the beginning.
         let write_start = Instant::now();
@@ -603,6 +618,39 @@ impl ProofProcessor {
         info!("Proof processed successfully");
 
         Ok(())
+    }
+
+    /// Leave out the held steps of the head that add a constraint which no kept inference cites,
+    /// directly or through a kept step citing it.
+    fn drop_unused_held_steps(&self, proof_log: &mut ProofLog) {
+        let mut cited: HashSet<ConstraintTag> = self
+            .output_proof
+            .iter()
+            .flat_map(|stage| stage.steps.iter())
+            .filter_map(|step| match step {
+                ExplanationStep::Inference { inference_code, .. } => Some(inference_code.tag()),
+                ExplanationStep::InitialDomain(_) => None,
+            })
+            .collect();
+
+        let held_steps = proof_log.held_steps();
+        let num_held_steps = held_steps.len();
+        let mut unused = vec![];
+        // A step cites only steps before it, so going backwards sees every citation of a step
+        // before the step itself.
+        for (step, cites) in held_steps.into_iter().rev() {
+            if cited.contains(&step) {
+                cited.extend(cites);
+            } else {
+                unused.push(step);
+            }
+        }
+
+        info!(
+            "Leaving out {} of {num_held_steps} held steps, whose constraint no kept inference cites",
+            unused.len()
+        );
+        proof_log.drop_held_steps(unused);
     }
 
     /// Initialise the state with the deductions from the proof.

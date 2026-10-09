@@ -1,11 +1,11 @@
 //! The proof processor turns a solver's scaffold, its learned nogoods, into a full proof. Its
 //! input is the FlatZinc model and the scaffold. A croc scaffold starts with a preamble stating
-//! the solver's preprocessing: its views, constants, literal predicates and decompositions,
-//! followed by a marker line and the nogoods. The processor reads the preamble,
-//! applies exactly that preprocessing, builds its solver once on the solver's variables when it
-//! reaches the marker, reads the nogoods as they arrive, derives each by its own propagation, and
-//! writes the proof headed by the preamble's steps. The scaffold is read once, front to back, so
-//! it may be a pipe; `-` reads it from the standard input.
+//! the solver's preprocessing: its views, constants, literal predicates, decompositions and
+//! symmetry and dominance breaking steps, followed by a marker line and the nogoods. The processor
+//! reads the preamble, applies exactly that preprocessing, builds its solver once on the solver's
+//! variables when it reaches the marker, reads the nogoods as they arrive, derives each by its own
+//! propagation, and writes the proof headed by the preamble's steps. The scaffold is read once,
+//! front to back, so it may be a pipe; `-` reads it from the standard input.
 
 mod deduction_database;
 mod deduction_propagator;
@@ -76,6 +76,12 @@ struct Cli {
     /// a file, or as text.
     #[arg(long, value_enum, default_value_t = ProofEncoding::Binary)]
     proof_encoding: ProofEncoding,
+
+    /// Leave out the symmetry and dominance breaking steps of the head whose constraint no kept
+    /// inference cites. This holds the head back until trimming is done, which a processor that
+    /// writes its proof as it derives it cannot do.
+    #[arg(long)]
+    drop_unused_breaking_steps: bool,
 
     /// How the scaffold's deductions are held while trimming.
     #[arg(long, value_enum, default_value_t = DeductionStore::DatabaseMerged)]
@@ -168,6 +174,7 @@ fn main() -> anyhow::Result<()> {
         DeductionStore::DatabaseMerged => DeductionStoreKind::DatabaseMerged,
     };
     proof_processor.set_deduction_store(store);
+    proof_processor.set_drop_unused_steps(cli.drop_unused_breaking_steps);
 
     proof_processor.process(ProofReader::new(scaffold), output)?;
 
