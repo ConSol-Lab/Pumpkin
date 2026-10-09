@@ -1,5 +1,4 @@
 use pumpkin_core::conjunction;
-use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::Priority;
@@ -8,8 +7,6 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
-
-declare_inference_label!(pub(super) Division);
 
 /// A propagator for maintaining the constraint `numerator / denominator = rhs`; note that this
 /// propagator performs truncating division (i.e. rounding towards 0).
@@ -39,7 +36,7 @@ where
         "Division"
     }
 
-    fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
+    fn propagate(&mut self, context: PropagationContext) -> PropagationStatusCP {
         perform_propagation(
             context,
             &self.numerator,

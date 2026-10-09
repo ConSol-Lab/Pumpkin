@@ -83,36 +83,4 @@ where
 
         Ok(())
     }
-
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
-        if let Some(conflict) = self.detect_inconsistency(context.domains()) {
-            return Err(conflict.into());
-        }
-
-        let a_lb = context.lower_bound(&self.a);
-        let a_ub = context.upper_bound(&self.a);
-
-        let b_lb = context.lower_bound(&self.b);
-        let b_ub = context.upper_bound(&self.b);
-
-        if a_ub < b_lb || b_ub < a_lb {
-            return Ok(());
-        }
-
-        if a_lb == a_ub {
-            context.post(
-                predicate!(self.b != a_lb),
-                (conjunction!([self.a == a_lb]), &self.inference_code),
-            )?;
-        }
-
-        if b_lb == b_ub {
-            context.post(
-                predicate!(self.a != b_lb),
-                (conjunction!([self.b == b_lb]), &self.inference_code),
-            )?;
-        }
-
-        Ok(())
-    }
 }

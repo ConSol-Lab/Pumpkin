@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 use std::ops::Range;
 use std::rc::Rc;
-
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::asserts::pumpkin_assert_extreme;
 use pumpkin_core::asserts::pumpkin_assert_simple;
@@ -20,12 +19,10 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::propagator_conflict;
 use pumpkin_core::variables::IntegerVariable;
-
 use super::insertion;
 use super::removal;
 use crate::cumulative::options::CumulativePropagatorOptions;
 use crate::cumulative::time_table::create_time_table_over_interval_from_scratch;
-use crate::cumulative::time_table::propagate_from_scratch_time_table_interval;
 use crate::cumulative::util::check_bounds_equal_at_propagation;
 use crate::cumulative::util::create_tasks;
 use crate::cumulative::util::update_bounds_task;
@@ -469,16 +466,6 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
 
     fn name(&self) -> &str {
         "CumulativeTimeTableOverIntervalIncremental"
-    }
-
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
-        // Use the same debug propagator from `TimeTableOverInterval`
-        propagate_from_scratch_time_table_interval(
-            &mut context,
-            &self.parameters,
-            &self.updatable_structures,
-            self.inference_code.as_ref().unwrap(),
-        )
     }
 }
 

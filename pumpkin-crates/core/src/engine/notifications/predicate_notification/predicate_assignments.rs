@@ -59,10 +59,6 @@ impl PredicateValue {
 }
 
 impl PredicateIdAssignments {
-    fn predicate_ids(&self) -> impl Iterator<Item = PredicateId> + '_ {
-        self.predicate_values.keys()
-    }
-
     /// Returns the satisfied predicates; note that this structure will be cleared once it is
     /// dropped.
     pub(crate) fn drain_satisfied_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
@@ -193,45 +189,9 @@ impl PredicateIdAssignments {
     }
 
     /// Returns whether the status of the [`Predicate`] is unknown.
+    #[cfg(test)]
     pub(crate) fn is_unknown(&self, predicate_id: PredicateId) -> bool {
         predicate_id.index() >= self.predicate_values.len()
             || self.predicate_values[predicate_id].is_unknown()
-    }
-
-    pub(crate) fn debug_empty_clone(&self) -> Self {
-        let mut predicate_id_assignments = PredicateIdAssignments::default();
-        for predicate_id in self.predicate_ids() {
-            predicate_id_assignments.store_predicate(predicate_id, PredicateValue::Unknown);
-        }
-        predicate_id_assignments
-    }
-
-    pub(crate) fn debug_create_from_assignments(
-        &mut self,
-        assignments: &Assignments,
-        predicate_to_id: &PredicateIdGenerator,
-    ) {
-        self.predicate_ids()
-            .collect::<Vec<_>>()
-            .into_iter()
-            .for_each(|predicate_id| {
-                let predicate = predicate_to_id.get_predicate(predicate_id);
-
-                let value = if self.is_unknown(predicate_id) {
-                    PredicateValue::Unknown
-                } else {
-                    match assignments.evaluate_predicate(predicate) {
-                        Some(assigned) => {
-                            if assigned {
-                                PredicateValue::AssignedTrue
-                            } else {
-                                PredicateValue::AssignedFalse
-                            }
-                        }
-                        None => PredicateValue::Unknown,
-                    }
-                };
-                self.store_predicate(predicate_id, value);
-            });
     }
 }

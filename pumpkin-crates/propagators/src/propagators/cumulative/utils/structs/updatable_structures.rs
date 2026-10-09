@@ -237,21 +237,4 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
         stored_updated_task_info.new_lower_bound = updated_task_info.new_lower_bound;
         stored_updated_task_info.new_upper_bound = updated_task_info.new_upper_bound;
     }
-
-    /// Used for creating the dynamic structures from the provided context
-    pub(crate) fn recreate_from_context(
-        &self,
-        context: Domains,
-        parameters: &CumulativeParameters<Var>,
-    ) -> Self {
-        let mut other = self.clone();
-
-        parameters
-            .tasks
-            .iter()
-            .for_each(|task| other.unfix_task(Rc::clone(task)));
-        other.reset_all_bounds_and_remove_fixed(context, parameters);
-
-        other
-    }
 }

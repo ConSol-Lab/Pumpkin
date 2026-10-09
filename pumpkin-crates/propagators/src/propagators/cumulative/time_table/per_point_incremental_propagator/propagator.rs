@@ -32,7 +32,6 @@ use crate::cumulative::time_table::PerPointTimeTableType;
 #[cfg(doc)]
 use crate::cumulative::time_table::TimeTablePerPointPropagator;
 use crate::cumulative::time_table::create_time_table_per_point_from_scratch;
-use crate::cumulative::time_table::propagate_from_scratch_time_table_point;
 use crate::cumulative::util::check_bounds_equal_at_propagation;
 use crate::cumulative::util::create_tasks;
 use crate::cumulative::util::update_bounds_task;
@@ -66,7 +65,6 @@ use crate::propagators::cumulative::time_table::time_table_util::should_enqueue;
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug, Clone)]
-
 pub struct TimeTablePerPointIncrementalPropagator<Var, const SYNCHRONISE: bool> {
     /// The key `t` (representing a time-point) holds the mandatory resource consumption of
     /// [`Task`]s at that time (stored in a [`ResourceProfile`]); the [`ResourceProfile`]s are
@@ -499,16 +497,6 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 
     fn name(&self) -> &str {
         "CumulativeTimeTablePerPointIncremental"
-    }
-
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
-        // Use the same debug propagator from `TimeTablePerPoint`
-        propagate_from_scratch_time_table_point(
-            &mut context,
-            self.inference_code.as_ref().unwrap(),
-            &self.parameters,
-            &self.updatable_structures,
-        )
     }
 }
 

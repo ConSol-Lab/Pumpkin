@@ -1,5 +1,4 @@
 use pumpkin_core::conjunction;
-use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::InferenceCode;
@@ -13,15 +12,13 @@ use pumpkin_core::variables::IntegerVariable;
 #[cfg(doc)]
 use super::MaximumArgs;
 
-declare_inference_label!(pub(super) Maximum);
-
 /// Bounds-consistent propagator which enforces `max(array) = rhs`. Can be constructed through
 /// [`MaximumArgs`].
 #[derive(Clone, Debug)]
 pub struct MaximumPropagator<ElementVar, Rhs> {
-    pub(super) array: Box<[ElementVar]>,
-    pub(super) rhs: Rhs,
-    pub(super) inference_code: InferenceCode,
+    pub(crate) array: Box<[ElementVar]>,
+    pub(crate) rhs: Rhs,
+    pub(crate) inference_code: InferenceCode,
 }
 
 impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Propagator
@@ -35,7 +32,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
         "Maximum"
     }
 
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         // This is the constraint that is being propagated:
         // max(a_0, a_1, ..., a_{n-1}) = rhs
 

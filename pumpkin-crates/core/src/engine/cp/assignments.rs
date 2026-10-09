@@ -189,33 +189,6 @@ impl Assignments {
         domain_id
     }
 
-    pub(crate) fn debug_create_empty_clone(&self) -> Self {
-        let mut new_assignment = Assignments::default();
-
-        // Skip the dummy variable that is already created in `Assignments::default`.
-        for domain_id in self.domains.keys().skip(1) {
-            let lower_bound = self.get_initial_lower_bound(domain_id);
-            let upper_bound = self.get_initial_upper_bound(domain_id);
-            let holes = self.get_initial_holes(domain_id);
-
-            let new_domain_id = new_assignment.grow(lower_bound, upper_bound);
-            assert_eq!(new_domain_id, domain_id);
-
-            for hole in holes {
-                let changed_domain = new_assignment
-                    .remove_value_from_domain(domain_id, hole, None)
-                    .expect("initial domain cannot be empty");
-
-                assert!(changed_domain);
-            }
-
-            new_assignment.domains[new_domain_id].initial_bounds_below_trail =
-                new_assignment.trail.len() - 1;
-        }
-
-        new_assignment
-    }
-
     pub(crate) fn is_initial_bound(&self, predicate: Predicate) -> bool {
         let domain_id = predicate.get_domain();
 

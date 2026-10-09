@@ -64,18 +64,6 @@ impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
             &self.inference_code,
         )
     }
-
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
-        let mut sorted_tasks = self.sorted_tasks.clone();
-        let mut theta_lambda_tree = self.theta_lambda_tree.clone();
-        edge_finding(
-            &mut theta_lambda_tree,
-            &mut context,
-            &self.tasks,
-            &mut sorted_tasks,
-            &self.inference_code,
-        )
-    }
 }
 
 /// Performs the edge-finding algorithm (see [`Disjunctive`] for an intuition and the work on which

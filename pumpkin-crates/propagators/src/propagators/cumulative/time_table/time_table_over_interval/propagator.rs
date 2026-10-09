@@ -21,8 +21,6 @@ use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::state::propagator_conflict;
 use pumpkin_core::variables::IntegerVariable;
 
-use super::super::time_table_util::propagate_based_on_timetable;
-use super::super::time_table_util::should_enqueue;
 use crate::cumulative::ArgTask;
 use crate::cumulative::CumulativeParameters;
 use crate::cumulative::ResourceProfile;
@@ -31,6 +29,8 @@ use crate::cumulative::UpdatableStructures;
 use crate::cumulative::options::CumulativePropagatorOptions;
 #[cfg(doc)]
 use crate::cumulative::time_table::TimeTablePerPointPropagator;
+use crate::cumulative::time_table::time_table_util::propagate_based_on_timetable;
+use crate::cumulative::time_table::time_table_util::should_enqueue;
 use crate::cumulative::util::create_tasks;
 use crate::cumulative::util::update_bounds_task;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
@@ -74,7 +74,6 @@ pub struct TimeTableOverIntervalPropagator<Var> {
 /// The [ResourceProfile]s are sorted based on start time and they are non-overlapping; each entry
 /// in the [`Vec`] represents the mandatory resource usage across an interval.
 pub(crate) type OverIntervalTimeTableType<Var> = Vec<ResourceProfile<Var>>;
-
 impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
     pub fn new(
         arg_tasks: &[ArgTask<Var>],
@@ -159,15 +158,6 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 
     fn name(&self) -> &str {
         "CumulativeTimeTableOverInterval"
-    }
-
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
-        propagate_from_scratch_time_table_interval(
-            &mut context,
-            &self.parameters,
-            &self.updatable_structures,
-            self.inference_code.as_ref().unwrap(),
-        )
     }
 }
 
@@ -409,29 +399,4 @@ fn check_starting_new_profile_invariants<Var: IntegerVariable + 'static>(
     event.change_in_resource_usage > 0
         && current_resource_usage == 0
         && current_profile_tasks.is_empty()
-}
-
-pub(crate) fn propagate_from_scratch_time_table_interval<Var: IntegerVariable + 'static>(
-    context: &mut PropagationContext,
-    parameters: &CumulativeParameters<Var>,
-    updatable_structures: &UpdatableStructures<Var>,
-    inference_code: &InferenceCode,
-) -> PropagationStatusCP {
-    // We first create a time-table over interval and return an error if there was
-    // an overflow of the resource capacity while building the time-table
-    let time_table = create_time_table_over_interval_from_scratch(
-        context.domains(),
-        parameters,
-        inference_code,
-    )?;
-    // Then we check whether propagation can take place
-    let mut updatable_structures_clone =
-        updatable_structures.recreate_from_context(context.domains(), parameters);
-    propagate_based_on_timetable(
-        context,
-        inference_code,
-        time_table.iter(),
-        parameters,
-        &mut updatable_structures_clone,
-    )
 }

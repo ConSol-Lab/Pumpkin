@@ -1098,7 +1098,7 @@ mod tests {
             "AlwaysConflict"
         }
 
-        fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
+        fn propagate(&mut self, context: PropagationContext) -> PropagationStatusCP {
             let is_watched_satisfied = context.evaluate_predicate(self.watched) == Some(true);
             let is_other_satisfied = context.evaluate_predicate(self.other) == Some(true);
 

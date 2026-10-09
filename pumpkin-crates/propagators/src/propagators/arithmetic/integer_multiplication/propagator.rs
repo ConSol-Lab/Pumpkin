@@ -53,7 +53,7 @@ where
         "IntTimes"
     }
 
-    fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
+    fn propagate(&mut self, context: PropagationContext) -> PropagationStatusCP {
         perform_propagation(context, &self.a, &self.b, &self.c)
     }
 
