@@ -11,7 +11,7 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
-use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::PropagatorWithEvents;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::propagators::nogoods::NogoodDescription;
 use pumpkin_core::propagators::nogoods::UnitNogoodRule;
@@ -72,7 +72,7 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
         self,
         mut context: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> PropagatorSpec<Self::PropagatorImpl> {
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
         let DeductionPropagatorConstructor {
             nogood,
             constraint_tag: _,
@@ -93,8 +93,8 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
             propagation_mode,
         };
 
-        PropagatorSpec {
-            registration: EventsToRegister::empty(),
+        PropagatorWithEvents {
+            events_to_register: EventsToRegister::empty(),
             propagator,
         }
     }

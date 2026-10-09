@@ -8,7 +8,7 @@ use crate::propagation::DomainEvents;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
-use crate::propagation::PropagatorSpec;
+use crate::propagation::PropagatorWithEvents;
 use crate::variables::Literal;
 
 /// A [`PropagatorConstructor`] for the reified propagator.
@@ -43,28 +43,28 @@ where
         self,
         mut context: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> PropagatorSpec<Self::PropagatorImpl> {
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
         let ReifiedPropagatorArgs {
             propagator,
             reification_literal,
         } = self;
 
         // The wrapped propagator makes the inferences of the half reified rule.
-        let PropagatorSpec {
-            mut registration,
+        let PropagatorWithEvents {
+            mut events_to_register,
             propagator,
         } = propagator.create(context.reborrow(), inference_code);
 
         // The local ID for the reification literal will be one larger than the largest ID
         // registered by the wrapped propagator.
-        let reification_literal_id = registration
+        let reification_literal_id = events_to_register
             .iter()
             .map(|(_, _, lid)| lid)
             .max()
             .expect("cannot reify propagators that do not register all variables immediately")
             .successor();
 
-        registration.add(
+        events_to_register.add(
             &self.reification_literal,
             DomainEvents::BOUNDS,
             reification_literal_id,
@@ -80,8 +80,8 @@ where
             reason_buffer: vec![],
         };
 
-        PropagatorSpec {
-            registration,
+        PropagatorWithEvents {
+            events_to_register,
             propagator,
         }
     }

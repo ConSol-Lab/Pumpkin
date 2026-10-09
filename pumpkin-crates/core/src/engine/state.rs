@@ -38,8 +38,8 @@ use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorId;
-use crate::propagation::PropagatorSpec;
 use crate::propagation::PropagatorVarId;
+use crate::propagation::PropagatorWithEvents;
 use crate::propagation::store::PropagatorStore;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
@@ -391,7 +391,7 @@ impl State {
     /// that this does not do any propagation.
     fn initialise_propagator<P>(
         &mut self,
-        create: impl FnOnce(PropagatorConstructorContext) -> PropagatorSpec<P>,
+        create: impl FnOnce(PropagatorConstructorContext) -> PropagatorWithEvents<P>,
     ) -> PropagatorHandle<P>
     where
         P: Propagator + Clone + 'static,
@@ -401,12 +401,12 @@ impl State {
         let constructor_context =
             PropagatorConstructorContext::new(original_handle.propagator_id(), self);
 
-        let PropagatorSpec {
-            registration,
+        let PropagatorWithEvents {
+            events_to_register,
             propagator,
         } = create(constructor_context);
 
-        for (domain_id, events, local_id) in registration.iter() {
+        for (domain_id, events, local_id) in events_to_register.iter() {
             let propagator_var = PropagatorVarId {
                 propagator: original_handle.propagator_id(),
                 variable: local_id,

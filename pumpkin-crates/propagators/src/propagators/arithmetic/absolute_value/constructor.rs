@@ -5,7 +5,7 @@ use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
-use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::PropagatorWithEvents;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::AbsoluteValueDescription;
@@ -38,14 +38,14 @@ where
         self,
         _: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> PropagatorSpec<Self::PropagatorImpl> {
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
         let AbsoluteValueArgs {
             constraint_description,
             constraint_tag: _,
         } = self;
         let AbsoluteValueDescription { signed, absolute } = constraint_description;
 
-        let registration = EventsToRegister::builder()
+        let events_to_register = EventsToRegister::builder()
             .add(&signed, DomainEvents::BOUNDS, LocalId::from(0))
             .add(&absolute, DomainEvents::BOUNDS, LocalId::from(1))
             .build();
@@ -56,8 +56,8 @@ where
             inference_code,
         };
 
-        PropagatorSpec {
-            registration,
+        PropagatorWithEvents {
+            events_to_register,
             propagator,
         }
     }

@@ -5,7 +5,7 @@ use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
-use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::PropagatorWithEvents;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::ElementDescription;
@@ -39,7 +39,7 @@ where
         self,
         _: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> PropagatorSpec<Self::PropagatorImpl> {
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
         let ElementArgs {
             constraint_description,
             constraint_tag: _,
@@ -66,8 +66,8 @@ where
             rhs_reason_buffer: vec![],
         };
 
-        PropagatorSpec {
-            registration: registration.build(),
+        PropagatorWithEvents {
+            events_to_register: registration.build(),
             propagator,
         }
     }

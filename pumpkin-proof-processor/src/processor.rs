@@ -757,7 +757,7 @@ mod tests {
     use pumpkin_core::propagation::Propagator;
     use pumpkin_core::propagation::PropagatorConstructor;
     use pumpkin_core::propagation::PropagatorConstructorContext;
-    use pumpkin_core::propagation::PropagatorSpec;
+    use pumpkin_core::propagation::PropagatorWithEvents;
     use pumpkin_core::propagation::ReadDomains;
     use pumpkin_core::propagation::SolutionCheck;
     use pumpkin_core::state::PropagationStatusCP;
@@ -996,7 +996,7 @@ mod tests {
             self,
             mut context: PropagatorConstructorContext,
             inference_code: InferenceCode,
-        ) -> PropagatorSpec<Self::PropagatorImpl> {
+        ) -> PropagatorWithEvents<Self::PropagatorImpl> {
             let AlwaysConflictConstructor {
                 watched,
                 other,
@@ -1007,8 +1007,8 @@ mod tests {
             // needs to fire once `watched` becomes true.
             let _ = context.register_predicate(watched);
 
-            PropagatorSpec {
-                registration: EventsToRegister::empty(),
+            PropagatorWithEvents {
+                events_to_register: EventsToRegister::empty(),
                 propagator: AlwaysConflictPropagator {
                     watched,
                     other,

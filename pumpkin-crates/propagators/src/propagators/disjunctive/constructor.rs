@@ -5,7 +5,7 @@ use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
-use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::PropagatorWithEvents;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::DisjunctiveDescription;
@@ -51,7 +51,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
         self,
         _: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> PropagatorSpec<Self::PropagatorImpl> {
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
         let tasks = self
             .constraint_description
             .tasks
@@ -78,8 +78,8 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
             inference_code,
         };
 
-        PropagatorSpec {
-            registration: registration.build(),
+        PropagatorWithEvents {
+            events_to_register: registration.build(),
             propagator,
         }
     }

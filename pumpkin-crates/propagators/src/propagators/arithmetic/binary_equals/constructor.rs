@@ -7,7 +7,7 @@ use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
-use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::PropagatorWithEvents;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::BinaryEqualsDescription;
@@ -41,14 +41,14 @@ where
         self,
         _: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> PropagatorSpec<Self::PropagatorImpl> {
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
         let BinaryEqualsPropagatorArgs {
             constraint_description,
             constraint_tag: _,
         } = self;
         let BinaryEqualsDescription { a, b } = constraint_description;
 
-        let registration = EventsToRegister::builder()
+        let events_to_register = EventsToRegister::builder()
             .add(&a, DomainEvents::ANY_INT, LocalId::from(0))
             .add(&b, DomainEvents::ANY_INT, LocalId::from(1))
             .build();
@@ -67,8 +67,8 @@ where
             reason: Predicate::trivially_false(),
         };
 
-        PropagatorSpec {
-            registration,
+        PropagatorWithEvents {
+            events_to_register,
             propagator,
         }
     }

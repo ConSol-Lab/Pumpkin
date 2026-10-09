@@ -6,7 +6,7 @@ use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
-use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::PropagatorWithEvents;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -46,7 +46,7 @@ where
         self,
         context: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> PropagatorSpec<Self::PropagatorImpl> {
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
         let DivisionArgs {
             constraint_description,
             constraint_tag: _,
@@ -62,7 +62,7 @@ where
             "Denominator cannot contain 0"
         );
 
-        let registration = EventsToRegister::builder()
+        let events_to_register = EventsToRegister::builder()
             .add(&numerator, DomainEvents::BOUNDS, ID_NUMERATOR)
             .add(&denominator, DomainEvents::BOUNDS, ID_DENOMINATOR)
             .add(&rhs, DomainEvents::BOUNDS, ID_RHS)
@@ -75,8 +75,8 @@ where
             inference_code,
         };
 
-        PropagatorSpec {
-            registration,
+        PropagatorWithEvents {
+            events_to_register,
             propagator,
         }
     }

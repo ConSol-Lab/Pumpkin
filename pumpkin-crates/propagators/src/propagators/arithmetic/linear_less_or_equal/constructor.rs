@@ -5,7 +5,7 @@ use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
-use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::PropagatorWithEvents;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -39,7 +39,7 @@ where
         self,
         mut context: PropagatorConstructorContext,
         inference_code: InferenceCode,
-    ) -> PropagatorSpec<Self::PropagatorImpl> {
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
         let LinearLessOrEqualPropagatorArgs {
             constraint_description,
             constraint_tag: _,
@@ -68,8 +68,8 @@ where
             reason_buffer: Vec::default(),
         };
 
-        PropagatorSpec {
-            registration: registration.build(),
+        PropagatorWithEvents {
+            events_to_register: registration.build(),
             propagator,
         }
     }

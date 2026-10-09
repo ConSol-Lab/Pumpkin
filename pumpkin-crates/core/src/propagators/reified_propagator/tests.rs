@@ -30,7 +30,7 @@ use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
-use crate::propagation::PropagatorSpec;
+use crate::propagation::PropagatorWithEvents;
 use crate::propagation::ReadDomains;
 use crate::propagation::SolutionCheck;
 use crate::state::Conflict;
@@ -224,15 +224,15 @@ where
         self,
         _: PropagatorConstructorContext,
         _: InferenceCode,
-    ) -> PropagatorSpec<Self::PropagatorImpl> {
-        let mut registration = EventsToRegister::empty();
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
+        let mut events_to_register = EventsToRegister::empty();
 
         for (index, variable) in self.variables_to_register.iter().enumerate() {
-            registration.add(variable, DomainEvents::ANY_INT, LocalId::from(index as u32));
+            events_to_register.add(variable, DomainEvents::ANY_INT, LocalId::from(index as u32));
         }
 
-        PropagatorSpec {
-            registration,
+        PropagatorWithEvents {
+            events_to_register,
             propagator: self,
         }
     }
