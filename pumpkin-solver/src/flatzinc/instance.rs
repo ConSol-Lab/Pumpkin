@@ -3,15 +3,16 @@ use std::fmt::Write;
 use std::rc::Rc;
 
 use pumpkin_branching::branching::dynamic_brancher::DynamicBrancher;
-use pumpkin_solver::core::optimisation::OptimisationDirection;
-use pumpkin_solver::core::variables::DomainId;
-use pumpkin_solver::core::variables::Literal;
+
+use crate::core::optimisation::OptimisationDirection;
+use crate::core::variables::DomainId;
+use crate::core::variables::Literal;
 
 /// The objective function of a FlatZinc model,
 /// consisting of the direction (e.g. maximization or minimization) and the integer variable which
 /// is being optimised
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum FlatzincObjective {
+pub enum FlatzincObjective {
     Maximize(DomainId),
     Minimize(DomainId),
 }
@@ -25,11 +26,11 @@ impl From<FlatzincObjective> for (OptimisationDirection, DomainId) {
     }
 }
 
-#[derive(Default)]
-pub(crate) struct FlatZincInstance {
-    pub(super) outputs: Vec<Output>,
-    pub(super) objective_function: Option<FlatzincObjective>,
-    pub(super) search: Option<DynamicBrancher>,
+#[derive(Debug, Default)]
+pub struct FlatZincInstance {
+    pub outputs: Vec<Output>,
+    pub objective_function: Option<FlatzincObjective>,
+    pub search: Option<DynamicBrancher>,
 }
 
 impl FlatZincInstance {
@@ -40,7 +41,7 @@ impl FlatZincInstance {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum Output {
+pub enum Output {
     Bool(VariableOutput<Literal>),
     Int(VariableOutput<DomainId>),
     ArrayOfBool(ArrayOutput<Literal>),
@@ -88,19 +89,19 @@ impl Output {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct VariableOutput<T> {
+pub struct VariableOutput<T> {
     id: Rc<str>,
     variable: T,
 }
 
 impl<T> VariableOutput<T> {
-    pub(crate) fn print_value<V: Display>(&self, value: impl FnOnce(&T) -> V) {
+    pub fn print_value<V: Display>(&self, value: impl FnOnce(&T) -> V) {
         println!("{} = {};", self.id, value(&self.variable));
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ArrayOutput<T> {
+pub struct ArrayOutput<T> {
     id: Rc<str>,
     /// The shape of the array is a sequence of index sets. The number of elements in this sequence
     /// corresponds to the dimensionality of the array, and the element in the sequence at index i
@@ -112,7 +113,7 @@ pub(crate) struct ArrayOutput<T> {
 }
 
 impl<T> ArrayOutput<T> {
-    pub(crate) fn print_value<V: Display>(&self, value: impl Fn(&T) -> V) {
+    pub fn print_value<V: Display>(&self, value: impl Fn(&T) -> V) {
         let mut array_buf = String::new();
 
         for element in self.contents.iter() {

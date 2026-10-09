@@ -20,12 +20,12 @@ use pumpkin_branching::variable_selection::InputOrder;
 use pumpkin_branching::variable_selection::Largest;
 use pumpkin_branching::variable_selection::MaxRegret;
 use pumpkin_branching::variable_selection::Smallest;
-use pumpkin_solver::core::pumpkin_assert_eq_simple;
-use pumpkin_solver::core::pumpkin_assert_simple;
-use pumpkin_solver::core::variables::DomainId;
-use pumpkin_solver::core::variables::Literal;
 
 use super::error::FlatZincError;
+use crate::core::pumpkin_assert_eq_simple;
+use crate::core::pumpkin_assert_simple;
+use crate::core::variables::DomainId;
+use crate::core::variables::Literal;
 #[derive(Debug)]
 pub(crate) enum VariableSelectionStrategy {
     AntiFirstFail,
