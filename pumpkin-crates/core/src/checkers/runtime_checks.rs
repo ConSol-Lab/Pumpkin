@@ -25,6 +25,9 @@ pub fn active_runtime_checks() -> Vec<&'static str> {
     } else if cfg!(feature = "check-retention") {
         checks.push("retention checks (check-retention)");
     }
+    if cfg!(feature = "check-solutions") {
+        checks.push("solution checks (check-solutions)");
+    }
     if cfg!(feature = "check-deductions") {
         checks.push("deduction checks (check-deductions)");
     }

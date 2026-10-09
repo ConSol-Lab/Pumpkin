@@ -5,15 +5,21 @@ use crate::checkers::ConflictCheckerStore;
 use crate::checkers::RetentionCheckerId;
 #[cfg(feature = "check-retention")]
 use crate::checkers::RetentionCheckerStore;
+#[cfg(feature = "check-solutions")]
+use crate::checkers::SolutionCheckerId;
+#[cfg(feature = "check-solutions")]
+use crate::checkers::SolutionCheckerStore;
 use crate::proof::InferenceCode;
 
-/// Owns the checkers of the rules registered in the solver: the conflict checkers and the retention
-/// checkers.
+/// Owns the checkers of the rules registered in the solver: the conflict checkers, the retention
+/// checkers and the solution checkers.
 #[derive(Clone, Debug, Default)]
 pub struct RuleCheckerStore {
     pub(crate) conflict_checkers: ConflictCheckerStore,
     #[cfg(feature = "check-retention")]
     pub(crate) retention_checkers: RetentionCheckerStore,
+    #[cfg(feature = "check-solutions")]
+    pub(crate) solution_checkers: SolutionCheckerStore,
 }
 
 impl RuleCheckerStore {
@@ -30,6 +36,11 @@ impl RuleCheckerStore {
         if let Some(retention_checker) = rule_checkers.retention_checker {
             self.retention_checkers.remove(retention_checker);
         }
+
+        #[cfg(feature = "check-solutions")]
+        if let Some(solution_checker) = rule_checkers.solution_checker {
+            self.solution_checkers.remove(solution_checker);
+        }
     }
 }
 
@@ -44,6 +55,8 @@ pub struct RemovableRuleCheckers {
     pub(crate) conflict_checker: Option<ConflictCheckerId>,
     #[cfg(feature = "check-retention")]
     pub(crate) retention_checker: Option<RetentionCheckerId>,
+    #[cfg(feature = "check-solutions")]
+    pub(crate) solution_checker: Option<SolutionCheckerId>,
 }
 
 impl RemovableRuleCheckers {

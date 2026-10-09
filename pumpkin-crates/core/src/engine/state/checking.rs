@@ -3,7 +3,8 @@
 //!   propagation is posted, when a propagator reports a conflict, or when conflict analysis
 //!   computes a reason;
 //! - the retention checks under `check-retention`, which run after a propagator call in which the
-//!   propagator did not enqueue itself again, and at a fixpoint.
+//!   propagator did not enqueue itself again, and at a fixpoint;
+//! - the solution check under `check-solutions`, which runs when the solver finds a solution.
 
 #[cfg(feature = "inference-checkers")]
 use crate::checkers::Inference;
@@ -11,6 +12,8 @@ use crate::checkers::Inference;
 use crate::checkers::RetentionCoverage;
 #[cfg(feature = "check-retention")]
 use crate::checkers::RetentionFailure;
+#[cfg(feature = "check-solutions")]
+use crate::checkers::SolutionFailure;
 #[cfg(feature = "inference-checkers")]
 use crate::checkers::check_inference;
 #[cfg(feature = "inference-checkers")]
@@ -19,6 +22,8 @@ use crate::engine::reason::ReasonRef;
 use crate::propagation::Domains;
 #[cfg(feature = "check-retention")]
 use crate::propagation::PropagatorId;
+#[cfg(feature = "check-solutions")]
+use crate::propagation::SolutionCheck;
 #[cfg(feature = "inference-checkers")]
 use crate::state::PropagatorConflict;
 use crate::state::State;
@@ -156,4 +161,39 @@ enum RetentionMoment {
     AfterCall,
     /// When propagation reached a fixpoint.
     AtFixpoint,
+}
+
+#[cfg(feature = "check-solutions")]
+impl State {
+    /// Check that the assignment satisfies the description of every constraint.
+    ///
+    /// Panics, naming the rule and the propagator of the first constraint it does not satisfy.
+    pub fn check_solution(&self) {
+        if let Err(failure) = self
+            .rule_checkers
+            .solution_checkers
+            .check(&self.assignments)
+        {
+            self.report_solution_failure(&failure);
+        }
+    }
+
+    fn report_solution_failure(&self, failure: &SolutionFailure) -> ! {
+        let rule = self.rule_name(failure.inference_code);
+        let propagator = self.propagators[failure.propagator].name();
+
+        match failure.outcome {
+            SolutionCheck::ConstraintViolated => panic!(
+                "The solver reported a solution that violates the constraint of the rule '{rule}' \
+                 of the propagator '{propagator}'."
+            ),
+            SolutionCheck::Unknown => panic!(
+                "The solver reported a solution in which the constraint of the rule '{rule}' of \
+                 the propagator '{propagator}' depends on variables that are not fixed."
+            ),
+            SolutionCheck::ConstraintSatisfied => {
+                unreachable!("a satisfied constraint is not a failure")
+            }
+        }
+    }
 }

@@ -53,6 +53,8 @@ check-retention = ["checkers"]
 # Consult every retention checker at each fixpoint rather than only those watching a domain that
 # changed. Slower, and independent of which propagators were notified.
 check-retention-all = ["check-retention"]
+# Check that every solution satisfies the description of every constraint.
+check-solutions = ["checkers"]
 # Check that every learned nogood follows from the inferences of the proof.
 check-deductions = []
 debug-checks = []

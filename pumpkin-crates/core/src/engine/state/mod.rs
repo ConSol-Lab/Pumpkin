@@ -222,10 +222,10 @@ impl State {
 
     /// Add the checkers of `Rule` for the constraint with `constraint_description`.
     ///
-    /// The conflict checker is added under `check-inferences` and the retention checker under
-    /// `check-retention`.
+    /// The conflict checker is added under `check-inferences`, the retention checker under
+    /// `check-retention` and the description for the solution check under `check-solutions`.
     #[cfg_attr(
-        not(feature = "check-retention"),
+        not(any(feature = "check-retention", feature = "check-solutions")),
         allow(
             unused_variables,
             reason = "the checkers exist only under the check features"
@@ -261,6 +261,12 @@ impl State {
             retention_checker: Some(self.rule_checkers.retention_checkers.register_removable(
                 constraint_description.scope(),
                 BoxedRetentionChecker::new(Rule::create_retention_checker(&constraint_description)),
+                propagator,
+                inference_code,
+            )),
+            #[cfg(feature = "check-solutions")]
+            solution_checker: Some(self.rule_checkers.solution_checkers.add(
+                std::rc::Rc::new(constraint_description),
                 propagator,
                 inference_code,
             )),

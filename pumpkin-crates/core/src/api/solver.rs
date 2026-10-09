@@ -522,11 +522,25 @@ impl Solver {
             }
         }
 
-        match self.satisfy(&mut NoDecisionBrancher, &mut Indefinite, &mut NoResolving) {
+        // Without decisions the state at the fixpoint is not a solution, so it is not checked as
+        // one.
+        #[cfg(feature = "check-solutions")]
+        {
+            self.satisfaction_solver.is_solution_checked = false;
+        }
+
+        let flag = match self.satisfy(&mut NoDecisionBrancher, &mut Indefinite, &mut NoResolving) {
             SatisfactionResult::Satisfiable(_) => CSPSolverExecutionFlag::Feasible,
             SatisfactionResult::Unsatisfiable(_, _, _) => CSPSolverExecutionFlag::Infeasible,
             SatisfactionResult::Unknown(_, _, _) => CSPSolverExecutionFlag::Timeout,
+        };
+
+        #[cfg(feature = "check-solutions")]
+        {
+            self.satisfaction_solver.is_solution_checked = true;
         }
+
+        flag
     }
 }
 
