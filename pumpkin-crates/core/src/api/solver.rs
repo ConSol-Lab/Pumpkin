@@ -35,6 +35,7 @@ use crate::options::SolverOptions;
 #[cfg(doc)]
 use crate::predicates;
 use crate::proof::ConstraintTag;
+use crate::proof::ProofLog;
 use crate::propagation::PropagatorConstructor;
 pub use crate::propagation::store::PropagatorHandle;
 use crate::pumpkin_assert_eq_simple;
@@ -294,6 +295,17 @@ impl Solver {
             .internal_parameters
             .proof_log
             .log_scaffold_preamble(preamble)
+    }
+
+    /// Take the solver apart into the state its constraints propagate in and its proof log, for
+    /// a tool that propagates the compiled model itself and writes the proof through the log,
+    /// such as the proof processor. Returns `None` for the state when posting a constraint made
+    /// the model infeasible at the root, since a clause that fails at the root is not posted.
+    pub fn into_state_and_proof_log(self) -> (Option<crate::engine::State>, ProofLog) {
+        let mut solver = self.satisfaction_solver;
+        let proof_log = std::mem::take(&mut solver.internal_parameters.proof_log);
+        let state = (!solver.solver_state.is_infeasible()).then_some(solver.state);
+        (state, proof_log)
     }
 }
 

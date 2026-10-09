@@ -273,6 +273,16 @@ impl State {
         self.truth_value(literal.get_true_predicate())
     }
 
+    /// Returns the name of the variable, if it has one.
+    pub fn variable_name(&self, domain: DomainId) -> Option<&str> {
+        self.variable_names.get_int_name(domain)
+    }
+
+    /// Returns every named variable with its name.
+    pub fn named_variables(&self) -> impl Iterator<Item = (DomainId, &str)> + '_ {
+        self.variable_names.iter()
+    }
+
     /// Returns the number of created checkpoints.
     pub fn get_checkpoint(&self) -> usize {
         self.assignments.get_checkpoint()
@@ -317,6 +327,32 @@ impl State {
         let priority = self.propagators[handle.propagator_id()].priority();
         self.propagator_queue
             .enqueue_propagator(handle.propagator_id(), priority);
+    }
+
+    /// Make the propagator with the handle be enqueued when the predicate becomes true, as its
+    /// constructor can, for a propagator that learns of predicates after it is created. Returns
+    /// the [`crate::propagation::PredicateId`] it is notified with.
+    pub fn register_predicate<P: Propagator>(
+        &mut self,
+        handle: PropagatorHandle<P>,
+        predicate: Predicate,
+    ) -> crate::propagation::PredicateId {
+        self.notification_engine.watch_predicate(
+            predicate,
+            handle.propagator_id(),
+            &mut self.trailed_values,
+            &self.assignments,
+        )
+    }
+
+    /// Enqueue the propagator with the handle, so that the next propagation runs it, as it runs
+    /// a propagator just added.
+    pub fn wake_propagator<P: Propagator>(&mut self, handle: PropagatorHandle<P>) {
+        #[allow(
+            deprecated,
+            reason = "the one way to enqueue a propagator from outside"
+        )]
+        self.enqueue_propagator(handle);
     }
 
     /// Add a new propagator to the [`State`]. The constructor for that propagator should

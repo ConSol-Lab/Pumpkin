@@ -14,6 +14,13 @@ impl VariableNames {
         self.integers.get(&domain_id).map(|s| s.as_ref())
     }
 
+    /// Every named variable with its name.
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (DomainId, &str)> + '_ {
+        self.integers
+            .iter()
+            .map(|(domain, name)| (*domain, name.as_ref()))
+    }
+
     /// Add a name to the integer variable. This will override existing the name if it
     /// exists.
     pub(crate) fn add_integer(&mut self, integer: DomainId, name: Arc<str>) {

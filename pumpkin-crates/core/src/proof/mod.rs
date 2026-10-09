@@ -38,6 +38,7 @@ use crate::containers::HashMap;
 use crate::containers::HashSet;
 use crate::containers::KeyGenerator;
 use crate::engine::Assignments;
+use crate::engine::State;
 use crate::engine::predicates::predicate::PredicateType;
 use crate::engine::variable_names::VariableNames;
 use crate::engine::variables::AffineView;
@@ -198,6 +199,7 @@ impl ProofLog {
                 atom_references: HashMap::default(),
                 label_references: HashMap::default(),
                 seen_premises: HashSet::default(),
+                facts_from_unit_nogoods: vec![],
             }))),
             supporting_inferences: vec![],
             supporting_inferences_at_root: vec![],
@@ -381,6 +383,104 @@ impl ProofLog {
                 .positions_of_constraint
                 .insert(constraint_tag, elements);
         }
+    }
+
+    /// Log an inference of the propagator that `inference_code` names, from the premises to the
+    /// propagated predicate or to a conflict, for a tool that propagates in a [`State`] outside a
+    /// solver, such as the proof processor. As in the solver, the inferences of a nogood are
+    /// logged from the conflict back, the reverse of the order they apply in, and the nogood
+    /// follows them with [`ProofLog::log_nogood_with_tag`].
+    pub fn log_inference_in_state(
+        &mut self,
+        state: &mut State,
+        inference_code: InferenceCode,
+        premises: impl IntoIterator<Item = Predicate> + Clone,
+        propagated: Option<Predicate>,
+    ) -> std::io::Result<ConstraintTag> {
+        self.log_inference(
+            &mut state.constraint_tags,
+            inference_code,
+            premises,
+            propagated,
+            &state.variable_names,
+            &state.assignments,
+        )
+    }
+
+    /// Log that the initial domains imply the predicate, as [`ProofLog::log_inference_in_state`]
+    /// logs an inference.
+    pub fn log_domain_inference_in_state(
+        &mut self,
+        state: &mut State,
+        predicate: Predicate,
+    ) -> std::io::Result<Option<ConstraintTag>> {
+        self.log_domain_inference(
+            predicate,
+            &state.variable_names,
+            &mut state.constraint_tags,
+            &state.assignments,
+        )
+    }
+
+    /// Log that each predicate holds by the unit nogood of its negation, derived under the tag,
+    /// for the nogood logged next: in a proof in the block format these inferences come before
+    /// the others, since they need nothing to hold. For a tool that propagates in a [`State`]
+    /// outside a solver; other proofs take no such inferences.
+    pub fn log_facts_from_unit_nogoods(
+        &mut self,
+        facts: impl IntoIterator<Item = (Predicate, ConstraintTag)>,
+    ) {
+        if let Some(ProofImpl::BlockProof(proof)) = self.internal_proof.as_mut() {
+            proof.facts_from_unit_nogoods.extend(facts);
+        }
+    }
+
+    /// Log the nogood the inferences logged since the last one derive, under the tag the
+    /// inferences that cite it name, for a tool that propagates in a [`State`] outside a solver.
+    /// Only a proof in the block format can take the tag; other proofs refuse.
+    pub fn log_nogood_with_tag(
+        &mut self,
+        state: &State,
+        constraint_tag: ConstraintTag,
+        premises: impl IntoIterator<Item = Predicate>,
+    ) -> std::io::Result<()> {
+        match &mut self.internal_proof {
+            Some(ProofImpl::BlockProof(proof)) => {
+                proof.log_refutation(
+                    constraint_tag,
+                    premises,
+                    &self.root_explanations,
+                    &state.variable_names,
+                    &state.assignments,
+                )?;
+                self.root_explanations.clear();
+                Ok(())
+            }
+            _ => Err(std::io::Error::other(
+                "only a proof in the block format logs a nogood under a given tag",
+            )),
+        }
+    }
+
+    /// Conclude the proof with unsatisfiability, for a tool that propagates in a [`State`]
+    /// outside a solver.
+    pub fn conclude_unsat_in_state(self, state: &State) -> std::io::Result<()> {
+        self.unsat(&state.variable_names)
+    }
+
+    /// Conclude the proof with the bound on the objective, for a tool that propagates in a
+    /// [`State`] outside a solver.
+    pub fn conclude_optimal_in_state(
+        self,
+        state: &State,
+        objective_bound: Predicate,
+    ) -> std::io::Result<()> {
+        self.optimal(objective_bound, &state.variable_names)
+    }
+
+    /// Whether the proof is written in the block format.
+    pub fn is_block_proof(&self) -> bool {
+        matches!(self.internal_proof, Some(ProofImpl::BlockProof(_)))
     }
 
     /// Create a dimacs proof logger.
@@ -998,6 +1098,8 @@ struct BlockProof {
     label_references: HashMap<Box<str>, NonZero<u32>>,
     /// The premises of an inference seen so far, reused from one inference to the next.
     seen_premises: HashSet<Predicate>,
+    /// The facts the next nogood infers from unit nogoods before its other inferences.
+    facts_from_unit_nogoods: Vec<(Predicate, ConstraintTag)>,
     /// Whether a learned nogood is written as a resolution chain rather than a refutation.
     resolution_chains: bool,
     /// The constraints the checker reads as reified (`true`) or half-reified (`false`).
@@ -1201,18 +1303,37 @@ impl BlockProof {
         let mut reached_conflict = false;
 
         let mut seen = std::mem::take(&mut self.seen_premises);
+        let facts = std::mem::take(&mut self.facts_from_unit_nogoods);
         if let Ok(mut state) =
             VariableState::prepare_for_conflict_check(nogood.iter().copied(), None)
         {
-            let order = roots_first(
-                self.propagation_order
-                    .iter()
-                    .rev()
-                    .flatten()
-                    .copied()
-                    .collect(),
-                root_explanations,
-            );
+            let nogood_label: Arc<str> = Arc::from("nogood");
+            for &(fact, tag) in facts.iter() {
+                let fact = self.proof_atomics.canonical(fact);
+                if is_constant(fact) || state.is_true(&fact) {
+                    continue;
+                }
+                let consistent = state.apply(&fact);
+                kept.push((vec![], Some(fact), Some(tag), Arc::clone(&nogood_label)));
+                if !consistent {
+                    reached_conflict = true;
+                    break;
+                }
+            }
+
+            let order = if reached_conflict {
+                vec![]
+            } else {
+                roots_first(
+                    self.propagation_order
+                        .iter()
+                        .rev()
+                        .flatten()
+                        .copied()
+                        .collect(),
+                    root_explanations,
+                )
+            };
             for tag in order {
                 let Some(inference) = self.inferences.get(&tag) else {
                     continue;
