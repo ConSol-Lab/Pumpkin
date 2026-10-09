@@ -17,16 +17,12 @@ pub struct LinearLessOrEqualDescription<Var> {
 impl<Var: IntegerVariable> ConstraintDescription for LinearLessOrEqualDescription<Var> {
     fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck {
         let bound = i64::from(self.bound);
-        let highest_sum = self
-            .terms
-            .iter()
-            .map(|term| IntExt::<i64>::from(term.induced_upper_bound(domains)))
-            .sum::<IntExt<i64>>();
-        let lowest_sum = self
-            .terms
-            .iter()
-            .map(|term| IntExt::<i64>::from(term.induced_lower_bound(domains)))
-            .sum::<IntExt<i64>>();
+
+        let (mut highest_sum, mut lowest_sum) = (IntExt::Int(0_i64), IntExt::Int(0_i64));
+        for term in self.terms.iter() {
+            highest_sum = highest_sum + IntExt::<i64>::from(term.induced_upper_bound(domains));
+            lowest_sum = lowest_sum + IntExt::<i64>::from(term.induced_lower_bound(domains));
+        }
 
         if highest_sum <= bound {
             SolutionCheck::ConstraintSatisfied
