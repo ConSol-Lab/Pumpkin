@@ -20,6 +20,11 @@ pub fn active_runtime_checks() -> Vec<&'static str> {
             "inference checks of the inferences used by conflict analysis (check-inferences-proof)",
         );
     }
+    if cfg!(feature = "check-retention-all") {
+        checks.push("retention checks of every checker at each fixpoint (check-retention-all)");
+    } else if cfg!(feature = "check-retention") {
+        checks.push("retention checks (check-retention)");
+    }
     if cfg!(feature = "check-deductions") {
         checks.push("deduction checks (check-deductions)");
     }

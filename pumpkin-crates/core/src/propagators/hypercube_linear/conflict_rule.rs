@@ -1,13 +1,15 @@
 use std::borrow::Cow;
 
 use pumpkin_checking::ConflictChecker;
+use pumpkin_checking::RetentionChecker;
 use pumpkin_checking::checkers::HypercubeLinearChecker;
 
 use super::HypercubeLinearDescription;
 use crate::predicates::Predicate;
 use crate::propagation::ConflictRule;
+use crate::variables::AffineView;
+use crate::variables::DomainId;
 
-/// The rule of the hypercube linear constraint.
 #[derive(Clone, Copy, Debug)]
 pub struct HypercubeLinearRule;
 
@@ -21,6 +23,20 @@ impl ConflictRule for HypercubeLinearRule {
     fn create_conflict_checker(
         constraint_description: &HypercubeLinearDescription,
     ) -> impl ConflictChecker<Predicate> + 'static {
+        Self::checker(constraint_description)
+    }
+
+    fn create_retention_checker(
+        constraint_description: &HypercubeLinearDescription,
+    ) -> impl RetentionChecker<Predicate> + 'static {
+        Self::checker(constraint_description)
+    }
+}
+
+impl HypercubeLinearRule {
+    fn checker(
+        constraint_description: &HypercubeLinearDescription,
+    ) -> HypercubeLinearChecker<Predicate, AffineView<DomainId>> {
         HypercubeLinearChecker {
             hypercube: constraint_description.hypercube.iter_predicates().collect(),
             terms: constraint_description.linear.terms().collect(),

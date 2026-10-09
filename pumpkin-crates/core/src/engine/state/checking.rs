@@ -1,14 +1,24 @@
 //! The runtime checks of [`State`]. They are a debugging tool:
 //! - the inference checks under `check-inferences` or `check-inferences-proof`, which run when a
 //!   propagation is posted, when a propagator reports a conflict, or when conflict analysis
-//!   computes a reason.
+//!   computes a reason;
+//! - the retention checks under `check-retention`, which run after a propagator call in which the
+//!   propagator did not enqueue itself again, and at a fixpoint.
 
 #[cfg(feature = "inference-checkers")]
 use crate::checkers::Inference;
+#[cfg(feature = "check-retention")]
+use crate::checkers::RetentionCoverage;
+#[cfg(feature = "check-retention")]
+use crate::checkers::RetentionFailure;
 #[cfg(feature = "inference-checkers")]
 use crate::checkers::check_inference;
 #[cfg(feature = "inference-checkers")]
 use crate::engine::reason::ReasonRef;
+#[cfg(feature = "check-retention")]
+use crate::propagation::Domains;
+#[cfg(feature = "check-retention")]
+use crate::propagation::PropagatorId;
 #[cfg(feature = "inference-checkers")]
 use crate::state::PropagatorConflict;
 use crate::state::State;
@@ -48,4 +58,102 @@ impl State {
             },
         );
     }
+}
+
+#[cfg(feature = "check-retention")]
+impl State {
+    /// Make the retention checkers that watch a domain changed since `start_index` pending.
+    pub(super) fn notify_retention_checkers(&mut self, start_index: usize) {
+        for index in start_index..self.assignments.num_trail_entries() {
+            let domain = self
+                .assignments
+                .get_trail_entry(index)
+                .predicate
+                .get_domain();
+            self.rule_checkers
+                .retention_checkers
+                .on_domain_event(domain);
+        }
+    }
+
+    /// Run the pending retention checkers of `propagator`, which did not enqueue itself again
+    /// after it was called and so reports that it is at a fixpoint.
+    ///
+    /// Panics if one of them reports that the propagator has something left to propagate.
+    pub(super) fn run_retention_checkers_of(&mut self, propagator: PropagatorId) {
+        let outcome = self.rule_checkers.retention_checkers.run_pending_of(
+            propagator,
+            Domains::new(&self.assignments, &mut self.trailed_values),
+        );
+
+        if let Err(failure) = outcome {
+            self.report_retention_failure(&failure, RetentionMoment::AfterCall);
+        }
+    }
+
+    /// Run the retention checkers that are still pending when propagation reaches a fixpoint:
+    /// those of the propagators that were not called after their domains changed. Under
+    /// `check-retention-all`, run every retention checker.
+    ///
+    /// Panics if one of them reports that its propagator has something left to propagate.
+    pub(super) fn run_retention_checkers_at_fixpoint(&mut self) {
+        let coverage = if cfg!(feature = "check-retention-all") {
+            RetentionCoverage::All
+        } else {
+            RetentionCoverage::Notified
+        };
+        let outcome = self.rule_checkers.retention_checkers.run(
+            coverage,
+            Domains::new(&self.assignments, &mut self.trailed_values),
+        );
+
+        if let Err(failure) = outcome {
+            self.report_retention_failure(&failure, RetentionMoment::AtFixpoint);
+        }
+    }
+
+    /// Panics, naming the rule and the propagator that is not finished and the variables the
+    /// checker watches.
+    fn report_retention_failure(&self, failure: &RetentionFailure, moment: RetentionMoment) -> ! {
+        let rule = self.rule_name(failure.inference_code);
+        let propagator = self.propagators[failure.propagator].name();
+        let variables = failure
+            .variables
+            .iter()
+            .map(|&domain| match self.variable_names.get_int_name(domain) {
+                Some(name) => name.to_owned(),
+                None => format!("{domain:?}"),
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let failure = match moment {
+            RetentionMoment::AfterCall => format!(
+                "The propagator '{propagator}' did not enqueue itself again after it was called, \
+                 but the retention checker of its rule '{rule}' reports that it still has \
+                 something to propagate over {variables}."
+            ),
+            RetentionMoment::AtFixpoint => format!(
+                "Propagation reached a fixed point, but the retention checker of the rule \
+                 '{rule}' of the propagator '{propagator}' reports that it still has something \
+                 to propagate over {variables}. The propagator was not called after these \
+                 domains changed: check the events it registers for and its notify."
+            ),
+        };
+
+        panic!(
+            "{failure} The checker describes what it expected in a message logged at the error \
+             level, which is only visible when a logger is installed."
+        )
+    }
+}
+
+/// When a retention checker found that its propagator is not finished.
+#[cfg(feature = "check-retention")]
+#[derive(Clone, Copy, Debug)]
+enum RetentionMoment {
+    /// After a call of the propagator in which it did not enqueue itself again.
+    AfterCall,
+    /// When propagation reached a fixpoint.
+    AtFixpoint,
 }

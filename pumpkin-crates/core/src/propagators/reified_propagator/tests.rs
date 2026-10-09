@@ -3,6 +3,8 @@ use std::borrow::Cow;
 use pumpkin_checking::ConflictCheck;
 use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::DomainView;
+use pumpkin_checking::RetentionCheck;
+use pumpkin_checking::RetentionChecker;
 use pumpkin_checking::VariableState;
 
 use crate::checkers::Scope;
@@ -304,6 +306,12 @@ impl ConflictRule for GenericRule {
     ) -> impl ConflictChecker<Predicate> + 'static {
         AcceptEverything
     }
+
+    fn create_retention_checker(
+        _: &GenericDescription,
+    ) -> impl RetentionChecker<Predicate> + 'static {
+        AcceptEverything
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -317,6 +325,12 @@ impl ConflictChecker<Predicate> for AcceptEverything {
         _: Option<&Predicate>,
     ) -> ConflictCheck {
         ConflictCheck::ConflictDetected
+    }
+}
+
+impl RetentionChecker<Predicate> for AcceptEverything {
+    fn check_retention(&self, _: &dyn DomainView<Predicate>) -> RetentionCheck {
+        RetentionCheck::NothingToPropagate
     }
 }
 

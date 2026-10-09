@@ -45,7 +45,6 @@ use crate::proof::explain_root_assignment;
 use crate::proof::finalize_proof;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::store::PropagatorHandle;
-use crate::propagators::nogoods::NogoodDescription;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
 use crate::propagators::nogoods::PropagationMode;
@@ -906,11 +905,15 @@ impl ConstraintSatisfactionSolver {
     fn add_nogood(&mut self, nogood: Vec<Predicate>, constraint_tag: ConstraintTag) {
         pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
 
-        let rule_checkers = self.state.add_removable_rule_checkers::<UnitNogoodRule>(
+        let propagation_mode = self
+            .state
+            .get_propagator(self.nogood_propagator_handle)
+            .expect("Nogood propagator handle should refer to nogood propagator")
+            .propagation_mode();
+        let rule_checkers = propagation_mode.add_nogood_checkers(
+            &mut self.state,
             constraint_tag,
-            NogoodDescription {
-                nogood: nogood.clone().into(),
-            },
+            &nogood,
             self.nogood_propagator_handle.propagator_id(),
         );
 

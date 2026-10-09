@@ -2,8 +2,11 @@ use std::borrow::Cow;
 use std::marker::PhantomData;
 
 use pumpkin_checking::BoxedConflictChecker;
+use pumpkin_checking::BoxedRetentionChecker;
 use pumpkin_checking::ConflictChecker;
+use pumpkin_checking::RetentionChecker;
 use pumpkin_checking::checkers::ReifiedChecker;
+use pumpkin_checking::checkers::ReifiedRetentionChecker;
 
 use super::HalfReifiedDescription;
 use crate::predicates::Predicate;
@@ -30,6 +33,17 @@ impl<Rule: ConflictRule> ConflictRule for HalfReified<Rule> {
             inner: BoxedConflictChecker::new(Box::new(Rule::create_conflict_checker(
                 &constraint_description.inner,
             ))),
+            reification_literal: constraint_description.reification_literal,
+        }
+    }
+
+    fn create_retention_checker(
+        constraint_description: &Self::Description,
+    ) -> impl RetentionChecker<Predicate> + 'static {
+        ReifiedRetentionChecker {
+            inner: BoxedRetentionChecker::new(Rule::create_retention_checker(
+                &constraint_description.inner,
+            )),
             reification_literal: constraint_description.reification_literal,
         }
     }

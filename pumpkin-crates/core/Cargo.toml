@@ -48,6 +48,11 @@ check-inferences = ["inference-checkers"]
 # Check only the inferences that conflict analysis uses, eager and lazy alike, as a proof checker
 # would. Cannot be combined with `check-inferences`.
 check-inferences-proof = ["inference-checkers"]
+# Check that a propagator has nothing left to propagate when it reports a fixpoint.
+check-retention = ["checkers"]
+# Consult every retention checker at each fixpoint rather than only those watching a domain that
+# changed. Slower, and independent of which propagators were notified.
+check-retention-all = ["check-retention"]
 # Check that every learned nogood follows from the inferences of the proof.
 check-deductions = []
 debug-checks = []

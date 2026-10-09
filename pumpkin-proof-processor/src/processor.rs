@@ -749,6 +749,8 @@ mod tests {
     use pumpkin_checking::ConflictCheck;
     use pumpkin_checking::ConflictChecker;
     use pumpkin_checking::DomainView;
+    use pumpkin_checking::RetentionCheck;
+    use pumpkin_checking::RetentionChecker;
     use pumpkin_checking::VariableState;
     use pumpkin_core::propagation::ConflictRule;
     use pumpkin_core::propagation::ConstraintDescription;
@@ -1057,6 +1059,22 @@ mod tests {
                 watched: constraint_description.watched,
                 other: constraint_description.other,
             }
+        }
+
+        fn create_retention_checker(
+            _: &AlwaysConflictDescription,
+        ) -> impl RetentionChecker<Predicate> + 'static {
+            // The propagator ignores `other` on purpose, so it is not meant to be complete.
+            AcceptEverything
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct AcceptEverything;
+
+    impl RetentionChecker<Predicate> for AcceptEverything {
+        fn check_retention(&self, _: &dyn DomainView<Predicate>) -> RetentionCheck {
+            RetentionCheck::NothingToPropagate
         }
     }
 

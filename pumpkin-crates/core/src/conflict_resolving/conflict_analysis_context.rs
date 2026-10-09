@@ -27,9 +27,7 @@ use crate::propagation::CurrentNogood;
 use crate::propagation::ExplanationContext;
 use crate::propagation::HasAssignments;
 use crate::propagation::ReadDomains;
-use crate::propagators::nogoods::NogoodDescription;
 use crate::propagators::nogoods::NogoodPropagator;
-use crate::propagators::nogoods::UnitNogoodRule;
 use crate::pumpkin_assert_eq_simple;
 use crate::state::PropagatorHandle;
 use crate::variables::DomainId;
@@ -300,11 +298,15 @@ impl ConflictAnalysisContext<'_> {
 
         let constraint_tag = self.log_deduction(learned_nogood.predicates.iter().copied());
 
-        let rule_checkers = self.state.add_removable_rule_checkers::<UnitNogoodRule>(
+        let propagation_mode = self
+            .state
+            .get_propagator(self.nogood_propagator_handle)
+            .expect("nogood propagator handle should refer to nogood propagator")
+            .propagation_mode();
+        let rule_checkers = propagation_mode.add_nogood_checkers(
+            self.state,
             constraint_tag,
-            NogoodDescription {
-                nogood: learned_nogood.predicates.clone().into(),
-            },
+            &learned_nogood.predicates,
             self.nogood_propagator_handle.propagator_id(),
         );
 

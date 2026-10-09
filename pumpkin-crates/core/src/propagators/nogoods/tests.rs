@@ -2,17 +2,19 @@ use crate::conjunction;
 use crate::engine::test_solver::TestSolver;
 use crate::predicate;
 use crate::predicates::Predicate;
-use crate::propagators::nogoods::NogoodDescription;
-use crate::propagators::nogoods::UnitNogoodRule;
 
 /// Add `nogood` as the solver adds a nogood from the model, together with its checkers.
 fn add_nogood(solver: &mut TestSolver, nogood: Vec<Predicate>) {
     let constraint_tag = solver.state.new_constraint_tag();
-    let rule_checkers = solver.state.add_removable_rule_checkers::<UnitNogoodRule>(
+    let propagation_mode = solver
+        .state
+        .get_propagator(solver.nogood_handle)
+        .expect("the handle refers to the nogood propagator")
+        .propagation_mode();
+    let rule_checkers = propagation_mode.add_nogood_checkers(
+        &mut solver.state,
         constraint_tag,
-        NogoodDescription {
-            nogood: nogood.clone().into(),
-        },
+        &nogood,
         solver.nogood_handle.propagator_id(),
     );
 

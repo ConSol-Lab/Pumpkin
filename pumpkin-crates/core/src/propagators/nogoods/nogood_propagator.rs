@@ -1069,13 +1069,18 @@ impl NogoodPropagator {
         Ok(())
     }
 
+    /// The form of propagation the propagator performs, which determines the rule of its nogoods.
+    pub(crate) fn propagation_mode(&self) -> PropagationMode {
+        self.propagation_mode
+    }
+
     /// Adds a nogood which has been learned during search.
     ///
     /// The first predicate should be asserting and the second predicate should contain the
     /// predicate with the next highest decision level.
     ///
-    /// The checkers of the nogood are added by the caller, which gives the `rule_checkers` of the
-    /// nogood.
+    /// The checkers of the nogood are added by the caller, through
+    /// [`PropagationMode::add_nogood_checkers`], which gives the `rule_checkers` of the nogood.
     pub(crate) fn add_asserting_nogood(
         &mut self,
         nogood: Vec<Predicate>,
