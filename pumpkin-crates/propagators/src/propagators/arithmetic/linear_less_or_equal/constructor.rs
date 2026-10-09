@@ -1,6 +1,5 @@
-use pumpkin_checking::checkers::LinearLessOrEqualConflictChecker;
-use pumpkin_core::declare_inference_label;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
@@ -8,13 +7,11 @@ use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::LinearLessOrEqualDescription;
 use super::LinearLessOrEqualPropagator;
-
-declare_inference_label!(LinearBounds);
+use super::LinearLessOrEqualRule;
 
 /// The [`PropagatorConstructor`] for the [`LinearLessOrEqualPropagator`].
 #[derive(Clone, Debug)]
@@ -28,14 +25,24 @@ where
     Var: IntegerVariable + 'static,
 {
     type PropagatorImpl = LinearLessOrEqualPropagator<Var>;
+    type Rule = LinearLessOrEqualRule<Var>;
+
+    fn constraint_description(&self) -> LinearLessOrEqualDescription<Var> {
+        self.constraint_description.clone()
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
 
     fn create(
         self,
         mut context: PropagatorConstructorContext,
+        inference_code: InferenceCode,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
         let LinearLessOrEqualPropagatorArgs {
             constraint_description,
-            constraint_tag,
+            constraint_tag: _,
         } = self;
         let LinearLessOrEqualDescription { terms: x, bound: c } = constraint_description;
 
@@ -52,13 +59,6 @@ where
 
         let lower_bound_left_hand_side = context.new_trailed_integer(lower_bound_left_hand_side);
 
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_conflict_checker(
-            constraint_tag,
-            LinearBounds,
-            LinearLessOrEqualConflictChecker::new(x.clone(), c),
-        );
-
         let propagator = LinearLessOrEqualPropagator {
             x,
             c,
@@ -70,7 +70,6 @@ where
 
         PropagatorSpec {
             registration: registration.build(),
-            checkers: checkers.build(),
             propagator,
         }
     }

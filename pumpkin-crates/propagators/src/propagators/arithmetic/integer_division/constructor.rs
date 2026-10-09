@@ -1,6 +1,6 @@
-use pumpkin_checking::checkers::IntegerDivisionChecker;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
@@ -8,12 +8,11 @@ use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
-use super::Division;
 use super::DivisionDescription;
 use super::DivisionPropagator;
+use super::DivisionRule;
 
 /// The [`PropagatorConstructor`] for the [`DivisionPropagator`].
 #[derive(Clone, Debug)]
@@ -33,11 +32,24 @@ where
     VC: IntegerVariable + 'static,
 {
     type PropagatorImpl = DivisionPropagator<VA, VB, VC>;
+    type Rule = DivisionRule<VA, VB, VC>;
 
-    fn create(self, context: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
+    fn constraint_description(&self) -> DivisionDescription<VA, VB, VC> {
+        self.constraint_description.clone()
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
+
+    fn create(
+        self,
+        context: PropagatorConstructorContext,
+        inference_code: InferenceCode,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let DivisionArgs {
             constraint_description,
-            constraint_tag,
+            constraint_tag: _,
         } = self;
         let DivisionDescription {
             numerator,
@@ -56,17 +68,6 @@ where
             .add(&rhs, DomainEvents::BOUNDS, ID_RHS)
             .build();
 
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_conflict_checker(
-            constraint_tag,
-            Division,
-            IntegerDivisionChecker {
-                numerator: numerator.clone(),
-                denominator: denominator.clone(),
-                rhs: rhs.clone(),
-            },
-        );
-
         let propagator = DivisionPropagator {
             numerator,
             denominator,
@@ -76,7 +77,6 @@ where
 
         PropagatorSpec {
             registration,
-            checkers: checkers.build(),
             propagator,
         }
     }

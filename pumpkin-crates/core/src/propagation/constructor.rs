@@ -15,11 +15,13 @@ use crate::engine::variables::AffineView;
 #[cfg(doc)]
 use crate::engine::variables::DomainId;
 use crate::predicates::Predicate;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
+use crate::propagation::ConflictRule;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
 use crate::propagation::EventsToRegister;
-use crate::propagation::RuntimeCheckers;
 use crate::variables::IntegerVariable;
 
 /// A propagator constructor creates a fully initialized instance of a [`Propagator`].
@@ -32,13 +34,27 @@ pub trait PropagatorConstructor {
     /// The propagator that is produced by this constructor.
     type PropagatorImpl: Propagator + Clone;
 
+    /// The inference rule that the propagator implements.
+    type Rule: ConflictRule;
+
+    /// The description of the constraint that the propagator propagates.
+    fn constraint_description(&self) -> <Self::Rule as ConflictRule>::Description;
+
+    /// The tag of the constraint that the propagator propagates.
+    fn constraint_tag(&self) -> ConstraintTag;
+
     /// Create the propagator instance from `Self`.
     ///
-    /// Returns a [`PropagatorSpec`] that contains:
-    /// - the propagator instance,
-    /// - the events for which the propagator should be enqueued,
-    /// - and the runtime checkers that verify the propagator's behavior.
-    fn create(self, context: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl>;
+    /// The inferences of the propagator use `inference_code`, which identifies the constraint and
+    /// the rule.
+    ///
+    /// Returns a [`PropagatorSpec`] that contains the propagator instance and the events for which
+    /// the propagator should be enqueued.
+    fn create(
+        self,
+        context: PropagatorConstructorContext,
+        inference_code: InferenceCode,
+    ) -> PropagatorSpec<Self::PropagatorImpl>;
 }
 
 /// The result of [`PropagatorConstructor::create`].
@@ -49,8 +65,6 @@ pub trait PropagatorConstructor {
 pub struct PropagatorSpec<P> {
     /// The domain events the propagator needs to be be registered for.
     pub registration: EventsToRegister,
-    /// Any runtime checkers that verify the propagator's implementation.
-    pub checkers: RuntimeCheckers,
     /// The propagator
     pub propagator: P,
 }

@@ -1,19 +1,16 @@
-use pumpkin_checking::checkers::IntegerMultiplicationChecker;
-use pumpkin_core::declare_inference_label;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::IntegerMultiplicationDescription;
+use super::IntegerMultiplicationRule;
 use super::propagator::IntegerMultiplicationPropagator;
-
-declare_inference_label!(IntegerMultiplication);
 
 const ID_A: LocalId = LocalId::from(0);
 const ID_B: LocalId = LocalId::from(1);
@@ -35,11 +32,24 @@ where
     VC: IntegerVariable + 'static,
 {
     type PropagatorImpl = IntegerMultiplicationPropagator<VA, VB, VC>;
+    type Rule = IntegerMultiplicationRule<VA, VB, VC>;
 
-    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
+    fn constraint_description(&self) -> IntegerMultiplicationDescription<VA, VB, VC> {
+        self.constraint_description.clone()
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
+
+    fn create(
+        self,
+        _: PropagatorConstructorContext,
+        inference_code: InferenceCode,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let IntegerMultiplicationConstructor {
             constraint_description,
-            constraint_tag,
+            constraint_tag: _,
         } = self;
         let IntegerMultiplicationDescription { a, b, c } = constraint_description;
 
@@ -49,22 +59,10 @@ where
             .add(&c, DomainEvents::ANY_INT, ID_C)
             .build();
 
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_conflict_checker(
-            constraint_tag,
-            IntegerMultiplication,
-            IntegerMultiplicationChecker {
-                a: a.clone(),
-                b: b.clone(),
-                c: c.clone(),
-            },
-        );
-
         let propagator = IntegerMultiplicationPropagator::new(a, b, c, inference_code);
 
         PropagatorSpec {
             registration,
-            checkers: checkers.build(),
             propagator,
         }
     }

@@ -66,6 +66,7 @@
 //! \[1\] C. Schulte and P. J. Stuckey, ‘Efficient constraint propagation engines’, ACM Transactions
 //! on Programming Languages and Systems (TOPLAS), vol. 31, no. 1, pp. 1–43, 2008.
 
+mod conflict_rule;
 mod constraint_description;
 mod constructor;
 mod contexts;
@@ -73,7 +74,6 @@ mod domains;
 mod event_registration;
 mod local_id;
 mod propagator;
-mod runtime_checkers;
 mod solution_check;
 
 pub(crate) mod propagator_id;
@@ -81,7 +81,6 @@ pub(crate) mod propagator_var_id;
 pub(crate) mod store;
 
 pub use event_registration::*;
-pub use runtime_checkers::*;
 
 mod reexports {
     // Re-exports of types not in this module according to the file tree.
@@ -93,6 +92,7 @@ mod reexports {
     pub use crate::engine::notifications::DomainEvents;
     pub use crate::engine::notifications::OpaqueDomainEvent;
 }
+pub use conflict_rule::*;
 pub use constraint_description::*;
 pub use constructor::*;
 pub use contexts::*;
