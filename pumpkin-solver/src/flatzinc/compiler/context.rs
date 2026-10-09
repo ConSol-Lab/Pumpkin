@@ -81,6 +81,11 @@ pub(crate) struct CompilationContext<'a> {
     pub(crate) proof_format: crate::flatzinc::ProofFormat,
     /// The preprocessing done, as the preamble of a scaffold states it.
     pub(crate) preamble: crate::flatzinc::preamble::Preamble,
+    /// When the symmetry and dominance breaking steps are stated in the preamble rather than in
+    /// a proof in the block format, the identifier the next step takes.
+    pub(crate) next_preamble_identifier: Option<u32>,
+    /// The position in the preamble's breaking items of the identifier each tag took.
+    pub(crate) preamble_identifiers: HashMap<ConstraintTag, usize>,
 }
 
 /// `coefficient * variable <= bound`, which the constraint `tag` states.
@@ -189,6 +194,8 @@ impl CompilationContext<'_> {
             unit_bounds: vec![],
             proof_format: crate::flatzinc::ProofFormat::Croc,
             preamble: Default::default(),
+            next_preamble_identifier: None,
+            preamble_identifiers: Default::default(),
         }
     }
 

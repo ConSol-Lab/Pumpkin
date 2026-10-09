@@ -370,6 +370,24 @@ struct Args {
     #[arg(short = 'a', long = "all-solutions", verbatim_doc_comment)]
     all_solutions: bool,
 
+    /// Detect interchangeable variables of a FlatZinc model and post lex-leader constraints to
+    /// break the symmetry (experimental). This removes solutions, so it is refused together with
+    /// `-a` on a satisfaction problem. Skipped under `--proof-format drcp` with a proof.
+    ///
+    /// Possible values: bool
+    #[arg(long = "symmetry-breaking", verbatim_doc_comment)]
+    symmetry_breaking: bool,
+
+    /// Detect values that are interchangeable for a group of variables of a FlatZinc model and
+    /// post value-precedence constraints to break the symmetry (experimental). This removes
+    /// solutions, so it is refused together with `-a` on a satisfaction problem and with
+    /// `--symmetry-breaking`. Under croc proof logging, the exchanges are stated in the proof
+    /// and no constraint is posted. Skipped under `--proof-format drcp` with a proof.
+    ///
+    /// Possible values: bool
+    #[arg(long = "value-symmetry-breaking", verbatim_doc_comment)]
+    value_symmetry_breaking: bool,
+
     /// If `--verbose` is enabled then this option removes the timestamp information from the log
     /// messages. Note that this option will only take affect in the case of a (W)CNF instance.
     ///
@@ -553,7 +571,7 @@ fn main() {
 }
 
 fn run() -> PumpkinResult<()> {
-    let args = Args::parse();
+    let mut args = Args::parse();
 
     let file_format = match args.instance_path.extension().and_then(|ext| ext.to_str()) {
         Some("cnf") => FileFormat::CnfDimacsPLine,
@@ -601,6 +619,21 @@ fn run() -> PumpkinResult<()> {
         ];
         for (_, option) in skipped.iter().filter(|(given, _)| *given) {
             warn!("{option} is skipped under --proof-format drcp");
+        }
+        // A DRCP proof derives only nogoods the model implies, and these passes remove
+        // solutions.
+        let breaking = [
+            (&mut args.symmetry_breaking, "--symmetry-breaking"),
+            (
+                &mut args.value_symmetry_breaking,
+                "--value-symmetry-breaking",
+            ),
+        ];
+        for (given, option) in breaking {
+            if *given {
+                warn!("{option} is skipped under --proof-format drcp");
+                *given = false;
+            }
         }
     }
 
@@ -725,6 +758,8 @@ fn run() -> PumpkinResult<()> {
                         None
                     },
                     verbose: args.verbose,
+                    symmetry_breaking: args.symmetry_breaking,
+                    value_symmetry_breaking: args.value_symmetry_breaking,
                     preamble: None,
                 },
                 NoLearningResolver,
@@ -756,6 +791,8 @@ fn run() -> PumpkinResult<()> {
                         None
                     },
                     verbose: args.verbose,
+                    symmetry_breaking: args.symmetry_breaking,
+                    value_symmetry_breaking: args.value_symmetry_breaking,
                     preamble: None,
                 },
                 ResolutionResolver::new(
@@ -791,6 +828,8 @@ fn run() -> PumpkinResult<()> {
                         None
                     },
                     verbose: args.verbose,
+                    symmetry_breaking: args.symmetry_breaking,
+                    value_symmetry_breaking: args.value_symmetry_breaking,
                     preamble: None,
                 },
                 ResolutionResolver::new(
@@ -826,6 +865,8 @@ fn run() -> PumpkinResult<()> {
                         None
                     },
                     verbose: args.verbose,
+                    symmetry_breaking: args.symmetry_breaking,
+                    value_symmetry_breaking: args.value_symmetry_breaking,
                     preamble: None,
                 },
                 ResolutionResolver::new(
@@ -861,6 +902,8 @@ fn run() -> PumpkinResult<()> {
                         None
                     },
                     verbose: args.verbose,
+                    symmetry_breaking: args.symmetry_breaking,
+                    value_symmetry_breaking: args.value_symmetry_breaking,
                     preamble: None,
                 },
                 ResolutionResolver::new(

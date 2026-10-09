@@ -54,6 +54,35 @@ croc_proofs!(
 // An objective that the view pass makes a view of another variable.
 croc_proofs!(objective_view, "objective_view", "c UPPER_BOUND 28");
 
+// The symmetry breaking passes, each justified in the proof.
+croc_proofs!(
+    symmetry_star,
+    "symmetry_star",
+    "c UPPER_BOUND 5",
+    "--symmetry-breaking"
+);
+croc_proofs!(
+    value_symmetry_colouring,
+    "value_symmetry_colouring",
+    "c UNSAT",
+    "--value-symmetry-breaking"
+);
+
+#[test]
+fn a_drcp_proof_skips_the_breaking_passes() {
+    let model_path = model_path("symmetry_star");
+    let proof_path = output_path("symmetry_star.drcp");
+    let output = Command::new(env!("CARGO_BIN_EXE_pumpkin-solver"))
+        .arg("--proof-path")
+        .arg(&proof_path)
+        .args(["--symmetry-breaking"])
+        .arg(&model_path)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let _ = std::fs::remove_file(&proof_path);
+}
+
 #[test]
 fn a_scaffold_states_its_preamble_before_the_nogoods() {
     let model_path = model_path("views_literals_constants");

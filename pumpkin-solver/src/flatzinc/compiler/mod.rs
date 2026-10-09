@@ -1,4 +1,5 @@
 mod apply_preamble;
+mod breaking_steps;
 mod check_no_variable_aliases;
 mod collect_domains;
 mod collect_views;
@@ -13,6 +14,7 @@ mod post_constraints;
 mod prepare_variables;
 mod remove_unused_variables;
 mod reserve_constraint_tags;
+mod symmetry_breaking;
 mod warn_default_bounds;
 
 use context::CompilationContext;
@@ -63,7 +65,10 @@ pub(crate) fn compile(
     post_constraints::run(&ast, &mut context, &options)?;
     if let Some(preamble) = options.preamble.as_ref() {
         apply_preamble::check_decompositions(&context, preamble)?;
+        apply_preamble::apply_breaking(&mut context, preamble)?;
     }
+    symmetry_breaking::run(&ast, &mut context, &options)?;
+    symmetry_breaking::run_value_symmetry(&ast, &mut context, &options)?;
     let objective_function = create_objective::run(&ast, &mut context)?;
     let search = create_search_strategy::run(&ast, &mut context, objective_function)?;
 

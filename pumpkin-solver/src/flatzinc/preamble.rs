@@ -19,7 +19,73 @@ pub struct Preamble {
     /// representative.
     pub objective: Option<(String, u64)>,
     pub first_free: Option<u64>,
+    pub breaking: Vec<BreakingItem>,
     pub steps: Vec<String>,
+}
+
+/// An item of the symmetry and dominance breaking steps.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BreakingItem {
+    /// A key of the order the steps use.
+    Key(String),
+    /// The identifier a step takes, with the constraint posted under it.
+    Identifier {
+        identifier: u64,
+        posted: Option<Posted>,
+    },
+    /// A line of a step.
+    Step(String),
+}
+
+/// A constraint posted under the identifier of a breaking step.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Posted {
+    Clause(Vec<Atom>),
+    /// The first variables are lexicographically at most the second.
+    LexLessOrEqual(Vec<String>, Vec<String>),
+}
+
+/// `[variable comparator value]`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Atom {
+    pub variable: String,
+    pub comparator: Comparator,
+    pub value: i64,
+}
+
+impl std::fmt::Display for Atom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{} {} {}]",
+            self.variable,
+            self.comparator.as_str(),
+            self.value
+        )
+    }
+}
+
+impl Atom {
+    /// The atoms `[x <= 3] [y >= 1] ...` the text lists, separated by whitespace.
+    pub fn parse_list(text: &str) -> Option<Vec<Atom>> {
+        let mut atoms = vec![];
+        let mut rest = text.trim();
+        while !rest.is_empty() {
+            let inner = rest.strip_prefix('[')?;
+            let end = inner.find(']')?;
+            let fields: Vec<&str> = inner[..end].split_whitespace().collect();
+            let [variable, comparator, value] = fields.as_slice() else {
+                return None;
+            };
+            atoms.push(Atom {
+                variable: (*variable).to_owned(),
+                comparator: Comparator::parse(comparator)?,
+                value: value.parse().ok()?,
+            });
+            rest = inner[end + 1..].trim_start();
+        }
+        Some(atoms)
+    }
 }
 
 /// `variable = scale * representative + offset`.
@@ -141,6 +207,14 @@ impl Preamble {
                 preamble.steps.push(line);
                 continue;
             }
+            if let Some(rest) = line.strip_prefix("key ") {
+                preamble.breaking.push(BreakingItem::Key(rest.to_owned()));
+                continue;
+            }
+            if let Some(rest) = line.strip_prefix("step ") {
+                preamble.breaking.push(BreakingItem::Step(rest.to_owned()));
+                continue;
+            }
             let fields: Vec<&str> = line.split_whitespace().collect();
             let error = |message: &str| PreambleError::Syntax {
                 line: index,
@@ -191,6 +265,34 @@ impl Preamble {
                     preamble.objective = Some(((*variable).to_owned(), number(constraint)?))
                 }
                 ["first", identifier] => preamble.first_free = Some(number(identifier)?),
+                ["breaking", identifier, rest @ ..] => {
+                    let posted = match rest {
+                        [] => None,
+                        ["clause", ..] => {
+                            let atoms = line
+                                .split_once("clause")
+                                .and_then(|(_, atoms)| Atom::parse_list(atoms))
+                                .ok_or_else(|| error("expected atoms"))?;
+                            Some(Posted::Clause(atoms))
+                        }
+                        ["lex_less_or_equal", variables @ ..] => {
+                            let mut sides = variables.split(|&field| field == ";");
+                            let (Some(first), Some(second), None) =
+                                (sides.next(), sides.next(), sides.next())
+                            else {
+                                return Err(error("expected two lists separated by ';'"));
+                            };
+                            let names =
+                                |side: &[&str]| side.iter().map(|&name| name.to_owned()).collect();
+                            Some(Posted::LexLessOrEqual(names(first), names(second)))
+                        }
+                        _ => return Err(error("unknown posted constraint")),
+                    };
+                    preamble.breaking.push(BreakingItem::Identifier {
+                        identifier: number(identifier)?,
+                        posted,
+                    })
+                }
                 ["proof"] => in_steps = true,
                 _ => return Err(error("unknown item")),
             }
@@ -244,6 +346,34 @@ impl Preamble {
         if let Some(first_free) = self.first_free {
             writeln!(text, "first {first_free}").unwrap();
         }
+        for item in &self.breaking {
+            match item {
+                BreakingItem::Key(line) => writeln!(text, "key {line}").unwrap(),
+                BreakingItem::Step(line) => writeln!(text, "step {line}").unwrap(),
+                BreakingItem::Identifier { identifier, posted } => {
+                    write!(text, "breaking {identifier}").unwrap();
+                    match posted {
+                        None => {}
+                        Some(Posted::Clause(atoms)) => {
+                            text.push_str(" clause");
+                            for atom in atoms {
+                                write!(text, " {atom}").unwrap();
+                            }
+                        }
+                        Some(Posted::LexLessOrEqual(first, second)) => {
+                            write!(
+                                text,
+                                " lex_less_or_equal {} ; {}",
+                                first.join(" "),
+                                second.join(" ")
+                            )
+                            .unwrap();
+                        }
+                    }
+                    text.push('\n');
+                }
+            }
+        }
         writeln!(text, "proof").unwrap();
         for step in &self.steps {
             writeln!(text, "{step}").unwrap();
@@ -282,6 +412,34 @@ mod tests {
             }],
             objective: Some(("y".into(), 1)),
             first_free: Some(7),
+            breaking: vec![
+                BreakingItem::Key("p x smaller [x <= -1] c:0 l:initial_domain".into()),
+                BreakingItem::Identifier {
+                    identifier: 7,
+                    posted: Some(Posted::LexLessOrEqual(vec!["x".into()], vec!["z".into()])),
+                },
+                BreakingItem::Step("y 7 x:z z:x".into()),
+                BreakingItem::Step("  under c:0 c:0".into()),
+                BreakingItem::Identifier {
+                    identifier: 8,
+                    posted: Some(Posted::Clause(vec![
+                        Atom {
+                            variable: "x".into(),
+                            comparator: Comparator::LessOrEqual,
+                            value: 0,
+                        },
+                        Atom {
+                            variable: "z".into(),
+                            comparator: Comparator::GreaterOrEqual,
+                            value: -1,
+                        },
+                    ])),
+                },
+                BreakingItem::Identifier {
+                    identifier: 9,
+                    posted: None,
+                },
+            ],
             steps: vec!["s y := -2*x+3 by c:1".into()],
         };
         let read = Preamble::read(preamble.render().as_bytes()).expect("the rendering reads");

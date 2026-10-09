@@ -47,6 +47,12 @@ pub enum FlatZincError {
     )]
     ProofOfSolutionEnumeration,
 
+    #[error("symmetry breaking cannot be combined with {0}")]
+    SymmetryBreakingUnsupported(&'static str),
+
+    #[error("value symmetry breaking cannot be combined with {0}")]
+    ValueSymmetryBreakingUnsupported(&'static str),
+
     #[error("the preamble cannot be applied to the model: {0}")]
     Preamble(String),
 }

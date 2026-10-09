@@ -74,6 +74,30 @@ pub struct FlatZincOptions {
     /// Make a boolean that a reified comparison with a constant defines the literal of the
     /// comparison, when it occurs only as a literal.
     pub literal_predicates: bool,
+
+    /// Detect interchangeable variables and post lex-leader constraints to break the
+    /// symmetry. Refused when enumerating all solutions and under proof logging other than a
+    /// croc block proof or croc scaffold, where each lex-leader constraint is justified by a
+    /// lex-leader step.
+    pub symmetry_breaking: bool,
+
+    /// Detect interchangeable values and post value-precedence constraints. Refused when
+    /// enumerating all solutions, with the other breaking options, and under proof logging other
+    /// than a croc block proof or croc scaffold, where the exchanges are stated as value symmetry
+    /// steps and nothing is posted.
+    pub value_symmetry_breaking: bool,
+}
+
+impl FlatZincOptions {
+    /// Whether the proof, if any, states symmetry and dominance breaking steps: a croc proof in
+    /// the block format, or a croc scaffold, whose preamble states them.
+    pub(crate) fn proof_states_breaking_steps(&self) -> bool {
+        match self.proof_type {
+            None => true,
+            Some(ProofType::Blocks | ProofType::Scaffold) => self.proof_format == ProofFormat::Croc,
+            Some(ProofType::Full) => false,
+        }
+    }
 }
 
 /// The proof format, which decides what the compiler does for a proof.
