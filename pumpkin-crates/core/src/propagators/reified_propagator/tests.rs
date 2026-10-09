@@ -5,9 +5,7 @@ use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::DomainView;
 use pumpkin_checking::VariableState;
 
-use super::ReifiedPropagatorArgs;
 use crate::checkers::Scope;
-use crate::checkers::ScopeItem;
 use crate::conjunction;
 use crate::containers::StorageKey;
 use crate::engine::PropagationStatusCP;
@@ -18,7 +16,6 @@ use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::proof::Unknown;
 use crate::propagation::ConflictRule;
 use crate::propagation::ConstraintDescription;
 use crate::propagation::DomainEvents;
@@ -32,7 +29,7 @@ use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorWithEvents;
 use crate::propagation::ReadDomains;
-use crate::propagation::SolutionCheck;
+use crate::propagators::ReifiedPropagatorArgs;
 use crate::state::Conflict;
 use crate::variables::DomainId;
 
@@ -48,9 +45,10 @@ fn a_detected_inconsistency_is_given_as_reason_for_propagating_reification_liter
     let t1 = triggered_conflict.clone();
     let t2 = triggered_conflict.clone();
 
-    let inference_code = solver.accept_inferences_by(ConstraintTag::create_from_index(0), Unknown);
-    let i1 = inference_code.clone();
-    let i2 = inference_code.clone();
+    let inference_code =
+        solver.accept_inferences_by(ConstraintTag::create_from_index(0), "test_rule");
+    let i1 = inference_code;
+    let i2 = inference_code;
 
     let _ = solver
         .new_propagator(ReifiedPropagatorArgs {
@@ -59,14 +57,14 @@ fn a_detected_inconsistency_is_given_as_reason_for_propagating_reification_liter
                 move |_: PropagationContext| {
                     Err(PropagatorConflict {
                         conjunction: t1.clone(),
-                        inference_code: i1.clone(),
+                        inference_code: i1,
                     }
                     .into())
                 },
                 move |_: Domains| {
                     Some(PropagatorConflict {
                         conjunction: t2.clone(),
-                        inference_code: i2.clone(),
+                        inference_code: i2,
                     })
                 },
             ),
@@ -83,6 +81,8 @@ fn a_detected_inconsistency_is_given_as_reason_for_propagating_reification_liter
 #[test]
 fn a_true_literal_is_added_to_reason_for_propagation() {
     let mut solver = TestSolver::default();
+    let inference_code =
+        solver.accept_inferences_by(ConstraintTag::create_from_index(0), "test_propagation");
 
     let reification_literal = solver.new_literal();
     let var = solver.new_variable(1, 5);
@@ -92,13 +92,7 @@ fn a_true_literal_is_added_to_reason_for_propagation() {
             propagator: GenericPropagator::new(
                 vec![var],
                 move |mut ctx: PropagationContext| {
-                    ctx.post(
-                        predicate![var >= 3],
-                        (
-                            conjunction!(),
-                            &InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
-                        ),
-                    )?;
+                    ctx.post(predicate![var >= 3], (conjunction!(), &inference_code))?;
                     Ok(())
                 },
                 |_: Domains| None,
@@ -120,6 +114,44 @@ fn a_true_literal_is_added_to_reason_for_propagation() {
     );
 }
 
+/// The rule of the propagation, the nogood `[var <= 0]`, does not imply `[var >= 3]`, so the
+/// propagation is rejected when it is posted.
+#[cfg(feature = "check-inferences")]
+#[test]
+#[should_panic(expected = "fails on inference")]
+fn an_unsound_eager_propagation_is_caught_when_it_is_posted() {
+    let mut solver = TestSolver::default();
+    let reification_literal = solver.new_literal();
+    let var = solver.new_variable(1, 5);
+
+    let inference_code = solver
+        .state
+        .inference_code_for_rule(ConstraintTag::create_from_index(0), "unsound");
+    solver.state.add_conflict_checker(
+        inference_code,
+        pumpkin_checking::checkers::NogoodChecker {
+            nogood: Box::from([predicate![var <= 0]]),
+        },
+    );
+
+    let propagator = solver
+        .new_propagator(ReifiedPropagatorArgs {
+            propagator: GenericPropagator::new(
+                vec![var],
+                move |mut ctx: PropagationContext| {
+                    ctx.post(predicate![var >= 3], (conjunction!(), &inference_code))?;
+                    Ok(())
+                },
+                |_: Domains| None,
+            ),
+            reification_literal,
+        })
+        .expect("no conflict");
+
+    let _ = solver.set_literal(reification_literal, true);
+    let _ = solver.propagate(propagator);
+}
+
 #[test]
 fn a_true_literal_is_added_to_a_conflict_conjunction() {
     let mut solver = TestSolver::default();
@@ -128,7 +160,8 @@ fn a_true_literal_is_added_to_a_conflict_conjunction() {
     let _ = solver.set_literal(reification_literal, true);
 
     let var = solver.new_variable(1, 1);
-    let inference_code = solver.accept_inferences_by(ConstraintTag::create_from_index(0), Unknown);
+    let inference_code =
+        solver.accept_inferences_by(ConstraintTag::create_from_index(0), "test_rule");
 
     let inconsistency = solver
         .new_propagator(ReifiedPropagatorArgs {
@@ -137,7 +170,7 @@ fn a_true_literal_is_added_to_a_conflict_conjunction() {
                 move |_: PropagationContext| {
                     Err(PropagatorConflict {
                         conjunction: conjunction!([var >= 1]),
-                        inference_code: inference_code.clone(),
+                        inference_code,
                     }
                     .into())
                 },
@@ -169,7 +202,8 @@ fn notify_propagator_is_enqueued_if_inconsistency_can_be_detected() {
     let reification_literal = solver.new_literal();
     let var = solver.new_variable(1, 5);
 
-    let inference_code = solver.accept_inferences_by(ConstraintTag::create_from_index(0), Unknown);
+    let inference_code =
+        solver.accept_inferences_by(ConstraintTag::create_from_index(0), "test_rule");
 
     let propagator = solver
         .new_propagator(ReifiedPropagatorArgs {
@@ -180,7 +214,7 @@ fn notify_propagator_is_enqueued_if_inconsistency_can_be_detected() {
                     if context.is_fixed(&var) {
                         Some(PropagatorConflict {
                             conjunction: conjunction!([var == 5]),
-                            inference_code: inference_code.clone(),
+                            inference_code,
                         })
                     } else {
                         None
@@ -238,6 +272,54 @@ where
     }
 }
 
+/// The variables of a [`GenericPropagator`].
+#[derive(Clone, Debug)]
+struct GenericDescription(Vec<DomainId>);
+
+impl crate::checkers::ScopeItem for GenericDescription {
+    fn add_to_scope(&self, scope: &mut Scope) {
+        self.0.add_to_scope(scope);
+    }
+}
+
+impl ConstraintDescription for GenericDescription {
+    fn check_solution(&self, _: &dyn DomainView<Predicate>) -> crate::propagation::SolutionCheck {
+        crate::propagation::SolutionCheck::ConstraintSatisfied
+    }
+}
+
+/// The rule of a [`GenericPropagator`], whose inferences are given by each test; its checkers
+/// accept everything.
+struct GenericRule;
+
+impl ConflictRule for GenericRule {
+    type Description = GenericDescription;
+
+    fn name() -> Cow<'static, str> {
+        Cow::Borrowed("generic")
+    }
+
+    fn create_conflict_checker(
+        _: &GenericDescription,
+    ) -> impl ConflictChecker<Predicate> + 'static {
+        AcceptEverything
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct AcceptEverything;
+
+impl ConflictChecker<Predicate> for AcceptEverything {
+    fn check(
+        &self,
+        _: &VariableState<Predicate>,
+        _: &[Predicate],
+        _: Option<&Predicate>,
+    ) -> ConflictCheck {
+        ConflictCheck::ConflictDetected
+    }
+}
+
 impl<Propagation, ConsistencyCheck> Propagator for GenericPropagator<Propagation, ConsistencyCheck>
 where
     Propagation: Fn(PropagationContext) -> PropagationStatusCP + 'static + Clone,
@@ -277,54 +359,5 @@ where
         // Necessary for ensuring that the local IDs are correct when notifying
         self.variables_to_register = variables.into();
         self
-    }
-}
-
-/// The description of the constraint of a [`GenericPropagator`]: only its variables.
-#[derive(Clone, Debug)]
-struct GenericDescription(Vec<DomainId>);
-
-impl ScopeItem for GenericDescription {
-    fn add_to_scope(&self, scope: &mut Scope) {
-        self.0.add_to_scope(scope);
-    }
-}
-
-impl ConstraintDescription for GenericDescription {
-    fn check_solution(&self, _: &dyn DomainView<Predicate>) -> SolutionCheck {
-        SolutionCheck::ConstraintSatisfied
-    }
-}
-
-/// The rule of a [`GenericPropagator`], which accepts every inference since the tests decide
-/// what the propagator infers.
-#[derive(Clone, Copy, Debug)]
-struct GenericRule;
-
-impl ConflictRule for GenericRule {
-    type Description = GenericDescription;
-
-    fn name() -> Cow<'static, str> {
-        Cow::Borrowed("generic")
-    }
-
-    fn create_conflict_checker(
-        _: &GenericDescription,
-    ) -> impl ConflictChecker<Predicate> + 'static {
-        AcceptEverything
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct AcceptEverything;
-
-impl ConflictChecker<Predicate> for AcceptEverything {
-    fn check(
-        &self,
-        _: &VariableState<Predicate>,
-        _: &[Predicate],
-        _: Option<&Predicate>,
-    ) -> ConflictCheck {
-        ConflictCheck::ConflictDetected
     }
 }

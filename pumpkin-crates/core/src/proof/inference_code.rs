@@ -1,10 +1,9 @@
 use std::num::NonZero;
-use std::sync::Arc;
 
 #[cfg(doc)]
 use crate::Solver;
+use crate::containers::HashMap;
 use crate::containers::StorageKey;
-use crate::propagation::ConflictRule;
 
 /// An identifier for constraints, which is used to relate constraints from the model to steps in
 /// the proof. Under the hood, a tag is just a [`NonZero<u32>`]. The underlying integer can be
@@ -44,30 +43,18 @@ impl StorageKey for ConstraintTag {
     }
 }
 
-/// An inference code is a combination of a constraint tag with an inference label. Propagators
+/// An inference code is a combination of a constraint tag with an inference rule. Propagators
 /// associate an inference code with every propagation to identify why that propagation happened
 /// in terms of the constraint and inference that identified it.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct InferenceCode(ConstraintTag, Arc<str>);
+///
+/// The rule is identified by a [`RuleId`], which is only meaningful in the solver that assigned
+/// it; the name of the rule is obtained from that solver.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct InferenceCode(ConstraintTag, RuleId);
 
 impl InferenceCode {
-    /// Create a new inference code from a [`ConstraintTag`] and [`InferenceLabel`].
-    pub fn new(tag: ConstraintTag, label: impl InferenceLabel) -> Self {
-        InferenceCode(tag, label.to_str())
-    }
-
-    /// Create an inference label with the [`Unknown`] inference label.
-    ///
-    /// This should be avoided as much as possible. This is likely only useful for writing unit
-    /// tests.
-    pub fn unknown_label(tag: ConstraintTag) -> Self {
-        InferenceCode::new(tag, Unknown)
-    }
-
-    /// The inference code of the inferences that the rule `Rule` makes for the constraint with
-    /// `tag`; the name of the rule is the label.
-    pub fn for_rule<Rule: ConflictRule>(tag: ConstraintTag) -> Self {
-        InferenceCode(tag, Arc::from(Rule::name().as_ref()))
+    pub(crate) fn new(tag: ConstraintTag, rule: RuleId) -> Self {
+        InferenceCode(tag, rule)
     }
 
     /// Get the constraint tag.
@@ -75,82 +62,53 @@ impl InferenceCode {
         self.0
     }
 
-    /// Get the inference label.
-    pub fn label(&self) -> Arc<str> {
-        Arc::clone(&self.1)
+    pub fn rule(&self) -> RuleId {
+        self.1
     }
 }
 
-#[doc(hidden)]
-pub fn convert_label_name(ident_str: &str) -> Arc<str> {
-    use convert_case::Casing;
+/// Identifies an inference rule in the solver that assigned it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct RuleId(u32);
 
-    ident_str.to_case(convert_case::Case::Snake).into()
+/// The names of the inference rules used by a solver, each with the [`RuleId`] that the solver
+/// assigned to it. A name is assigned an identifier when it is first used.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct InferenceRules {
+    names: Vec<Box<str>>,
+    ids: HashMap<Box<str>, RuleId>,
 }
 
-/// Conveniently creates [`InferenceLabel`] for use in a propagator.
-///
-/// In case it is desirable, the exact string that is printed in the DRCP proof can be
-/// provided as a second parameter. Otherwise, the type name is converted to snake
-///
-/// # Example
-/// ```ignore
-/// declare_inference_label!(SomeInference);
-/// declare_inference_label!(OtherInference, "label");
-///
-/// // Now we can use `SomeInference` and `OtherInference` when creating an inference
-/// // code as it implements `InferenceLabel`.
-/// ```
-/// case.
-#[macro_export]
-macro_rules! declare_inference_label {
-    ($v:vis $name:ident) => {
-        declare_inference_label!($v $name, $crate::proof::convert_label_name(stringify!($name)));
-    };
-
-    ($v:vis $name:ident, $label:expr) => {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        $v struct $name;
-
-        declare_inference_label!(@impl_trait $name, std::sync::Arc::from($label));
-    };
-
-    (@impl_trait $name:ident, $label:expr) => {
-        impl $crate::proof::InferenceLabel for $name {
-            fn to_str(&self) -> std::sync::Arc<str> {
-                static LABEL: std::sync::OnceLock<std::sync::Arc<str>> = std::sync::OnceLock::new();
-
-                let label = LABEL.get_or_init(|| $label);
-
-                std::sync::Arc::clone(label)
-            }
+impl InferenceRules {
+    /// The identifier of the rule named `name`, assigned when the name is first used.
+    pub(crate) fn id(&mut self, name: &str) -> RuleId {
+        if let Some(&id) = self.ids.get(name) {
+            return id;
         }
-    };
-}
 
-/// A label of the inference mechanism that identifies a particular inference. It is combined with a
-/// [`ConstraintTag`] to create an [`InferenceCode`].
-///
-/// There may be different inference algorithms for the same contraint that are incomparable in
-/// terms of propagation strength. To discriminate between these algorithms, the inference label is
-/// used.
-///
-/// Conceptually, the inference label is a string. To aid with auto-complete, we introduce
-/// this as a strongly-typed concept. For most cases, creating an inference label is done with the
-/// [`declare_inference_label`] macro.
-pub trait InferenceLabel {
-    /// Returns the string-representation of the inference label.
-    ///
-    /// Typically different instances of the same propagator will use the same inference label.
-    /// Users are encouraged to share the string allocation, which is why the return value is
-    /// `Arc<str>`.
-    fn to_str(&self) -> Arc<str>;
-}
+        let id = RuleId(u32::try_from(self.names.len()).expect("fewer than 2^32 rules"));
+        self.names.push(name.into());
+        let _ = self.ids.insert(name.into(), id);
+        id
+    }
 
-impl InferenceLabel for Arc<str> {
-    fn to_str(&self) -> Arc<str> {
-        Arc::clone(self)
+    pub(crate) fn name(&self, id: RuleId) -> &str {
+        &self.names[id.0 as usize]
     }
 }
 
-declare_inference_label!(pub Unknown);
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_name_built_at_runtime_gets_the_identifier_of_the_same_name() {
+        let mut rules = InferenceRules::default();
+
+        let first = rules.id(&format!("HalfReified({})", "linear"));
+        let second = rules.id("HalfReified(linear)");
+
+        assert_eq!(first, second);
+        assert_eq!(rules.name(first), "HalfReified(linear)");
+    }
+}

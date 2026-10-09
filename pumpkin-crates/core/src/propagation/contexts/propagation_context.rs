@@ -1,6 +1,9 @@
 use enumset::EnumSet;
 
 use crate::basic_types::PredicateId;
+#[cfg(feature = "checkers")]
+use crate::checkers::RemovableRuleCheckers;
+use crate::checkers::RuleCheckerStore;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::EmptyDomainConflict;
@@ -89,6 +92,7 @@ pub struct PropagationContext<'a> {
     pub(crate) propagator_id: PropagatorId,
     pub(crate) notification_engine: &'a mut NotificationEngine,
     reification_literal: Option<Literal>,
+    pub(crate) rule_checkers: &'a mut RuleCheckerStore,
 }
 
 impl<'a> HasAssignments for PropagationContext<'a> {
@@ -112,6 +116,7 @@ impl<'a> PropagationContext<'a> {
         reason_store: &'a mut ReasonStore,
         notification_engine: &'a mut NotificationEngine,
         propagator_id: PropagatorId,
+        rule_checkers: &'a mut RuleCheckerStore,
     ) -> Self {
         PropagationContext {
             trailed_values,
@@ -120,7 +125,14 @@ impl<'a> PropagationContext<'a> {
             propagator_id,
             notification_engine,
             reification_literal: None,
+            rule_checkers,
         }
+    }
+
+    /// Remove the checkers of a constraint that the propagator deleted.
+    #[cfg(feature = "checkers")]
+    pub(crate) fn remove_rule_checkers(&mut self, rule_checkers: RemovableRuleCheckers) {
+        self.rule_checkers.remove(rule_checkers);
     }
 
     /// Register the propagator to be enqueued when the provided [`Predicate`] becomes true.
@@ -233,7 +245,36 @@ impl<'a> PropagationContext<'a> {
             propagator_id: self.propagator_id,
             notification_engine: self.notification_engine,
             reification_literal: self.reification_literal,
+            rule_checkers: self.rule_checkers,
         }
+    }
+}
+
+#[cfg(feature = "check-inferences")]
+impl PropagationContext<'_> {
+    /// Check a propagation with an eager reason when it is posted. A propagation with a lazy reason
+    /// is checked when conflict analysis computes its reason.
+    fn check_posted_inference(
+        assignments: &Assignments,
+        rule_checkers: &RuleCheckerStore,
+        consequent: Predicate,
+        reason: &StoredReason,
+        consequent_position: Option<usize>,
+    ) {
+        let StoredReason::Eager(premises, inference_code) = reason else {
+            return;
+        };
+
+        crate::checkers::check_inference(
+            assignments,
+            &rule_checkers.conflict_checkers,
+            crate::checkers::Inference {
+                premises: premises.as_slice(),
+                consequent: Some(consequent),
+                consequent_position,
+                inference_code: *inference_code,
+            },
+        );
     }
 }
 
@@ -260,19 +301,37 @@ impl PropagationContext<'_> {
         match modification_result {
             Ok(false) => Ok(()),
             Ok(true) => {
-                let _ = slot.populate(
-                    self.propagator_id,
-                    build_reason(reason, self.reification_literal),
+                let stored_reason = build_reason(reason, self.reification_literal);
+                #[cfg(feature = "check-inferences")]
+                Self::check_posted_inference(
+                    self.assignments,
+                    self.rule_checkers,
+                    predicate,
+                    &stored_reason,
+                    Some(self.assignments.num_trail_entries() - 1),
                 );
+
+                let _ = slot.populate(self.propagator_id, stored_reason);
                 Ok(())
             }
             Err(EmptyDomain) => {
-                let _ = slot.populate(
-                    self.propagator_id,
-                    build_reason(reason, self.reification_literal),
-                );
+                let stored_reason = build_reason(reason, self.reification_literal);
+                #[cfg(feature = "check-inferences")]
+                let checked_reason = stored_reason.clone();
+
+                let _ = slot.populate(self.propagator_id, stored_reason);
                 let (trigger_predicate, trigger_reason) =
                     self.assignments.remove_last_trail_element();
+
+                // Checked once the emptied domain is restored, in which the premises still hold.
+                #[cfg(feature = "check-inferences")]
+                Self::check_posted_inference(
+                    self.assignments,
+                    self.rule_checkers,
+                    predicate,
+                    &checked_reason,
+                    None,
+                );
 
                 Err(EmptyDomainConflict {
                     trigger_predicate,

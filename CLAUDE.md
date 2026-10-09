@@ -14,10 +14,10 @@ cargo build
 cargo build --release
 
 # Test (standard CI command)
-cargo test --release --no-fail-fast --features pumpkin-solver/check-propagations --features pumpkin-core/check-deductions
+cargo test --release --no-fail-fast --features pumpkin-solver/check-inferences --features pumpkin-core/check-deductions
 
 # Run a single test
-cargo test --release --features pumpkin-solver/check-propagations <test_name>
+cargo test --release --features pumpkin-solver/check-inferences <test_name>
 
 # Format (requires nightly)
 cargo +nightly fmt
@@ -71,9 +71,9 @@ The project is a Cargo workspace (edition 2024, resolver 2). Crates are grouped 
 ## Key Design Concepts
 
 - **Lazy Clause Generation (LCG)**: The solver operates on a hybrid SAT/CP model. CP propagators generate explanations (clauses/nogoods) on demand during conflict analysis.
-- **Proof Logging**: Every inference can be certified. The `core` crate threads proof-logging through propagators via a `Proof` type. The `check-propagations` feature enables runtime validation of propagator explanations during tests.
+- **Proof Logging**: Every inference can be certified. The `core` crate threads proof-logging through propagators via a `Proof` type. The `check-inferences` feature enables runtime validation of propagator explanations during tests.
 - **Propagator Interface**: Custom propagators implement the `Propagator` trait in `pumpkin-crates/core`. They must provide both `propagate` and `explain` methods for proof soundness.
-- **Feature Flags**: `pumpkin-solver/check-propagations` enables expensive correctness assertions — always enable this when running tests.
+- **Feature Flags**: `pumpkin-solver/check-inferences` enables expensive correctness assertions — always enable this when running tests.
 
 ## Code Style
 

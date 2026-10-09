@@ -95,7 +95,8 @@ fn finalize_proof_impl(
             if let Some(inference_code) = context.unit_nogood_inference_codes.get(&predicate) {
                 let _ = context.proof_log.log_inference(
                     &mut context.state.constraint_tags,
-                    inference_code.clone(),
+                    &context.state.inference_rules,
+                    *inference_code,
                     [],
                     Some(predicate),
                     &context.state.variable_names,

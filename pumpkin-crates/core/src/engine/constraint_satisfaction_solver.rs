@@ -270,7 +270,7 @@ impl ConstraintSatisfactionSolver {
 impl ConstraintSatisfactionSolver {
     pub fn new(solver_options: SatisfactionSolverOptions) -> Self {
         let mut state = State::default();
-        let handle = state.add_nogood_propagator(NogoodPropagatorConstructor::new(
+        let nogood_propagator = NogoodPropagatorConstructor::new(
             (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
             solver_options.learning_options,
             match solver_options.analysis_mode {
@@ -283,7 +283,8 @@ impl ConstraintSatisfactionSolver {
                 ConflictResolverType::NoLearning => PropagationMode::default(),
             },
             solver_options.learning_options.nogood_propagator_priority,
-        ));
+        );
+        let handle = state.add_nogood_propagator(nogood_propagator);
 
         ConstraintSatisfactionSolver {
             solver_state: CSPSolverState::default(),
@@ -538,6 +539,8 @@ impl ConstraintSatisfactionSolver {
         brancher: &mut impl Brancher,
         resolver: &mut impl ConflictResolver,
     ) -> CSPSolverExecutionFlag {
+        crate::checkers::report_runtime_checks();
+
         loop {
             if termination.should_stop() {
                 self.solver_state.declare_timeout();
@@ -633,6 +636,7 @@ impl ConstraintSatisfactionSolver {
             // Otherwise there are no more decisions to be made,
             // all predicates have been applied without a conflict,
             // meaning the problem is feasible.
+
             self.solver_state.declare_solution_found();
             return Err(CSPSolverExecutionFlag::Feasible);
         };
@@ -807,6 +811,7 @@ impl ConstraintSatisfactionSolver {
             let inference_premises = reason.iter().copied().chain(std::iter::once(!propagated));
             let _ = self.internal_parameters.proof_log.log_inference(
                 &mut self.state.constraint_tags,
+                &self.state.inference_rules,
                 inference_code,
                 inference_premises,
                 None,
@@ -851,7 +856,7 @@ impl ConstraintSatisfactionSolver {
             );
 
             if let Ok(constraint_tag) = constraint_tag {
-                let inference_code = InferenceCode::for_rule::<UnitNogoodRule>(constraint_tag);
+                let inference_code = self.state.rule_code::<UnitNogoodRule>(constraint_tag);
 
                 let _ = self
                     .unit_nogood_inference_codes
@@ -901,16 +906,13 @@ impl ConstraintSatisfactionSolver {
     fn add_nogood(&mut self, nogood: Vec<Predicate>, constraint_tag: ConstraintTag) {
         pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
 
-        let inference_code = if cfg!(feature = "check-propagations") {
-            self.state.add_rule_checker::<UnitNogoodRule>(
-                constraint_tag,
-                &NogoodDescription {
-                    nogood: nogood.clone().into(),
-                },
-            )
-        } else {
-            InferenceCode::for_rule::<UnitNogoodRule>(constraint_tag)
-        };
+        let rule_checkers = self.state.add_removable_rule_checkers::<UnitNogoodRule>(
+            constraint_tag,
+            NogoodDescription {
+                nogood: nogood.clone().into(),
+            },
+            self.nogood_propagator_handle.propagator_id(),
+        );
 
         let (nogood_propagator, mut context) = self
             .state
@@ -919,7 +921,7 @@ impl ConstraintSatisfactionSolver {
         let nogood_propagator =
             nogood_propagator.expect("Nogood propagator handle should refer to nogood propagator");
 
-        nogood_propagator.add_nogood(nogood, inference_code, &mut context);
+        nogood_propagator.add_nogood(nogood, rule_checkers, &mut context);
 
         #[allow(deprecated, reason = "Will be refactored")]
         self.state.enqueue_propagator(self.nogood_propagator_handle);
@@ -963,12 +965,14 @@ impl ConstraintSatisfactionSolver {
         if are_all_falsified_at_root {
             // Since the propagation is not actually performed, we log the inference
             // explicitly here for the proof.
+            let inference_code = self.state.rule_code::<UnitNogoodRule>(constraint_tag);
             let _ = self
                 .internal_parameters
                 .proof_log
                 .log_inference(
                     &mut self.state.constraint_tags,
-                    InferenceCode::for_rule::<UnitNogoodRule>(constraint_tag),
+                    &self.state.inference_rules,
+                    inference_code,
                     predicates.iter().copied(),
                     None,
                     &self.state.variable_names,

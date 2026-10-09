@@ -1,15 +1,32 @@
-use super::NogoodPropagator;
 use crate::conjunction;
-use crate::containers::StorageKey;
 use crate::engine::test_solver::TestSolver;
 use crate::predicate;
-use crate::proof::ConstraintTag;
-use crate::proof::InferenceCode;
+use crate::predicates::Predicate;
+use crate::propagators::nogoods::NogoodDescription;
+use crate::propagators::nogoods::UnitNogoodRule;
+
+/// Add `nogood` as the solver adds a nogood from the model, together with its checkers.
+fn add_nogood(solver: &mut TestSolver, nogood: Vec<Predicate>) {
+    let constraint_tag = solver.state.new_constraint_tag();
+    let rule_checkers = solver.state.add_removable_rule_checkers::<UnitNogoodRule>(
+        constraint_tag,
+        NogoodDescription {
+            nogood: nogood.clone().into(),
+        },
+        solver.nogood_handle.propagator_id(),
+    );
+
+    let (nogood_propagator, mut context) = solver
+        .state
+        .get_propagator_mut_with_context(solver.nogood_handle);
+    nogood_propagator
+        .expect("the handle refers to the nogood propagator")
+        .add_nogood(nogood, rule_checkers, &mut context);
+}
 
 #[test]
 fn ternary_nogood_propagate() {
     let mut solver = TestSolver::default();
-    let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
     let dummy = solver.new_variable(0, 1);
     let a = solver.new_variable(1, 3);
     let b = solver.new_variable(-4, 4);
@@ -20,14 +37,7 @@ fn ternary_nogood_propagate() {
     let _ = solver.increase_lower_bound_and_notify(id, dummy.id(), dummy, 1);
 
     let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
-    {
-        let (nogood_propagator, mut context) = solver
-            .state
-            .get_propagator_mut_with_context(solver.nogood_handle);
-        let nogood_propagator: &mut NogoodPropagator = nogood_propagator.unwrap();
-
-        nogood_propagator.add_nogood(nogood.into(), inference_code, &mut context);
-    }
+    add_nogood(&mut solver, nogood.into());
 
     let _ = solver.increase_lower_bound_and_notify(id, a.id(), a, 3);
     let _ = solver.increase_lower_bound_and_notify(id, b.id(), b, 0);
@@ -47,7 +57,6 @@ fn ternary_nogood_propagate() {
 #[test]
 fn unsat() {
     let mut solver = TestSolver::default();
-    let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
     let a = solver.new_variable(1, 3);
     let b = solver.new_variable(-4, 4);
     let c = solver.new_variable(-10, 20);
@@ -55,14 +64,7 @@ fn unsat() {
     let id = solver.nogood_handle.propagator_id();
 
     let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
-    {
-        let (nogood_propagator, mut context) = solver
-            .state
-            .get_propagator_mut_with_context(solver.nogood_handle);
-        let nogood_propagator: &mut NogoodPropagator = nogood_propagator.unwrap();
-
-        nogood_propagator.add_nogood(nogood.into(), inference_code, &mut context);
-    }
+    add_nogood(&mut solver, nogood.into());
 
     let _ = solver.increase_lower_bound_and_notify(id, a.id(), a, 3);
     let _ = solver.increase_lower_bound_and_notify(id, b.id(), b, 1);

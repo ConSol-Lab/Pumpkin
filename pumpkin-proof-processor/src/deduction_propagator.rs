@@ -179,7 +179,7 @@ impl Propagator for DeductionPropagator {
             DeductionPropagationMode::OnlyConflictDetection if num_unassigned_predicates == 0 => {
                 return Err(Conflict::Propagator(PropagatorConflict {
                     conjunction: self.nogood.iter().copied().collect(),
-                    inference_code: self.inference_code.clone(),
+                    inference_code: self.inference_code,
                 }));
             }
             DeductionPropagationMode::OnlyUnitPropagation if num_unassigned_predicates == 1 => {

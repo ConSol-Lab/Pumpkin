@@ -19,12 +19,19 @@ use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::ConflictRule;
 #[cfg(doc)]
+use crate::propagation::ConstraintDescription;
+#[cfg(doc)]
 use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
 use crate::propagation::EventsToRegister;
 use crate::variables::IntegerVariable;
 
 /// A propagator constructor creates a fully initialized instance of a [`Propagator`].
+///
+/// The constructor names the [`ConflictRule`] that the propagator implements and gives the
+/// [`ConstraintDescription`] of its constraint. The solver registers the rule for that
+/// description before the propagator is created, so the checkers of the rule are built from the
+/// same data as the propagator.
 ///
 /// The constructor is responsible for:
 /// 1) Indicating on which [`DomainEvent`]s the propagator should be enqueued (via the
@@ -34,7 +41,7 @@ pub trait PropagatorConstructor {
     /// The propagator that is produced by this constructor.
     type PropagatorImpl: Propagator + Clone;
 
-    /// The inference rule that the propagator implements.
+    /// The rule that the propagator implements.
     type Rule: ConflictRule;
 
     /// The description of the constraint that the propagator propagates.
@@ -45,8 +52,7 @@ pub trait PropagatorConstructor {
 
     /// Create the propagator instance from `Self`.
     ///
-    /// The inferences of the propagator use `inference_code`, which identifies the constraint and
-    /// the rule.
+    /// The `inference_code` identifies the inferences of the propagator with its rule.
     ///
     /// Returns a [`PropagatorWithEvents`] that contains the propagator instance and the events for
     /// which the propagator should be enqueued.

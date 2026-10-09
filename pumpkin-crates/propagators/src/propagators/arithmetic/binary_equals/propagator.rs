@@ -115,7 +115,7 @@ where
             // Note that we lift the conflict
             Some(PropagatorConflict {
                 conjunction: conjunction!([self.a <= b_lb - 1] & [self.b >= b_lb]),
-                inference_code: self.inference_code.clone(),
+                inference_code: self.inference_code,
             })
         } else if b_ub < a_lb {
             // If `b` is fully before `a` then we report a conflict
@@ -123,7 +123,7 @@ where
             // Note that we lift the conflict
             Some(PropagatorConflict {
                 conjunction: conjunction!([self.b <= a_lb - 1] & [self.a >= a_lb]),
-                inference_code: self.inference_code.clone(),
+                inference_code: self.inference_code,
             })
         } else {
             None
@@ -262,7 +262,7 @@ where
 
         LazyExplanation {
             predicates: slice::from_ref(&self.reason),
-            inference_code: self.inference_code.clone(),
+            inference_code: self.inference_code,
         }
     }
 }

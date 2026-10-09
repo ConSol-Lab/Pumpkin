@@ -37,7 +37,18 @@ getrandom = { version = "0.4.2", features = ["wasm_js"] }
 wasm-bindgen-test = "0.3"
 
 [features]
-check-propagations = []
+# Runtime checks, a debugging tool. They slow the solver down, which it reports when it starts
+# solving. `checkers` and `inference-checkers` are implied by the features below; they are not meant
+# to be enabled directly.
+checkers = []
+inference-checkers = ["checkers"]
+# Check every inference: eager explanations when they are posted, lazy explanations when conflict
+# analysis computes them, and the conflicts that propagators report.
+check-inferences = ["inference-checkers"]
+# Check only the inferences that conflict analysis uses, eager and lazy alike, as a proof checker
+# would. Cannot be combined with `check-inferences`.
+check-inferences-proof = ["inference-checkers"]
+# Check that every learned nogood follows from the inferences of the proof.
 check-deductions = []
 debug-checks = []
 clap = ["dep:clap"]

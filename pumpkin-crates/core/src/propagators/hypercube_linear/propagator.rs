@@ -136,7 +136,7 @@ impl HypercubeLinearPropagator {
 
             return Err(crate::state::Conflict::Propagator(PropagatorConflict {
                 conjunction,
-                inference_code: self.inference_code.clone(),
+                inference_code: self.inference_code,
             }));
         }
 

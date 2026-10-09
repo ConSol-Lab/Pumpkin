@@ -507,7 +507,7 @@ impl ProofProcessor {
                 inference_code,
             }) => {
                 let generated_by = inference_code.tag();
-                let label = inference_code.label();
+                let label = Arc::from(self.state.rule_name(inference_code));
 
                 inferences.push(Some(Inference {
                     constraint_id: self.state.new_constraint_tag().into(),
@@ -531,7 +531,7 @@ impl ProofProcessor {
 
                 if let Some(inference_code) = maybe_trigger_inference {
                     let generated_by = inference_code.tag();
-                    let label = inference_code.label();
+                    let label = Arc::from(self.state.rule_name(inference_code));
 
                     inferences.push(Some(Inference {
                         constraint_id: self.state.new_constraint_tag().into(),
@@ -628,9 +628,9 @@ impl ProofProcessor {
             // predicate. Those inferences do not need to be in the proof, so we only create an
             // inference for propagations by constraints.
             if let Some(inference_code) = inference_code {
-                self.mark_stack_entry(nogood_stack, inference_code.clone());
+                self.mark_stack_entry(nogood_stack, inference_code);
 
-                let label = inference_code.label();
+                let label = Arc::from(self.state.rule_name(inference_code));
                 inferences.push(Some(Inference {
                     constraint_id: self.state.new_constraint_tag().into(),
                     premises: convert_predicates_to_proof_atomic(&self.variables, &reason_buffer),
@@ -1105,7 +1105,7 @@ mod tests {
             if is_watched_satisfied && is_other_satisfied {
                 return Err(Conflict::Propagator(PropagatorConflict {
                     conjunction: [self.watched, self.other].into_iter().collect(),
-                    inference_code: self.inference_code.clone(),
+                    inference_code: self.inference_code,
                 }));
             }
 

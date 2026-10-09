@@ -17,7 +17,6 @@ use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::proof::InferenceLabel;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
 use crate::propagation::NotificationContext;
@@ -42,12 +41,13 @@ pub struct TestSolver {
 impl Default for TestSolver {
     fn default() -> Self {
         let mut state = State::default();
-        let handle = state.add_nogood_propagator(NogoodPropagatorConstructor::new(
+        let nogood_propagator = NogoodPropagatorConstructor::new(
             0,
             LearningOptions::default(),
             PropagationMode::UnitPropagation,
             crate::propagation::Priority::High,
-        ));
+        );
+        let handle = state.add_nogood_propagator(nogood_propagator);
         let mut solver = Self {
             state,
             constraint_tags: Default::default(),
@@ -64,7 +64,7 @@ impl TestSolver {
     pub fn accept_inferences_by(
         &mut self,
         constraint_tag: ConstraintTag,
-        inference_label: impl InferenceLabel,
+        rule_name: &'static str,
     ) -> InferenceCode {
         #[derive(Debug, Clone, Copy)]
         struct Checker;
@@ -80,8 +80,11 @@ impl TestSolver {
             }
         }
 
-        self.state
-            .add_conflict_checker(constraint_tag, inference_label, Checker)
+        let inference_code = self
+            .state
+            .inference_code_for_rule(constraint_tag, rule_name);
+        self.state.add_conflict_checker(inference_code, Checker);
+        inference_code
     }
 
     pub fn new_variable(&mut self, lb: i32, ub: i32) -> DomainId {
@@ -240,14 +243,26 @@ impl TestSolver {
     }
 
     pub fn propagate(&mut self, propagator: PropagatorId) -> Result<(), Conflict> {
+        let State {
+            propagators,
+            trailed_values,
+            assignments,
+            reason_store,
+            notification_engine,
+            rule_checkers,
+            ..
+        } = &mut self.state;
+
         let context = PropagationContext::new(
-            &mut self.state.trailed_values,
-            &mut self.state.assignments,
-            &mut self.state.reason_store,
-            &mut self.state.notification_engine,
+            trailed_values,
+            assignments,
+            reason_store,
+            notification_engine,
             propagator,
+            rule_checkers,
         );
-        self.state.propagators[propagator].propagate(context)
+
+        propagators[propagator].propagate(context)
     }
 
     pub fn propagate_until_fixed_point(
@@ -259,14 +274,26 @@ impl TestSolver {
         loop {
             {
                 // Specify the life-times to be able to retrieve the trail entries
+                let State {
+                    propagators,
+                    trailed_values,
+                    assignments,
+                    reason_store,
+                    notification_engine,
+                    rule_checkers,
+                    ..
+                } = &mut self.state;
+
                 let context = PropagationContext::new(
-                    &mut self.state.trailed_values,
-                    &mut self.state.assignments,
-                    &mut self.state.reason_store,
-                    &mut self.state.notification_engine,
+                    trailed_values,
+                    assignments,
+                    reason_store,
+                    notification_engine,
                     propagator,
+                    rule_checkers,
                 );
-                self.state.propagators[propagator].propagate(context)?;
+
+                propagators[propagator].propagate(context)?;
                 self.notify_propagator(propagator);
             }
             if self.state.assignments.num_trail_entries() == num_trail_entries {

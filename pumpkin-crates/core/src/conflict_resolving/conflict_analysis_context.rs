@@ -91,8 +91,12 @@ impl ConflictAnalysisContext<'_> {
     pub fn get_conflict_nogood(&mut self) -> Vec<Predicate> {
         let conflict_nogood = match self.solver_state.get_conflict_info() {
             StoredConflictInfo::Propagator(conflict) => {
+                #[cfg(feature = "check-inferences-proof")]
+                self.state.check_reported_conflict(&conflict);
+
                 let _ = self.proof_log.log_inference(
                     &mut self.state.constraint_tags,
+                    &self.state.inference_rules,
                     conflict.inference_code,
                     conflict.conjunction.iter().copied(),
                     None,
@@ -222,6 +226,7 @@ impl ConflictAnalysisContext<'_> {
             .proof_log
             .log_inference(
                 &mut self.state.constraint_tags,
+                &self.state.inference_rules,
                 inference_code,
                 premises,
                 consequent,
@@ -295,27 +300,21 @@ impl ConflictAnalysisContext<'_> {
 
         let constraint_tag = self.log_deduction(learned_nogood.predicates.iter().copied());
 
-        let inference_code = if cfg!(feature = "check-propagations") {
-            self.state.add_rule_checker::<UnitNogoodRule>(
-                constraint_tag,
-                &NogoodDescription {
-                    nogood: learned_nogood.predicates.clone().into(),
-                },
-            )
-        } else {
-            InferenceCode::for_rule::<UnitNogoodRule>(constraint_tag)
-        };
+        let rule_checkers = self.state.add_removable_rule_checkers::<UnitNogoodRule>(
+            constraint_tag,
+            NogoodDescription {
+                nogood: learned_nogood.predicates.clone().into(),
+            },
+            self.nogood_propagator_handle.propagator_id(),
+        );
 
         self.restore_to(learned_nogood.backtrack_level);
 
         if learned_nogood.len() == 1 {
             let _ = self
                 .unit_nogood_inference_codes
-                .insert(!learned_nogood[0], inference_code.clone());
+                .insert(!learned_nogood[0], rule_checkers.inference_code());
         }
-
-        #[cfg(feature = "check-propagations")]
-        let trail_len_before_nogood = self.state.trail_len();
 
         let (nogood_propagator, mut propagation_context) = self
             .state
@@ -325,12 +324,9 @@ impl ConflictAnalysisContext<'_> {
 
         nogood_propagator.add_asserting_nogood(
             learned_nogood.to_vec(),
-            inference_code,
+            rule_checkers,
             &mut propagation_context,
         );
-
-        #[cfg(feature = "check-propagations")]
-        self.state.check_propagations(trail_len_before_nogood);
 
         learned_nogood.backtrack_level
     }
@@ -386,7 +382,8 @@ impl ConflictAnalysisContext<'_> {
                 if let Some(unit_ic) = unit_ic {
                     let _ = proof_log.log_inference(
                         &mut state.constraint_tags,
-                        unit_ic.clone(),
+                        &state.inference_rules,
+                        *unit_ic,
                         [],
                         Some(predicate),
                         &state.variable_names,
@@ -396,7 +393,8 @@ impl ConflictAnalysisContext<'_> {
                     // Otherwise we log the inference which was used to derive the nogood
                     let _ = proof_log.log_inference(
                         &mut state.constraint_tags,
-                        ic.clone(),
+                        &state.inference_rules,
+                        *ic,
                         reason_buffer.as_ref().iter().copied(),
                         Some(predicate),
                         &state.variable_names,
@@ -407,7 +405,8 @@ impl ConflictAnalysisContext<'_> {
                 // Otherwise we log the inference which was used to derive the nogood
                 let _ = proof_log.log_inference(
                     &mut state.constraint_tags,
-                    ic.clone(),
+                    &state.inference_rules,
+                    *ic,
                     reason_buffer.as_ref().iter().copied(),
                     Some(predicate),
                     &state.variable_names,
@@ -428,8 +427,11 @@ impl ConflictAnalysisContext<'_> {
         // Look up the reason for the bound that changed.
         // The reason for changing the bound cannot be a decision, so we can safely unwrap.
         let mut empty_domain_reason: Vec<Predicate> = vec![];
+        let trigger_reason = conflict.trigger_reason.expect(
+            "in conflict analysis the empty domain conflict is always triggered by a propagation",
+        );
         let trigger_inference_code = self.state.reason_store.get_or_compute(
-            conflict.trigger_reason.expect("in conflict analysis the empty domain conflict is always triggered by a propagation"),
+            trigger_reason,
             ExplanationContext::without_working_nogood(
                 &self.state.assignments,
                 self.state.assignments.num_trail_entries(), // Note that we do not do a
@@ -441,9 +443,22 @@ impl ConflictAnalysisContext<'_> {
             &mut empty_domain_reason,
         );
 
+        // The trigger predicate empties the domain, so it is not applied.
+        #[cfg(feature = "inference-checkers")]
+        self.state.check_explained_inference(
+            trigger_reason,
+            crate::checkers::Inference {
+                premises: &empty_domain_reason,
+                consequent: Some(conflict.trigger_predicate),
+                consequent_position: None,
+                inference_code: trigger_inference_code,
+            },
+        );
+
         // We also need to log this last propagation to the proof log as an inference.
         let _ = self.proof_log.log_inference(
             &mut self.state.constraint_tags,
+            &self.state.inference_rules,
             trigger_inference_code,
             empty_domain_reason.iter().copied(),
             Some(conflict.trigger_predicate),

@@ -1,6 +1,5 @@
 use bitfield_struct::bitfield;
 use pumpkin_core::conjunction;
-use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::InferenceCode;
@@ -13,8 +12,6 @@ use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Reason;
-
-declare_inference_label!(pub(super) Element);
 
 /// Arc-consistent propagator for constraint `element([x_1, \ldots, x_n], i, e)`, where `x_j` are
 ///  variables, `i` is an integer variable, and `e` is a variable, which holds iff `x_i = e`
@@ -80,7 +77,7 @@ where
 
         LazyExplanation {
             predicates: self.rhs_reason_buffer.as_slice(),
-            inference_code: self.inference_code.clone(),
+            inference_code: self.inference_code,
         }
     }
 }

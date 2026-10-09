@@ -14,6 +14,7 @@ pub use trailed::*;
 mod tests {
     use assignments::Assignments;
 
+    use crate::checkers::RuleCheckerStore;
     use crate::conjunction;
     use crate::containers::StorageKey;
     use crate::engine::TrailedValues;
@@ -36,19 +37,24 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut notification_engine = NotificationEngine::default();
+            let mut rule_checkers = RuleCheckerStore::default();
             let mut context = PropagationContext::new(
                 &mut trailed_values,
                 &mut assignments,
                 &mut reason_store,
                 &mut notification_engine,
                 PropagatorId(0),
+                &mut rule_checkers,
             );
 
             let result = context.post(
                 predicate![domain >= 2],
                 (
                     conjunction!(),
-                    &InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
+                    &InferenceCode::new(
+                        ConstraintTag::create_from_index(0),
+                        crate::proof::InferenceRules::default().id("test_rule"),
+                    ),
                 ),
             );
             assert!(result.is_ok());
@@ -67,19 +73,24 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut notification_engine = NotificationEngine::default();
+            let mut rule_checkers = RuleCheckerStore::default();
             let mut context = PropagationContext::new(
                 &mut trailed_values,
                 &mut assignments,
                 &mut reason_store,
                 &mut notification_engine,
                 PropagatorId(0),
+                &mut rule_checkers,
             );
 
             let result = context.post(
                 predicate![domain <= 15],
                 (
                     conjunction!(),
-                    &InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
+                    &InferenceCode::new(
+                        ConstraintTag::create_from_index(0),
+                        crate::proof::InferenceRules::default().id("test_rule"),
+                    ),
                 ),
             );
             assert!(result.is_ok());
@@ -98,19 +109,24 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut notification_engine = NotificationEngine::default();
+            let mut rule_checkers = RuleCheckerStore::default();
             let mut context = PropagationContext::new(
                 &mut trailed_values,
                 &mut assignments,
                 &mut reason_store,
                 &mut notification_engine,
                 PropagatorId(0),
+                &mut rule_checkers,
             );
 
             let result = context.post(
                 predicate![domain != 15],
                 (
                     conjunction!(),
-                    &InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
+                    &InferenceCode::new(
+                        ConstraintTag::create_from_index(0),
+                        crate::proof::InferenceRules::default().id("test_rule"),
+                    ),
                 ),
             );
             assert!(result.is_ok());

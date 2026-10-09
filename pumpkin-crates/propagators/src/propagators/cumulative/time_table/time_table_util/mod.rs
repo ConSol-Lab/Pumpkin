@@ -252,10 +252,8 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     // We create the structure responsible for propagations and explanations
-    let mut propagation_handler = CumulativePropagationHandler::new(
-        parameters.options.explanation_type,
-        inference_code.clone(),
-    );
+    let mut propagation_handler =
+        CumulativePropagationHandler::new(parameters.options.explanation_type, *inference_code);
 
     // Then we go over all of the profiles in the time-table
     'profile_loop: for profile in time_table {
@@ -379,10 +377,8 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
     }
 
     // We create the structure responsible for propagations and explanations
-    let mut propagation_handler = CumulativePropagationHandler::new(
-        parameters.options.explanation_type,
-        inference_code.clone(),
-    );
+    let mut propagation_handler =
+        CumulativePropagationHandler::new(parameters.options.explanation_type, *inference_code);
 
     // Then we go over all the possible tasks
     for task in updatable_structures.get_unfixed_tasks() {

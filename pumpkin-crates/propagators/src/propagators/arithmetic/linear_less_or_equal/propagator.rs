@@ -45,7 +45,7 @@ where
                 .iter()
                 .map(|var| predicate![var >= context.lower_bound(var)])
                 .collect(),
-            inference_code: self.inference_code.clone(),
+            inference_code: self.inference_code,
         }
     }
 }
@@ -115,7 +115,7 @@ where
 
         LazyExplanation {
             predicates: self.reason_buffer.as_slice(),
-            inference_code: self.inference_code.clone(),
+            inference_code: self.inference_code,
         }
     }
 
