@@ -2,12 +2,14 @@ use crate::AtomicConstraint;
 use crate::IntExt;
 #[cfg(doc)]
 use crate::VariableState;
+#[cfg(doc)]
+use crate::checkers::RetentionChecker;
 
 /// A read-only view of the domains of variables.
 ///
-/// The [`VariableState`] built for a conflict check is a view, and so are the domains of a
-/// solver, so code that reads domains, such as a check whether a constraint is satisfied, works on
-/// both without copying them.
+/// A [`RetentionChecker`] reads the domains through this view, so that it can check the domains of
+/// the solver without copying them. The [`VariableState`] built for an inference check is also a
+/// view.
 pub trait DomainView<Atomic: AtomicConstraint> {
     fn lower_bound(&self, identifier: &Atomic::Identifier) -> IntExt;
 
