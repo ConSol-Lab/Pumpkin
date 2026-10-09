@@ -744,7 +744,7 @@ mod tests {
     use drcp_format::IntComparison::*;
     use drcp_format::reader::ReadAtomic;
     use drcp_format::reader::ReadStep;
-    use pumpkin_checking::InferenceChecker;
+    use pumpkin_checking::ConflictChecker;
     use pumpkin_checking::VariableState;
     use pumpkin_core::declare_inference_label;
     use pumpkin_core::propagation::EventsToRegister;
@@ -992,7 +992,7 @@ mod tests {
             let _ = context.register_predicate(watched);
 
             let mut checkers = RuntimeCheckers::builder();
-            let inference_code = checkers.add_inference_checker(
+            let inference_code = checkers.add_conflict_checker(
                 constraint_tag,
                 AlwaysConflict,
                 AlwaysConflictChecker { watched, other },
@@ -1016,7 +1016,7 @@ mod tests {
         other: Predicate,
     }
 
-    impl InferenceChecker<Predicate> for AlwaysConflictChecker {
+    impl ConflictChecker<Predicate> for AlwaysConflictChecker {
         fn check(
             &self,
             state: VariableState<Predicate>,
