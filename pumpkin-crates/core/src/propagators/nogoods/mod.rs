@@ -15,3 +15,6 @@ pub(crate) use nogood_info::*;
 pub(crate) use nogood_propagator::*;
 pub(crate) use propagation_buffer::*;
 pub use propagation_mode::*;
+
+#[cfg(test)]
+mod tests;
