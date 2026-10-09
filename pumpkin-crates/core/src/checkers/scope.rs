@@ -72,6 +72,24 @@ impl<Item: ScopeItem> ScopeItem for Vec<Item> {
 /// holds variables can be left out of the scope. Every field has to implement [`ScopeItem`].
 /// The purpose of the macro is to make it harder to make mistakes,
 /// e.g., forgetting to add a variable to the scope.
+///
+/// # Example
+/// ```
+/// use pumpkin_core::variables::DomainId;
+///
+/// pumpkin_core::scoped_struct! {
+///     /// The description of the constraint `x + y <= bound`.
+///     #[derive(Clone, Debug)]
+///     pub struct SumDescription {
+///         pub x: DomainId,
+///         pub y: DomainId,
+///         pub bound: i32,
+///     }
+/// }
+/// ```
+///
+/// The scope of a `SumDescription` holds the domains of `x` and `y`; the constant `bound` adds
+/// nothing.
 #[macro_export]
 macro_rules! scoped_struct {
     (

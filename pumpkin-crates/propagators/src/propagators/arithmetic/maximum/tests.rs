@@ -2,12 +2,15 @@ use pumpkin_core::conjunction;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
+use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::CurrentNogood;
+use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::state::State;
 
 use super::MaximumArgs;
 use super::MaximumDescription;
 use crate::StateExt;
+use crate::fixed_domains;
 
 #[test]
 fn upper_bound_of_rhs_matches_maximum_upper_bound_of_array_at_initialise() {
@@ -129,4 +132,18 @@ fn single_variable_propagate() {
 
     state.assert_bounds(*array.last().unwrap(), 45, 51);
     state.assert_bounds(rhs, 45, 51);
+}
+
+#[test]
+fn maximum_has_to_equal_an_element() {
+    let (variables, domains) = fixed_domains(&[1, 3, 2]);
+    let description = MaximumDescription {
+        array: Box::from([variables[0], variables[1]]),
+        rhs: variables[2],
+    };
+
+    assert_eq!(
+        description.check_solution(&domains),
+        SolutionCheck::ConstraintViolated
+    );
 }

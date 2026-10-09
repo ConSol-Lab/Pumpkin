@@ -13,7 +13,9 @@ pub trait DomainView<Atomic: AtomicConstraint> {
     /// The values within the bounds of the variable that are not in its domain.
     fn holes<'a>(&'a self, identifier: &Atomic::Identifier) -> Box<dyn Iterator<Item = i32> + 'a>;
 
-    /// Whether the atomic constraint holds in every value of the domains.
+    /// Whether the atomic constraint is implied by the domains: it holds for every value left in
+    /// the domain of its variable, for example `[x >= 3]` when the lower bound of `x` is at least
+    /// 3.
     fn is_true(&self, atomic: &Atomic) -> bool;
 
     fn fixed_value(&self, identifier: &Atomic::Identifier) -> Option<i32> {

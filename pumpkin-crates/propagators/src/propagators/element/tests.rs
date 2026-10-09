@@ -5,13 +5,16 @@ use pumpkin_core::conjunction;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
+use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::CurrentNogood;
+use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::state::State;
 
 use super::ElementArgs;
 use super::ElementChecker;
 use super::ElementDescription;
 use crate::StateExt;
+use crate::fixed_domains;
 
 #[test]
 fn elements_from_array_with_disjoint_domains_to_rhs_are_filtered_from_index() {
@@ -231,4 +234,34 @@ fn holes_outside_union_bounds_are_ignored() {
     let checker = ElementChecker::new(vec!["x1", "x2"].into(), "x3", "x4");
 
     assert!(checker.check(state, &premises, consequent.as_ref()));
+}
+
+#[test]
+fn element_with_an_index_outside_the_array_is_a_violation() {
+    let (variables, domains) = fixed_domains(&[1, 2, 2, 2]);
+    let description = ElementDescription {
+        array: Box::from([variables[0], variables[1]]),
+        index: variables[2],
+        rhs: variables[3],
+    };
+
+    assert_eq!(
+        description.check_solution(&domains),
+        SolutionCheck::ConstraintViolated
+    );
+}
+
+#[test]
+fn element_selects_by_an_index_starting_at_zero() {
+    let (variables, domains) = fixed_domains(&[5, 7, 1, 7]);
+    let description = ElementDescription {
+        array: Box::from([variables[0], variables[1]]),
+        index: variables[2],
+        rhs: variables[3],
+    };
+
+    assert_eq!(
+        description.check_solution(&domains),
+        SolutionCheck::ConstraintSatisfied
+    );
 }
