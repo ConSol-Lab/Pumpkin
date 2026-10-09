@@ -1,0 +1,225 @@
+#![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
+
+//! The solver writes a scaffold, headed by its preamble, for a model with `--proof-format croc`,
+//! and the processor, given only the model and the scaffold, turns it into a proof in the block
+//! format, as resolution chains and as refutations. When the environment variable `CROC_CHECK`
+//! names the fzn-croc-check binary, the proofs are checked.
+
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::Stdio;
+use std::sync::OnceLock;
+
+macro_rules! process_model {
+    ($name:ident, $model:literal, $conclusion:expr $(, $flag:literal)*) => {
+        #[test]
+        fn $name() {
+            run_pipeline(stringify!($name), $model, $conclusion, &[$($flag),*]);
+        }
+    };
+}
+
+// Sparse domains and an all-different, unsatisfiable.
+process_model!(sparse_all_different, "sparse_all_different", "c UNSAT");
+
+// A table with its decomposition line, a reified inequality, a clause and an element, minimised.
+process_model!(
+    table_reified_element,
+    "table_reified_element",
+    "c LOWER_BOUND 1"
+);
+process_model!(
+    table_reified_element_declared,
+    "table_reified_element",
+    "c LOWER_BOUND 1",
+    "--declare-replacements",
+    "--literal-predicates"
+);
+
+// Multiplication, absolute value and an unbounded integer, unsatisfiable.
+process_model!(times_abs_unbounded, "times_abs_unbounded", "c UNSAT");
+
+// Views of every kind (a definition, a two-term equality, bool2int, a parameter), a fixed
+// variable and two booleans that reify comparisons with a constant, maximised.
+process_model!(
+    views_literals_constants,
+    "views_literals_constants",
+    "c UPPER_BOUND 28"
+);
+process_model!(
+    views_literals_constants_declared,
+    "views_literals_constants",
+    "c UPPER_BOUND 28",
+    "--declare-replacements",
+    "--literal-predicates"
+);
+process_model!(
+    views_literals_constants_literals,
+    "views_literals_constants",
+    "c UPPER_BOUND 28",
+    "--literal-predicates"
+);
+
+// An objective that the view pass makes a view of another variable.
+process_model!(objective_view, "objective_view", "c UPPER_BOUND 28");
+// Two definitions under declared replacements: the head numbers both before the first
+// declaration, as the checker requires.
+process_model!(
+    objective_view_declared,
+    "objective_view",
+    "c UPPER_BOUND 28",
+    "--declare-replacements",
+    "--literal-predicates"
+);
+
+// The scaffold read from a pipe while the solver writes it.
+#[cfg(unix)]
+#[test]
+fn objective_view_through_a_pipe() {
+    let model_path = format!(
+        "{}/../pumpkin-solver/tests/croc_models/objective_view.fzn",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let directory = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("process_models");
+    std::fs::create_dir_all(&directory).expect("can create the output directory");
+    let pipe_path = directory.join("objective_view_through_a_pipe.scaffold");
+    let _ = std::fs::remove_file(&pipe_path);
+    let made = Command::new("mkfifo").arg(&pipe_path).status().unwrap();
+    assert!(made.success(), "mkfifo makes the pipe");
+
+    let mut solver_process = Command::new(solver())
+        .arg("--proof-path")
+        .arg(&pipe_path)
+        .args(["--proof-format", "croc"])
+        .arg(&model_path)
+        .stdout(Stdio::null())
+        .spawn()
+        .unwrap();
+
+    let _ = process_and_check(
+        "objective_view_through_a_pipe",
+        &model_path,
+        &pipe_path,
+        "refutation",
+        "c UPPER_BOUND 28",
+        &[],
+    );
+
+    assert!(solver_process.wait().unwrap().success());
+    std::fs::remove_file(&pipe_path).expect("the pipe is removed");
+}
+
+/// The solver binary, built once for all tests.
+fn solver() -> &'static Path {
+    static SOLVER: OnceLock<PathBuf> = OnceLock::new();
+    SOLVER.get_or_init(|| {
+        escargot::CargoBuild::new()
+            .package("pumpkin-solver")
+            .bin("pumpkin-solver")
+            .current_target()
+            .current_release()
+            .run()
+            .expect("the solver builds")
+            .path()
+            .to_path_buf()
+    })
+}
+
+fn run_pipeline(name: &str, model: &str, conclusion: &str, solver_flags: &[&str]) {
+    let (model_path, scaffold_path) = solve(name, model, solver_flags);
+    for derivation in ["resolution", "refutation"] {
+        let _ = process_and_check(
+            name,
+            &model_path,
+            &scaffold_path,
+            derivation,
+            conclusion,
+            &[],
+        );
+    }
+}
+
+/// Solve the model with croc proof logging; returns the paths of the model and the scaffold.
+fn solve(name: &str, model: &str, solver_flags: &[&str]) -> (String, PathBuf) {
+    let model_path = format!(
+        "{}/../pumpkin-solver/tests/croc_models/{model}.fzn",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let directory = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("process_models");
+    std::fs::create_dir_all(&directory).expect("can create the output directory");
+    let scaffold_path = directory.join(format!("{name}.scaffold.drcp"));
+
+    let solver_output = Command::new(solver())
+        .arg("--proof-path")
+        .arg(&scaffold_path)
+        .arg("--proof-format")
+        .arg("croc")
+        .args(solver_flags)
+        .arg(&model_path)
+        .output()
+        .unwrap();
+    assert!(solver_output.status.success());
+    (model_path, scaffold_path)
+}
+
+/// Process the scaffold into a proof in the block format that derives each nogood as
+/// `derivation` says, and check that the proof ends with the conclusion and, when a checker is
+/// given, that it checks. Returns what the processor printed and the proof.
+fn process_and_check(
+    name: &str,
+    model_path: &str,
+    scaffold_path: &Path,
+    derivation: &str,
+    conclusion: &str,
+    processor_flags: &[&str],
+) -> (String, String) {
+    let directory = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("process_models");
+    let proof_path = directory.join(format!("{name}.{derivation}.croc"));
+
+    let processor_output = Command::new(env!("CARGO_BIN_EXE_pumpkin-proof-processor"))
+        .args(["--format", "blocks", "--proof-encoding", "text"])
+        .args(["--nogood-derivation", derivation])
+        .args(processor_flags)
+        .arg(model_path)
+        .arg(scaffold_path)
+        .arg(&proof_path)
+        .output()
+        .unwrap();
+    assert!(
+        processor_output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&processor_output.stdout),
+        String::from_utf8_lossy(&processor_output.stderr)
+    );
+
+    let proof = std::fs::read_to_string(&proof_path).expect("the proof is written as text");
+    assert!(
+        proof.lines().any(|line| line == conclusion),
+        "the {derivation} proof does not conclude {conclusion}"
+    );
+
+    check_if_checker_given(model_path, &proof_path);
+    (
+        String::from_utf8_lossy(&processor_output.stdout).into_owned(),
+        proof,
+    )
+}
+
+fn check_if_checker_given(model_path: &str, proof_path: &Path) {
+    let Some(checker) = std::env::var_os("CROC_CHECK") else {
+        return;
+    };
+
+    let output = Command::new(checker)
+        .arg(model_path)
+        .arg(proof_path)
+        .output()
+        .expect("CROC_CHECK names a binary that runs");
+    let verdict = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        verdict.lines().any(|line| line == "VERIFIED"),
+        "the checker does not verify {}:\n{verdict}",
+        proof_path.display()
+    );
+}

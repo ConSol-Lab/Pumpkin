@@ -1038,12 +1038,12 @@ dependencies = [
  "env_logger",
  "escargot",
  "flate2",
- "fzn-rs",
  "log",
  "pumpkin-checker",
  "pumpkin-checking",
  "pumpkin-core",
  "pumpkin-propagators",
+ "pumpkin-solver",
  "regex",
  "thiserror",
 ]
