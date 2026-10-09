@@ -8,9 +8,9 @@ use crate::Union;
 
 #[derive(Clone, Debug)]
 pub struct ElementChecker<VX, VI, VE> {
-    array: Box<[VX]>,
-    index: VI,
-    rhs: VE,
+    pub array: Box<[VX]>,
+    pub index: VI,
+    pub rhs: VE,
 
     union: RefCell<Union>,
 }

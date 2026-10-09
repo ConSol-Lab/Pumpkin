@@ -1,6 +1,7 @@
+use pumpkin_checking::ConflictCheck;
 use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::VariableState;
-use pumpkin_checking::checkers::LinearLessOrEqualConflictChecker;
+use pumpkin_checking::checkers::LinearLessOrEqualChecker;
 
 use crate::inferences::Fact;
 use crate::inferences::InvalidInference;
@@ -52,9 +53,11 @@ fn verify_linear_inference(
     fact: &Fact,
     state: VariableState<Atomic>,
 ) -> Result<(), InvalidInference> {
-    let checker = LinearLessOrEqualConflictChecker::new(linear.terms.clone().into(), linear.bound);
+    let checker = LinearLessOrEqualChecker::new(linear.terms.clone().into(), linear.bound);
 
-    if checker.check(state, &fact.premises, fact.consequent.as_ref()) {
+    if checker.check(&state, &fact.premises, fact.consequent.as_ref())
+        == ConflictCheck::ConflictDetected
+    {
         Ok(())
     } else {
         Err(InvalidInference::Unsound)

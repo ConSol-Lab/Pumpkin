@@ -1,8 +1,10 @@
 use super::IntegerDivisionChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::ConflictCheck;
 use crate::ConflictChecker;
 use crate::IntExt;
+use crate::VariableState;
 
 impl<VA, VB, VC, Atomic> ConflictChecker<Atomic> for IntegerDivisionChecker<VA, VB, VC>
 where
@@ -13,19 +15,19 @@ where
 {
     fn check(
         &self,
-        state: crate::VariableState<Atomic>,
+        state: &VariableState<Atomic>,
         _premises: &[Atomic],
         _consequent: Option<&Atomic>,
-    ) -> bool {
+    ) -> ConflictCheck {
         // We apply interval arithmetic to determine that the computed interval `a div b`
         // does not intersect with the domain of `c`.
         //
         // See https://en.wikipedia.org/wiki/Interval_arithmetic#Interval_operators.
 
-        let x1 = self.numerator.induced_lower_bound(&state);
-        let x2 = self.numerator.induced_upper_bound(&state);
-        let y1 = self.denominator.induced_lower_bound(&state);
-        let y2 = self.denominator.induced_upper_bound(&state);
+        let x1 = self.numerator.induced_lower_bound(state);
+        let x2 = self.numerator.induced_upper_bound(state);
+        let y1 = self.denominator.induced_lower_bound(state);
+        let y2 = self.denominator.induced_upper_bound(state);
 
         assert!(
             y2 < 0 || y1 > 0,
@@ -54,9 +56,13 @@ where
         .max()
         .expect("Expected at least one element to be defined");
 
-        let c_lower = self.rhs.induced_lower_bound(&state);
-        let c_upper = self.rhs.induced_upper_bound(&state);
+        let c_lower = self.rhs.induced_lower_bound(state);
+        let c_upper = self.rhs.induced_upper_bound(state);
 
-        computed_c_upper < c_lower || computed_c_lower > c_upper
+        if computed_c_upper < c_lower || computed_c_lower > c_upper {
+            ConflictCheck::ConflictDetected
+        } else {
+            ConflictCheck::NoConflictDetected
+        }
     }
 }

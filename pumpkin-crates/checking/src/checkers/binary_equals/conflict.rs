@@ -1,21 +1,26 @@
 use super::BinaryEqualsChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::ConflictCheck;
 use crate::ConflictChecker;
 use crate::IntExt;
+use crate::VariableState;
 
 impl<Lhs, Rhs, Atomic> ConflictChecker<Atomic> for BinaryEqualsChecker<Lhs, Rhs>
 where
     Atomic: AtomicConstraint,
     Lhs: CheckerVariable<Atomic>,
     Rhs: CheckerVariable<Atomic>,
+    Atomic::Identifier: Clone,
 {
     fn check(
         &self,
-        mut state: crate::VariableState<Atomic>,
+        state: &VariableState<Atomic>,
         _: &[Atomic],
         _: Option<&Atomic>,
-    ) -> bool {
+    ) -> ConflictCheck {
+        let mut state = state.clone();
+
         // We apply the domain of variable 2 to variable 1. If the state remains consistent, then
         // the step is unsound!
         let mut consistent = true;
@@ -35,6 +40,10 @@ where
             consistent &= state.apply(&atomic);
         }
 
-        !consistent
+        if consistent {
+            ConflictCheck::NoConflictDetected
+        } else {
+            ConflictCheck::ConflictDetected
+        }
     }
 }

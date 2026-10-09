@@ -1,42 +1,44 @@
-use super::DisjunctiveCheckerTask;
-use super::*;
+use crate::Comparison;
+use crate::ConflictCheck;
 use crate::ConflictChecker;
 use crate::TestAtomic;
 use crate::VariableState;
+use crate::checkers::DisjunctiveCheckerTask;
+use crate::checkers::DisjunctiveEdgeFindingChecker;
 
 #[test]
 fn test_simple_propagation() {
     let premises = [
         TestAtomic {
             name: "x1",
-            comparison: crate::Comparison::GreaterEqual,
+            comparison: Comparison::GreaterEqual,
             value: 0,
         },
         TestAtomic {
             name: "x1",
-            comparison: crate::Comparison::LessEqual,
+            comparison: Comparison::LessEqual,
             value: 7,
         },
         TestAtomic {
             name: "x2",
-            comparison: crate::Comparison::GreaterEqual,
+            comparison: Comparison::GreaterEqual,
             value: 5,
         },
         TestAtomic {
             name: "x2",
-            comparison: crate::Comparison::LessEqual,
+            comparison: Comparison::LessEqual,
             value: 6,
         },
         TestAtomic {
             name: "x3",
-            comparison: crate::Comparison::GreaterEqual,
+            comparison: Comparison::GreaterEqual,
             value: 0,
         },
     ];
 
     let consequent = Some(TestAtomic {
         name: "x3",
-        comparison: crate::Comparison::GreaterEqual,
+        comparison: Comparison::GreaterEqual,
         value: 8,
     });
     let state = VariableState::prepare_for_conflict_check(premises, consequent)
@@ -60,7 +62,10 @@ fn test_simple_propagation() {
         .into(),
     };
 
-    assert!(checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(&state, &premises, consequent.as_ref()),
+        ConflictCheck::ConflictDetected
+    );
 }
 
 #[test]
@@ -68,22 +73,22 @@ fn test_conflict() {
     let premises = [
         TestAtomic {
             name: "x1",
-            comparison: crate::Comparison::GreaterEqual,
+            comparison: Comparison::GreaterEqual,
             value: 0,
         },
         TestAtomic {
             name: "x1",
-            comparison: crate::Comparison::LessEqual,
+            comparison: Comparison::LessEqual,
             value: 1,
         },
         TestAtomic {
             name: "x2",
-            comparison: crate::Comparison::GreaterEqual,
+            comparison: Comparison::GreaterEqual,
             value: 0,
         },
         TestAtomic {
             name: "x2",
-            comparison: crate::Comparison::LessEqual,
+            comparison: Comparison::LessEqual,
             value: 1,
         },
     ];
@@ -105,7 +110,10 @@ fn test_conflict() {
         .into(),
     };
 
-    assert!(checker.check(state, &premises, None));
+    assert_eq!(
+        checker.check(&state, &premises, None),
+        ConflictCheck::ConflictDetected
+    );
 }
 
 #[test]
@@ -113,34 +121,34 @@ fn test_simple_propagation_not_accepted() {
     let premises = [
         TestAtomic {
             name: "x1",
-            comparison: crate::Comparison::GreaterEqual,
+            comparison: Comparison::GreaterEqual,
             value: 0,
         },
         TestAtomic {
             name: "x1",
-            comparison: crate::Comparison::LessEqual,
+            comparison: Comparison::LessEqual,
             value: 7,
         },
         TestAtomic {
             name: "x2",
-            comparison: crate::Comparison::GreaterEqual,
+            comparison: Comparison::GreaterEqual,
             value: 5,
         },
         TestAtomic {
             name: "x2",
-            comparison: crate::Comparison::LessEqual,
+            comparison: Comparison::LessEqual,
             value: 6,
         },
         TestAtomic {
             name: "x3",
-            comparison: crate::Comparison::GreaterEqual,
+            comparison: Comparison::GreaterEqual,
             value: 0,
         },
     ];
 
     let consequent = Some(TestAtomic {
         name: "x3",
-        comparison: crate::Comparison::GreaterEqual,
+        comparison: Comparison::GreaterEqual,
         value: 9,
     });
     let state = VariableState::prepare_for_conflict_check(premises, consequent)
@@ -164,7 +172,10 @@ fn test_simple_propagation_not_accepted() {
         .into(),
     };
 
-    assert!(!checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(&state, &premises, consequent.as_ref()),
+        ConflictCheck::NoConflictDetected
+    );
 }
 
 #[test]
@@ -172,22 +183,22 @@ fn test_conflict_not_accepted() {
     let premises = [
         TestAtomic {
             name: "x1",
-            comparison: crate::Comparison::GreaterEqual,
+            comparison: Comparison::GreaterEqual,
             value: 0,
         },
         TestAtomic {
             name: "x1",
-            comparison: crate::Comparison::LessEqual,
+            comparison: Comparison::LessEqual,
             value: 1,
         },
         TestAtomic {
             name: "x2",
-            comparison: crate::Comparison::GreaterEqual,
+            comparison: Comparison::GreaterEqual,
             value: 0,
         },
         TestAtomic {
             name: "x2",
-            comparison: crate::Comparison::LessEqual,
+            comparison: Comparison::LessEqual,
             value: 2,
         },
     ];
@@ -209,5 +220,8 @@ fn test_conflict_not_accepted() {
         .into(),
     };
 
-    assert!(!checker.check(state, &premises, None));
+    assert_eq!(
+        checker.check(&state, &premises, None),
+        ConflictCheck::NoConflictDetected
+    );
 }
