@@ -1,4 +1,10 @@
-//! The conflict checkers of the constraints.
+//! The checkers of the inference rules.
+//!
+//! Each constraint has a folder holding the checker of its rule: the type in `mod.rs` and the
+//! [`ConflictChecker`] implementation in `conflict.rs`.
+
+mod conflict_checker;
+mod deduction_checker;
 
 mod absolute_value;
 mod binary_equals;
@@ -18,7 +24,9 @@ mod reified;
 pub use absolute_value::*;
 pub use binary_equals::*;
 pub use binary_not_equals::*;
+pub use conflict_checker::*;
 pub use cumulative::*;
+pub use deduction_checker::*;
 pub use disjunctive::*;
 pub use element::*;
 pub use hypercube_linear::*;

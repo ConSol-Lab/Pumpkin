@@ -1,5 +1,9 @@
-use super::*;
+use crate::Comparison;
+use crate::ConflictCheck;
 use crate::ConflictChecker;
+use crate::TestAtomic;
+use crate::VariableState;
+use crate::checkers::IntegerMultiplicationChecker;
 
 #[test]
 fn checker_detects_a_pure_conflict_with_no_consequent() {
@@ -7,9 +11,6 @@ fn checker_detects_a_pure_conflict_with_no_consequent() {
     // that isn't a single propagated predicate (see `VariableState::prepare_for_conflict_check`
     // and `State::check_conflict`). The checker must not just reject these outright: it needs
     // to confirm the premises alone are already contradictory.
-    use crate::Comparison;
-    use crate::TestAtomic;
-    use crate::VariableState;
 
     let premises = [
         TestAtomic {
@@ -39,15 +40,14 @@ fn checker_detects_a_pure_conflict_with_no_consequent() {
     };
 
     // 3 * 4 = 12 != 10, so this is a genuine conflict.
-    assert!(checker.check(state, &premises, None));
+    assert_eq!(
+        checker.check(&state, &premises, None),
+        ConflictCheck::ConflictDetected
+    );
 }
 
 #[test]
 fn checker_does_not_report_a_conflict_for_consistent_premises_with_no_consequent() {
-    use crate::Comparison;
-    use crate::TestAtomic;
-    use crate::VariableState;
-
     let premises = [TestAtomic {
         name: "a",
         comparison: Comparison::Equal,
@@ -64,5 +64,8 @@ fn checker_does_not_report_a_conflict_for_consistent_premises_with_no_consequent
     };
 
     // `b` and `c` are unconstrained, so `a = 3` alone can't be a conflict.
-    assert!(!checker.check(state, &premises, None));
+    assert_eq!(
+        checker.check(&state, &premises, None),
+        ConflictCheck::NoConflictDetected
+    );
 }

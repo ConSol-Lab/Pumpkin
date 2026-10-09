@@ -1,8 +1,10 @@
 use super::ElementChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::ConflictCheck;
 use crate::ConflictChecker;
 use crate::Domain;
+use crate::VariableState;
 
 impl<VX, VI, VE, Atomic> ConflictChecker<Atomic> for ElementChecker<VX, VI, VE>
 where
@@ -11,7 +13,12 @@ where
     VI: CheckerVariable<Atomic>,
     VE: CheckerVariable<Atomic>,
 {
-    fn check(&self, state: crate::VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
+    fn check(
+        &self,
+        state: &VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> ConflictCheck {
         self.union.borrow_mut().reset();
 
         // A domain consistent checker for element does the following:
@@ -25,17 +32,17 @@ where
             .array
             .iter()
             .enumerate()
-            .filter(|(idx, _)| self.index.induced_domain_contains(&state, *idx as i32))
+            .filter(|(idx, _)| self.index.induced_domain_contains(state, *idx as i32))
             .map(|(_, element)| element)
             .collect();
 
         for element in supported_elements {
-            self.union.borrow_mut().add(&state, element);
+            self.union.borrow_mut().add(state, element);
         }
 
         // No element can equal the right-hand side when the index selects none of them.
         if !self.union.borrow().is_consistent() {
-            return true;
+            return ConflictCheck::ConflictDetected;
         }
 
         // Compute `|union cap rhs| == 0`.
@@ -43,22 +50,26 @@ where
             .union
             .borrow()
             .lower_bound()
-            .max(self.rhs.induced_lower_bound(&state));
+            .max(self.rhs.induced_lower_bound(state));
         let intersection_upper_bound = self
             .union
             .borrow()
             .upper_bound()
-            .min(self.rhs.induced_upper_bound(&state));
+            .min(self.rhs.induced_upper_bound(state));
         let holes = self
             .union
             .borrow()
             .holes()
-            .chain(self.rhs.induced_holes(&state))
+            .chain(self.rhs.induced_holes(state))
             .collect();
 
         let intersected_domain =
             Domain::new(intersection_lower_bound, intersection_upper_bound, holes);
 
-        !intersected_domain.is_consistent()
+        if intersected_domain.is_consistent() {
+            ConflictCheck::NoConflictDetected
+        } else {
+            ConflictCheck::ConflictDetected
+        }
     }
 }

@@ -1009,8 +1009,6 @@ dependencies = [
  "fnv",
  "fzn-rs",
  "pumpkin-checking",
- "pumpkin-core",
- "pumpkin-propagators",
  "thiserror",
 ]
 

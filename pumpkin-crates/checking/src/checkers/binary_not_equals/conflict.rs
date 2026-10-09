@@ -1,7 +1,9 @@
 use super::BinaryNotEqualsChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::ConflictCheck;
 use crate::ConflictChecker;
+use crate::VariableState;
 
 impl<Lhs, Rhs, Atomic> ConflictChecker<Atomic> for BinaryNotEqualsChecker<Lhs, Rhs>
 where
@@ -9,9 +11,18 @@ where
     Lhs: CheckerVariable<Atomic>,
     Rhs: CheckerVariable<Atomic>,
 {
-    fn check(&self, state: crate::VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
+    fn check(
+        &self,
+        state: &VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> ConflictCheck {
         // There is a conflict if both variables are fixed to the same values.
 
-        self.lhs.induced_fixed_value(&state) == self.rhs.induced_fixed_value(&state)
+        if self.lhs.induced_fixed_value(state) == self.rhs.induced_fixed_value(state) {
+            ConflictCheck::ConflictDetected
+        } else {
+            ConflictCheck::NoConflictDetected
+        }
     }
 }

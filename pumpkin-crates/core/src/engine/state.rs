@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use pumpkin_checking::BoxedChecker;
+use pumpkin_checking::BoxedConflictChecker;
+#[cfg(feature = "check-propagations")]
+use pumpkin_checking::ConflictCheck;
 use pumpkin_checking::ConflictChecker;
 #[cfg(feature = "check-propagations")]
 use pumpkin_checking::VariableState;
@@ -377,7 +379,7 @@ impl State {
         if cfg!(feature = "check-propagations") {
             self.checkers.add_conflict_checker(
                 inference_code.clone(),
-                BoxedChecker::new(Box::new(Rule::create_conflict_checker(
+                BoxedConflictChecker::new(Box::new(Rule::create_conflict_checker(
                     constraint_description,
                 ))),
             );
@@ -449,8 +451,10 @@ impl State {
         if cfg!(feature = "check-propagations") {
             // The checkers are only used when this feature is enabled, so we avoid storing them
             // otherwise.
-            self.checkers
-                .add_conflict_checker(inference_code.clone(), BoxedChecker::new(Box::new(checker)));
+            self.checkers.add_conflict_checker(
+                inference_code.clone(),
+                BoxedConflictChecker::new(Box::new(checker)),
+            );
         }
         inference_code
     }
@@ -863,7 +867,8 @@ impl State {
                         )
                     });
 
-                    checker.check(variable_state, &premises, consequent.as_ref())
+                    checker.check(&variable_state, &premises, consequent.as_ref())
+                        == ConflictCheck::ConflictDetected
                 });
 
         assert!(

@@ -1,13 +1,13 @@
 mod conflict;
 
 #[derive(Debug, Clone)]
-pub struct LinearLessOrEqualConflictChecker<Var> {
-    terms: Box<[Var]>,
-    bound: i32,
+pub struct LinearLessOrEqualChecker<Var> {
+    pub terms: Box<[Var]>,
+    pub bound: i32,
 }
 
-impl<Var> LinearLessOrEqualConflictChecker<Var> {
+impl<Var> LinearLessOrEqualChecker<Var> {
     pub fn new(terms: Box<[Var]>, bound: i32) -> Self {
-        LinearLessOrEqualConflictChecker { terms, bound }
+        LinearLessOrEqualChecker { terms, bound }
     }
 }
