@@ -1,6 +1,7 @@
 //! The time-table rule of the cumulative constraint.
 
 mod conflict;
+mod retention;
 #[cfg(test)]
 mod tests;
 
