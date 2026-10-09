@@ -60,6 +60,24 @@ pub enum HeadField {
     Label(&'static str),
     /// The name the proof gives the variable.
     Name(DomainId),
+    /// The identifier of the constraint with the tag, a held step that
+    /// [`ProofLog::hold_step`] numbers when the held lines are written.
+    Identifier(ConstraintTag),
+}
+
+/// A piece of a held line: text, or the identifier of a held step, which is known only once the
+/// held lines are written.
+#[derive(Clone, Debug)]
+enum HeldPiece {
+    Text(String),
+    Identifier(ConstraintTag),
+}
+
+/// A line held until the first nogood, with the held step it belongs to, if any.
+#[derive(Clone, Debug)]
+struct HeldLine {
+    pieces: Vec<HeldPiece>,
+    step: Option<ConstraintTag>,
 }
 
 /// A proof log which logs the proof steps necessary to prove unsatisfiability or optimality. We
@@ -196,6 +214,9 @@ impl ProofLog {
                 fixing_bounds_when_true: HashSet::default(),
                 resolution_chains,
                 held_lines: vec![],
+                held_lines_written: false,
+                held_steps: vec![],
+                dropped_steps: HashSet::default(),
                 atom_references: HashMap::default(),
                 label_references: HashMap::default(),
                 seen_premises: HashSet::default(),
@@ -219,7 +240,10 @@ impl ProofLog {
             return Ok(());
         };
 
-        proof.held_lines.extend(lines.iter().cloned());
+        proof.held_lines.extend(lines.iter().map(|line| HeldLine {
+            pieces: vec![HeldPiece::Text(line.clone())],
+            step: None,
+        }));
         proof.next_identifier = first_free_identifier;
 
         Ok(())
@@ -236,9 +260,71 @@ impl ProofLog {
         let Some(ProofImpl::BlockProof(proof)) = self.internal_proof.as_mut() else {
             return Ok(());
         };
-        let line = proof.render_head_line(fields, variable_names)?;
-        proof.held_lines.push(line);
+        let pieces = proof.render_head_line(fields, variable_names)?;
+        let step = proof.held_steps.last().copied();
+        proof.held_lines.push(HeldLine { pieces, step });
         Ok(())
+    }
+
+    /// Hold a step of the head that adds the constraint with the tag, in the block format: the
+    /// lines held after it, up to the next held step, are its lines, and it takes its identifier
+    /// when the held lines are written, unless [`ProofLog::drop_held_steps`] drops it. Does
+    /// nothing for other proofs.
+    pub fn hold_step(&mut self, constraint_tag: ConstraintTag) {
+        if let Some(ProofImpl::BlockProof(proof)) = self.internal_proof.as_mut() {
+            proof.held_steps.push(constraint_tag);
+        }
+    }
+
+    /// The held steps not yet written, in order, each with the held steps its lines cite.
+    pub fn held_steps(&self) -> Vec<(ConstraintTag, Vec<ConstraintTag>)> {
+        let Some(ProofImpl::BlockProof(proof)) = self.internal_proof.as_ref() else {
+            return vec![];
+        };
+        proof
+            .held_steps
+            .iter()
+            .map(|&step| {
+                let cited = proof
+                    .held_lines
+                    .iter()
+                    .filter(|line| line.step == Some(step))
+                    .flat_map(|line| line.pieces.iter())
+                    .filter_map(|piece| match piece {
+                        HeldPiece::Identifier(tag) if *tag != step => Some(*tag),
+                        _ => None,
+                    })
+                    .collect();
+                (step, cited)
+            })
+            .collect()
+    }
+
+    /// Leave the held steps with the tags out of the proof, with their lines; the held steps
+    /// after them take the identifiers in their place.
+    pub fn drop_held_steps(&mut self, steps: impl IntoIterator<Item = ConstraintTag>) {
+        if let Some(ProofImpl::BlockProof(proof)) = self.internal_proof.as_mut() {
+            proof.dropped_steps.extend(steps);
+        }
+    }
+
+    /// Write a `p` line, a key of the order dominance steps use, at once, so that it comes
+    /// before the held head and steps: the checker reads the keys before the first step. Does
+    /// nothing for other proofs.
+    pub(crate) fn log_order_key_line(
+        &mut self,
+        fields: &[HeadField],
+        variable_names: &VariableNames,
+    ) -> std::io::Result<()> {
+        let Some(ProofImpl::BlockProof(proof)) = self.internal_proof.as_mut() else {
+            return Ok(());
+        };
+        if proof.held_lines_written {
+            eprintln!("warning: an order key is written after the first nogood");
+        }
+        let pieces = proof.render_head_line(fields, variable_names)?;
+        let line = proof.held_line_text(&pieces)?;
+        proof.writer.log_line(&line)
     }
 
     /// Take the identifier the next constraint of a proof in the block format has, as the
@@ -1089,8 +1175,15 @@ struct BlockProof {
     /// The reified constraints whose inferences on the side of the indicator state the bounds
     /// that fix their 0/1 variables.
     fixing_bounds_when_true: HashSet<ConstraintTag>,
-    /// The head and the steps after it, held until the first nogood.
-    held_lines: Vec<String>,
+    /// The head and the steps after it, held until the first nogood so that the order keys,
+    /// written at once, come before them.
+    held_lines: Vec<HeldLine>,
+    held_lines_written: bool,
+    /// The held steps not yet written, which take their identifiers, in this order, when the
+    /// held lines are written.
+    held_steps: Vec<ConstraintTag>,
+    /// The held steps left out of the proof.
+    dropped_steps: HashSet<ConstraintTag>,
     /// The reference of every atom written so far, by the predicate it is written for, so that
     /// an atom written again costs one lookup rather than its name.
     atom_references: HashMap<Predicate, NonZero<i32>>,
@@ -1210,11 +1303,16 @@ impl BlockProof {
         &mut self,
         fields: &[HeadField],
         variable_names: &VariableNames,
-    ) -> std::io::Result<String> {
+    ) -> std::io::Result<Vec<HeldPiece>> {
+        let mut pieces = vec![];
         let mut line = String::new();
         for field in fields {
             match field {
                 HeadField::Text(text) => line.push_str(text),
+                HeadField::Identifier(tag) => {
+                    pieces.push(HeldPiece::Text(std::mem::take(&mut line)));
+                    pieces.push(HeldPiece::Identifier(*tag));
+                }
                 HeadField::Atom(predicate) => {
                     let atomic = self
                         .proof_atomics
@@ -1233,7 +1331,8 @@ impl BlockProof {
                 ),
             }
         }
-        Ok(line)
+        pieces.push(HeldPiece::Text(line));
+        Ok(pieces)
     }
 
     /// The reference of the atom written for the predicate, declared first if it is new.
@@ -1263,11 +1362,49 @@ impl BlockProof {
         Ok(reference)
     }
 
-    /// Write the held head and steps before the next nogood or the conclusion.
-    fn write_held_lines(&mut self) -> std::io::Result<()> {
-        for line in std::mem::take(&mut self.held_lines) {
-            self.writer.log_line(&line)?;
+    /// The text of a held line, with the identifier of each step it names.
+    fn held_line_text(&self, pieces: &[HeldPiece]) -> std::io::Result<String> {
+        let mut line = String::new();
+        for piece in pieces {
+            match piece {
+                HeldPiece::Text(text) => line.push_str(text),
+                HeldPiece::Identifier(tag) => {
+                    let identifier = self.derived_identifiers.get(tag).ok_or_else(|| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "a line names a step that has no identifier, or one that is dropped",
+                        )
+                    })?;
+                    line.push_str(&identifier.to_string());
+                }
+            }
         }
+        Ok(line)
+    }
+
+    /// Write the held head and steps before the next nogood or the conclusion, numbering the
+    /// held steps that are not dropped.
+    fn write_held_lines(&mut self) -> std::io::Result<()> {
+        for step in std::mem::take(&mut self.held_steps) {
+            if self.dropped_steps.contains(&step) {
+                continue;
+            }
+            let identifier =
+                NonZero::new(self.next_identifier).expect("derived identifiers start at one");
+            self.next_identifier += 1;
+            let _ = self.derived_identifiers.insert(step, identifier);
+        }
+        for line in std::mem::take(&mut self.held_lines) {
+            if line
+                .step
+                .is_some_and(|step| self.dropped_steps.contains(&step))
+            {
+                continue;
+            }
+            let text = self.held_line_text(&line.pieces)?;
+            self.writer.log_line(&text)?;
+        }
+        self.held_lines_written = true;
         Ok(())
     }
 

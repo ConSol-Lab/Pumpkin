@@ -269,6 +269,22 @@ impl Solver {
         self.satisfaction_solver.log_proof_head_line(fields)
     }
 
+    /// The line as text: each atom as `[<name> <comparison> <value>]`, each label by its name
+    /// and each variable by its name, as the preamble of a scaffold states a step.
+    pub fn render_head_line_as_text(&self, fields: &[crate::proof::HeadField]) -> String {
+        self.satisfaction_solver.render_head_line_as_text(fields)
+    }
+
+    /// Write a key of the order the dominance steps use, a `p` line, before the head and the
+    /// steps held for a proof in the block format; see
+    /// `ProofLog::log_order_key_line`. Does nothing for other proofs.
+    pub fn log_proof_order_key_line(
+        &mut self,
+        fields: &[crate::proof::HeadField],
+    ) -> std::io::Result<()> {
+        self.satisfaction_solver.log_proof_order_key_line(fields)
+    }
+
     /// Take the identifier of the next constraint of a proof in the block format as the
     /// identifier of the constraint with the tag, or `None` when no such proof is logged.
     pub fn take_proof_identifier(&mut self, constraint_tag: ConstraintTag) -> Option<u32> {
@@ -286,6 +302,15 @@ impl Solver {
     ) -> std::io::Result<()> {
         self.satisfaction_solver
             .log_proof_head(lines, first_free_identifier)
+    }
+
+    /// Hold a step of the head that adds the constraint with the tag, for a proof in the block
+    /// format; see [`crate::proof::ProofLog::hold_step`]. Does nothing for other proofs.
+    pub fn hold_proof_step(&mut self, constraint_tag: ConstraintTag) {
+        self.satisfaction_solver
+            .internal_parameters
+            .proof_log
+            .hold_step(constraint_tag)
     }
 
     /// Write the preamble of a croc scaffold before its nogoods; see

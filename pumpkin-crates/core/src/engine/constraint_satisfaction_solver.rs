@@ -37,6 +37,7 @@ use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::engine::State;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::predicates::predicate::PredicateType;
 use crate::options::LearningOptions;
 use crate::predicate;
 use crate::proof::ConstraintTag;
@@ -355,6 +356,51 @@ impl ConstraintSatisfactionSolver {
         self.internal_parameters
             .proof_log
             .log_head_line(fields, &self.state.variable_names)
+    }
+
+    pub(crate) fn render_head_line_as_text(&self, fields: &[crate::proof::HeadField]) -> String {
+        use crate::proof::HeadField;
+        let name = |domain: DomainId| {
+            self.state
+                .variable_names
+                .get_int_name(domain)
+                .expect("a variable in a proof line is named")
+                .to_owned()
+        };
+        let mut line = String::new();
+        for field in fields {
+            match field {
+                HeadField::Text(text) => line.push_str(text),
+                HeadField::Label(label) => line.push_str(label),
+                HeadField::Name(domain) => line.push_str(&name(*domain)),
+                HeadField::Identifier(tag) => {
+                    line.push_str(&std::num::NonZero::<u32>::from(*tag).to_string())
+                }
+                HeadField::Atom(predicate) => {
+                    let comparison = match predicate.get_predicate_type() {
+                        PredicateType::LowerBound => ">=",
+                        PredicateType::UpperBound => "<=",
+                        PredicateType::Equal => "==",
+                        PredicateType::NotEqual => "!=",
+                    };
+                    line.push_str(&format!(
+                        "[{} {comparison} {}]",
+                        name(predicate.get_domain()),
+                        predicate.get_right_hand_side()
+                    ));
+                }
+            }
+        }
+        line
+    }
+
+    pub(crate) fn log_proof_order_key_line(
+        &mut self,
+        fields: &[crate::proof::HeadField],
+    ) -> std::io::Result<()> {
+        self.internal_parameters
+            .proof_log
+            .log_order_key_line(fields, &self.state.variable_names)
     }
 
     pub(crate) fn take_proof_identifier(&mut self, constraint_tag: ConstraintTag) -> Option<u32> {
