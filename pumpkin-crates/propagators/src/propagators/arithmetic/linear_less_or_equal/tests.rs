@@ -1,8 +1,11 @@
+use pumpkin_checking::VariableState;
 use pumpkin_core::conjunction;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
+use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::CurrentNogood;
+use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::state::State;
 
 use super::LinearLessOrEqualDescription;
@@ -95,4 +98,33 @@ fn underflow_leads_to_no_propagation() {
     state
         .propagate_to_fixed_point()
         .expect("Expected no error to be detected");
+}
+
+#[test]
+fn a_linear_inequality_is_decided_by_the_bounds() {
+    let mut state = State::default();
+    let x = state.new_interval_variable(-100, 100, None);
+    let y = state.new_interval_variable(-100, 100, None);
+    let domains = VariableState::prepare_for_conflict_check(
+        [
+            predicate![x >= 0],
+            predicate![x <= 3],
+            predicate![y >= 1],
+            predicate![y <= 2],
+        ],
+        None,
+    )
+    .expect("the predicates are consistent");
+
+    let check = |bound| {
+        LinearLessOrEqualDescription {
+            terms: Box::from([x, y]),
+            bound,
+        }
+        .check_solution(&domains)
+    };
+
+    assert_eq!(check(5), SolutionCheck::ConstraintSatisfied);
+    assert_eq!(check(0), SolutionCheck::ConstraintViolated);
+    assert_eq!(check(3), SolutionCheck::Unknown);
 }

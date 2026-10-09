@@ -61,6 +61,8 @@ mod explanations;
 mod over_interval_incremental_propagator;
 mod per_point_incremental_propagator;
 mod propagation_handler;
+#[cfg(test)]
+mod tests;
 mod time_table_over_interval;
 mod time_table_per_point;
 mod time_table_util;

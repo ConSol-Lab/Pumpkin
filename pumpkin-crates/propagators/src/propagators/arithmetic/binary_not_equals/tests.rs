@@ -1,7 +1,10 @@
+use pumpkin_core::propagation::ConstraintDescription;
+use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::state::State;
 
 use super::BinaryNotEqualsDescription;
 use crate::StateExt;
+use crate::fixed_domains;
 use crate::propagators::arithmetic::BinaryNotEqualsPropagatorArgs;
 
 #[test]
@@ -85,4 +88,26 @@ fn non_overlapping_is_ok() {
 
     state.assert_bounds(a, 0, 5);
     state.assert_bounds(b, 6, 10);
+}
+
+#[test]
+fn binary_disequality_compares_the_values() {
+    let (variables, domains) = fixed_domains(&[2, 2, 3]);
+
+    assert_eq!(
+        BinaryNotEqualsDescription {
+            a: variables[0],
+            b: variables[2],
+        }
+        .check_solution(&domains),
+        SolutionCheck::ConstraintSatisfied
+    );
+    assert_eq!(
+        BinaryNotEqualsDescription {
+            a: variables[0],
+            b: variables[1],
+        }
+        .check_solution(&domains),
+        SolutionCheck::ConstraintViolated
+    );
 }
