@@ -1,4 +1,5 @@
 use crate::AtomicConstraint;
+use crate::DomainView;
 use crate::VariableState;
 
 /// An inference that was ignored when checking a deduction.

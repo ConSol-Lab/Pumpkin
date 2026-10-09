@@ -1,6 +1,10 @@
+use pumpkin_core::propagation::ConstraintDescription;
+use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::state::State;
 
+use super::BinaryEqualsDescription;
 use crate::StateExt;
+use crate::fixed_domains;
 use crate::propagators::arithmetic::BinaryEqualsPropagatorArgs;
 
 #[test]
@@ -11,8 +15,7 @@ fn test_propagation_of_bounds() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
-        a,
-        b,
+        constraint_description: BinaryEqualsDescription { a, b },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("no conflict");
@@ -29,8 +32,7 @@ fn test_propagation_of_holes() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
-        a,
-        b,
+        constraint_description: BinaryEqualsDescription { a, b },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("no conflict");
@@ -57,8 +59,7 @@ fn test_propagation_of_holes_incremental() {
 
     let propagator = solver
         .new_propagator(BinaryEqualsPropagatorArgs {
-            a,
-            b,
+            constraint_description: BinaryEqualsDescription { a, b },
             constraint_tag,
         })
         .expect("Expected result to be okay");
@@ -91,11 +92,32 @@ fn test_conflict() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
-        a,
-        b,
+        constraint_description: BinaryEqualsDescription { a, b },
         constraint_tag,
     });
     let _ = state
         .propagate_to_fixed_point()
         .expect_err("expected conflict");
+}
+
+#[test]
+fn binary_equality_compares_the_values() {
+    let (variables, domains) = fixed_domains(&[2, 2, 3]);
+
+    assert_eq!(
+        BinaryEqualsDescription {
+            a: variables[0],
+            b: variables[1],
+        }
+        .check_solution(&domains),
+        SolutionCheck::ConstraintSatisfied
+    );
+    assert_eq!(
+        BinaryEqualsDescription {
+            a: variables[0],
+            b: variables[2],
+        }
+        .check_solution(&domains),
+        SolutionCheck::ConstraintViolated
+    );
 }

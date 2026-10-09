@@ -1,5 +1,6 @@
 use enumset::EnumSet;
 use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::DomainView;
 use pumpkin_checking::IntExt;
 
 use crate::engine::Assignments;
@@ -168,51 +169,52 @@ impl CheckerVariable<Predicate> for i32 {
         }
     }
 
-    fn induced_lower_bound(
-        &self,
-        _variable_state: &pumpkin_checking::VariableState<Predicate>,
-    ) -> IntExt {
+    fn induced_lower_bound<View>(&self, _variable_state: &View) -> IntExt
+    where
+        View: DomainView<Predicate> + ?Sized,
+    {
         IntExt::Int(*self)
     }
 
-    fn induced_upper_bound(
-        &self,
-        _variable_state: &pumpkin_checking::VariableState<Predicate>,
-    ) -> IntExt {
+    fn induced_upper_bound<View>(&self, _variable_state: &View) -> IntExt
+    where
+        View: DomainView<Predicate> + ?Sized,
+    {
         IntExt::Int(*self)
     }
 
-    fn induced_fixed_value(
-        &self,
-        _variable_state: &pumpkin_checking::VariableState<Predicate>,
-    ) -> Option<i32> {
+    fn induced_fixed_value<View>(&self, _variable_state: &View) -> Option<i32>
+    where
+        View: DomainView<Predicate> + ?Sized,
+    {
         Some(*self)
     }
 
-    fn induced_domain_contains(
-        &self,
-        _variable_state: &pumpkin_checking::VariableState<Predicate>,
-        value: i32,
-    ) -> bool {
+    fn induced_domain_contains<View>(&self, _variable_state: &View, value: i32) -> bool
+    where
+        View: DomainView<Predicate> + ?Sized,
+    {
         value == *self
     }
 
-    fn induced_holes<'this, 'state>(
+    fn induced_holes<'this, 'state, View>(
         &'this self,
-        _variable_state: &'state pumpkin_checking::VariableState<Predicate>,
+        _variable_state: &'state View,
     ) -> impl Iterator<Item = i32> + 'state
     where
         'this: 'state,
+        View: DomainView<Predicate> + ?Sized,
     {
         std::iter::empty()
     }
 
-    fn iter_induced_domain<'this, 'state>(
+    fn iter_induced_domain<'this, 'state, View>(
         &'this self,
-        _variable_state: &'state pumpkin_checking::VariableState<Predicate>,
+        _variable_state: &'state View,
     ) -> Option<impl Iterator<Item = i32> + 'state>
     where
         'this: 'state,
+        View: DomainView<Predicate> + ?Sized,
     {
         Some(std::iter::once(*self))
     }

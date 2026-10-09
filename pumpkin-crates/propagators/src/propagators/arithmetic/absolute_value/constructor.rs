@@ -10,14 +10,14 @@ use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::AbsoluteValueChecker;
+use super::AbsoluteValueDescription;
 use super::AbsoluteValuePropagator;
 
 declare_inference_label!(AbsoluteValue);
 
 #[derive(Clone, Debug)]
 pub struct AbsoluteValueArgs<VA, VB> {
-    pub signed: VA,
-    pub absolute: VB,
+    pub constraint_description: AbsoluteValueDescription<VA, VB>,
     pub constraint_tag: ConstraintTag,
 }
 
@@ -30,10 +30,10 @@ where
 
     fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let AbsoluteValueArgs {
-            signed,
-            absolute,
+            constraint_description,
             constraint_tag,
         } = self;
+        let AbsoluteValueDescription { signed, absolute } = constraint_description;
 
         let registration = EventsToRegister::builder()
             .add(&signed, DomainEvents::BOUNDS, LocalId::from(0))

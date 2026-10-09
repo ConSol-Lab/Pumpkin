@@ -3,6 +3,7 @@
 //! Currently, it contains only an edge-finding propagator.
 use pumpkin_core::declare_inference_label;
 
+mod constraint_description;
 mod constructor;
 pub(crate) mod disjunctive_task;
 mod propagator;
@@ -10,6 +11,7 @@ mod propagator;
 mod tests;
 mod theta_lambda_tree;
 mod theta_tree;
+pub use constraint_description::*;
 pub use constructor::*;
 pub use disjunctive_task::ArgDisjunctiveTask;
 pub use propagator::*;
