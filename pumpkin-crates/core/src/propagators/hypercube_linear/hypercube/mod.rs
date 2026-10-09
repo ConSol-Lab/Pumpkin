@@ -27,7 +27,7 @@ pub struct Hypercube {
 impl ScopeItem for Hypercube {
     fn add_to_scope(&self, scope: &mut Scope) {
         for predicate in self.iter_predicates() {
-            scope.extend(predicate.get_domain());
+            scope.extend_scope(predicate.get_domain());
         }
     }
 }

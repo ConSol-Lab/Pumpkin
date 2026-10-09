@@ -40,7 +40,7 @@ impl DomainId {
 
 impl ScopeItem for DomainId {
     fn add_to_scope(&self, scope: &mut Scope) {
-        scope.extend(*self);
+        scope.extend_scope(*self);
     }
 }
 
