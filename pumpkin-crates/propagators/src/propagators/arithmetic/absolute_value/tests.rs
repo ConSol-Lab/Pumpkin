@@ -1,8 +1,11 @@
+use pumpkin_core::propagation::ConstraintDescription;
+use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::state::State;
 
 use super::AbsoluteValueArgs;
 use super::AbsoluteValueDescription;
 use crate::StateExt;
+use crate::fixed_domains;
 
 #[test]
 fn absolute_bounds_are_propagated_at_initialise() {
@@ -104,4 +107,27 @@ fn lower_bound_on_absolute_can_propagate_positive_lower_bound_on_signed() {
     state.propagate_to_fixed_point().expect("no empty domains");
 
     state.assert_bounds(signed, 3, 5);
+}
+
+#[test]
+fn absolute_value_compares_the_magnitude() {
+    let (variables, domains) = fixed_domains(&[-4, 4, 3]);
+
+    let satisfied = AbsoluteValueDescription {
+        signed: variables[0],
+        absolute: variables[1],
+    };
+    let violated = AbsoluteValueDescription {
+        signed: variables[0],
+        absolute: variables[2],
+    };
+
+    assert_eq!(
+        satisfied.check_solution(&domains),
+        SolutionCheck::ConstraintSatisfied
+    );
+    assert_eq!(
+        violated.check_solution(&domains),
+        SolutionCheck::ConstraintViolated
+    );
 }

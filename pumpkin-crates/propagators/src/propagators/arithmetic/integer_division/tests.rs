@@ -1,9 +1,12 @@
 use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::checkers::IntegerDivisionChecker;
+use pumpkin_core::propagation::ConstraintDescription;
+use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::state::State;
 
 use super::DivisionArgs;
 use super::DivisionDescription;
+use crate::fixed_domains;
 
 #[test]
 fn detects_conflicts() {
@@ -66,4 +69,34 @@ fn checker_does_not_report_false_conflict_for_tight_but_valid_quotient() {
     // div_floor(7, 2) = 3 is the max corner, so the true upper bound is 3 (matching rhs); a
     // buggy `.min()` over the floor-corners instead yields 2, which would wrongly conflict.
     assert!(!checker.check(state, &premises, None));
+}
+
+#[test]
+fn division_truncates_towards_zero() {
+    let (variables, domains) = fixed_domains(&[-7, 2, -3]);
+    let description = DivisionDescription {
+        numerator: variables[0],
+        denominator: variables[1],
+        rhs: variables[2],
+    };
+
+    assert_eq!(
+        description.check_solution(&domains),
+        SolutionCheck::ConstraintSatisfied
+    );
+}
+
+#[test]
+fn division_by_zero_is_a_violation() {
+    let (variables, domains) = fixed_domains(&[0, 0, 0]);
+    let description = DivisionDescription {
+        numerator: variables[0],
+        denominator: variables[1],
+        rhs: variables[2],
+    };
+
+    assert_eq!(
+        description.check_solution(&domains),
+        SolutionCheck::ConstraintViolated
+    );
 }

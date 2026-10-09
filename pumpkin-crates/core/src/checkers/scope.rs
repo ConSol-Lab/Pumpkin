@@ -1,18 +1,21 @@
 use std::rc::Rc;
 
 use crate::predicates::Predicate;
+#[cfg(doc)]
+use crate::propagation::ConstraintDescription;
 use crate::variables::DomainId;
 
-/// The scope of a constraint is the collection of variables involved in the relation.
+/// The scope is the set of variables used by the constraint.
 ///
-/// A domain may occur more than once, for instance when two terms share a variable.
+/// A domain may occur more than once, for instance when two terms share a variable,
+/// although we aim to avoid these situations in the solver by normalising constraints.
 #[derive(Clone, Debug, Default)]
 pub struct Scope {
     domains: Vec<DomainId>,
 }
 
 impl Scope {
-    pub fn add_domain(&mut self, domain_id: DomainId) {
+    pub fn extend(&mut self, domain_id: DomainId) {
         self.domains.push(domain_id);
     }
 
@@ -21,10 +24,8 @@ impl Scope {
     }
 }
 
-/// Implemented by everything a constraint description is made of: a variable adds its domains to
+/// Implemented by everything a [`ConstraintDescription`] is made of: a variable adds its domain to
 /// the scope, and data without variables, such as a constant, adds nothing.
-///
-/// Usually derived, so that every field of a description is accounted for.
 pub trait ScopeItem {
     fn add_to_scope(&self, scope: &mut Scope);
 }
@@ -37,7 +38,7 @@ impl ScopeItem for i32 {
 
 impl ScopeItem for Predicate {
     fn add_to_scope(&self, scope: &mut Scope) {
-        scope.add_domain(self.get_domain());
+        scope.extend(self.get_domain());
     }
 }
 
@@ -69,9 +70,26 @@ impl<Item: ScopeItem> ScopeItem for Vec<Item> {
 
 /// Defines a struct and implements [`ScopeItem`] for it from all its fields, so that no field that
 /// holds variables can be left out of the scope. Every field has to implement [`ScopeItem`].
+/// The purpose of the macro is to make it harder to make mistakes,
+/// e.g., forgetting to add a variable to the scope.
 ///
-/// It is a declarative macro rather than a derive, so that `pumpkin-core` does not depend on a
-/// procedural-macro crate.
+/// # Example
+/// ```
+/// use pumpkin_core::variables::DomainId;
+///
+/// pumpkin_core::scoped_struct! {
+///     /// The description of the constraint `x + y <= bound`.
+///     #[derive(Clone, Debug)]
+///     pub struct SumDescription {
+///         pub x: DomainId,
+///         pub y: DomainId,
+///         pub bound: i32,
+///     }
+/// }
+/// ```
+///
+/// The scope of a `SumDescription` holds the domains of `x` and `y`; the constant `bound` adds
+/// nothing.
 #[macro_export]
 macro_rules! scoped_struct {
     (
