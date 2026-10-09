@@ -65,6 +65,49 @@ impl State {
     }
 }
 
+#[cfg(feature = "inference-checkers")]
+impl State {
+    /// Check that no conflict checker reports a conflict on the current assignment, which has to
+    /// fix every variable and satisfy every constraint, as [`State::check_solution`] confirms: an
+    /// assignment that satisfies a constraint is not a conflict of a sound rule of it.
+    ///
+    /// Panics, naming the rule, when a checker reports a conflict.
+    pub fn check_rules_accept_solution(&self) {
+        let assignment = self
+            .get_domain_ids()
+            .map(|domain| {
+                let value = self
+                    .fixed_value(domain)
+                    .expect("every variable is fixed in a solution");
+                crate::predicate![domain == value]
+            })
+            .collect::<Vec<_>>();
+
+        for (inference_code, checker) in self.rule_checkers.conflict_checkers.iter() {
+            if checker.check_inference(&assignment, None).is_ok() {
+                let values = assignment
+                    .iter()
+                    .map(|predicate| {
+                        let domain = predicate.get_domain();
+                        let name = self
+                            .variable_names
+                            .get_int_name(domain)
+                            .map(str::to_owned)
+                            .unwrap_or_else(|| format!("{domain:?}"));
+                        format!("{name} = {}", predicate.get_right_hand_side())
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                panic!(
+                    "The conflict checker of the rule '{}' reports a conflict on an assignment that \
+                     satisfies every constraint, so the rule is unsound. The assignment: {values}.",
+                    self.rule_name(*inference_code)
+                );
+            }
+        }
+    }
+}
+
 #[cfg(feature = "check-retention")]
 impl State {
     /// Make the retention checkers that watch a domain changed since `start_index` pending.

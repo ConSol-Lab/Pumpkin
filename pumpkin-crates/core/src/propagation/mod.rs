@@ -73,6 +73,7 @@ mod domains;
 mod event_registration;
 mod local_id;
 mod propagator;
+mod propagator_parameters;
 mod solution_check;
 
 pub(crate) mod propagator_id;
@@ -99,6 +100,7 @@ pub use domains::*;
 pub use local_id::*;
 pub use propagator::*;
 pub use propagator_id::PropagatorId;
+pub use propagator_parameters::*;
 pub(crate) use propagator_var_id::PropagatorVarId;
 pub use reexports::*;
 pub use solution_check::*;

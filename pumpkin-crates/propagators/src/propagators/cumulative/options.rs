@@ -1,3 +1,5 @@
+use pumpkin_core::propagation::PropagatorParameters;
+
 use crate::cumulative::time_table::CumulativeExplanationType;
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -43,6 +45,44 @@ impl CumulativeOptions {
                 incremental_backtracking,
             },
         }
+    }
+}
+
+impl PropagatorParameters for CumulativeOptions {
+    fn all() -> Vec<Self> {
+        let propagation_methods = [
+            CumulativePropagationMethod::TimeTablePerPoint,
+            CumulativePropagationMethod::TimeTablePerPointIncremental,
+            CumulativePropagationMethod::TimeTablePerPointIncrementalSynchronised,
+            CumulativePropagationMethod::TimeTableOverInterval,
+            CumulativePropagationMethod::TimeTableOverIntervalIncremental,
+            CumulativePropagationMethod::TimeTableOverIntervalIncrementalSynchronised,
+        ];
+        let explanation_types = [
+            CumulativeExplanationType::Naive,
+            CumulativeExplanationType::BigStep,
+            CumulativeExplanationType::Pointwise,
+        ];
+
+        let mut all = vec![];
+        for propagation_method in propagation_methods {
+            for explanation_type in explanation_types {
+                for allow_holes_in_domain in [false, true] {
+                    for generate_sequence in [false, true] {
+                        for incremental_backtracking in [false, true] {
+                            all.push(CumulativeOptions::new(
+                                allow_holes_in_domain,
+                                explanation_type,
+                                generate_sequence,
+                                propagation_method,
+                                incremental_backtracking,
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        all
     }
 }
 

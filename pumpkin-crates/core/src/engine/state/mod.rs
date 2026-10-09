@@ -450,6 +450,11 @@ impl State {
     pub fn trail_position(&self, predicate: Predicate) -> Option<usize> {
         self.assignments.get_trail_position(&predicate)
     }
+
+    /// The predicates on the trail, in the order in which they were applied.
+    pub fn trail(&self) -> impl ExactSizeIterator<Item = Predicate> + '_ {
+        (0..self.trail_len()).map(|index| self.trail_entry(index).predicate)
+    }
 }
 
 /// Operations for adding constraints.
@@ -924,6 +929,11 @@ impl State {
     /// Returns a mapping of [`DomainId`] to variable name.
     pub(crate) fn variable_names(&self) -> &VariableNames {
         &self.variable_names
+    }
+
+    /// The name given to `domain_id` when it was created, if any.
+    pub fn variable_name(&self, domain_id: DomainId) -> Option<&str> {
+        self.variable_names.get_int_name(domain_id)
     }
 
     pub(crate) fn get_propagation_reason_trail_entry(
@@ -1702,5 +1712,42 @@ mod tests {
         assert_eq!(state.lower_bound(x), 5);
         assert_eq!(state.statistics.sum_of_backjumps, 0);
         assert_eq!(state.statistics.num_backjumps, 0);
+    }
+
+    /// A conflict checker that reports a conflict on every state.
+    #[cfg(feature = "inference-checkers")]
+    #[derive(Debug, Clone)]
+    struct ConflictEverywhere;
+
+    #[cfg(feature = "inference-checkers")]
+    impl pumpkin_checking::ConflictChecker<crate::predicates::Predicate> for ConflictEverywhere {
+        fn check(
+            &self,
+            _: &pumpkin_checking::VariableState<crate::predicates::Predicate>,
+            _: &[crate::predicates::Predicate],
+            _: Option<&crate::predicates::Predicate>,
+        ) -> pumpkin_checking::ConflictCheck {
+            pumpkin_checking::ConflictCheck::ConflictDetected
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "inference-checkers")]
+    #[should_panic(
+        expected = "The conflict checker of the rule 'nogood' reports a conflict on an \
+                               assignment that satisfies every constraint"
+    )]
+    fn a_rule_that_reports_a_conflict_on_a_solution_is_unsound() {
+        let mut state = State::default();
+        let _ = state.new_interval_variable(3, 3, Some("x".into()));
+        let constraint_tag = state.new_constraint_tag();
+        let inference_code =
+            state.rule_code::<crate::propagators::nogoods::UnitNogoodRule>(constraint_tag);
+        state.rule_checkers.conflict_checkers.add_conflict_checker(
+            inference_code,
+            pumpkin_checking::BoxedConflictChecker::new(Box::new(ConflictEverywhere)),
+        );
+
+        state.check_rules_accept_solution();
     }
 }

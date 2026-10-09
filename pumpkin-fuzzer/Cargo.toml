@@ -1,0 +1,29 @@
+[package]
+name = "pumpkin-fuzzer"
+description = "Randomised testing of Pumpkin propagators against the checkers of their rules."
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[dependencies]
+clap = { version = "4.5.17", features = ["derive"] }
+log = "0.4.30"
+pumpkin-core = { version = "0.5.0", path = "../pumpkin-crates/core/" }
+pumpkin-solver = { version = "0.5.0", path = "../pumpkin-solver/" }
+
+[features]
+# The oracles of the fuzzer are the runtime checkers of the solver. They are not enabled by default,
+# because Cargo unifies features across a workspace build and the checkers would then be enabled for
+# every crate in it.
+checks = ["check-inferences", "check-retention", "check-solutions"]
+check-inferences = ["pumpkin-core/check-inferences"]
+check-inferences-proof = ["pumpkin-core/check-inferences-proof"]
+check-retention = ["pumpkin-core/check-retention"]
+check-retention-all = ["pumpkin-core/check-retention-all"]
+check-solutions = ["pumpkin-core/check-solutions"]
+
+[lints]
+workspace = true
