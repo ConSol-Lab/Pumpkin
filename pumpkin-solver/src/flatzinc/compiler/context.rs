@@ -62,6 +62,11 @@ pub(crate) struct CompilationContext<'a> {
 
     /// All the constraints with their constraint tags.
     pub(crate) constraints: Vec<(ConstraintTag, flatzinc::ConstraintItem)>,
+
+    /// The proof format, which decides what the compiler does for a proof.
+    pub(crate) proof_format: crate::flatzinc::ProofFormat,
+    /// The preprocessing done, as the preamble of a scaffold states it.
+    pub(crate) preamble: crate::flatzinc::preamble::Preamble,
 }
 
 /// A set parameter.
@@ -99,6 +104,9 @@ impl CompilationContext<'_> {
             set_constants: Default::default(),
 
             constraints: Default::default(),
+
+            proof_format: crate::flatzinc::ProofFormat::Croc,
+            preamble: Default::default(),
         }
     }
 
@@ -258,10 +266,10 @@ impl CompilationContext<'_> {
         let value = self.resolve_int_expr_to_const(&flatzinc::IntExpr::VarParIdentifier(
             identifier.to_owned(),
         ))?;
-        Ok(*self.constant_domain_ids.entry(value).or_insert_with(|| {
-            self.solver
-                .new_named_bounded_integer(value, value, identifier.to_owned())
-        }))
+        Ok(*self
+            .constant_domain_ids
+            .entry(value)
+            .or_insert_with(|| self.solver.new_bounded_integer(value, value)))
     }
 
     pub(crate) fn resolve_integer_constant_from_expr(
@@ -325,11 +333,8 @@ impl CompilationContext<'_> {
                 .constant_domain_ids
                 .entry(*value as i32)
                 .or_insert_with(|| {
-                    self.solver.new_named_bounded_integer(
-                        *value as i32,
-                        *value as i32,
-                        value.to_string(),
-                    )
+                    self.solver
+                        .new_bounded_integer(*value as i32, *value as i32)
                 })),
             flatzinc::IntExpr::VarParIdentifier(id) => {
                 self.resolve_integer_variable_from_identifier(id)
@@ -348,10 +353,7 @@ impl CompilationContext<'_> {
             flatzinc::Expr::Int(val) => Ok(*self
                 .constant_domain_ids
                 .entry(*val as i32)
-                .or_insert_with(|| {
-                    self.solver
-                        .new_named_bounded_integer(*val as i32, *val as i32, val.to_string())
-                })),
+                .or_insert_with(|| self.solver.new_bounded_integer(*val as i32, *val as i32))),
             _ => Err(FlatZincError::UnexpectedExpr),
         }
     }
@@ -375,10 +377,10 @@ impl CompilationContext<'_> {
             self.integer_parameters
                 .get(&self.equivalences.representative(identifier))
                 .map(|value| {
-                    *self.constant_domain_ids.entry(*value).or_insert_with(|| {
-                        self.solver
-                            .new_named_bounded_integer(*value, *value, value.to_string())
-                    })
+                    *self
+                        .constant_domain_ids
+                        .entry(*value)
+                        .or_insert_with(|| self.solver.new_bounded_integer(*value, *value))
                 })
                 .ok_or_else(|| FlatZincError::InvalidIdentifier {
                     identifier: identifier.into(),
@@ -403,11 +405,7 @@ impl CompilationContext<'_> {
                                 .iter()
                                 .map(|value| {
                                     *self.constant_domain_ids.entry(*value).or_insert_with(|| {
-                                        self.solver.new_named_bounded_integer(
-                                            *value,
-                                            *value,
-                                            value.to_string(),
-                                        )
+                                        self.solver.new_bounded_integer(*value, *value)
                                     })
                                 })
                                 .collect()
@@ -673,13 +671,6 @@ impl Domain {
                     values: intersection,
                 }
             }
-        }
-    }
-
-    pub(crate) fn is_constant(&self) -> bool {
-        match self {
-            Domain::IntervalDomain { lb, ub } => lb == ub,
-            Domain::SparseDomain { values } => values.len() == 1,
         }
     }
 

@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser;
+use clap::ValueEnum;
 use file_format::FileFormat;
 use log::Level;
 use log::LevelFilter;
@@ -44,6 +45,7 @@ use pumpkin_solver::core::results::SolutionReference;
 use pumpkin_solver::core::statistics::configure_statistic_logging;
 use pumpkin_solver::core::termination::TimeBudget;
 use pumpkin_solver::flatzinc::FlatZincOptions;
+use pumpkin_solver::flatzinc::ProofFormat;
 use pumpkin_solver::flatzinc::ProofType;
 use result::PumpkinError;
 use result::PumpkinResult;
@@ -81,6 +83,9 @@ struct Args {
     ///
     /// In case of a DRCP proof, if the file extension ends with `.gz`, a gzipped proof will be
     /// produced.
+    ///
+    /// A croc scaffold starts with a preamble that states the preprocessing the solver did, for
+    /// the proof processor.
     #[arg(long, verbatim_doc_comment)]
     proof_path: Option<PathBuf>,
 
@@ -89,6 +94,20 @@ struct Args {
     /// If the `proof_path` option is not provided, this is ignored.
     #[arg(long, value_enum, default_value_t)]
     proof_type: ProofType,
+
+    /// The proof format: `drcp`, or `croc`, which is experimental.
+    #[arg(long, value_enum, default_value_t)]
+    proof_format: ProofFormat,
+
+    /// How a croc proof of the block proof type derives each learned nogood: by a resolution
+    /// chain or by a refutation (experimental).
+    #[arg(long, value_enum, default_value_t)]
+    nogood_derivation: NogoodDerivation,
+
+    /// How a croc proof of the block proof type is written: in binary (the default) or as text
+    /// (experimental).
+    #[arg(long, value_enum)]
+    proof_encoding: Option<ProofEncoding>,
 
     /// The number of high-lbd learned nogoods that are kept in the database.
     ///
@@ -537,6 +556,30 @@ fn run() -> PumpkinResult<()> {
         args.omit_call_site,
     )?;
 
+    // Without a proof there is nothing to justify, and the compiler does what it does for croc.
+    let proof_format = if args.proof_path.is_some() {
+        args.proof_format
+    } else {
+        ProofFormat::Croc
+    };
+
+    if proof_format == ProofFormat::Drcp {
+        let croc_only = [
+            (args.proof_type == ProofType::Blocks, "--proof-type blocks"),
+            (
+                args.proof_encoding == Some(ProofEncoding::Binary),
+                "--proof-encoding binary",
+            ),
+        ];
+        if let Some((_, option)) = croc_only.iter().find(|(given, _)| *given) {
+            return Err(PumpkinError::NeedsCrocProofs((*option).to_owned()));
+        }
+    }
+
+    if args.proof_encoding == Some(ProofEncoding::Binary) && args.proof_type != ProofType::Blocks {
+        return Err(PumpkinError::BinaryNeedsBlocks);
+    }
+
     if pumpkin_solver::core::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION
         >= pumpkin_solver::core::asserts::PUMPKIN_ASSERT_MODERATE
     {
@@ -551,6 +594,16 @@ fn run() -> PumpkinResult<()> {
             FileFormat::CnfDimacsPLine => ProofLog::dimacs(path_buf)?,
             FileFormat::WcnfDimacsPLine => {
                 return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()));
+            }
+            FileFormat::FlatZinc if args.proof_type == ProofType::Blocks => ProofLog::blocks(
+                path_buf,
+                args.nogood_derivation == NogoodDerivation::Resolution,
+                args.proof_encoding.unwrap_or(ProofEncoding::Binary) == ProofEncoding::Binary,
+            )?,
+            FileFormat::FlatZinc
+                if proof_format == ProofFormat::Croc && args.proof_type == ProofType::Scaffold =>
+            {
+                ProofLog::croc_scaffold(path_buf)?
             }
             FileFormat::FlatZinc => ProofLog::cp(path_buf, args.proof_type == ProofType::Full)?,
         }
@@ -596,6 +649,11 @@ fn run() -> PumpkinResult<()> {
         .to_str()
         .ok_or(PumpkinError::invalid_instance(args.instance_path.display()))?;
 
+    // A croc scaffold starts with the preamble that states the compiler's preprocessing.
+    let writes_preamble = args.proof_path.is_some()
+        && proof_format == ProofFormat::Croc
+        && args.proof_type == ProofType::Scaffold;
+
     let recursive_minimisation = args.recursive_minimisation;
     let iterative_minimisation = !args.no_iterative_minimisation;
 
@@ -623,7 +681,9 @@ fn run() -> PumpkinResult<()> {
                         args.cumulative_incremental_backtracking,
                     ),
                     optimisation_strategy: args.optimisation_strategy,
-                    proof_type: args.proof_path.map(|_| args.proof_type),
+                    proof_type: args.proof_path.as_ref().map(|_| args.proof_type),
+                    proof_format,
+                    writes_preamble,
                     verbose: args.verbose,
                 },
                 NoLearningResolver,
@@ -643,7 +703,9 @@ fn run() -> PumpkinResult<()> {
                         args.cumulative_incremental_backtracking,
                     ),
                     optimisation_strategy: args.optimisation_strategy,
-                    proof_type: args.proof_path.map(|_| args.proof_type),
+                    proof_type: args.proof_path.as_ref().map(|_| args.proof_type),
+                    proof_format,
+                    writes_preamble,
                     verbose: args.verbose,
                 },
                 ResolutionResolver::new(
@@ -667,7 +729,9 @@ fn run() -> PumpkinResult<()> {
                         args.cumulative_incremental_backtracking,
                     ),
                     optimisation_strategy: args.optimisation_strategy,
-                    proof_type: args.proof_path.map(|_| args.proof_type),
+                    proof_type: args.proof_path.as_ref().map(|_| args.proof_type),
+                    proof_format,
+                    writes_preamble,
                     verbose: args.verbose,
                 },
                 ResolutionResolver::new(
@@ -691,7 +755,9 @@ fn run() -> PumpkinResult<()> {
                         args.cumulative_incremental_backtracking,
                     ),
                     optimisation_strategy: args.optimisation_strategy,
-                    proof_type: args.proof_path.map(|_| args.proof_type),
+                    proof_type: args.proof_path.as_ref().map(|_| args.proof_type),
+                    proof_format,
+                    writes_preamble,
                     verbose: args.verbose,
                 },
                 ResolutionResolver::new(
@@ -715,7 +781,9 @@ fn run() -> PumpkinResult<()> {
                         args.cumulative_incremental_backtracking,
                     ),
                     optimisation_strategy: args.optimisation_strategy,
-                    proof_type: args.proof_path.map(|_| args.proof_type),
+                    proof_type: args.proof_path.as_ref().map(|_| args.proof_type),
+                    proof_format,
+                    writes_preamble,
                     verbose: args.verbose,
                 },
                 ResolutionResolver::new(
@@ -798,4 +866,21 @@ fn stringify_solution(
             std::iter::once(String::new())
         })
         .collect::<String>()
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+enum ProofEncoding {
+    /// The binary form: atomic constraint declarations and inference lines as binary records.
+    Binary,
+    /// The text form.
+    Text,
+}
+
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+enum NogoodDerivation {
+    /// A resolution chain from the conflict.
+    #[default]
+    Resolution,
+    /// A refutation of the nogood by the inferences in the order they propagated.
+    Refutation,
 }

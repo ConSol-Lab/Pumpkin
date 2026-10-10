@@ -4,7 +4,6 @@ use std::rc::Rc;
 
 use flatzinc::Annotation;
 use pumpkin_core::Solver;
-use pumpkin_core::containers::HashMap;
 use pumpkin_core::variables::DomainId;
 use pumpkin_solver::core::variables::Literal;
 
@@ -31,12 +30,7 @@ pub(crate) fn run(
                     .variable_map
                     .entry(Rc::clone(&representative))
                     .or_insert_with(|| {
-                        create_integer_domain(
-                            context.solver,
-                            &mut context.constant_domain_ids,
-                            representative,
-                            domain,
-                        )
+                        create_integer_domain(context.solver, representative, domain)
                     });
 
                 let literal = Literal::new(domain_id);
@@ -59,12 +53,7 @@ pub(crate) fn run(
                     .variable_map
                     .entry(Rc::clone(&representative))
                     .or_insert_with(|| {
-                        create_integer_domain(
-                            context.solver,
-                            &mut context.constant_domain_ids,
-                            representative,
-                            domain,
-                        )
+                        create_integer_domain(context.solver, representative, domain)
                     });
 
                 if is_output_variable(annos) {
@@ -77,24 +66,11 @@ pub(crate) fn run(
     Ok(())
 }
 
-fn create_integer_domain(
-    solver: &mut Solver,
-    constant_domains: &mut HashMap<i32, DomainId>,
-    identifier: Rc<str>,
-    domain: Domain,
-) -> DomainId {
-    if domain.is_constant() {
-        let value = match &domain {
-            Domain::IntervalDomain { lb, ub: _ } => *lb,
-            Domain::SparseDomain { values } => values[0],
-        };
-
-        *constant_domains
-            .entry(value)
-            .or_insert_with(|| domain.into_variable(solver, value.to_string()))
-    } else {
-        domain.into_variable(solver, identifier.to_string())
-    }
+/// A model variable keeps a domain of its own and its name even when its domain is a single
+/// value, so that a proof can state what it knows about it: the constraints a proof checker
+/// reads mention the variable, not the value.
+fn create_integer_domain(solver: &mut Solver, identifier: Rc<str>, domain: Domain) -> DomainId {
+    domain.into_variable(solver, identifier.to_string())
 }
 
 fn is_output_variable(annos: &[Annotation]) -> bool {

@@ -1,0 +1,16 @@
+var 1..6: x :: output_var;
+var 1..6: y :: output_var;
+var 0..9: m :: output_var;
+var bool: a :: output_var;
+var bool: b :: output_var;
+var bool: c :: output_var;
+var 2..8: s :: output_var;
+constraint int_eq(x,y);
+constraint int_ne_reif(x,3,a);
+constraint bool_not(a,b);
+constraint set_in(s,{2,4,5,8});
+constraint int_lin_le_imp([1,1],[x,s],9,c);
+constraint array_bool_or([a,c],true);
+constraint array_int_minimum(m,[x,s]);
+constraint int_le_reif(5,s,b);
+solve maximize m;

@@ -6,6 +6,7 @@ mod compiler;
 pub mod error;
 pub mod instance;
 mod parser;
+pub mod preamble;
 
 use std::io::Read;
 
@@ -47,8 +48,25 @@ pub struct FlatZincOptions {
     /// The type of proof that is logged. This influences which preprocessing steps we can do.
     pub proof_type: Option<ProofType>,
 
+    /// The proof format, which decides what the compiler does for a proof.
+    pub proof_format: ProofFormat,
+
     /// Indicates that the solver should perform verbose logging
     pub verbose: bool,
+
+    /// Write the preamble that states the compiler's preprocessing, for the proof processor, at
+    /// the head of the croc scaffold the proof log writes.
+    pub writes_preamble: bool,
+}
+
+/// The proof format, which decides what the compiler does for a proof.
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum ProofFormat {
+    /// The DRCP format, without the steps it cannot state.
+    #[default]
+    Drcp,
+    /// The croc format of fzn-croc-check, with every step.
+    Croc,
 }
 
 /// The type of proof that is logged.
@@ -59,6 +77,8 @@ pub enum ProofType {
     Scaffold,
     /// Log the full proof with hints.
     Full,
+    /// Log the full proof in the croc block format (experimental).
+    Blocks,
 }
 
 /// Parse the FlatZinc model and compile it into the solver.

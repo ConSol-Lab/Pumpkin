@@ -32,6 +32,18 @@ pub enum FlatZincError {
         expected_type: Box<str>,
     },
 
+    #[error(
+        "the declaration of '{0}' makes it equal to another variable, which the proof cannot \
+         state"
+    )]
+    VariableAlias(Box<str>),
+
     #[error("missing solve item")]
     MissingSolveItem,
+
+    #[error(
+        "a croc proof cannot be logged when enumerating all solutions of a satisfaction problem: \
+         the clauses that exclude each solution found are not derivable"
+    )]
+    ProofOfSolutionEnumeration,
 }

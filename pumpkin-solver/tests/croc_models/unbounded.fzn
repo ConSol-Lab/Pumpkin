@@ -1,0 +1,5 @@
+var int: z :: output_var;
+var 0..5: x :: output_var;
+constraint int_le(x,z);
+constraint int_le(3,x);
+solve minimize z;

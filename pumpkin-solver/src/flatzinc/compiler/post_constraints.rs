@@ -15,16 +15,69 @@ use pumpkin_solver::core::variables::TransformableVariable;
 use super::context::CompilationContext;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::FlatZincOptions;
+use crate::flatzinc::ProofFormat;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::compiler::context::Set;
+use crate::flatzinc::preamble::Decomposition;
+use crate::flatzinc::preamble::DecompositionKind;
 
 pub(crate) fn run(
     _: &FlatZincAst,
     context: &mut CompilationContext,
     options: &FlatZincOptions,
 ) -> Result<(), FlatZincError> {
+    // 'set_in' constraints are handled in pre-processing steps, which restrict the domain of the
+    // variable to the set. fzn-croc-check holds the constraint apart from the declared domains,
+    // so the proof cites it for what the set excludes. The sets are named before any constraint
+    // is posted, since posting one can explain a predicate a set implies at the root.
+    if context.proof_format == ProofFormat::Croc && context.solver.is_logging_proof() {
+        let set_ins: Vec<(ConstraintTag, Vec<flatzinc::Expr>)> = context
+            .constraints
+            .iter()
+            .filter(|(_, item)| item.id == "set_in")
+            .map(|(tag, item)| (*tag, item.exprs.clone()))
+            .collect();
+        for (constraint_tag, exprs) in set_ins {
+            name_set_in_domain(context, &exprs, constraint_tag)?;
+        }
+    }
     for (constraint_tag, constraint_item) in std::mem::take(&mut context.constraints) {
         let flatzinc::ConstraintItem { id, exprs, annos } = &constraint_item;
+        // fzn-croc-check reads these as a reified or half-reified constraint, whose inferences
+        // cite the rule of the inner constraint wrapped as reified(R) or half_reified(R).
+        if context.proof_format == ProofFormat::Croc
+            && let Some(fully) = reification_of(id)
+        {
+            context.solver.name_reification(constraint_tag, fully);
+        }
+
+        // Constraints Pumpkin decomposes are cited under the rule for the whole constraint.
+        match id.as_str() {
+            "pumpkin_all_different" | "all_different_int" | "fzn_all_different_int" => context
+                .solver
+                .name_rule_of_constraint(constraint_tag, "all_different_hall"),
+            "array_int_minimum" | "int_min" => context
+                .solver
+                .name_rule_of_constraint(constraint_tag, "minimum"),
+            "bool_clause" => context
+                .solver
+                .name_rule_of_constraint(constraint_tag, "clause"),
+            "array_bool_and" | "bool_and" => context
+                .solver
+                .name_rule_of_constraint(constraint_tag, "boolean_and"),
+            "array_bool_or" | "bool_or" => context
+                .solver
+                .name_rule_of_constraint(constraint_tag, "boolean_or"),
+            // fzn-croc-check reads set_in_reif as set_in under an indicator.
+            "set_in_reif" if context.proof_format == ProofFormat::Croc => context
+                .solver
+                .name_rule_of_constraint(constraint_tag, "set_in"),
+            // fzn-croc-check reads bool_not(a, b) as the equality a + b = 1.
+            "bool_not" if context.proof_format == ProofFormat::Croc => context
+                .solver
+                .name_rule_of_constraint(constraint_tag, "linear_equal_binary"),
+            _ => {}
+        }
 
         match id.as_str() {
             "pumpkin_disjunctive_strict" => {
@@ -335,10 +388,8 @@ pub(crate) fn run(
             "bool_eq_reif" => compile_bool_eq_reif(context, exprs, constraint_tag)?,
             "bool_not" => compile_bool_not(context, exprs, constraint_tag)?,
             "set_in_reif" => compile_set_in_reif(context, exprs, constraint_tag)?,
-            "set_in" => {
-                // 'set_in' constraints are handled in pre-processing steps.
-                // TODO: remove it from the AST, so it does not need to be matched here
-            }
+            // Named before the constraints were posted.
+            "set_in" => {}
 
             "pumpkin_cumulative" => compile_cumulative(context, exprs, options, constraint_tag)?,
             "pumpkin_cumulative_var" => todo!(
@@ -445,6 +496,62 @@ fn compile_array_int_minimum(
     pumpkin_constraints::minimum(array.as_ref().to_owned(), rhs, constraint_tag)
         .post(context.solver);
 
+    Ok(())
+}
+
+/// Whether fzn-croc-check reads the FlatZinc constraint as reified (`Some(true)`) or half-reified
+/// (`Some(false)`), or as neither.
+fn reification_of(id: &str) -> Option<bool> {
+    match id {
+        "int_lin_le_reif"
+        | "int_lin_eq_reif"
+        | "int_lin_ne_reif"
+        | "int_le_reif"
+        | "int_lt_reif"
+        | "int_eq_reif"
+        | "bool_eq_reif"
+        | "int_ne_reif"
+        | "pumpkin_bool_xor_reif"
+        | "set_in_reif" => Some(true),
+        "int_lin_le_imp" | "int_lin_eq_imp" | "int_lin_ne_imp" | "int_le_imp" | "int_lt_imp"
+        | "int_eq_imp" | "int_ne_imp" | "set_in_imp" => Some(false),
+        _ => None,
+    }
+}
+
+/// Give the proof the set of a `set_in` constraint over a variable, as ranges of values, so that
+/// a bound the set implies at the root cites the constraint.
+fn name_set_in_domain(
+    context: &mut CompilationContext<'_>,
+    exprs: &[flatzinc::Expr],
+    constraint_tag: ConstraintTag,
+) -> Result<(), FlatZincError> {
+    check_parameters!(exprs, 2, "set_in");
+    let Ok(member) = context.resolve_integer_variable(&exprs[0]) else {
+        return Ok(());
+    };
+    let ranges = match context.resolve_set_constant(&exprs[1])? {
+        Set::Interval {
+            lower_bound,
+            upper_bound,
+        } => vec![(lower_bound, upper_bound)],
+        Set::Sparse { values } => {
+            let mut values = values.to_vec();
+            values.sort_unstable();
+            values.dedup();
+            let mut ranges: Vec<(i32, i32)> = vec![];
+            for value in values {
+                match ranges.last_mut() {
+                    Some((_, upper)) if *upper + 1 == value => *upper = value,
+                    _ => ranges.push((value, value)),
+                }
+            }
+            ranges
+        }
+    };
+    context
+        .solver
+        .name_set_in_domain(constraint_tag, member, ranges);
     Ok(())
 }
 
@@ -931,6 +1038,14 @@ fn compile_all_different(
     check_parameters!(exprs, 1, "fzn_all_different");
 
     let variables = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
+    // The disequalities it is decomposed into are cited as the Hall rule on the pair.
+    context.solver.name_positions_of_constraint(
+        constraint_tag,
+        variables
+            .iter()
+            .map(|variable| variable.scaled(1))
+            .collect(),
+    );
     pumpkin_constraints::all_different(variables, constraint_tag).post(context.solver);
 
     Ok(())
@@ -948,6 +1063,7 @@ fn compile_table(
 
     let flat_table = context.resolve_array_integer_constants(&exprs[1])?;
     let table = create_table(flat_table, variables.len());
+    record_table_decomposition(context, constraint_tag, table.len());
 
     pumpkin_constraints::table(variables, table, constraint_tag).post(context.solver);
 
@@ -968,10 +1084,30 @@ fn compile_table_reif(
     let table = create_table(flat_table, variables.len());
 
     let reified = context.resolve_bool_variable(&exprs[2])?;
+    record_table_decomposition(context, constraint_tag, table.len());
 
     pumpkin_constraints::table(variables, table, constraint_tag).reify(context.solver, reified);
 
     Ok(())
+}
+
+/// Under proof logging a table is posted as its decomposition, with a named selector per row,
+/// which the preamble states.
+fn record_table_decomposition(
+    context: &mut CompilationContext,
+    constraint_tag: ConstraintTag,
+    rows: usize,
+) {
+    if !context.solver.is_logging_proof() {
+        return;
+    }
+    context.preamble.decompositions.push(Decomposition {
+        kind: DecompositionKind::Table,
+        constraint: u64::from(std::num::NonZero::<u32>::from(constraint_tag).get()),
+        fresh_variables: (0..rows)
+            .map(|row| pumpkin_constraints::table_selector_name(constraint_tag, row))
+            .collect(),
+    });
 }
 
 fn create_table(flat_table: Rc<[i32]>, num_variables: usize) -> Vec<Vec<i32>> {
