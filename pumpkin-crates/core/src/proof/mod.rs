@@ -185,6 +185,7 @@ impl ProofLog {
                 last_nogood: None,
                 rule_of_constraint: HashMap::default(),
                 rule_by_indicator_side: HashMap::default(),
+                constant_domains: HashSet::default(),
                 positions_of_constraint: HashMap::default(),
                 set_in_domains: HashMap::default(),
                 selector_bounds: HashMap::default(),
@@ -356,6 +357,14 @@ impl ProofLog {
         if let Some(ProofImpl::BlockProof(proof)) = self.internal_proof.as_mut() {
             let _ = proof.selector_bounds.insert(domain, constraint_tag);
             let _ = proof.selector_bound_tags.insert(constraint_tag);
+        }
+    }
+
+    /// Write the variable as the constant its domain fixes, once the proof has replaced it by its
+    /// value: its atoms are left out.
+    pub fn write_as_constant(&mut self, domain: DomainId) {
+        if let Some(ProofImpl::BlockProof(proof)) = self.internal_proof.as_mut() {
+            let _ = proof.constant_domains.insert(domain);
         }
     }
 
@@ -1001,6 +1010,9 @@ struct BlockProof {
     selector_bounds: HashMap<DomainId, ConstraintTag>,
     /// The constraints in [`BlockProof::selector_bounds`], cited under `initial_domain`.
     selector_bound_tags: HashSet<ConstraintTag>,
+    /// The variables the proof replaces by their value, whose atoms it writes as it writes a
+    /// constant's: not at all.
+    constant_domains: HashSet<DomainId>,
 }
 
 impl Drop for BlockProof {
@@ -1174,7 +1186,11 @@ impl BlockProof {
             NonZero::new(self.next_identifier).expect("derived identifiers start at one");
         self.next_identifier += 1;
 
-        let is_constant = |predicate: Predicate| is_unnamed(predicate, variable_names);
+        let constant_domains = &self.constant_domains;
+        let is_constant = |predicate: Predicate| {
+            is_unnamed(predicate, variable_names)
+                || constant_domains.contains(&predicate.get_domain())
+        };
         let nogood: Vec<Predicate> = premises
             .into_iter()
             .map(|predicate| self.proof_atomics.canonical(predicate))

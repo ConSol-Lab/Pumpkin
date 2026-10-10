@@ -43,6 +43,12 @@ croc_proofs!(
     "views_literals_constants",
     "c UPPER_BOUND 28"
 );
+croc_proofs!(
+    views_literals_constants_declared,
+    "views_literals_constants",
+    "c UPPER_BOUND 28",
+    "--declare-replacements"
+);
 
 // An objective that the view pass makes a view of another variable.
 croc_proofs!(objective_view, "objective_view", "c UPPER_BOUND 28");
@@ -69,6 +75,21 @@ fn a_scaffold_states_its_preamble_before_the_nogoods() {
     assert!(preamble.iter().any(|line| line.starts_with("view ")));
     assert!(preamble.contains(&"proof"));
     std::fs::remove_file(&scaffold_path).expect("the scaffold is removed");
+}
+
+#[test]
+fn a_drcp_proof_skips_the_view_options() {
+    let model_path = model_path("table_reified_element");
+    let proof_path = output_path("table_reified_element.drcp");
+    let output = Command::new(env!("CARGO_BIN_EXE_pumpkin-solver"))
+        .arg("--proof-path")
+        .arg(&proof_path)
+        .args(["--declare-replacements"])
+        .arg(&model_path)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let _ = std::fs::remove_file(&proof_path);
 }
 
 /// Solve the model with a croc proof of the block proof type for each nogood derivation and

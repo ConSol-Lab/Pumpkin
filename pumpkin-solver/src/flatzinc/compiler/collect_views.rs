@@ -39,6 +39,8 @@ use crate::flatzinc::ast::SingleVarDecl;
 use crate::flatzinc::ast::VarArrayDecl;
 use crate::flatzinc::compiler::context::Affine;
 use crate::flatzinc::compiler::context::CompilationContext;
+use crate::flatzinc::compiler::context::Domain;
+use crate::flatzinc::compiler::context::UnitBound;
 use crate::flatzinc::preamble::View;
 
 pub(crate) fn run(
@@ -91,10 +93,26 @@ fn collect(
         forms: HashMap::default(),
         next_id: first_free_id,
         next_parameter: 0,
+        declare: options.declare_replacements,
         events: vec![],
         absorbed: HashSet::default(),
+        fixed: HashMap::default(),
+        constants: HashMap::default(),
         objective: objective_name(ast).map(|name| context.identifiers.get_interned(name)),
     };
+    if views.declare {
+        for name in context.equivalences.classes.keys() {
+            if context.equivalences.booleans.contains(name) {
+                continue;
+            }
+            if let Domain::IntervalDomain { lb, ub } = context.equivalences.domain(name)
+                && lb == ub
+            {
+                let _ = views.fixed.insert(Rc::clone(name), i64::from(lb));
+            }
+        }
+    }
+
     phase(&mut phases, "setup");
     // Only an equality can become a view; the form of any other constraint is built when it is
     // rewritten.
@@ -103,7 +121,10 @@ fn collect(
             item.id.as_str(),
             "int_lin_eq" | "int_eq" | "bool_eq" | "bool2int" | "bool_not"
         );
-        if !is_equality {
+        // A product with a constant factor is the linear equality the checker reads it as, and
+        // only a declared replacement can cite it, since a stated result would be linear.
+        let is_scaling = views.declare && item.id.as_str() == "int_times";
+        if !is_equality && !is_scaling {
             continue;
         }
         if let Some(form) = views.linear_form_of(context, item) {
@@ -126,6 +147,40 @@ fn collect(
         }
         kept.push((tag, item));
     }
+    if views.declare {
+        // An equality over more variables can read over two once other equalities made views,
+        // so the equalities left are read again until none becomes a view.
+        loop {
+            let mut changed = false;
+            let mut still_kept = Vec::with_capacity(kept.len());
+            for (tag, item) in kept {
+                if views.forms.contains_key(&tag_number(tag))
+                    && views.collect_equality(context, tag_number(tag), &item)
+                {
+                    context.view_statistics.views_on_rereading += 1;
+                    skipped.push(tag_number(tag));
+                    changed = true;
+                    continue;
+                }
+                still_kept.push((tag, item));
+            }
+            kept = still_kept;
+            if !changed {
+                break;
+            }
+        }
+        // An inequality over one variable is a bound on it, and none over a variable is a
+        // constant comparison.
+        let mut still_kept = Vec::with_capacity(kept.len());
+        for (tag, item) in kept {
+            if views.collect_unit_bound(context, tag, &item) {
+                skipped.push(tag_number(tag));
+                continue;
+            }
+            still_kept.push((tag, item));
+        }
+        kept = still_kept;
+    }
     for (_, item) in &kept {
         if !matches!(
             item.id.as_str(),
@@ -147,7 +202,10 @@ fn collect(
     context.constraints = kept;
 
     phase(&mut phases, "equalities");
-    views.rewrite_posted_constraints(context);
+    // Declared replacements rewrite every constraint in the checker; blocks rewrite each here.
+    if !views.declare {
+        views.rewrite_posted_constraints(context);
+    }
 
     phase(&mut phases, "rewrites");
     {
@@ -172,6 +230,7 @@ fn collect(
             match event {
                 ViewEvent::Definition { .. } => statistics.definitions += 1,
                 ViewEvent::Substitute { .. } => statistics.rewrites += 1,
+                ViewEvent::Declare(_) => statistics.declarations += 1,
                 ViewEvent::Parametrise { .. } => {}
             }
         }
@@ -255,7 +314,21 @@ fn collect(
         .iter()
         .map(|name| name.to_string())
         .collect();
-    preamble.skipped = skipped;
+    preamble.constants = context
+        .declared_constants
+        .iter()
+        .map(|name| (name.to_string(), views.constants[name]))
+        .collect();
+    // A unit bound is posted, as a bound rather than as a propagator.
+    let unit_bounds: HashSet<u64> = context
+        .unit_bounds
+        .iter()
+        .map(|unit| tag_number(unit.tag))
+        .collect();
+    preamble.skipped = skipped
+        .into_iter()
+        .filter(|number| !unit_bounds.contains(number))
+        .collect();
     if let Some(objective) = views.objective.as_ref()
         && context.equivalences.is_defined(objective)
         && context.equivalences.representative(objective) != *objective
@@ -285,6 +358,14 @@ fn objective_name(ast: &FlatZincAst) -> Option<&str> {
     }
 }
 
+/// Whether the domain holds the value.
+fn domain_contains(domain: &Domain, value: i64) -> bool {
+    match domain {
+        Domain::IntervalDomain { lb, ub } => i64::from(*lb) <= value && value <= i64::from(*ub),
+        Domain::SparseDomain { values } => values.iter().any(|v| i64::from(*v) == value),
+    }
+}
+
 fn tag_number(tag: ConstraintTag) -> u64 {
     u64::from(NonZero::<u32>::from(tag).get())
 }
@@ -305,11 +386,28 @@ struct Views<'a> {
     forms: HashMap<u64, LinearForm>,
     next_id: u64,
     next_parameter: u64,
+    /// Whether views are stated as declared replacements.
+    declare: bool,
     events: Vec<ViewEvent>,
     /// The variables that are views of another and no longer appear in posted constraints.
     absorbed: HashSet<Rc<str>>,
+    /// The variables whose declared domain is one value, with that value; each is replaced by it
+    /// in the proof when an equality or inequality it occurs in needs it.
+    fixed: HashMap<Rc<str>, i64>,
+    /// The representatives the proof replaced by a value, with the value.
+    constants: HashMap<Rc<str>, i64>,
     /// The objective variable, which keeps its name in the proof.
     objective: Option<Rc<str>>,
+}
+
+/// A linear form over representatives: views applied, constants moved to the bound, like terms
+/// merged and terms with coefficient zero left out, as the checker reads it once the declared
+/// replacements are applied. `needs` are the fixed variables it reads as constants, which the
+/// proof must replace first.
+struct ReducedForm {
+    terms: Vec<(Rc<str>, i64)>,
+    bound: i64,
+    needs: Vec<Rc<str>>,
 }
 
 impl Views<'_> {
@@ -628,10 +726,181 @@ impl Views<'_> {
             return false;
         };
         let _ = item;
-        let Some((x, a, y, b, c)) = Self::two_variable_equality(&form) else {
+        if !self.declare {
+            let Some((x, a, y, b, c)) = Self::two_variable_equality(&form) else {
+                return false;
+            };
+            return self.relate(context, number, &x, a, &y, b, c);
+        }
+        // Declared replacements rewrite the equality in the checker by every earlier one, so it
+        // reads over the representatives, with the constants in the bound.
+        let Some(reduced) = self.reduced(context, &form) else {
             return false;
         };
-        self.relate(context, number, &x, a, &y, b, c)
+        match reduced.terms.as_slice() {
+            [(x, a), (y, b)] => {
+                let (x, a, y, b) = (Rc::clone(x), *a, Rc::clone(y), *b);
+                self.declare_constants(context, &reduced.needs);
+                self.relate(context, number, &x, a, &y, b, reduced.bound)
+            }
+            [(x, a)] => {
+                let (x, a) = (Rc::clone(x), *a);
+                if reduced.bound % a != 0 || self.is_objective(context, &x) {
+                    return false;
+                }
+                let value = reduced.bound / a;
+                if !domain_contains(&context.equivalences.domain(&x), value) {
+                    // No value satisfies it; the solver finds the model infeasible.
+                    return false;
+                }
+                self.declare_constants(context, &reduced.needs);
+                self.declare_constant(context, &x, value, number);
+                true
+            }
+            [] if reduced.bound == 0 => {
+                context.view_statistics.redundant_equalities += 1;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Whether the variable's class holds the objective.
+    fn is_objective(&self, context: &CompilationContext, variable: &Rc<str>) -> bool {
+        self.objective.as_ref().is_some_and(|objective| {
+            context.equivalences.is_defined(objective)
+                && context.equivalences.representative(objective)
+                    == context.equivalences.representative(variable)
+        })
+    }
+
+    /// The form over representatives, as the checker reads it once the declarations so far are
+    /// applied; `None` on an overflow.
+    fn reduced(&self, context: &CompilationContext, form: &LinearForm) -> Option<ReducedForm> {
+        let mut terms: Vec<(Rc<str>, i64)> = vec![];
+        let mut position: HashMap<Rc<str>, usize> = HashMap::default();
+        let mut bound = form.bound;
+        let mut needs = vec![];
+        for (coefficient, term) in &form.terms {
+            let name = match term {
+                Term::Constant(value) => {
+                    bound = bound.checked_sub(coefficient.checked_mul(*value)?)?;
+                    continue;
+                }
+                Term::Variable(name) => name,
+            };
+            let (representative, view) = context.equivalences.view(name);
+            let scale = i64::from(view.scale);
+            let offset = i64::from(view.offset);
+            let constant = self.constants.get(&representative).copied().or_else(|| {
+                (context.equivalences.class_size(&representative) == 1
+                    && !self.is_objective(context, &representative))
+                .then(|| self.fixed.get(&representative).copied())
+                .flatten()
+            });
+            if let Some(value) = constant {
+                if !self.constants.contains_key(&representative) && !needs.contains(&representative)
+                {
+                    needs.push(Rc::clone(&representative));
+                }
+                let term_value = scale.checked_mul(value)?.checked_add(offset)?;
+                bound = bound.checked_sub(coefficient.checked_mul(term_value)?)?;
+                continue;
+            }
+            bound = bound.checked_sub(coefficient.checked_mul(offset)?)?;
+            let scaled = coefficient.checked_mul(scale)?;
+            match position.get(&representative) {
+                Some(&index) => terms[index].1 = terms[index].1.checked_add(scaled)?,
+                None => {
+                    let _ = position.insert(Rc::clone(&representative), terms.len());
+                    terms.push((representative, scaled));
+                }
+            }
+        }
+        terms.retain(|(_, coefficient)| *coefficient != 0);
+        Some(ReducedForm {
+            terms,
+            bound,
+            needs,
+        })
+    }
+
+    /// Replace the fixed variables by their value in the proof, citing their declared domains.
+    fn declare_constants(&mut self, context: &mut CompilationContext, variables: &[Rc<str>]) {
+        for variable in variables {
+            if self.constants.contains_key(variable) {
+                continue;
+            }
+            let value = self.fixed[variable];
+            self.declare_constant(context, variable, value, 0);
+        }
+    }
+
+    /// `s variable := value by c:evidence`: the variable's class takes the value, and the proof
+    /// no longer mentions the variable.
+    fn declare_constant(
+        &mut self,
+        context: &mut CompilationContext,
+        variable: &Rc<str>,
+        value: i64,
+        evidence: u64,
+    ) {
+        self.events.push(ViewEvent::Declare(Replacement {
+            variable: Rc::clone(variable),
+            replacing: Rc::clone(variable),
+            scale: 0,
+            offset: value,
+            evidence,
+        }));
+        let _ = self.constants.insert(Rc::clone(variable), value);
+        let value = i32::try_from(value).expect("a value in the domain fits");
+        *context.equivalences.get_mut_domain(variable) = Domain::IntervalDomain {
+            lb: value,
+            ub: value,
+        };
+        context.declared_constants.push(Rc::clone(variable));
+        context.view_statistics.constants += 1;
+    }
+
+    /// Returns `true` when the constraint is an inequality over one variable, which is posted as
+    /// a bound, or over none, which always holds; either way it is not posted as a propagator.
+    fn collect_unit_bound(
+        &mut self,
+        context: &mut CompilationContext,
+        tag: ConstraintTag,
+        item: &ConstraintItem,
+    ) -> bool {
+        if !matches!(item.id.as_str(), "int_lin_le" | "int_le" | "int_lt") {
+            return false;
+        }
+        let Some(form) = self.linear_form_of(context, item) else {
+            return false;
+        };
+        if form.relation != Relation::LessOrEqual {
+            return false;
+        }
+        let Some(reduced) = self.reduced(context, &form) else {
+            return false;
+        };
+        match reduced.terms.as_slice() {
+            [(x, a)] => {
+                if i32::try_from(*a).is_err() || i32::try_from(reduced.bound).is_err() {
+                    return false;
+                }
+                let bound = UnitBound {
+                    variable: Rc::clone(x),
+                    coefficient: *a,
+                    bound: reduced.bound,
+                    tag,
+                };
+                self.declare_constants(context, &reduced.needs);
+                context.unit_bounds.push(bound);
+                context.view_statistics.unit_bounds += 1;
+                true
+            }
+            [] if reduced.bound >= 0 => true,
+            _ => false,
+        }
     }
 
     /// `a * x + b * y = c` under the constraint `number`. Returns `true` when the classes were
@@ -723,11 +992,26 @@ impl Views<'_> {
                 if !keeps_booleans(&moved, view) {
                     return false;
                 }
-                self.rewrite_by_views(context, number, x, y);
+                if self.declare {
+                    // The checker has replaced every earlier member by its representative, so the
+                    // constraint reads A * r1 + B * r2 = k, and one declaration moves the absorbed
+                    // class.
+                    self.events.push(ViewEvent::Declare(Replacement {
+                        variable: Rc::clone(&absorbed),
+                        replacing: Rc::clone(&target),
+                        scale: i64::from(view.scale),
+                        offset: i64::from(view.offset),
+                        evidence: number,
+                    }));
+                } else {
+                    self.rewrite_by_views(context, number, x, y);
+                }
                 // The rewritten constraint reads A * r1 + B * r2 = k and now relates the absorbed
                 // representative to the target.
                 let _ = self.evidence.insert(Rc::clone(&absorbed), number);
-                self.rewrite_members(&moved, &absorbed, &target, view, number);
+                if !self.declare {
+                    self.rewrite_members(&moved, &absorbed, &target, view, number);
+                }
                 context.equivalences.absorb(&target, &absorbed, view);
                 let _ = self.absorbed.insert(absorbed);
                 true
@@ -763,7 +1047,9 @@ impl Views<'_> {
                 {
                     return false;
                 }
-                self.rewrite_by_views(context, number, x, y);
+                if !self.declare {
+                    self.rewrite_by_views(context, number, x, y);
+                }
 
                 let parameter: Rc<str> = format!("view_parameter_{}", self.next_parameter).into();
                 self.next_parameter += 1;
@@ -806,8 +1092,22 @@ impl Views<'_> {
                 context
                     .equivalences
                     .create_parameter_class(Rc::clone(&parameter));
-                self.rewrite_members(&first_members, &r1, &parameter, first_view, first_id);
-                self.rewrite_members(&second_members, &r2, &parameter, second_view, second_id);
+                if self.declare {
+                    for (id, representative, view) in
+                        [(first_id, &r1, first_view), (second_id, &r2, second_view)]
+                    {
+                        self.events.push(ViewEvent::Declare(Replacement {
+                            variable: Rc::clone(representative),
+                            replacing: Rc::clone(&parameter),
+                            scale: i64::from(view.scale),
+                            offset: i64::from(view.offset),
+                            evidence: id,
+                        }));
+                    }
+                } else {
+                    self.rewrite_members(&first_members, &r1, &parameter, first_view, first_id);
+                    self.rewrite_members(&second_members, &r2, &parameter, second_view, second_id);
+                }
                 context.equivalences.absorb(&parameter, &r1, first_view);
                 context.equivalences.absorb(&parameter, &r2, second_view);
                 let _ = self.absorbed.insert(r1);

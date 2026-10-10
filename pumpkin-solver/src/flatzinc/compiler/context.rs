@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::cell::RefMut;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
@@ -66,11 +67,25 @@ pub(crate) struct CompilationContext<'a> {
 
     /// What the view pass did and how long it took.
     pub(crate) view_statistics: ViewStatistics,
+    /// The variables the proof replaces by their value; each class's domain is that value.
+    pub(crate) declared_constants: Vec<Rc<str>>,
+    /// Linear inequalities that read over one variable once views and constants are applied:
+    /// each is a bound on that variable, posted at the root instead of as a propagator.
+    pub(crate) unit_bounds: Vec<UnitBound>,
     /// The proof format: in the DRCP format, terms are posted as the model writes them and a
     /// half-reified bound stays a propagator, as the DRCP checker reads them.
     pub(crate) proof_format: crate::flatzinc::ProofFormat,
     /// The preprocessing done, as the preamble of a scaffold states it.
     pub(crate) preamble: crate::flatzinc::preamble::Preamble,
+}
+
+/// `coefficient * variable <= bound`, which the constraint `tag` states.
+#[derive(Clone, Debug)]
+pub(crate) struct UnitBound {
+    pub(crate) variable: Rc<str>,
+    pub(crate) coefficient: i64,
+    pub(crate) bound: i64,
+    pub(crate) tag: ConstraintTag,
 }
 
 /// Counts of the views made, by kind, and the time the pass took.
@@ -89,6 +104,8 @@ pub struct ViewStatistics {
     pub skipped: usize,
     /// Rewrite steps in the log.
     pub rewrites: usize,
+    /// Declared replacements in the log.
+    pub declarations: usize,
     /// Two-variable equalities still posted as propagators: over two variables already in one
     /// class, declined by the view pass for another reason (a boolean that would not stay a
     /// boolean, no integer solution, an overflow), longer equalities that views reduce to two
@@ -101,6 +118,17 @@ pub struct ViewStatistics {
     /// not read: `int_plus` and `int_times` with a constant operand, `bool_lin_eq` over two
     /// booleans, and a reified equality whose indicator is fixed true.
     pub affine_relations_not_read: usize,
+    /// Variables the proof replaces by their value: fixed by their declared domain, or by an
+    /// equality over one variable once views apply.
+    pub constants: usize,
+    /// Equalities that became views only when read again after other views were made.
+    pub views_on_rereading: usize,
+    /// Equalities that views and constants reduce to `0 = 0`, which are not posted.
+    pub redundant_equalities: usize,
+    /// Linear inequalities posted as a bound at the root.
+    pub unit_bounds: usize,
+    /// Half-reified comparisons of a variable with a constant posted as a clause.
+    pub half_reified_clauses: usize,
 }
 
 /// A set parameter.
@@ -140,6 +168,8 @@ impl CompilationContext<'_> {
             constraints: Default::default(),
 
             view_statistics: Default::default(),
+            declared_constants: vec![],
+            unit_bounds: vec![],
             proof_format: crate::flatzinc::ProofFormat::Croc,
             preamble: Default::default(),
         }
@@ -697,6 +727,18 @@ impl VariableEquivalences {
     /// If the variable doesn't belong to an equivalence class, this method panics.
     pub(crate) fn domain(&self, variable: &str) -> Domain {
         self.classes[variable].borrow().domain.clone()
+    }
+
+    #[allow(
+        clippy::needless_pass_by_ref_mut,
+        reason = "The domains are behind a `RefCell`, so `&self` would suffice; taking `&mut self` \
+                  ensures at compile-time that two mutable borrows cannot be handed out at the \
+                  same time, which would panic at runtime"
+    )]
+    pub(crate) fn get_mut_domain(&mut self, variable: &str) -> RefMut<'_, Domain> {
+        RefMut::map(self.classes[variable].borrow_mut(), |class| {
+            &mut class.domain
+        })
     }
 
     /// Restrict the variable to the values of `domain`: its class's representative keeps the

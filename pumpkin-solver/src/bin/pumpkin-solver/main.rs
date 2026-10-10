@@ -115,6 +115,11 @@ struct Args {
     #[arg(long)]
     preprocess_only: bool,
 
+    /// State each view the compiler makes as one declared replacement in a croc proof, instead
+    /// of rewriting each constraint that mentions the variable (experimental).
+    #[arg(long)]
+    declare_replacements: bool,
+
     /// The number of high-lbd learned nogoods that are kept in the database.
     ///
     /// Learned nogoods are kept based on the tiered system introduced in "Improving
@@ -584,6 +589,10 @@ fn run() -> PumpkinResult<()> {
         if let Some((_, option)) = croc_only.iter().find(|(given, _)| *given) {
             return Err(PumpkinError::NeedsCrocProofs((*option).to_owned()));
         }
+        let skipped = [(args.declare_replacements, "--declare-replacements")];
+        for (_, option) in skipped.iter().filter(|(given, _)| *given) {
+            warn!("{option} is skipped under --proof-format drcp");
+        }
     }
 
     if args.proof_encoding == Some(ProofEncoding::Binary) && args.proof_type != ProofType::Blocks {
@@ -699,6 +708,7 @@ fn run() -> PumpkinResult<()> {
                     proof_format,
                     writes_preamble,
                     preprocess_only: args.preprocess_only,
+                    declare_replacements: args.declare_replacements,
                     head_path: if args.preprocess_only {
                         args.proof_path.clone()
                     } else {
@@ -727,6 +737,7 @@ fn run() -> PumpkinResult<()> {
                     proof_format,
                     writes_preamble,
                     preprocess_only: args.preprocess_only,
+                    declare_replacements: args.declare_replacements,
                     head_path: if args.preprocess_only {
                         args.proof_path.clone()
                     } else {
@@ -759,6 +770,7 @@ fn run() -> PumpkinResult<()> {
                     proof_format,
                     writes_preamble,
                     preprocess_only: args.preprocess_only,
+                    declare_replacements: args.declare_replacements,
                     head_path: if args.preprocess_only {
                         args.proof_path.clone()
                     } else {
@@ -791,6 +803,7 @@ fn run() -> PumpkinResult<()> {
                     proof_format,
                     writes_preamble,
                     preprocess_only: args.preprocess_only,
+                    declare_replacements: args.declare_replacements,
                     head_path: if args.preprocess_only {
                         args.proof_path.clone()
                     } else {
@@ -823,6 +836,7 @@ fn run() -> PumpkinResult<()> {
                     proof_format,
                     writes_preamble,
                     preprocess_only: args.preprocess_only,
+                    declare_replacements: args.declare_replacements,
                     head_path: if args.preprocess_only {
                         args.proof_path.clone()
                     } else {

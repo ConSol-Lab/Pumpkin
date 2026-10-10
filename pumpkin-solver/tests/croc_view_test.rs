@@ -52,6 +52,25 @@ fn an_equality_whose_coefficients_divide_neither_way_introduces_a_parameter() {
     assert!(preamble.iter().any(|line| line.starts_with("view v ")));
 }
 
+#[test]
+fn declared_replacements_replace_a_fixed_variable_by_its_value() {
+    let preamble = preamble_of(
+        "declared",
+        "views_literals_constants",
+        &["--declare-replacements"],
+    );
+    assert!(
+        preamble.contains(&"constant k 3".to_owned()),
+        "{preamble:?}"
+    );
+    check_block_proofs(
+        "views_declared",
+        "views_literals_constants",
+        "c UPPER_BOUND 28",
+        &["--declare-replacements"],
+    );
+}
+
 /// The lines of the preamble of the scaffold the solver writes for the model, before the marker.
 fn preamble_of(name: &str, model: &str, flags: &[&str]) -> Vec<String> {
     let scaffold_path = output_path(&format!("{name}.scaffold"));

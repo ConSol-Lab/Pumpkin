@@ -118,6 +118,21 @@ pub(crate) fn solve<R: ConflictResolver>(
                 view_statistics.skipped.to_string(),
             ),
             ("viewRewriteSteps", view_statistics.rewrites.to_string()),
+            ("viewDeclarations", view_statistics.declarations.to_string()),
+            ("viewConstants", view_statistics.constants.to_string()),
+            (
+                "viewsOnRereading",
+                view_statistics.views_on_rereading.to_string(),
+            ),
+            (
+                "redundantEqualities",
+                view_statistics.redundant_equalities.to_string(),
+            ),
+            ("unitBounds", view_statistics.unit_bounds.to_string()),
+            (
+                "halfReifiedClauses",
+                view_statistics.half_reified_clauses.to_string(),
+            ),
             (
                 "postedTwoTermEqualitiesInOneClass",
                 view_statistics.two_term_equalities_in_one_class.to_string(),

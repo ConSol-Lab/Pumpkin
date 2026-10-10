@@ -242,6 +242,12 @@ impl Solver {
             .name_selector_bounds(domain, constraint_tag)
     }
 
+    /// Write the variable as the constant its domain fixes in a proof in the block format, which
+    /// has replaced it by its value. Does nothing for other proofs.
+    pub fn write_as_constant(&mut self, domain: DomainId) {
+        self.satisfaction_solver.write_as_constant(domain)
+    }
+
     /// Give the elements of a constraint over a list of expressions, so that the inferences
     /// from it in a proof in the block format name the positions they read.
     pub fn name_positions_of_constraint(

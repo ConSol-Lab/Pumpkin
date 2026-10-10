@@ -334,6 +334,10 @@ impl ConstraintSatisfactionSolver {
             .name_selector_bounds(domain, constraint_tag)
     }
 
+    pub(crate) fn write_as_constant(&mut self, domain: DomainId) {
+        self.internal_parameters.proof_log.write_as_constant(domain)
+    }
+
     pub(crate) fn name_positions_of_constraint(
         &mut self,
         constraint_tag: ConstraintTag,

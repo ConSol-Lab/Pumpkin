@@ -27,6 +27,24 @@ pub(crate) fn run(
     context: &mut CompilationContext,
     options: &FlatZincOptions,
 ) -> Result<(), FlatZincError> {
+    // The proof replaced these variables by their value, so it writes no atom over them.
+    for name in context.declared_constants.clone() {
+        let domain = context.variable_map[&name];
+        context.solver.write_as_constant(domain);
+    }
+    // An inequality over one variable is a bound on it, set at the root by a unit clause that
+    // cites the inequality.
+    for unit in std::mem::take(&mut context.unit_bounds) {
+        let domain = context.variable_map[&unit.variable];
+        let scaled = domain.scaled(i32::try_from(unit.coefficient).expect("checked to fit"));
+        let bound = i32::try_from(unit.bound).expect("checked to fit");
+        context
+            .solver
+            .name_rule_of_constraint(unit.tag, "linear_less_or_equal");
+        context
+            .solver
+            .add_clause([predicate![scaled <= bound]], unit.tag);
+    }
     // 'set_in' constraints are handled in pre-processing steps, which restrict the domain of the
     // variable to the set. fzn-croc-check holds the constraint apart from the declared domains,
     // so the proof cites it for what the set excludes. The sets are named before any constraint
@@ -51,6 +69,12 @@ pub(crate) fn run(
         {
             context.solver.name_reification(constraint_tag, fully);
         }
+        if context.proof_format == ProofFormat::Croc
+            && post_half_reified_bound(context, id, exprs, constraint_tag)?
+        {
+            continue;
+        }
+
         // Two-term equalities that stay propagators, counted for the statistics.
         match id.as_str() {
             "int_eq_reif" | "int_eq_imp" | "bool_eq_reif" | "bool_eq_imp" => {
@@ -1124,6 +1148,56 @@ fn compile_int_lin_imp_predicate<C: Constraint>(
     constraint.implied_by(context.solver, reif);
 
     Ok(())
+}
+
+/// `b -> x <= c` and its kin, with one side a constant, as the clause `!b \/ [x <= c]` instead of
+/// a propagator. Returns `false` for any other constraint. Its inferences are the comparison's,
+/// read under the indicator.
+fn post_half_reified_bound(
+    context: &mut CompilationContext,
+    id: &str,
+    exprs: &[flatzinc::Expr],
+    constraint_tag: ConstraintTag,
+) -> Result<bool, FlatZincError> {
+    if !matches!(
+        id,
+        "int_le_imp" | "int_lt_imp" | "int_ge_imp" | "int_gt_imp"
+    ) || exprs.len() != 3
+    {
+        return Ok(false);
+    }
+    let left = context.resolve_integer_constant_from_expr(&exprs[0]).ok();
+    let right = context.resolve_integer_constant_from_expr(&exprs[1]).ok();
+    let predicate = match (left, right) {
+        (None, Some(value)) => {
+            let x = context.resolve_integer_variable(&exprs[0])?;
+            match id {
+                "int_le_imp" => predicate![x <= value],
+                "int_lt_imp" => predicate![x <= value - 1],
+                "int_ge_imp" => predicate![x >= value],
+                _ => predicate![x >= value + 1],
+            }
+        }
+        (Some(value), None) => {
+            let x = context.resolve_integer_variable(&exprs[1])?;
+            match id {
+                "int_le_imp" => predicate![x >= value],
+                "int_lt_imp" => predicate![x >= value + 1],
+                "int_ge_imp" => predicate![x <= value],
+                _ => predicate![x <= value - 1],
+            }
+        }
+        _ => return Ok(false),
+    };
+    let indicator = context.resolve_bool_variable(&exprs[2])?;
+    context
+        .solver
+        .name_rule_of_constraint(constraint_tag, "linear_less_or_equal");
+    context
+        .solver
+        .add_clause([!indicator.get_true_predicate(), predicate], constraint_tag);
+    context.view_statistics.half_reified_clauses += 1;
+    Ok(true)
 }
 
 fn compile_binary_int_imp<C: Constraint>(

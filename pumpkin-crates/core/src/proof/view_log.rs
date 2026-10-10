@@ -63,6 +63,9 @@ pub enum ViewEvent {
         source: u64,
         equalities: [(u64, Rc<str>, i64, i64); 2],
     },
+    /// `s <variable> := <affine> by c:<evidence>`: the variable replaced in every constraint but
+    /// the cited equality, from here on.
+    Declare(Replacement),
 }
 
 /// The view steps of the FlatZinc compiler, in order.
@@ -199,6 +202,16 @@ impl ViewLog {
                         None => lines.push(format!("  e {target}")),
                     }
                 }
+                ViewEvent::Declare(replacement) => lines.push(format!(
+                    "s {} := {} by c:{}",
+                    replacement.variable,
+                    affine_text(
+                        replacement.scale,
+                        &replacement.replacing,
+                        replacement.offset
+                    ),
+                    replacement.evidence
+                )),
                 ViewEvent::Parametrise {
                     parameter,
                     source,

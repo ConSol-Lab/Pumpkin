@@ -8,6 +8,7 @@ use std::fmt::Write as _;
 pub struct Preamble {
     pub views: Vec<View>,
     pub parameters: Vec<String>,
+    pub constants: Vec<(String, i64)>,
     pub skipped: Vec<u64>,
     pub decompositions: Vec<Decomposition>,
     /// The objective variable when it is a view, with the constraint that relates it to its
@@ -53,6 +54,9 @@ impl Preamble {
         }
         for parameter in &self.parameters {
             writeln!(text, "parameter {parameter}").unwrap();
+        }
+        for (variable, value) in &self.constants {
+            writeln!(text, "constant {variable} {value}").unwrap();
         }
         for constraint in &self.skipped {
             writeln!(text, "skip {constraint}").unwrap();

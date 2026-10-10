@@ -63,6 +63,8 @@ pub struct FlatZincOptions {
     /// fzn-drcp-check, to `head_path`, report what the view pass did, and do not solve.
     pub preprocess_only: bool,
     pub head_path: Option<std::path::PathBuf>,
+    /// State views as declared replacements rather than rewriting every constraint.
+    pub declare_replacements: bool,
 }
 
 /// The proof format, which decides what the compiler does for a proof.
