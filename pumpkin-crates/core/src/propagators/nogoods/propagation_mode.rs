@@ -19,6 +19,7 @@ use crate::propagators::nogoods::Watcher;
 use crate::propagators::nogoods::arena_allocator::ArenaAllocator;
 use crate::propagators::nogoods::arena_allocator::NogoodIndex;
 use crate::pumpkin_assert_moderate;
+#[cfg(feature = "check-propagations")]
 use crate::pumpkin_assert_simple;
 use crate::state::PropagationStatusCP;
 use crate::state::PropagatorHandle;
@@ -356,12 +357,13 @@ impl PropagationMode {
                     num_watchable += 1;
                 }
             }
+
+            pumpkin_assert_simple!(
+                !context.is_predicate_id_satisfied(nogood[0])
+                    && !context.is_predicate_id_satisfied(nogood[1]),
+                "the watched predicates of a nogood should not be true"
+            );
         }
-        pumpkin_assert_simple!(
-            !context.is_predicate_id_satisfied(nogood[0])
-                && !context.is_predicate_id_satisfied(nogood[1]),
-            "the watched predicates of a nogood should not be true"
-        );
 
         match self {
             PropagationMode::ExtendedNogoodPropagation => {
