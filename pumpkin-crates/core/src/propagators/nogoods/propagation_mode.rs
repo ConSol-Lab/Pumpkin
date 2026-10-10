@@ -325,7 +325,6 @@ impl PropagationMode {
         nogood_info: &mut KeyedVec<NogoodIndex, NogoodInfo>,
         inference_codes: &mut KeyedVec<NogoodIndex, InferenceCode>,
         watch_lists: &mut KeyedVec<PredicateId, Vec<Watcher>>,
-        permanent_nogood_ids: &mut Vec<NogoodId>,
         statistics: &NogoodPropagatorStatistics,
         propagation_buffer: &mut PropagationBuffer,
     ) {
@@ -408,8 +407,6 @@ impl PropagationMode {
                         watcher,
                         watch_lists,
                     );
-
-                    permanent_nogood_ids.push(nogood_id);
                 } else {
                     // Otherwise, we treat it as a "unit" nogood and we perform propagation and
                     // then do not add the nogood to the database.
@@ -423,8 +420,6 @@ impl PropagationMode {
                 let nogood_id = nogood_predicates.insert(nogood);
                 let _ = nogood_info.push(NogoodInfo::new_permanent_nogood_info());
                 let _ = inference_codes.push(inference_code);
-
-                permanent_nogood_ids.push(nogood_id);
 
                 let watcher = Watcher {
                     nogood_id,

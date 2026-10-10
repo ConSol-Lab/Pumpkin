@@ -5,5 +5,7 @@ allowed-duplicate-crates = [
     "anstyle-parse",
     "regex-syntax",
     "hashbrown",
-    "syn"
+    "syn",
+    # Only locked as an optional dependency of `bit-vec` (through `borsh`); a single version is built
+    "winnow"
 ]

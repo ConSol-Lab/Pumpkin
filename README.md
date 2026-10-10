@@ -1,11 +1,13 @@
-# Pumpkin
+<h1 align="center">Pumpkin</h1>
 
-[![Pumpkin on crates.io](https://img.shields.io/crates/v/pumpkin-solver?label=pumpkin-solver)](https://crates.io/crates/pumpkin-solver)
-[![DRCP Format on crates.io](https://img.shields.io/crates/v/drcp-format?label=drcp-format)](https://crates.io/crates/drcp-format)
-[![Pumpkin on PyPI](https://img.shields.io/pypi/v/pumpkin_solver)](https://pypi.org/project/pumpkin-solver/)
-[![Build Status](https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml/badge.svg)](https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml)
-[![docs.rs](https://img.shields.io/docsrs/pumpkin-solver)](https://docs.rs/pumpkin-solver)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+<p align="center">
+  <a href="https://crates.io/crates/pumpkin-solver"><img src="https://img.shields.io/crates/v/pumpkin-solver?label=pumpkin-solver&logo=rust&color=CE422B&style=for-the-badge" alt="Pumpkin on crates.io"></a>
+  <a href="https://docs.rs/pumpkin-solver"><img src="https://img.shields.io/docsrs/pumpkin-solver?logo=docsdotrs&color=CE422B&style=for-the-badge" alt="docs.rs"></a>
+  <a href="https://crates.io/crates/drcp-format"><img src="https://img.shields.io/crates/v/drcp-format?label=drcp-format&logo=rust&color=CE422B&style=for-the-badge" alt="DRCP Format on crates.io"></a>
+  <a href="https://pypi.org/project/pumpkin-solver/"><img src="https://img.shields.io/pypi/v/pumpkin_solver?logo=pypi&logoColor=white&color=3775A9&style=for-the-badge" alt="Pumpkin on PyPI"></a>
+  <a href="https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Consol-Lab/Pumpkin/ci.yml?logo=github&color=green&logoColor=white&style=for-the-badge" alt="Build Status"></a>
+  <a href="#license"><img src="https://img.shields.io/badge/-MIT%20OR%20Apache--2.0-blue.svg?color=97CA00&style=for-the-badge" alt="License: MIT OR Apache-2.0"></a>
+</p>
 
 
 <p align="center">
@@ -108,6 +110,7 @@ Pumpkin consists of several different components:
     - [pumpkin-propagators](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/propagators); contains (most of) the propagators used by Pumpkin.
     - [pumpkin-constraints](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/constraints); contains convenient ways to add one or more propagators modelling certain constraints to the solver.
     - [pumpkin-conflict-resolvers](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/conflict-resolvers); contains the conflict resolvers (e.g., 1UIP or All-Decision conflict resolvers) used by Pumpkin.
+    - [pumpkin-branching](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/branching); contains the branching heuristics (e.g., variable/value selection strategies) used by Pumpkin.
     - [pumpkin-checking](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/checking); contains the types used for checking the soundness of propagators in Pumpkin.
 - The CLI contained in [pumpkin-solver](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver).
 - The Python bindings contained in [pumpkin-solver-py](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver-py).
