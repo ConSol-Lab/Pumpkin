@@ -66,6 +66,13 @@ pub enum ViewEvent {
     /// `s <variable> := <affine> by c:<evidence>`: the variable replaced in every constraint but
     /// the cited equality, from here on.
     Declare(Replacement),
+    /// `q <id> : <equality> by c:<k> ...`: an equality over two variables that the cited
+    /// constraints entail, which the checker establishes by enumerating the two variables.
+    Equality {
+        id: u64,
+        form: LinearForm,
+        evidence: Vec<u64>,
+    },
 }
 
 /// The view steps of the FlatZinc compiler, in order.
@@ -212,6 +219,14 @@ impl ViewLog {
                     ),
                     replacement.evidence
                 )),
+                ViewEvent::Equality { id, form, evidence } => {
+                    let cited = evidence
+                        .iter()
+                        .map(|number| format!("c:{number}"))
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    lines.push(format!("q {id} : {} by {cited}", form.render()));
+                }
                 ViewEvent::Parametrise {
                     parameter,
                     source,

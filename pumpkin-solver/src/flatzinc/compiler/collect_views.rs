@@ -136,12 +136,16 @@ fn collect(
     views.collect_definitions(context)?;
 
     phase(&mut phases, "definitions");
+    // Two booleans that other constraints together force equal or opposite.
+    let implied = views.collect_boolean_pairs(context);
 
     let constraints = std::mem::take(&mut context.constraints);
     let mut kept = vec![];
     let mut skipped = vec![];
     for (tag, item) in constraints {
-        if views.collect_equality(context, tag_number(tag), &item) {
+        if implied.contains(&tag_number(tag))
+            || views.collect_equality(context, tag_number(tag), &item)
+        {
             skipped.push(tag_number(tag));
             continue;
         }
@@ -231,7 +235,7 @@ fn collect(
                 ViewEvent::Definition { .. } => statistics.definitions += 1,
                 ViewEvent::Substitute { .. } => statistics.rewrites += 1,
                 ViewEvent::Declare(_) => statistics.declarations += 1,
-                ViewEvent::Parametrise { .. } => {}
+                ViewEvent::Parametrise { .. } | ViewEvent::Equality { .. } => {}
             }
         }
     }
@@ -642,6 +646,213 @@ impl Views<'_> {
             }
             _ => None,
         }
+    }
+
+    /// The value of an operand when `x` and `y` take `value_x` and `value_y`; `None` for any
+    /// other variable.
+    fn value_at(operand: &Operand, x: &str, y: &str, value_x: i64, value_y: i64) -> Option<i64> {
+        match operand {
+            Operand::Constant(value) => Some(*value),
+            Operand::Variable(name) if name.as_ref() == x => Some(value_x),
+            Operand::Variable(name) if name.as_ref() == y => Some(value_y),
+            Operand::Variable(_) => None,
+        }
+    }
+
+    /// Whether the constraint holds when `x` and `y` take the values, for the kinds over
+    /// booleans the pair detection reads; `None` for any other kind or argument.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the constraint, its arguments and the two values"
+    )]
+    fn holds_at(
+        &self,
+        context: &CompilationContext,
+        item: &ConstraintItem,
+        x: &str,
+        y: &str,
+        value_x: i64,
+        value_y: i64,
+    ) -> Option<bool> {
+        let at = |expr: &flatzinc::Expr| -> Option<i64> {
+            Self::value_at(&self.operand(context, expr)?, x, y, value_x, value_y)
+        };
+        let all_at = |expr: &flatzinc::Expr| -> Option<Vec<i64>> {
+            self.array_operands(context, expr)?
+                .iter()
+                .map(|operand| Self::value_at(operand, x, y, value_x, value_y))
+                .collect()
+        };
+        let sum = |weights: &flatzinc::Expr, variables: &flatzinc::Expr| -> Option<i64> {
+            let weights = context.resolve_array_integer_constants(weights).ok()?;
+            let values = all_at(variables)?;
+            (weights.len() == values.len()).then(|| {
+                weights
+                    .iter()
+                    .zip(values)
+                    .map(|(weight, value)| i64::from(*weight) * value)
+                    .sum()
+            })
+        };
+        let exprs = &item.exprs;
+        let name = item.id.as_str();
+        let reified = |relation: bool, indicator: i64| -> bool {
+            if name.ends_with("_imp") {
+                indicator == 0 || relation
+            } else {
+                (indicator == 1) == relation
+            }
+        };
+        let base = name.trim_end_matches("_reif").trim_end_matches("_imp");
+        let is_reified = name.ends_with("_reif") || name.ends_with("_imp");
+        match (base, exprs.len(), is_reified) {
+            ("bool_clause", 2, false) => {
+                let positives = all_at(&exprs[0])?;
+                let negatives = all_at(&exprs[1])?;
+                Some(positives.contains(&1) || negatives.contains(&0))
+            }
+            ("array_bool_and", 2, false) => {
+                let operands = all_at(&exprs[0])?;
+                Some((at(&exprs[1])? == 1) == operands.iter().all(|&v| v == 1))
+            }
+            ("array_bool_or", 2, false) => {
+                let operands = all_at(&exprs[0])?;
+                Some((at(&exprs[1])? == 1) == operands.contains(&1))
+            }
+            ("pumpkin_bool_xor", 3, true) => {
+                Some(reified(at(&exprs[0])? != at(&exprs[1])?, at(&exprs[2])?))
+            }
+            ("int_lin_le", 3, false) => Some(sum(&exprs[0], &exprs[1])? <= at(&exprs[2])?),
+            ("int_lin_ne", 3, false) => Some(sum(&exprs[0], &exprs[1])? != at(&exprs[2])?),
+            ("int_lin_le", 4, true) => Some(reified(
+                sum(&exprs[0], &exprs[1])? <= at(&exprs[2])?,
+                at(&exprs[3])?,
+            )),
+            ("int_lin_eq", 4, true) => Some(reified(
+                sum(&exprs[0], &exprs[1])? == at(&exprs[2])?,
+                at(&exprs[3])?,
+            )),
+            ("int_lin_ne", 4, true) => Some(reified(
+                sum(&exprs[0], &exprs[1])? != at(&exprs[2])?,
+                at(&exprs[3])?,
+            )),
+            ("int_le" | "bool_le", 2, false) => Some(at(&exprs[0])? <= at(&exprs[1])?),
+            ("int_lt" | "bool_lt", 2, false) => Some(at(&exprs[0])? < at(&exprs[1])?),
+            ("int_ne", 2, false) => Some(at(&exprs[0])? != at(&exprs[1])?),
+            ("int_eq" | "bool_eq", 3, true) => {
+                Some(reified(at(&exprs[0])? == at(&exprs[1])?, at(&exprs[2])?))
+            }
+            ("int_ne", 3, true) => Some(reified(at(&exprs[0])? != at(&exprs[1])?, at(&exprs[2])?)),
+            ("int_le" | "bool_le", 3, true) => {
+                Some(reified(at(&exprs[0])? <= at(&exprs[1])?, at(&exprs[2])?))
+            }
+            ("int_lt" | "bool_lt", 3, true) => {
+                Some(reified(at(&exprs[0])? < at(&exprs[1])?, at(&exprs[2])?))
+            }
+            _ => None,
+        }
+    }
+
+    /// Pairs of variables with domain `0..1` that the constraints over the two of them alone
+    /// force equal or opposite. The equality is stated with a `q` step citing those constraints
+    /// and the declared domains, and becomes a view; the constraints are then implied by the view
+    /// and are not posted, so their numbers are returned. Equalities are left to
+    /// [`Self::collect_equality`].
+    fn collect_boolean_pairs(&mut self, context: &mut CompilationContext) -> HashSet<u64> {
+        let is_binary = |context: &CompilationContext, name: &Rc<str>| {
+            context.equivalences.representative(name) == *name
+                && context.equivalences.domain(name) == Domain::IntervalDomain { lb: 0, ub: 1 }
+        };
+        let mut groups: std::collections::BTreeMap<(Rc<str>, Rc<str>), Vec<usize>> =
+            std::collections::BTreeMap::new();
+        for (index, (_, item)) in context.constraints.iter().enumerate() {
+            if matches!(
+                item.id.as_str(),
+                "int_lin_eq" | "int_eq" | "bool_eq" | "bool2int" | "bool_not"
+            ) {
+                continue;
+            }
+            let variables = self.variables_of(context, item);
+            let [first, second] = variables.as_slice() else {
+                continue;
+            };
+            if !is_binary(context, first) || !is_binary(context, second) {
+                continue;
+            }
+            // Only the kinds the evaluation reads.
+            if self.holds_at(context, item, first, second, 0, 0).is_none() {
+                continue;
+            }
+            groups
+                .entry((Rc::clone(first), Rc::clone(second)))
+                .or_default()
+                .push(index);
+        }
+
+        let mut implied = HashSet::default();
+        let mut related_later = vec![];
+        for ((x, y), members) in groups {
+            let mut allowed = vec![];
+            for (value_x, value_y) in [(0, 0), (0, 1), (1, 0), (1, 1)] {
+                let holds = members.iter().all(|&index| {
+                    self.holds_at(
+                        context,
+                        &context.constraints[index].1,
+                        &x,
+                        &y,
+                        value_x,
+                        value_y,
+                    ) == Some(true)
+                });
+                if holds {
+                    allowed.push((value_x, value_y));
+                }
+            }
+            // x + y = 1 or x - y = 0.
+            let (b, c) = match allowed.as_slice() {
+                [(0, 1), (1, 0)] => (1, 1),
+                [(0, 0), (1, 1)] => (-1, 0),
+                _ => continue,
+            };
+            if !is_binary(context, &x) || !is_binary(context, &y) {
+                continue;
+            }
+            let numbers: Vec<u64> = members
+                .iter()
+                .map(|&index| tag_number(context.constraints[index].0))
+                .collect();
+            let id = self.fresh_id();
+            let form = LinearForm {
+                terms: vec![
+                    (1, Term::Variable(Rc::clone(&x))),
+                    (b, Term::Variable(Rc::clone(&y))),
+                ],
+                relation: Relation::Equal,
+                bound: c,
+            };
+            self.events.push(ViewEvent::Equality {
+                id,
+                form: form.clone(),
+                evidence: std::iter::once(0).chain(numbers.iter().copied()).collect(),
+            });
+            let _ = self.forms.insert(id, form);
+            if self.declare {
+                // The equalities cite constraints as the model states them, so all of them come
+                // before the declarations, which then form one run.
+                related_later.push((id, x, y, b, c, numbers));
+            } else if self.relate(context, id, &x, 1, &y, b, c) {
+                implied.extend(numbers);
+            }
+        }
+        for (id, x, y, b, c, numbers) in related_later {
+            if is_binary(context, &x)
+                && is_binary(context, &y)
+                && self.relate(context, id, &x, 1, &y, b, c)
+            {
+                implied.extend(numbers);
+            }
+        }
+        implied
     }
 
     /// `a * x + b * y = c` when the form is an equality over exactly two variables.

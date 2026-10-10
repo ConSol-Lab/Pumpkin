@@ -71,6 +71,17 @@ fn declared_replacements_replace_a_fixed_variable_by_its_value() {
     );
 }
 
+#[test]
+fn two_booleans_forced_equal_become_one() {
+    let preamble = preamble_of("boolean_pair", "boolean_pair", &[]);
+    assert!(
+        preamble.contains(&"view b a 1 0".to_owned()),
+        "{preamble:?}"
+    );
+    assert!(preamble.iter().any(|line| line.starts_with("q ")));
+    check_block_proofs("boolean_pair", "boolean_pair", "c UPPER_BOUND 3", &[]);
+}
+
 /// The lines of the preamble of the scaffold the solver writes for the model, before the marker.
 fn preamble_of(name: &str, model: &str, flags: &[&str]) -> Vec<String> {
     let scaffold_path = output_path(&format!("{name}.scaffold"));
