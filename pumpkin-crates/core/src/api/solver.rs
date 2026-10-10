@@ -157,6 +157,117 @@ impl Solver {
     pub fn is_logging_proof(&self) -> bool {
         self.satisfaction_solver.is_logging_proof()
     }
+
+    /// Name the rule a proof checker applies to the inferences from the constraint, for a proof in
+    /// the block format. Does nothing for other proofs.
+    pub fn name_rule_of_constraint(&mut self, constraint_tag: ConstraintTag, rule: &str) {
+        self.satisfaction_solver
+            .name_rule_of_constraint(constraint_tag, rule)
+    }
+
+    /// State the bounds that fix the 0/1 variables in an inference from the reified constraint
+    /// whose nogood contains the indicator, for a proof in the block format. Does nothing for
+    /// other proofs.
+    pub fn state_fixing_bounds_when_true(&mut self, constraint_tag: ConstraintTag) {
+        self.satisfaction_solver
+            .state_fixing_bounds_when_true(constraint_tag)
+    }
+
+    /// State that the checker reads the constraint as reified (`fully`) or half-reified, so that a
+    /// proof in the block format cites its rules as `reified(R)` or `half_reified(R)`. Does
+    /// nothing for other proofs.
+    pub fn name_reification(&mut self, constraint_tag: ConstraintTag, fully: bool) {
+        self.satisfaction_solver
+            .name_reification(constraint_tag, fully)
+    }
+
+    /// Give the set of a `set_in` constraint over a domain, as ranges of values, for a proof in
+    /// the block format: a predicate on the domain that holds at the root and whose negation the
+    /// set excludes cites the constraint under the rule `set_in` instead of the initial domains.
+    /// Does nothing for other proofs.
+    pub fn name_set_in_domain(
+        &mut self,
+        constraint_tag: ConstraintTag,
+        domain: DomainId,
+        ranges: Vec<(i32, i32)>,
+    ) {
+        self.satisfaction_solver
+            .name_set_in_domain(constraint_tag, domain, ranges)
+    }
+
+    /// Name the rules a proof checker applies to the inferences from a reified constraint Pumpkin
+    /// decomposes, by the side of the indicator their nogood contains, for a proof in the block
+    /// format. Does nothing for other proofs.
+    pub fn name_rules_by_indicator_side(
+        &mut self,
+        constraint_tag: ConstraintTag,
+        indicator: Predicate,
+        rule_when_true: &str,
+        rule_when_false: &str,
+    ) {
+        self.satisfaction_solver.name_rules_by_indicator_side(
+            constraint_tag,
+            indicator,
+            rule_when_true,
+            rule_when_false,
+        )
+    }
+
+    /// Give the constraint that states the bounds of a fresh 0/1 variable of a decomposition, for
+    /// a proof in the block format: the inferences its domain implies cite that constraint.
+    /// Does nothing for other proofs.
+    pub fn name_selector_bounds(&mut self, domain: DomainId, constraint_tag: ConstraintTag) {
+        self.satisfaction_solver
+            .name_selector_bounds(domain, constraint_tag)
+    }
+
+    /// Give the elements of a constraint over a list of expressions, so that the inferences
+    /// from it in a proof in the block format name the positions they read.
+    pub fn name_positions_of_constraint(
+        &mut self,
+        constraint_tag: ConstraintTag,
+        elements: Vec<crate::engine::variables::AffineView<DomainId>>,
+    ) {
+        self.satisfaction_solver
+            .name_positions_of_constraint(constraint_tag, elements)
+    }
+
+    /// Write a line after the proof head, for a proof in the block format; see
+    /// `ProofLog::log_head_line`. Does nothing for other proofs.
+    pub fn log_proof_head_line(
+        &mut self,
+        fields: &[crate::proof::HeadField],
+    ) -> std::io::Result<()> {
+        self.satisfaction_solver.log_proof_head_line(fields)
+    }
+
+    /// Take the identifier of the next constraint of a proof in the block format as the
+    /// identifier of the constraint with the tag, or `None` when no such proof is logged.
+    pub fn take_proof_identifier(&mut self, constraint_tag: ConstraintTag) -> Option<u32> {
+        self.satisfaction_solver
+            .take_proof_identifier(constraint_tag)
+    }
+
+    /// Write the steps that precede the first learned nogood in a proof in the block format,
+    /// such as the steps a model's preprocessing took, and number the learned nogoods from
+    /// `first_free_identifier`. Does nothing for other proofs.
+    pub fn log_proof_head(
+        &mut self,
+        lines: &[String],
+        first_free_identifier: u32,
+    ) -> std::io::Result<()> {
+        self.satisfaction_solver
+            .log_proof_head(lines, first_free_identifier)
+    }
+
+    /// Write the preamble of a croc scaffold before its nogoods; see
+    /// [`crate::proof::ProofLog::log_scaffold_preamble`]. Does nothing for other proofs.
+    pub fn log_scaffold_preamble(&mut self, preamble: &str) -> std::io::Result<()> {
+        self.satisfaction_solver
+            .internal_parameters
+            .proof_log
+            .log_scaffold_preamble(preamble)
+    }
 }
 
 /// Methods to retrieve information about variables

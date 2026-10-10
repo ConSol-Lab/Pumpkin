@@ -1,10 +1,13 @@
 use std::collections::BTreeMap;
+use std::num::NonZero;
 
 use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_core::predicate;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::proof::HeadField;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Literal;
 
@@ -54,6 +57,11 @@ pub fn negative_table<Var: IntegerVariable + 'static>(
     }
 }
 
+/// The name of the selector of the row in the decomposition of the table constraint.
+pub fn table_selector_name(constraint_tag: ConstraintTag, row: usize) -> String {
+    format!("_t{}_{row}", NonZero::<u32>::from(constraint_tag))
+}
+
 struct Table<Var> {
     xs: Vec<Var>,
     table: Vec<Vec<i32>>,
@@ -61,13 +69,21 @@ struct Table<Var> {
 }
 
 impl<Var: IntegerVariable> Table<Var> {
-    fn encode(self, solver: &mut Solver, reification_literal: Option<Literal>) {
-        // 1. Create a variable `y_i` that selects the row from the table which is chosen.
-        let ys: Vec<_> = (0..self.table.len())
-            .map(|_| solver.new_literal())
-            .collect();
+    /// The clauses of the decomposition, in the order fzn-croc-check numbers them
+    /// (`decompose_table` in `theories/proof_system/concrete/decompositions/table.v`): for each
+    /// column, and each value of that column in ascending order, `y_i -> x_col == value` for each
+    /// row `i` with that value, in row order, then `x_col == value -> \/ y_i` over those rows;
+    /// then the clause that some `y_i` holds; with a reification literal `l`, each of these with
+    /// `!l` added, followed, when `fully`, by the clause `\/_col x_col != t_i[col] \/ l` for each
+    /// row `i`.
+    fn clauses(
+        &self,
+        ys: &[Literal],
+        reification_literal: Option<Literal>,
+        fully: bool,
+    ) -> Vec<Vec<Predicate>> {
+        let mut clauses = vec![];
 
-        // 2. Setup the implications between values and `ys`.
         for (col, x_col) in self.xs.iter().enumerate() {
             // A map from domain values to the `ys` variables that support this value.
             let mut values = BTreeMap::new();
@@ -93,7 +109,7 @@ impl<Var: IntegerVariable> Table<Var> {
                     // l -> clause
                     clause.extend(reification_literal.iter().map(|l| l.get_false_predicate()));
 
-                    solver.add_clause(clause, self.constraint_tag);
+                    clauses.push(clause);
                 }
 
                 // `condition -> (\/ supports)`
@@ -102,27 +118,109 @@ impl<Var: IntegerVariable> Table<Var> {
                 // Account for possible reification.
                 clause.extend(reification_literal.iter().map(|l| l.get_false_predicate()));
 
-                solver.add_clause(clause, self.constraint_tag);
+                clauses.push(clause);
             }
         }
 
-        // 4. Enforce at least one `y` to be true.
-        let poster = solver.add_constraint(crate::constraints::clause(ys, self.constraint_tag));
-        if let Some(literal) = reification_literal {
-            poster.implied_by(literal);
+        // Enforce at least one `y` to be true.
+        let mut clause: Vec<Predicate> = ys.iter().map(|y| y.get_true_predicate()).collect();
+        clause.extend(reification_literal.iter().map(|l| l.get_false_predicate()));
+        clauses.push(clause);
+
+        // With the reification literal false, no row is taken.
+        if fully && let Some(literal) = reification_literal {
+            for row in &self.table {
+                let mut clause: Vec<Predicate> = self
+                    .xs
+                    .iter()
+                    .zip(row)
+                    .map(|(x, &value)| predicate![x != value])
+                    .collect();
+                clause.push(literal.get_true_predicate());
+                clauses.push(clause);
+            }
+        }
+
+        clauses
+    }
+
+    /// Post the decomposition: a fresh literal `y_i` that selects row `i`, named by
+    /// [`table_selector_name`] under proof logging, and the clauses of [`Table::clauses`]. Under
+    /// proof logging in the block format the decomposition is stated first, as
+    /// `k <first> table c:<table> <selectors...>`, and each clause, and then the bounds
+    /// of the selectors, take the identifiers from `<first>` on, in order.
+    fn encode(self, solver: &mut Solver, reification_literal: Option<Literal>, fully: bool) {
+        let logging = solver.is_logging_proof();
+        let first = if logging {
+            let tag = solver.new_constraint_tag();
+            solver
+                .take_proof_identifier(tag)
+                .map(|identifier| (tag, identifier))
         } else {
-            poster.post();
+            None
+        };
+
+        // 1. Create a variable `y_i` that selects the row from the table which is chosen. Under
+        // proof logging it is named, so that a nogood over it can be written.
+        let ys: Vec<_> = (0..self.table.len())
+            .map(|row| {
+                if logging {
+                    solver.new_named_literal(table_selector_name(self.constraint_tag, row))
+                } else {
+                    solver.new_literal()
+                }
+            })
+            .collect();
+
+        let clauses = self.clauses(&ys, reification_literal, fully);
+
+        let Some((first_tag, identifier)) = first else {
+            for clause in clauses {
+                solver.add_clause(clause, self.constraint_tag);
+            }
+            return;
+        };
+
+        let mut line = format!(
+            "k {identifier} table c:{}",
+            NonZero::<u32>::from(self.constraint_tag)
+        );
+        for row in 0..ys.len() {
+            line.push(' ');
+            line.push_str(&table_selector_name(self.constraint_tag, row));
+        }
+        let _ = solver.log_proof_head_line(&[HeadField::Text(line)]);
+
+        // 2. Each clause is a part of the decomposition of its own, cited under the rule
+        // `clause`, and the bounds of the selectors are the last part. Every part takes its
+        // identifier before any clause is added, since adding one can derive a nogood, which
+        // takes the next identifier.
+        let mut tags = vec![first_tag];
+        for _ in 1..clauses.len() {
+            let tag = solver.new_constraint_tag();
+            let _ = solver.take_proof_identifier(tag);
+            tags.push(tag);
+        }
+        let bounds_tag = solver.new_constraint_tag();
+        let _ = solver.take_proof_identifier(bounds_tag);
+        for y in &ys {
+            solver.name_selector_bounds(*y.get_integer_variable().inner(), bounds_tag);
+        }
+
+        for (clause, tag) in clauses.into_iter().zip(tags) {
+            solver.name_rule_of_constraint(tag, "clause");
+            solver.add_clause(clause, tag);
         }
     }
 }
 
 impl<Var: IntegerVariable> Constraint for Table<Var> {
     fn post(self, solver: &mut Solver) {
-        self.encode(solver, None)
+        self.encode(solver, None, false)
     }
 
     fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
-        self.encode(solver, Some(reification_literal))
+        self.encode(solver, Some(reification_literal), false)
     }
 }
 
@@ -139,6 +237,16 @@ impl<Var: IntegerVariable + 'static> NegatableConstraint for Table<Var> {
             table,
             constraint_tag,
         }
+    }
+
+    /// Both directions in one decomposition: the clauses of the table implied by the literal,
+    /// and, for each row, the clause that the variables differ from it or the literal holds,
+    /// which are the clauses of the negative table implied by the negation of the literal.
+    fn reify(self, solver: &mut Solver, reification_literal: Literal)
+    where
+        Self: Sized,
+    {
+        self.encode(solver, Some(reification_literal), true)
     }
 }
 

@@ -1825,6 +1825,19 @@ impl NogoodPropagator {
 }
 
 impl NogoodPropagator {
+    /// The nogood as [`NogoodPropagator::add_nogood`] holds it once it is preprocessed at the
+    /// root, which may state its predicates through the root bounds, as `[x >= 3]` for
+    /// `[x == 3]` when 3 is the upper bound of `x`.
+    pub(crate) fn preprocessed(
+        &mut self,
+        nogood: &[Predicate],
+        context: &mut PropagationContext,
+    ) -> Vec<Predicate> {
+        let mut preprocessed = nogood.to_vec();
+        Self::preprocess_nogood(&mut preprocessed, context, &mut self.semantic_minimiser);
+        preprocessed
+    }
+
     /// Does simple preprocessing, modifying the input nogood by:
     ///     1. Removing duplicate predicates.
     ///     2. Removing satisfied predicates at the root.

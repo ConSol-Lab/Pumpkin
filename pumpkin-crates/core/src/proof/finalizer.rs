@@ -64,6 +64,16 @@ pub(crate) fn finalize_proof(context: FinalizingContext<'_>) {
 
 fn finalize_proof_impl(
     context: &mut RootExplanationContext<'_>,
+    to_explain: BTreeMap<usize, HashSet<Predicate>>,
+) -> Vec<Predicate> {
+    let was_explaining_root = context.proof_log.set_explaining_root(true);
+    let required_assumptions = explain_at_root(context, to_explain);
+    let _ = context.proof_log.set_explaining_root(was_explaining_root);
+    required_assumptions
+}
+
+fn explain_at_root(
+    context: &mut RootExplanationContext<'_>,
     mut to_explain: BTreeMap<usize, HashSet<Predicate>>,
 ) -> Vec<Predicate> {
     let mut required_assumptions = vec![];

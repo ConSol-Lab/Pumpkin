@@ -41,6 +41,16 @@ impl<Inner> AffineView<Inner> {
         &self.inner
     }
 
+    /// The scale `a` of `a * x + b`.
+    pub fn scale(&self) -> i32 {
+        self.scale
+    }
+
+    /// The offset `b` of `a * x + b`.
+    pub fn view_offset(&self) -> i32 {
+        self.offset
+    }
+
     /// Apply the inverse transformation of this view on a value, to go from the value in the domain
     /// of `self` to a value in the domain of `self.inner`.
     fn invert(&self, value: i32, rounding: Rounding) -> i32 {

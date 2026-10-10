@@ -85,7 +85,7 @@ where
     Var: IntegerVariable + Clone + 'static,
 {
     fn post(self, solver: &mut Solver) {
-        if self.terms.len() == 2 && !solver.is_logging_proof() {
+        if self.terms.len() == 2 {
             let _ = solver.add_propagator(BinaryEqualsPropagatorArgs {
                 a: self.terms[0].clone(),
                 b: self.terms[1].scaled(-1).offset(self.rhs),
@@ -104,7 +104,7 @@ where
     }
 
     fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
-        if self.terms.len() == 2 && !solver.is_logging_proof() {
+        if self.terms.len() == 2 {
             let _ = solver.add_propagator(ReifiedPropagatorArgs {
                 propagator: BinaryEqualsPropagatorArgs {
                     a: self.terms[0].clone(),

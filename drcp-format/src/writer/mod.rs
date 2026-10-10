@@ -53,6 +53,8 @@
 //! assert_eq!(expected.trim(), proof_string.trim());
 //! ```
 
+pub mod blocks;
+
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::io::Write;
@@ -90,6 +92,11 @@ impl<W: Write, Int> ProofWriter<W, Int> {
             defined_atomics: BTreeMap::default(),
             next_atomic_id: 0,
         }
+    }
+
+    /// The underlying sink.
+    pub fn get_mut(&mut self) -> &mut W {
+        &mut self.writer
     }
 }
 
