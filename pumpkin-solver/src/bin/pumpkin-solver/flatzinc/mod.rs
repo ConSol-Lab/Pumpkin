@@ -1,11 +1,6 @@
-mod ast;
-mod compiler;
-pub(crate) mod error;
-mod instance;
-mod parser;
+//! Solving a FlatZinc model with the solver, after the library compiled it.
 
 use std::fs::File;
-use std::io::Read;
 use std::ops::ControlFlow;
 use std::path::Path;
 use std::time::Duration;
@@ -16,12 +11,9 @@ use pumpkin_core::branching::branchers::alternating::every_x_restarts::EveryXRes
 use pumpkin_core::branching::branchers::alternating::until_solution::UntilSolution;
 use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_core::statistics::log_statistic;
-use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::branching::Brancher;
 use pumpkin_solver::core::branching::branchers::dynamic_brancher::DynamicBrancher;
-#[cfg(doc)]
-use pumpkin_solver::core::constraints::cumulative;
 use pumpkin_solver::core::optimisation::OptimisationDirection;
 use pumpkin_solver::core::optimisation::OptimisationStrategy;
 use pumpkin_solver::core::optimisation::linear_sat_unsat::LinearSatUnsat;
@@ -35,48 +27,15 @@ use pumpkin_solver::core::termination::Combinator;
 use pumpkin_solver::core::termination::TerminationCondition;
 use pumpkin_solver::core::termination::TimeBudget;
 use pumpkin_solver::core::variables::DomainId;
+use pumpkin_solver::flatzinc::FlatZincOptions;
+use pumpkin_solver::flatzinc::error::FlatZincError;
+use pumpkin_solver::flatzinc::instance::Output;
+use pumpkin_solver::flatzinc::parse_and_compile;
 
-use self::instance::FlatZincInstance;
-use self::instance::Output;
-use crate::ProofType;
-use crate::flatzinc::error::FlatZincError;
 use crate::os_signal_termination::OsSignal;
 
 const MSG_UNKNOWN: &str = "=====UNKNOWN=====";
 const MSG_UNSATISFIABLE: &str = "=====UNSATISFIABLE=====";
-
-/// The minimum value of an unbounded integer.
-///
-/// This can be overridden by setting specific bounds under this threshold but this should be done
-/// with care since it might lead to overflow/underflow!
-pub(crate) const MIN_INTEGER_VALUE: i32 = -500_000_000;
-/// The maximum value of an unbounded integer.
-///
-/// This can be overridden by setting specific bounds over this threshold but this should be done
-/// with care since it might lead to overflow/underflow!
-pub(crate) const MAX_INTEGER_VALUE: i32 = 500_000_000;
-
-#[derive(Debug, Clone, Copy, Default)]
-pub(crate) struct FlatZincOptions {
-    /// If `true`, the solver will not strictly keep to the search annotations in the flatzinc.
-    pub(crate) free_search: bool,
-
-    /// For satisfaction problems, print all solutions. For optimisation problems, this instructs
-    /// the solver to print intermediate solutions.
-    pub(crate) all_solutions: bool,
-
-    /// Options used for the cumulative constraint (see [`cumulative`]).
-    pub(crate) cumulative_options: CumulativeOptions,
-
-    /// Determines which type of search is performed by the solver
-    pub(crate) optimisation_strategy: OptimisationStrategy,
-
-    /// The type of proof that is logged. This influences which preprocessing steps we can do.
-    pub(crate) proof_type: Option<ProofType>,
-
-    /// Indicates that the solver should perform verbose logging
-    pub(crate) verbose: bool,
-}
 
 fn log_statistics(
     solver: &Solver,
@@ -380,15 +339,6 @@ fn satisfy(
     }
 }
 
-fn parse_and_compile(
-    solver: &mut Solver,
-    instance: impl Read,
-    options: FlatZincOptions,
-) -> Result<FlatZincInstance, FlatZincError> {
-    let ast = parser::parse(instance)?;
-    compiler::compile(ast, solver, options)
-}
-
 /// Prints the current solution.
 fn print_solution_from_solver(solution: SolutionReference, outputs: &[Output]) {
     for output_specification in outputs {
@@ -412,263 +362,4 @@ fn print_solution_from_solver(solution: SolutionReference, outputs: &[Output]) {
     }
 
     println!("----------");
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // TODO: The following tests rely on observing the interal state of the solver. This is not good
-    // design, and these tests should be re-done.
-    //
-    // #[test]
-    // fn single_bool_gets_compiled_to_literal() {
-    //     let model = r#"
-    //         var bool: SomeVar;
-    //         solve satisfy;
-    //     "#;
-
-    //     let mut solver = ConstraintSatisfactionSolver::default();
-
-    //     let starting_variables = solver
-    //         .get_propositional_assignments()
-    //         .num_propositional_variables();
-
-    //     let _ =
-    //         parse_and_compile(&mut solver, model.as_bytes()).expect("compilation should
-    // succeed");
-
-    //     let final_variables = solver
-    //         .get_propositional_assignments()
-    //         .num_propositional_variables();
-
-    //     assert_eq!(1, final_variables - starting_variables);
-    // }
-
-    // #[test]
-    // fn output_annotation_is_interpreted_on_bools() {
-    //     let model = r#"
-    //         var bool: SomeVar ::output_var;
-    //         solve satisfy;
-    //     "#;
-
-    //     let mut solver = ConstraintSatisfactionSolver::default();
-
-    //     let instance =
-    //         parse_and_compile(&mut solver, model.as_bytes()).expect("compilation should
-    // succeed");
-
-    //     let literal = Literal::new(
-    //         PropositionalVariable::new(
-    //             solver
-    //                 .get_propositional_assignments()
-    //                 .num_propositional_variables()
-    //                 - 1,
-    //         ),
-    //         true,
-    //     );
-
-    //     let outputs = instance.outputs().collect::<Vec<_>>();
-    //     assert_eq!(1, outputs.len());
-
-    //     let output = outputs[0].clone();
-    //     assert_eq!(output, Output::bool("SomeVar".into(), literal));
-    // }
-
-    // #[test]
-    // fn equivalent_bools_refer_to_the_same_literal() {
-    //     let model = r#"
-    //         var bool: SomeVar;
-    //         var bool: OtherVar = SomeVar;
-    //         solve satisfy;
-    //     "#;
-
-    //     let mut solver = ConstraintSatisfactionSolver::default();
-
-    //     let starting_variables = solver
-    //         .get_propositional_assignments()
-    //         .num_propositional_variables();
-
-    //     let _ =
-    //         parse_and_compile(&mut solver, model.as_bytes()).expect("compilation should
-    // succeed");
-
-    //     let final_variables = solver
-    //         .get_propositional_assignments()
-    //         .num_propositional_variables();
-
-    //     assert_eq!(1, final_variables - starting_variables);
-    // }
-
-    // #[test]
-    // fn bool_equivalent_to_true_uses_builtin_true_literal() {
-    //     let model = r#"
-    //         var bool: SomeVar = true;
-    //         solve satisfy;
-    //     "#;
-
-    //     let mut solver = ConstraintSatisfactionSolver::default();
-
-    //     let starting_variables = solver
-    //         .get_propositional_assignments()
-    //         .num_propositional_variables();
-
-    //     let _ =
-    //         parse_and_compile(&mut solver, model.as_bytes()).expect("compilation should
-    // succeed");
-
-    //     let final_variables = solver
-    //         .get_propositional_assignments()
-    //         .num_propositional_variables();
-
-    //     assert_eq!(0, final_variables - starting_variables);
-    // }
-
-    // #[test]
-    // fn single_variable_gets_compiled_to_domain_id() {
-    //     let instance = "var 1..5: SomeVar;\nsolve satisfy;";
-    //     let mut solver = ConstraintSatisfactionSolver::default();
-
-    //     let _ = parse_and_compile(&mut solver, instance.as_bytes())
-    //         .expect("compilation should succeed");
-
-    //     let domains = solver
-    //         .get_integer_assignments()
-    //         .get_domains()
-    //         .collect::<Vec<DomainId>>();
-
-    //     assert_eq!(1, domains.len());
-
-    //     let domain = domains[0];
-    //     assert_eq!(1, solver.get_integer_assignments().get_lower_bound(domain));
-    //     assert_eq!(5, solver.get_integer_assignments().get_upper_bound(domain));
-    // }
-
-    // #[test]
-    // fn equal_integer_variables_use_one_domain_id() {
-    //     let instance = r#"
-    //          var 1..10: SomeVar;
-    //          var 0..11: OtherVar = SomeVar;
-    //          solve satisfy;
-    //      "#;
-    //     let mut solver = ConstraintSatisfactionSolver::default();
-
-    //     let _ = parse_and_compile(&mut solver, instance.as_bytes())
-    //         .expect("compilation should succeed");
-
-    //     let domains = solver
-    //         .get_integer_assignments()
-    //         .get_domains()
-    //         .collect::<Vec<DomainId>>();
-
-    //     assert_eq!(1, domains.len());
-
-    //     let domain = domains[0];
-    //     assert_eq!(1, solver.get_integer_assignments().get_lower_bound(domain));
-    //     assert_eq!(10, solver.get_integer_assignments().get_upper_bound(domain));
-    // }
-
-    // #[test]
-    // fn var_equal_to_constant_reuse_domain_id() {
-    //     let instance = r#"
-    //          var 1..10: SomeVar = 5;
-    //          var 0..11: OtherVar = 5;
-    //          solve satisfy;
-    //      "#;
-    //     let mut solver = ConstraintSatisfactionSolver::default();
-
-    //     let _ = parse_and_compile(&mut solver, instance.as_bytes())
-    //         .expect("compilation should succeed");
-
-    //     let domains = solver
-    //         .get_integer_assignments()
-    //         .get_domains()
-    //         .collect::<Vec<DomainId>>();
-
-    //     assert_eq!(1, domains.len());
-
-    //     let domain = domains[0];
-    //     assert_eq!(5, solver.get_integer_assignments().get_lower_bound(domain));
-    //     assert_eq!(5, solver.get_integer_assignments().get_upper_bound(domain));
-    // }
-
-    #[test]
-    fn array_1d_of_boolean_variables() {
-        let instance = r#"
-            var bool: x1;
-            var bool: x2;
-            array [1..2] of var bool: xs :: output_array([1..2]) = [x1,x2];
-            solve satisfy;
-        "#;
-        let mut solver = Solver::default();
-
-        let instance =
-            parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
-                .expect("compilation should succeed");
-
-        let outputs = instance.outputs().collect::<Vec<_>>();
-        assert_eq!(1, outputs.len());
-
-        assert!(matches!(outputs[0], Output::ArrayOfBool(_)));
-    }
-
-    #[test]
-    fn array_2d_of_boolean_variables() {
-        let instance = r#"
-            var bool: x1;
-            var bool: x2;
-            var bool: x3;
-            var bool: x4;
-            array [1..4] of var bool: xs :: output_array([1..2, 1..2]) = [x1,x2,x3,x4];
-            solve satisfy;
-        "#;
-        let mut solver = Solver::default();
-
-        let instance =
-            parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
-                .expect("compilation should succeed");
-
-        let outputs = instance.outputs().collect::<Vec<_>>();
-        assert_eq!(1, outputs.len());
-    }
-
-    #[test]
-    fn array_1d_of_integer_variables() {
-        let instance = r#"
-            var 1..10: x1;
-            var 1..10: x2;
-            array [1..2] of var int: xs :: output_array([1..2]) = [x1,x2];
-            solve satisfy;
-        "#;
-        let mut solver = Solver::default();
-
-        let instance =
-            parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
-                .expect("compilation should succeed");
-
-        let outputs = instance.outputs().collect::<Vec<_>>();
-        assert_eq!(1, outputs.len());
-
-        assert!(matches!(outputs[0], Output::ArrayOfInt(_)));
-    }
-
-    #[test]
-    fn array_2d_of_integer_variables() {
-        let instance = r#"
-            var 1..10: x1;
-            var 1..10: x2;
-            var 1..10: x3;
-            var 1..10: x4;
-            array [1..4] of var 1..10: xs :: output_array([1..2, 1..2]) = [x1,x2,x3,x4];
-            solve satisfy;
-        "#;
-        let mut solver = Solver::default();
-
-        let instance =
-            parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
-                .expect("compilation should succeed");
-
-        let outputs = instance.outputs().collect::<Vec<_>>();
-        assert_eq!(1, outputs.len());
-    }
 }

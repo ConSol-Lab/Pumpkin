@@ -13,7 +13,6 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser;
-use clap::ValueEnum;
 use file_format::FileFormat;
 use log::Level;
 use log::LevelFilter;
@@ -44,10 +43,11 @@ use pumpkin_solver::core::results::SatisfactionResult;
 use pumpkin_solver::core::results::SolutionReference;
 use pumpkin_solver::core::statistics::configure_statistic_logging;
 use pumpkin_solver::core::termination::TimeBudget;
+use pumpkin_solver::flatzinc::FlatZincOptions;
+use pumpkin_solver::flatzinc::ProofType;
 use result::PumpkinError;
 use result::PumpkinResult;
 
-use crate::flatzinc::FlatZincOptions;
 use crate::maxsat::wcnf_problem;
 
 #[derive(Debug, Parser)]
@@ -798,13 +798,4 @@ fn stringify_solution(
             std::iter::once(String::new())
         })
         .collect::<String>()
-}
-
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
-enum ProofType {
-    /// Log only the proof scaffold.
-    #[default]
-    Scaffold,
-    /// Log the full proof with hints.
-    Full,
 }

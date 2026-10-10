@@ -3,9 +3,9 @@
 use flatzinc::ConstraintItem;
 use log::warn;
 
-use crate::FlatZincOptions;
-use crate::ProofType;
 use crate::flatzinc::FlatZincError;
+use crate::flatzinc::FlatZincOptions;
+use crate::flatzinc::ProofType;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::ast::SingleVarDecl;
 use crate::flatzinc::compiler::context::CompilationContext;
@@ -25,7 +25,7 @@ pub(crate) fn run(
 
 /// Used when parsing FlatZinc of the following structure:
 ///
-/// ```
+/// ```text
 /// var 1..5: a;
 /// var 1..5: b = a;
 /// ```

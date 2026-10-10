@@ -330,6 +330,10 @@
 //! - `debug-checks`: Enable expensive assertions in the solver. Turning this on slows down the
 //!   solver by several orders of magnitude, so it is turned off by default.
 
+extern crate self as pumpkin_solver;
+
+pub mod flatzinc;
+
 pub mod conflict_resolvers {
     //! Contains the implementations of [`ConflictResolver`]s, and
     //! [`NogoodMinimiser`]s.
