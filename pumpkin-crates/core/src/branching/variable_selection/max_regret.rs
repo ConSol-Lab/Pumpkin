@@ -6,7 +6,7 @@ use crate::branching::tie_breaking::Direction;
 use crate::branching::tie_breaking::InOrderTieBreaker;
 use crate::branching::tie_breaking::TieBreaker;
 use crate::branching::variable_selection::VariableSelector;
-use crate::engine::variables::DomainId;
+use crate::engine::variables::IntegerVariable;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_simple;
 
@@ -68,11 +68,12 @@ impl<Var: Clone + 'static, TieBreaking: TieBreaker<Var, i32>> MaxRegret<Var, Tie
     }
 }
 
-impl<TieBreaking> VariableSelector<DomainId> for MaxRegret<DomainId, TieBreaking>
+impl<Var, TieBreaking> VariableSelector<Var> for MaxRegret<Var, TieBreaking>
 where
-    TieBreaking: TieBreaker<DomainId, i32>,
+    Var: IntegerVariable + Copy,
+    TieBreaking: TieBreaker<Var, i32>,
 {
-    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<DomainId> {
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<Var> {
         self.variables
             .iter()
             .filter(|variable| !context.is_integer_fixed(**variable))

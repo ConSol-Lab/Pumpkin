@@ -3,7 +3,7 @@ use crate::branching::SelectionContext;
 use crate::branching::brancher::BrancherEvent;
 use crate::branching::value_selection::ValueSelector;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::variables::DomainId;
+use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
 /// Reduces the domain (consisting of intervals) to its first interval.
@@ -17,11 +17,11 @@ use crate::predicate;
 #[derive(Debug, Copy, Clone)]
 pub struct InDomainInterval;
 
-impl ValueSelector<DomainId> for InDomainInterval {
+impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainInterval {
     fn select_value(
         &mut self,
         context: &mut SelectionContext,
-        decision_variable: DomainId,
+        decision_variable: Var,
     ) -> Predicate {
         // We attempt to find the first hole in the domain (i.e. the value is not in the domain of
         // `decision_variable`) Note that the lower-bound and upper-bound are guaranteed to

@@ -2,18 +2,18 @@ use crate::branching::SelectionContext;
 use crate::branching::brancher::BrancherEvent;
 use crate::branching::value_selection::ValueSelector;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::variables::DomainId;
+use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
 /// A [`ValueSelector`] which excludes the largest value from the domain.
 #[derive(Debug, Copy, Clone)]
 pub struct OutDomainMax;
 
-impl ValueSelector<DomainId> for OutDomainMax {
+impl<Var: IntegerVariable + Copy> ValueSelector<Var> for OutDomainMax {
     fn select_value(
         &mut self,
         context: &mut SelectionContext,
-        decision_variable: DomainId,
+        decision_variable: Var,
     ) -> Predicate {
         predicate!(decision_variable <= context.upper_bound(decision_variable) - 1)
     }

@@ -6,7 +6,7 @@ use crate::branching::tie_breaking::Direction;
 use crate::branching::tie_breaking::InOrderTieBreaker;
 use crate::branching::tie_breaking::TieBreaker;
 use crate::branching::variable_selection::VariableSelector;
-use crate::engine::variables::DomainId;
+use crate::engine::variables::IntegerVariable;
 use crate::pumpkin_assert_eq_simple;
 
 /// A [`VariableSelector`] which selects the variable with the largest value in its domain.
@@ -63,11 +63,12 @@ impl<Var: Clone + 'static, TieBreaking: TieBreaker<Var, i32>> Largest<Var, TieBr
     }
 }
 
-impl<TieBreaking> VariableSelector<DomainId> for Largest<DomainId, TieBreaking>
+impl<Var, TieBreaking> VariableSelector<Var> for Largest<Var, TieBreaking>
 where
-    TieBreaking: TieBreaker<DomainId, i32>,
+    Var: IntegerVariable + Copy,
+    TieBreaking: TieBreaker<Var, i32>,
 {
-    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<DomainId> {
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<Var> {
         self.variables
             .iter()
             .filter(|variable| !context.is_integer_fixed(**variable))

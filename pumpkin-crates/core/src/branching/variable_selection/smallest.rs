@@ -6,7 +6,7 @@ use crate::branching::brancher::BrancherEvent;
 use crate::branching::tie_breaking::Direction;
 use crate::branching::tie_breaking::InOrderTieBreaker;
 use crate::branching::tie_breaking::TieBreaker;
-use crate::engine::variables::DomainId;
+use crate::engine::variables::IntegerVariable;
 use crate::pumpkin_assert_eq_simple;
 
 /// A [`VariableSelector`] which selects the variable with the smallest value in its domain.
@@ -59,11 +59,12 @@ impl<Var: Clone + 'static, TieBreaking: TieBreaker<Var, i32>> Smallest<Var, TieB
     }
 }
 
-impl<TieBreaking> VariableSelector<DomainId> for Smallest<DomainId, TieBreaking>
+impl<Var, TieBreaking> VariableSelector<Var> for Smallest<Var, TieBreaking>
 where
-    TieBreaking: TieBreaker<DomainId, i32>,
+    Var: IntegerVariable + Copy,
+    TieBreaking: TieBreaker<Var, i32>,
 {
-    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<DomainId> {
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<Var> {
         self.variables
             .iter()
             .filter(|variable| !context.is_integer_fixed(**variable))

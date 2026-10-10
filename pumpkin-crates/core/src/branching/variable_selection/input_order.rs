@@ -3,6 +3,7 @@ use log::warn;
 use crate::branching::SelectionContext;
 use crate::branching::brancher::BrancherEvent;
 use crate::branching::variable_selection::VariableSelector;
+use crate::engine::variables::AffineView;
 use crate::engine::variables::DomainId;
 use crate::variables::Literal;
 
@@ -30,6 +31,19 @@ impl<Var: Copy> InputOrder<Var> {
 
 impl VariableSelector<DomainId> for InputOrder<DomainId> {
     fn select_variable(&mut self, context: &mut SelectionContext) -> Option<DomainId> {
+        self.variables
+            .iter()
+            .find(|variable| !context.is_integer_fixed(**variable))
+            .copied()
+    }
+
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+        vec![]
+    }
+}
+
+impl VariableSelector<AffineView<DomainId>> for InputOrder<AffineView<DomainId>> {
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<AffineView<DomainId>> {
         self.variables
             .iter()
             .find(|variable| !context.is_integer_fixed(**variable))

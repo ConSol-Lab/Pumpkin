@@ -2,18 +2,18 @@ use crate::branching::SelectionContext;
 use crate::branching::brancher::BrancherEvent;
 use crate::branching::value_selection::ValueSelector;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::variables::DomainId;
+use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
 /// A [`ValueSelector`] which excludes the smallest value from the domain.
 #[derive(Debug, Copy, Clone)]
 pub struct OutDomainMin;
 
-impl ValueSelector<DomainId> for OutDomainMin {
+impl<Var: IntegerVariable + Copy> ValueSelector<Var> for OutDomainMin {
     fn select_value(
         &mut self,
         context: &mut SelectionContext,
-        decision_variable: DomainId,
+        decision_variable: Var,
     ) -> Predicate {
         predicate!(decision_variable >= context.lower_bound(decision_variable) + 1)
     }
