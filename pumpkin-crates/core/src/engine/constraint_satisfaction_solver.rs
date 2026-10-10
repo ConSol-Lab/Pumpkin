@@ -294,6 +294,23 @@ impl ConstraintSatisfactionSolver {
             .state_fixing_bounds_when_true(constraint_tag)
     }
 
+    pub(crate) fn name_objective_view(
+        &mut self,
+        objective: &str,
+        representative: &str,
+        scale: i32,
+        offset: i32,
+        evidence: u32,
+    ) {
+        self.internal_parameters.proof_log.name_objective_view(
+            objective,
+            representative,
+            scale,
+            offset,
+            evidence,
+        )
+    }
+
     pub(crate) fn name_reification(&mut self, constraint_tag: ConstraintTag, fully: bool) {
         self.internal_parameters
             .proof_log

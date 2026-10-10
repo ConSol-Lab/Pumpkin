@@ -33,8 +33,8 @@ pub enum FlatZincError {
     },
 
     #[error(
-        "the declaration of '{0}' makes it equal to another variable, which the proof cannot \
-         state"
+        "the declaration of '{0}' makes it equal to another variable, which the DRCP format cannot \
+         state; use --proof-format croc"
     )]
     VariableAlias(Box<str>),
 

@@ -1,6 +1,6 @@
-//! Under croc proof logging no variable is merged into another: the proof cannot justify the
-//! merge. A declaration that makes a variable equal to another, `var 1..5: b = a;`, states an
-//! equality no constraint carries, so a model with one is rejected.
+//! In the DRCP format no variable is merged into another: the format cannot justify the merge.
+//! A declaration that makes a variable equal to another, `var 1..5: b = a;`, states an equality
+//! no constraint carries, so a model with one is rejected.
 
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::ast::FlatZincAst;

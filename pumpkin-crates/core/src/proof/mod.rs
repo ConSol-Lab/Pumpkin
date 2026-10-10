@@ -8,6 +8,7 @@ mod dimacs;
 mod finalizer;
 mod inference_code;
 mod proof_atomics;
+pub mod view_log;
 
 use std::fs::File;
 use std::io::Write;
@@ -18,6 +19,7 @@ use std::sync::Arc;
 use dimacs::DimacsProof;
 use drcp_format::Deduction;
 use drcp_format::Inference;
+use drcp_format::IntAtomic;
 use drcp_format::IntComparison;
 use drcp_format::writer::ProofWriter;
 use drcp_format::writer::blocks::BlockProofWriter;
@@ -187,6 +189,7 @@ impl ProofLog {
                 set_in_domains: HashMap::default(),
                 selector_bounds: HashMap::default(),
                 selector_bound_tags: HashSet::default(),
+                objective_view: None,
                 reification: HashMap::default(),
                 fixing_bounds_when_true: HashSet::default(),
                 resolution_chains,
@@ -283,6 +286,28 @@ impl ProofLog {
                     Arc::from(rule_when_false),
                 ),
             );
+        }
+    }
+
+    /// Give the objective variable as `scale * representative + offset`, stated by the
+    /// constraint `evidence`: a bound the solver proves on the representative is concluded on
+    /// the objective.
+    pub fn name_objective_view(
+        &mut self,
+        objective: &str,
+        representative: &str,
+        scale: i32,
+        offset: i32,
+        evidence: u32,
+    ) {
+        if let Some(ProofImpl::BlockProof(proof)) = self.internal_proof.as_mut() {
+            proof.objective_view = Some(ObjectiveView {
+                objective: Arc::from(objective),
+                representative: Arc::from(representative),
+                scale: i64::from(scale),
+                offset: i64::from(offset),
+                evidence: NonZero::new(evidence).expect("a model constraint is numbered from one"),
+            });
         }
     }
 
@@ -914,6 +939,17 @@ struct BufferedInference {
     label: Arc<str>,
 }
 
+/// The objective variable of the model as `scale * representative + offset`, stated by the
+/// constraint `evidence`.
+#[derive(Debug)]
+struct ObjectiveView {
+    objective: Arc<str>,
+    representative: Arc<str>,
+    scale: i64,
+    offset: i64,
+    evidence: NonZero<u32>,
+}
+
 /// A `set_in` constraint with its set, as ranges of values.
 type SetInRanges = (ConstraintTag, Vec<(i32, i32)>);
 
@@ -957,6 +993,8 @@ struct BlockProof {
     resolution_chains: bool,
     /// The constraints the checker reads as reified (`true`) or half-reified (`false`).
     reification: HashMap<ConstraintTag, bool>,
+    /// The objective as a view of the representative the solver bounds, when it is one.
+    objective_view: Option<ObjectiveView>,
     /// For a domain that `set_in` constraints restrict, each constraint and its set as ranges.
     set_in_domains: HashMap<DomainId, Vec<SetInRanges>>,
     /// For a fresh 0/1 variable of a decomposition, the constraint that states its bounds.
@@ -1502,7 +1540,9 @@ impl BlockProof {
     /// Conclude an optimisation with the bound on the objective: the improvement on the bound
     /// is assumed with an `o` line, and a refutation derives the empty nogood from the
     /// assumption and the unit nogood of the improvement, which the solver derived last. Without
-    /// that nogood, the initial domains are cited instead.
+    /// that nogood, the initial domains are cited instead. When the solver bounds a
+    /// representative of which the objective is a view, the constraint stating the view carries
+    /// the assumption over to the representative.
     fn conclude_optimal(
         &mut self,
         objective_bound: Predicate,
@@ -1519,14 +1559,28 @@ impl BlockProof {
                 unreachable!("a bound on the objective is a lower or an upper bound")
             }
         };
-        let bound_value = bound.value;
+        let view = self
+            .objective_view
+            .as_ref()
+            .filter(|view| view.representative.as_ref() == bound.name);
+        // The bound on the objective: through a view with a negative scale, a lower bound on the
+        // representative is an upper bound on the objective.
+        let (is_lower, bound_value) = match view {
+            Some(view) => (
+                is_lower == (view.scale > 0),
+                view.scale * i64::from(bound.value) + view.offset,
+            ),
+            None => (is_lower, i64::from(bound.value)),
+        };
         let conclusion_line = if is_lower {
             format!("c LOWER_BOUND {bound_value}")
         } else {
             format!("c UPPER_BOUND {bound_value}")
         };
+        let link = view.map(|view| (Arc::clone(&view.objective), view.evidence));
 
         let improvement_predicate = self.proof_atomics.canonical(!objective_bound);
+        let bound_reference = self.writer.atomic_reference(bound)?;
         let improvement = self.writer.atomic_reference(!bound)?;
 
         let unit = self
@@ -1548,10 +1602,33 @@ impl BlockProof {
         // The declarations come before the refutation, which a declaration would end.
         let initial_domain = self.writer.label_reference("initial_domain")?;
         let mut inferences = vec![];
-        inferences.push(format!(
-            "  {} c:{assumed} l:{initial_domain}",
-            -improvement.get()
-        ));
+        match link {
+            Some((objective, evidence)) => {
+                let value = i32::try_from(bound_value).expect("the objective's bound fits");
+                let (holds, assumed_atomic) = if is_lower {
+                    (
+                        IntAtomic::new(&*objective, IntComparison::GreaterEqual, value),
+                        IntAtomic::new(&*objective, IntComparison::LessEqual, value - 1),
+                    )
+                } else {
+                    (
+                        IntAtomic::new(&*objective, IntComparison::LessEqual, value),
+                        IntAtomic::new(&*objective, IntComparison::GreaterEqual, value + 1),
+                    )
+                };
+                let holds = self.writer.atomic_reference(holds)?;
+                let assumed_atomic = self.writer.atomic_reference(assumed_atomic)?;
+                let linear_bounds = self.writer.label_reference("linear_bounds")?;
+                inferences.push(format!("  {holds} c:{assumed} l:{initial_domain}"));
+                inferences.push(format!(
+                    "  {assumed_atomic} {bound_reference} c:{evidence} l:{linear_bounds}"
+                ));
+            }
+            None => inferences.push(format!(
+                "  {} c:{assumed} l:{initial_domain}",
+                -improvement.get()
+            )),
+        }
         match unit {
             Some(unit) => {
                 let nogood = self.writer.label_reference("nogood")?;

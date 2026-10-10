@@ -22,6 +22,7 @@ use pumpkin_solver::core::branching::variable_selection::MaxRegret;
 use pumpkin_solver::core::branching::variable_selection::Smallest;
 use pumpkin_solver::core::pumpkin_assert_eq_simple;
 use pumpkin_solver::core::pumpkin_assert_simple;
+use pumpkin_solver::core::variables::AffineView;
 use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::core::variables::Literal;
 
@@ -88,10 +89,10 @@ impl VariableSelectionStrategy {
         })
     }
 
-    pub(crate) fn create_from_domains(
+    pub(crate) fn create_from_views(
         &self,
-        variables: &[DomainId],
-    ) -> DynamicVariableSelector<DomainId> {
+        variables: &[AffineView<DomainId>],
+    ) -> DynamicVariableSelector<AffineView<DomainId>> {
         DynamicVariableSelector::new(match self {
             VariableSelectionStrategy::AntiFirstFail => Box::new(AntiFirstFail::new(variables)),
             VariableSelectionStrategy::DomWDeg => todo!("DomWDeg is not yet implemented"),

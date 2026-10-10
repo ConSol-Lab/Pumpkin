@@ -95,7 +95,8 @@ struct Args {
     #[arg(long, value_enum, default_value_t)]
     proof_type: ProofType,
 
-    /// The proof format: `drcp`, or `croc`, which is experimental.
+    /// The proof format: `drcp`, or `croc`, which is experimental. Preprocessing that a DRCP
+    /// proof cannot justify is skipped under `drcp`.
     #[arg(long, value_enum, default_value_t)]
     proof_format: ProofFormat,
 
@@ -108,6 +109,11 @@ struct Args {
     /// (experimental).
     #[arg(long, value_enum)]
     proof_encoding: Option<ProofEncoding>,
+
+    /// Compile the model, write the steps that state the views the compiler made to
+    /// `proof_path`, report what the view pass did, and stop without solving (experimental).
+    #[arg(long)]
+    preprocess_only: bool,
 
     /// The number of high-lbd learned nogoods that are kept in the database.
     ///
@@ -556,7 +562,7 @@ fn run() -> PumpkinResult<()> {
         args.omit_call_site,
     )?;
 
-    // Without a proof there is nothing to justify, and the compiler does what it does for croc.
+    // Without a proof there is nothing to justify, and the view pass runs as for croc proofs.
     let proof_format = if args.proof_path.is_some() {
         args.proof_format
     } else {
@@ -564,8 +570,12 @@ fn run() -> PumpkinResult<()> {
     };
 
     if proof_format == ProofFormat::Drcp {
+        if file_format == FileFormat::FlatZinc {
+            warn!("the view pass is skipped under --proof-format drcp");
+        }
         let croc_only = [
             (args.proof_type == ProofType::Blocks, "--proof-type blocks"),
+            (args.preprocess_only, "--preprocess-only"),
             (
                 args.proof_encoding == Some(ProofEncoding::Binary),
                 "--proof-encoding binary",
@@ -589,7 +599,10 @@ fn run() -> PumpkinResult<()> {
         );
     };
 
-    let proof_log = if let Some(path_buf) = args.proof_path.as_ref() {
+    // In preprocess-only mode the proof file receives the view steps instead.
+    let proof_log = if let Some(path_buf) =
+        args.proof_path.as_ref().filter(|_| !args.preprocess_only)
+    {
         match file_format {
             FileFormat::CnfDimacsPLine => ProofLog::dimacs(path_buf)?,
             FileFormat::WcnfDimacsPLine => {
@@ -652,6 +665,7 @@ fn run() -> PumpkinResult<()> {
     // A croc scaffold starts with the preamble that states the compiler's preprocessing.
     let writes_preamble = args.proof_path.is_some()
         && proof_format == ProofFormat::Croc
+        && !args.preprocess_only
         && args.proof_type == ProofType::Scaffold;
 
     let recursive_minimisation = args.recursive_minimisation;
@@ -684,6 +698,12 @@ fn run() -> PumpkinResult<()> {
                     proof_type: args.proof_path.as_ref().map(|_| args.proof_type),
                     proof_format,
                     writes_preamble,
+                    preprocess_only: args.preprocess_only,
+                    head_path: if args.preprocess_only {
+                        args.proof_path.clone()
+                    } else {
+                        None
+                    },
                     verbose: args.verbose,
                 },
                 NoLearningResolver,
@@ -706,6 +726,12 @@ fn run() -> PumpkinResult<()> {
                     proof_type: args.proof_path.as_ref().map(|_| args.proof_type),
                     proof_format,
                     writes_preamble,
+                    preprocess_only: args.preprocess_only,
+                    head_path: if args.preprocess_only {
+                        args.proof_path.clone()
+                    } else {
+                        None
+                    },
                     verbose: args.verbose,
                 },
                 ResolutionResolver::new(
@@ -732,6 +758,12 @@ fn run() -> PumpkinResult<()> {
                     proof_type: args.proof_path.as_ref().map(|_| args.proof_type),
                     proof_format,
                     writes_preamble,
+                    preprocess_only: args.preprocess_only,
+                    head_path: if args.preprocess_only {
+                        args.proof_path.clone()
+                    } else {
+                        None
+                    },
                     verbose: args.verbose,
                 },
                 ResolutionResolver::new(
@@ -758,6 +790,12 @@ fn run() -> PumpkinResult<()> {
                     proof_type: args.proof_path.as_ref().map(|_| args.proof_type),
                     proof_format,
                     writes_preamble,
+                    preprocess_only: args.preprocess_only,
+                    head_path: if args.preprocess_only {
+                        args.proof_path.clone()
+                    } else {
+                        None
+                    },
                     verbose: args.verbose,
                 },
                 ResolutionResolver::new(
@@ -784,6 +822,12 @@ fn run() -> PumpkinResult<()> {
                     proof_type: args.proof_path.as_ref().map(|_| args.proof_type),
                     proof_format,
                     writes_preamble,
+                    preprocess_only: args.preprocess_only,
+                    head_path: if args.preprocess_only {
+                        args.proof_path.clone()
+                    } else {
+                        None
+                    },
                     verbose: args.verbose,
                 },
                 ResolutionResolver::new(

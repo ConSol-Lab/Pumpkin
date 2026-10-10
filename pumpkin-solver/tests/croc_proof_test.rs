@@ -34,10 +34,23 @@ croc_proofs!(
     "c UPPER_BOUND 4"
 );
 
+// Multiplication, absolute value and an unbounded integer, unsatisfiable.
+croc_proofs!(times_abs_unbounded, "times_abs_unbounded", "c UNSAT");
+
+// Views, a fixed variable and two booleans that reify comparisons with a constant, maximised.
+croc_proofs!(
+    views_literals_constants,
+    "views_literals_constants",
+    "c UPPER_BOUND 28"
+);
+
+// An objective that the view pass makes a view of another variable.
+croc_proofs!(objective_view, "objective_view", "c UPPER_BOUND 28");
+
 #[test]
 fn a_scaffold_states_its_preamble_before_the_nogoods() {
-    let model_path = model_path("table_reified_element");
-    let scaffold_path = output_path("table_reified_element.scaffold");
+    let model_path = model_path("views_literals_constants");
+    let scaffold_path = output_path("views_literals_constants.scaffold");
     let output = Command::new(env!("CARGO_BIN_EXE_pumpkin-solver"))
         .arg("--proof-path")
         .arg(&scaffold_path)
@@ -53,11 +66,7 @@ fn a_scaffold_states_its_preamble_before_the_nogoods() {
         .position(|line| line == "nogoods")
         .expect("the scaffold has the marker line");
     let preamble: Vec<&str> = scaffold.lines().take(marker).collect();
-    assert!(
-        preamble
-            .iter()
-            .any(|line| line.starts_with("decomposition table "))
-    );
+    assert!(preamble.iter().any(|line| line.starts_with("view ")));
     assert!(preamble.contains(&"proof"));
     std::fs::remove_file(&scaffold_path).expect("the scaffold is removed");
 }

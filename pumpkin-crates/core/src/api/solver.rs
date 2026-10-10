@@ -173,6 +173,27 @@ impl Solver {
             .state_fixing_bounds_when_true(constraint_tag)
     }
 
+    /// Give the objective variable of the model as a view of another variable, the
+    /// representative the solver bounds, with the constraint that states the view, for a proof
+    /// in the block format: the bound concluded is stated on the objective through that
+    /// constraint. Does nothing for other proofs.
+    pub fn name_objective_view(
+        &mut self,
+        objective: &str,
+        representative: &str,
+        scale: i32,
+        offset: i32,
+        evidence: u32,
+    ) {
+        self.satisfaction_solver.name_objective_view(
+            objective,
+            representative,
+            scale,
+            offset,
+            evidence,
+        )
+    }
+
     /// State that the checker reads the constraint as reified (`fully`) or half-reified, so that a
     /// proof in the block format cites its rules as `reified(R)` or `half_reified(R)`. Does
     /// nothing for other proofs.

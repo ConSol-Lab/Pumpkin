@@ -1,0 +1,9 @@
+var -5..5: x :: output_var;
+var -5..5: y :: output_var;
+var int: z :: output_var;
+var {0,2,4,6,8}: w :: output_var;
+constraint int_times(x,y,z);
+constraint int_abs(x,w);
+constraint int_lin_eq([1,-1],[z,w],7);
+constraint int_ne(x,0);
+solve satisfy;

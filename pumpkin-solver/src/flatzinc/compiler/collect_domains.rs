@@ -5,7 +5,6 @@ use std::rc::Rc;
 use flatzinc::Annotation;
 use pumpkin_core::Solver;
 use pumpkin_core::variables::DomainId;
-use pumpkin_solver::core::variables::Literal;
 
 use super::context::CompilationContext;
 use super::context::Domain;
@@ -22,7 +21,6 @@ pub(crate) fn run(
         match single_var_decl {
             SingleVarDecl::Bool { id, annos, .. } => {
                 let id = context.identifiers.get_interned(id);
-
                 let representative = context.equivalences.representative(&id);
                 let domain = context.equivalences.domain(&id);
 
@@ -33,9 +31,9 @@ pub(crate) fn run(
                         create_integer_domain(context.solver, representative, domain)
                     });
 
-                let literal = Literal::new(domain_id);
-
                 if is_output_variable(annos) {
+                    let _ = domain_id;
+                    let literal = context.resolve_bool_variable_from_identifier(&id)?;
                     context.outputs.push(Output::bool(id, literal));
                 }
             }
@@ -57,7 +55,9 @@ pub(crate) fn run(
                     });
 
                 if is_output_variable(annos) {
-                    context.outputs.push(Output::int(id, domain_id));
+                    let _ = domain_id;
+                    let view = context.resolve_integer_variable_from_identifier(&id)?;
+                    context.outputs.push(Output::int(id, view));
                 }
             }
         }

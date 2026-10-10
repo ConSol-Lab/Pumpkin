@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use pumpkin_solver::core::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_solver::core::optimisation::OptimisationDirection;
+use pumpkin_solver::core::variables::AffineView;
 use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::core::variables::Literal;
 
@@ -12,11 +13,11 @@ use pumpkin_solver::core::variables::Literal;
 /// is being optimised
 #[derive(Debug, Clone, Copy)]
 pub enum FlatzincObjective {
-    Maximize(DomainId),
-    Minimize(DomainId),
+    Maximize(AffineView<DomainId>),
+    Minimize(AffineView<DomainId>),
 }
 
-impl From<FlatzincObjective> for (OptimisationDirection, DomainId) {
+impl From<FlatzincObjective> for (OptimisationDirection, AffineView<DomainId>) {
     fn from(value: FlatzincObjective) -> Self {
         match value {
             FlatzincObjective::Maximize(domain_id) => (OptimisationDirection::Maximise, domain_id),
@@ -44,9 +45,9 @@ impl FlatZincInstance {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Output {
     Bool(VariableOutput<Literal>),
-    Int(VariableOutput<DomainId>),
+    Int(VariableOutput<AffineView<DomainId>>),
     ArrayOfBool(ArrayOutput<Literal>),
-    ArrayOfInt(ArrayOutput<DomainId>),
+    ArrayOfInt(ArrayOutput<AffineView<DomainId>>),
 }
 
 impl Output {
@@ -69,17 +70,14 @@ impl Output {
         })
     }
 
-    pub(crate) fn int(id: Rc<str>, domain_id: DomainId) -> Output {
-        Output::Int(VariableOutput {
-            id,
-            variable: domain_id,
-        })
+    pub(crate) fn int(id: Rc<str>, view: AffineView<DomainId>) -> Output {
+        Output::Int(VariableOutput { id, variable: view })
     }
 
     pub(crate) fn array_of_int(
         id: Rc<str>,
         shape: Box<[(i32, i32)]>,
-        contents: Rc<[DomainId]>,
+        contents: Rc<[AffineView<DomainId>]>,
     ) -> Output {
         Output::ArrayOfInt(ArrayOutput {
             id,

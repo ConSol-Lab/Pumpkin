@@ -14,6 +14,7 @@ use std::io::Read;
 use pumpkin_constraints::cumulative;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 
+pub use self::compiler::ViewStatistics;
 use self::error::FlatZincError;
 use self::instance::FlatZincInstance;
 use crate::Solver;
@@ -30,7 +31,7 @@ pub const MIN_INTEGER_VALUE: i32 = -500_000_000;
 /// with care since it might lead to overflow/underflow!
 pub const MAX_INTEGER_VALUE: i32 = 500_000_000;
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct FlatZincOptions {
     /// If `true`, the solver will not strictly keep to the search annotations in the flatzinc.
     pub free_search: bool,
@@ -48,7 +49,7 @@ pub struct FlatZincOptions {
     /// The type of proof that is logged. This influences which preprocessing steps we can do.
     pub proof_type: Option<ProofType>,
 
-    /// The proof format, which decides what the compiler does for a proof.
+    /// The proof format, which decides whether the view pass runs.
     pub proof_format: ProofFormat,
 
     /// Indicates that the solver should perform verbose logging
@@ -57,6 +58,11 @@ pub struct FlatZincOptions {
     /// Write the preamble that states the compiler's preprocessing, for the proof processor, at
     /// the head of the croc scaffold the proof log writes.
     pub writes_preamble: bool,
+
+    /// Stop after compiling: write the proof steps that state the views, in the format of
+    /// fzn-drcp-check, to `head_path`, report what the view pass did, and do not solve.
+    pub preprocess_only: bool,
+    pub head_path: Option<std::path::PathBuf>,
 }
 
 /// The proof format, which decides what the compiler does for a proof.
@@ -86,7 +92,7 @@ pub fn parse_and_compile(
     solver: &mut Solver,
     instance: impl Read,
     options: FlatZincOptions,
-) -> Result<FlatZincInstance, FlatZincError> {
+) -> Result<(FlatZincInstance, ViewStatistics), FlatZincError> {
     let ast = parser::parse(instance)?;
     compiler::compile(ast, solver, options)
 }
@@ -282,7 +288,8 @@ mod tests {
 
         let instance =
             parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
-                .expect("compilation should succeed");
+                .expect("compilation should succeed")
+                .0;
 
         let outputs = instance.outputs().collect::<Vec<_>>();
         assert_eq!(1, outputs.len());
@@ -304,7 +311,8 @@ mod tests {
 
         let instance =
             parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
-                .expect("compilation should succeed");
+                .expect("compilation should succeed")
+                .0;
 
         let outputs = instance.outputs().collect::<Vec<_>>();
         assert_eq!(1, outputs.len());
@@ -322,7 +330,8 @@ mod tests {
 
         let instance =
             parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
-                .expect("compilation should succeed");
+                .expect("compilation should succeed")
+                .0;
 
         let outputs = instance.outputs().collect::<Vec<_>>();
         assert_eq!(1, outputs.len());
@@ -344,7 +353,8 @@ mod tests {
 
         let instance =
             parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
-                .expect("compilation should succeed");
+                .expect("compilation should succeed")
+                .0;
 
         let outputs = instance.outputs().collect::<Vec<_>>();
         assert_eq!(1, outputs.len());

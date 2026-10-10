@@ -26,6 +26,7 @@ use pumpkin_solver::core::results::solution_iterator::IteratedSolution;
 use pumpkin_solver::core::termination::Combinator;
 use pumpkin_solver::core::termination::TerminationCondition;
 use pumpkin_solver::core::termination::TimeBudget;
+use pumpkin_solver::core::variables::AffineView;
 use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::flatzinc::FlatZincOptions;
 use pumpkin_solver::flatzinc::error::FlatZincError;
@@ -57,7 +58,7 @@ fn log_statistics(
 fn solution_callback(
     brancher: &impl Brancher,
     resolver: &impl ConflictResolver,
-    instance_objective_function: Option<DomainId>,
+    instance_objective_function: Option<AffineView<DomainId>>,
     options_all_solutions: bool,
     outputs: &[Output],
     solver: &Solver,
@@ -97,10 +98,53 @@ pub(crate) fn solve<R: ConflictResolver>(
         time_limit.map(TimeBudget::starting_now),
     );
 
-    let instance = parse_and_compile(&mut solver, instance, options)?;
+    let (instance, view_statistics) = parse_and_compile(&mut solver, instance, options.clone())?;
     let outputs = instance.outputs.clone();
 
     let init_time = init_start_time.elapsed();
+
+    if options.preprocess_only {
+        // Written whether or not statistics were asked for, since reporting them is the point.
+        let statistics = [
+            ("initTime", format!("{}", init_time.as_secs_f64())),
+            ("viewPassTime", format!("{}", view_statistics.seconds)),
+            ("viewAliases", view_statistics.aliases.to_string()),
+            ("viewNegations", view_statistics.negations.to_string()),
+            ("viewOtherViews", view_statistics.other_views.to_string()),
+            ("viewDefinitions", view_statistics.definitions.to_string()),
+            (
+                "viewSkippedConstraints",
+                view_statistics.skipped.to_string(),
+            ),
+            ("viewRewriteSteps", view_statistics.rewrites.to_string()),
+            (
+                "postedTwoTermEqualitiesInOneClass",
+                view_statistics.two_term_equalities_in_one_class.to_string(),
+            ),
+            (
+                "postedTwoTermEqualitiesDeclined",
+                view_statistics.two_term_equalities_declined.to_string(),
+            ),
+            (
+                "postedEqualitiesReducedToTwoTerms",
+                view_statistics.equalities_reduced_to_two_terms.to_string(),
+            ),
+            (
+                "postedReifiedTwoTermEqualities",
+                view_statistics.reified_two_term_equalities.to_string(),
+            ),
+            (
+                "postedAffineRelationsNotRead",
+                view_statistics.affine_relations_not_read.to_string(),
+            ),
+        ];
+        for (name, value) in statistics {
+            println!("%%%mzn-stat: {name}={value}");
+        }
+        println!("%%%mzn-stat-end");
+        return Ok(());
+    }
+    log_statistic("viewPassTime", view_statistics.seconds);
 
     let mut brancher = if options.free_search {
         // The free search flag is active
@@ -125,7 +169,7 @@ pub(crate) fn solve<R: ConflictResolver>(
         instance.search.expect("Expected a search to be defined")
     };
 
-    let (direction, objective): (OptimisationDirection, DomainId) =
+    let (direction, objective): (OptimisationDirection, AffineView<DomainId>) =
         match instance.objective_function {
             Some(objective) => objective.into(),
             None => {

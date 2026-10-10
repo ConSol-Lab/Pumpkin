@@ -1,5 +1,6 @@
 //! Scan through all constraint definition and determine whether a `set_in` constraint is present;
-//! if this is the case then update the domain of the variable directly.
+//! if this is the case then restrict the domain of the variable, through its view of the
+//! representative of its class, to the set.
 use super::context::CompilationContext;
 use crate::flatzinc::error::FlatZincError;
 
@@ -21,11 +22,9 @@ pub(crate) fn run(context: &mut CompilationContext) -> Result<(), FlatZincError>
             _ => return Err(FlatZincError::UnexpectedExpr),
         });
 
-        let mut domain = context.equivalences.get_mut_domain(&id);
-
-        // We take the intersection between the two domains
-        let new_domain = domain.merge(&set.into());
-        *domain = new_domain;
+        // The class's domain is that of its representative, of which the variable may be a
+        // view; the set is pulled back through the view.
+        context.equivalences.restrict(&id, &set.into());
     }
     Ok(())
 }

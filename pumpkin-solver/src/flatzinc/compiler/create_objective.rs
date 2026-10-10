@@ -2,6 +2,7 @@
 
 use flatzinc::BoolExpr;
 use flatzinc::Goal;
+use pumpkin_solver::core::variables::TransformableVariable;
 
 use super::context::CompilationContext;
 use crate::flatzinc::FlatZincError;
@@ -25,7 +26,9 @@ pub(crate) fn run(
                 ),
                 BoolExpr::VarParIdentifier(x) => {
                     if context.is_identifier_parameter(x) {
-                        context.resolve_integer_constant_from_identifier(x)?
+                        context
+                            .resolve_integer_constant_from_identifier(x)?
+                            .scaled(1)
                     } else {
                         context.resolve_integer_variable_from_identifier(x)?
                     }
