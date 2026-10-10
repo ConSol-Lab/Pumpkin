@@ -55,6 +55,14 @@ pub enum ViewEvent {
         replacements: Vec<Replacement>,
         stated: Option<LinearForm>,
     },
+    /// `v <parameter> from c:<source>`: a fresh parameter for a two-term equality
+    /// whose coefficients divide neither way, with the two equalities
+    /// `variable = scale * parameter + offset` under new numbers.
+    Parametrise {
+        parameter: Rc<str>,
+        source: u64,
+        equalities: [(u64, Rc<str>, i64, i64); 2],
+    },
 }
 
 /// The view steps of the FlatZinc compiler, in order.
@@ -189,6 +197,19 @@ impl ViewLog {
                     match stated {
                         Some(form) => lines.push(format!("  e {target} : {}", form.render())),
                         None => lines.push(format!("  e {target}")),
+                    }
+                }
+                ViewEvent::Parametrise {
+                    parameter,
+                    source,
+                    equalities,
+                } => {
+                    lines.push(format!("v {parameter} from c:{source}"));
+                    for (id, variable, scale, offset) in equalities {
+                        lines.push(format!(
+                            "  {id} : {variable} = {}",
+                            affine_text(*scale, parameter, *offset)
+                        ));
                     }
                 }
             }

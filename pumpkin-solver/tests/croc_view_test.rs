@@ -41,6 +41,17 @@ fn a_drcp_proof_skips_the_view_pass() {
     let _ = std::fs::remove_file(output_path("int_lin_eq_drcp.drcp"));
 }
 
+#[test]
+fn an_equality_whose_coefficients_divide_neither_way_introduces_a_parameter() {
+    let preamble = preamble_of("parameter", "views_literals_constants", &[]);
+    assert!(
+        preamble.iter().any(|line| line.starts_with("parameter ")),
+        "{preamble:?}"
+    );
+    assert!(preamble.iter().any(|line| line.starts_with("view u ")));
+    assert!(preamble.iter().any(|line| line.starts_with("view v ")));
+}
+
 /// The lines of the preamble of the scaffold the solver writes for the model, before the marker.
 fn preamble_of(name: &str, model: &str, flags: &[&str]) -> Vec<String> {
     let scaffold_path = output_path(&format!("{name}.scaffold"));

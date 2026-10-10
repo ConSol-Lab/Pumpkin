@@ -83,6 +83,7 @@ pub struct ViewStatistics {
     pub negations: usize,
     /// Variables that became another view of another variable.
     pub other_views: usize,
+    pub parameters: usize,
     pub definitions: usize,
     /// Model constraints that became views and are not posted.
     pub skipped: usize,
@@ -584,6 +585,9 @@ pub(crate) struct VariableEquivalences {
     pub(super) classes: HashMap<Rc<str>, Rc<RefCell<EquivalenceClass>>>,
     /// The variables declared boolean: a view of one must keep it boolean.
     pub(crate) booleans: HashSet<Rc<str>>,
+    /// The parameters introduced for equalities whose coefficients divide neither way, in the
+    /// order of introduction; each is the representative of its class.
+    pub(crate) parameters: Vec<Rc<str>>,
 }
 
 #[derive(Debug)]
@@ -619,6 +623,18 @@ impl VariableEquivalences {
         values: Vec<i32>,
     ) {
         self.create(representative, Domain::SparseDomain { values });
+    }
+
+    /// A fresh parameter, unconstrained until the classes it stands for are absorbed.
+    pub(crate) fn create_parameter_class(&mut self, name: Rc<str>) {
+        self.create(
+            Rc::clone(&name),
+            Domain::IntervalDomain {
+                lb: i32::MIN / 4,
+                ub: i32::MAX / 4,
+            },
+        );
+        self.parameters.push(name);
     }
 
     /// Get the name of the representative variable of the equivalence class the given variable

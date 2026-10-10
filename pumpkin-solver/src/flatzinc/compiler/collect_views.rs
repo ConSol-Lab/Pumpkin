@@ -3,16 +3,17 @@
 //! A two-term equality between variables, `a * x + b * y = c`, whether written as `int_eq`,
 //! `bool_eq`, `bool2int`, `bool_not`, a two-term `int_lin_eq` or a declaration `var ..: b = a`,
 //! makes one variable an affine view of the other when one coefficient divides the other and
-//! the constant. The equality is then not posted: every other constraint is posted on the views,
-//! and the equality's propagation is the view's arithmetic.
+//! the constant, and otherwise makes both views of a fresh parameter. The equality is then not
+//! posted: every other constraint is posted on the views, and the equality's propagation is the
+//! view's arithmetic.
 //!
 //! The proof records each step in the checker's terms: a definition is numbered with `n`, the
-//! equality is rewritten by the views its variables already are (`s` in place), the equalities
-//! that relate the absorbed class's members to their old representative are rewritten to the new
-//! one, and finally every posted constraint that mentions a view is rewritten, with its result
-//! stated where the checker requires it. The invariant kept throughout is that every member `m`
-//! of a class has a cited constraint reading `c_m * m + c_r * r = k` with `r` the class's current
-//! representative.
+//! equality is rewritten by the views its variables already are (`s` in place), a fresh parameter
+//! is introduced with `v`, the equalities that relate the absorbed class's members to their old
+//! representative are rewritten to the new one, and finally every posted constraint that mentions
+//! a view is rewritten, with its result stated where the checker requires it. The invariant kept
+//! throughout is that every member `m` of a class has a cited constraint reading
+//! `c_m * m + c_r * r = k` with `r` the class's current representative.
 //!
 //! The domain a member was declared with narrows the representative's; in the proof the declared
 //! domains (constraint 0) are rewritten by the views last, which states the same narrowing.
@@ -89,6 +90,7 @@ fn collect(
         evidence: HashMap::default(),
         forms: HashMap::default(),
         next_id: first_free_id,
+        next_parameter: 0,
         events: vec![],
         absorbed: HashSet::default(),
         objective: objective_name(ast).map(|name| context.identifiers.get_interned(name)),
@@ -164,11 +166,13 @@ fn collect(
                 _ => statistics.other_views += 1,
             }
         }
+        statistics.parameters = context.equivalences.parameters.len();
         statistics.skipped = skipped.len();
         for event in &views.events {
             match event {
                 ViewEvent::Definition { .. } => statistics.definitions += 1,
                 ViewEvent::Substitute { .. } => statistics.rewrites += 1,
+                ViewEvent::Parametrise { .. } => {}
             }
         }
     }
@@ -245,6 +249,12 @@ fn collect(
             });
         }
     }
+    preamble.parameters = context
+        .equivalences
+        .parameters
+        .iter()
+        .map(|name| name.to_string())
+        .collect();
     preamble.skipped = skipped;
     if let Some(objective) = views.objective.as_ref()
         && context.equivalences.is_defined(objective)
@@ -294,6 +304,7 @@ struct Views<'a> {
     /// The linear constraints the checker holds, in its form, under their numbers.
     forms: HashMap<u64, LinearForm>,
     next_id: u64,
+    next_parameter: u64,
     events: Vec<ViewEvent>,
     /// The variables that are views of another and no longer appear in posted constraints.
     absorbed: HashSet<Rc<str>>,
@@ -664,22 +675,27 @@ impl Views<'_> {
                 absorbed: Rc::clone(&r1),
                 view: (-big_b / big_a, k / big_a),
             });
-        let plan =
-            if let (Some(into_first), Some(into_second)) = (&second_of_first, &first_of_second) {
-                let _ = (into_first, into_second);
-                if context.equivalences.class_size(&r1) >= context.equivalences.class_size(&r2) {
-                    second_of_first.unwrap()
-                } else {
-                    first_of_second.unwrap()
-                }
-            } else if let Some(plan) = second_of_first {
-                plan
-            } else if let Some(plan) = first_of_second {
-                plan
+        let plan = if let (Some(into_first), Some(into_second)) =
+            (&second_of_first, &first_of_second)
+        {
+            let _ = (into_first, into_second);
+            if context.equivalences.class_size(&r1) >= context.equivalences.class_size(&r2) {
+                second_of_first.unwrap()
             } else {
-                // Neither representative is an integral view of the other.
+                first_of_second.unwrap()
+            }
+        } else if let Some(plan) = second_of_first {
+            plan
+        } else if let Some(plan) = first_of_second {
+            plan
+        } else {
+            let g = gcd(big_a.abs(), big_b.abs());
+            if g == 0 || k % g != 0 {
+                // No integer solution: left to the solver, which will find the model infeasible.
                 return false;
-            };
+            }
+            Plan::Parametrise { g }
+        };
 
         // A boolean must stay a boolean: its view of the final representative is the identity or
         // the negation.
@@ -693,27 +709,112 @@ impl Views<'_> {
             })
         };
 
-        let Plan::Absorb {
-            target,
-            absorbed,
-            view: (scale, offset),
-        } = plan;
-        let (Ok(scale), Ok(offset)) = (i32::try_from(scale), i32::try_from(offset)) else {
-            return false;
-        };
-        let view = Affine { scale, offset };
-        let moved = context.equivalences.members(&absorbed);
-        if !keeps_booleans(&moved, view) {
-            return false;
+        match plan {
+            Plan::Absorb {
+                target,
+                absorbed,
+                view: (scale, offset),
+            } => {
+                let (Ok(scale), Ok(offset)) = (i32::try_from(scale), i32::try_from(offset)) else {
+                    return false;
+                };
+                let view = Affine { scale, offset };
+                let moved = context.equivalences.members(&absorbed);
+                if !keeps_booleans(&moved, view) {
+                    return false;
+                }
+                self.rewrite_by_views(context, number, x, y);
+                // The rewritten constraint reads A * r1 + B * r2 = k and now relates the absorbed
+                // representative to the target.
+                let _ = self.evidence.insert(Rc::clone(&absorbed), number);
+                self.rewrite_members(&moved, &absorbed, &target, view, number);
+                context.equivalences.absorb(&target, &absorbed, view);
+                let _ = self.absorbed.insert(absorbed);
+                true
+            }
+            Plan::Parametrise { g } => {
+                // r1 = x0 + p * t, r2 = y0 + q * t with p = B / g, q = -A / g, and (x0, y0) a
+                // particular solution from a Bezout pair u * A + v * B = g.
+                let (u, v) = bezout(big_a, big_b);
+                let p = big_b / g;
+                let q = -big_a / g;
+                let x0 = u * (k / g);
+                let y0 = v * (k / g);
+                let (Ok(p32), Ok(q32), Ok(x032), Ok(y032)) = (
+                    i32::try_from(p),
+                    i32::try_from(q),
+                    i32::try_from(x0),
+                    i32::try_from(y0),
+                ) else {
+                    return false;
+                };
+                let first_view = Affine {
+                    scale: p32,
+                    offset: x032,
+                };
+                let second_view = Affine {
+                    scale: q32,
+                    offset: y032,
+                };
+                let first_members = context.equivalences.members(&r1);
+                let second_members = context.equivalences.members(&r2);
+                if !keeps_booleans(&first_members, first_view)
+                    || !keeps_booleans(&second_members, second_view)
+                {
+                    return false;
+                }
+                self.rewrite_by_views(context, number, x, y);
+
+                let parameter: Rc<str> = format!("view_parameter_{}", self.next_parameter).into();
+                self.next_parameter += 1;
+                let first_id = self.fresh_id();
+                let second_id = self.fresh_id();
+                self.events.push(ViewEvent::Parametrise {
+                    parameter: Rc::clone(&parameter),
+                    source: number,
+                    equalities: [
+                        (first_id, Rc::clone(&r1), p, x0),
+                        (second_id, Rc::clone(&r2), q, y0),
+                    ],
+                });
+                let _ = self.forms.insert(
+                    first_id,
+                    LinearForm {
+                        terms: vec![
+                            (1, Term::Variable(Rc::clone(&r1))),
+                            (-p, Term::Variable(Rc::clone(&parameter))),
+                        ],
+                        relation: Relation::Equal,
+                        bound: x0,
+                    },
+                );
+                let _ = self.forms.insert(
+                    second_id,
+                    LinearForm {
+                        terms: vec![
+                            (1, Term::Variable(Rc::clone(&r2))),
+                            (-q, Term::Variable(Rc::clone(&parameter))),
+                        ],
+                        relation: Relation::Equal,
+                        bound: y0,
+                    },
+                );
+                let _ = self.evidence.insert(Rc::clone(&r1), first_id);
+                let _ = self.evidence.insert(Rc::clone(&r2), second_id);
+
+                let _ = context.identifiers.get_interned(&parameter);
+                context
+                    .equivalences
+                    .create_parameter_class(Rc::clone(&parameter));
+                self.rewrite_members(&first_members, &r1, &parameter, first_view, first_id);
+                self.rewrite_members(&second_members, &r2, &parameter, second_view, second_id);
+                context.equivalences.absorb(&parameter, &r1, first_view);
+                context.equivalences.absorb(&parameter, &r2, second_view);
+                let _ = self.absorbed.insert(r1);
+                let _ = self.absorbed.insert(r2);
+                true
+            }
         }
-        self.rewrite_by_views(context, number, x, y);
-        // The rewritten constraint reads A * r1 + B * r2 = k and now relates the absorbed
-        // representative to the target.
-        let _ = self.evidence.insert(Rc::clone(&absorbed), number);
-        self.rewrite_members(&moved, &absorbed, &target, view, number);
-        context.equivalences.absorb(&target, &absorbed, view);
-        let _ = self.absorbed.insert(absorbed);
-        true
     }
 
     /// Rewrite the constraint in place by the views its two variables already are, so that it
@@ -881,6 +982,23 @@ enum Plan {
         absorbed: Rc<str>,
         view: (i64, i64),
     },
+    Parametrise {
+        g: i64,
+    },
+}
+
+fn gcd(a: i64, b: i64) -> i64 {
+    if b == 0 { a } else { gcd(b, a % b) }
+}
+
+/// `u`, `v` with `u * a + v * b = gcd(a, b)`.
+fn bezout(a: i64, b: i64) -> (i64, i64) {
+    if b == 0 {
+        return (a.signum(), 0);
+    }
+    let (u, v) = bezout(b, a.rem_euclid(b));
+    // gcd = u * b + v * (a - b * floor(a / b))
+    (v, u - v * a.div_euclid(b))
 }
 
 /// `a * x + b * y = c` as `(x, a, y, b, c)`.

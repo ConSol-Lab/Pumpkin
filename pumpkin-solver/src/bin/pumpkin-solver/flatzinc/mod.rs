@@ -111,6 +111,7 @@ pub(crate) fn solve<R: ConflictResolver>(
             ("viewAliases", view_statistics.aliases.to_string()),
             ("viewNegations", view_statistics.negations.to_string()),
             ("viewOtherViews", view_statistics.other_views.to_string()),
+            ("viewParameters", view_statistics.parameters.to_string()),
             ("viewDefinitions", view_statistics.definitions.to_string()),
             (
                 "viewSkippedConstraints",
