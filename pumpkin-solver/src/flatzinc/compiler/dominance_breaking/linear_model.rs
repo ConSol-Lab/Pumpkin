@@ -1,4 +1,4 @@
-//! The linear part of the model, as far as dominance detection needs it.
+//! The linear part of the model, as far as dual fixing and dominance detection need it.
 //!
 //! Every constraint with an exact linear form (see [`linear_forms`](super::linear_forms)) is
 //! replaced by its rows. A variable is a candidate only if every constraint it occurs in has an

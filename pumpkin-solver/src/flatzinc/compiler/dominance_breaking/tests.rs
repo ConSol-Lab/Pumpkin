@@ -1,9 +1,11 @@
-//! Unit tests on the linear forms and the dominance order over hand-built linear
+//! Unit tests on the linear forms, dual fixing and the dominance order over hand-built linear
 //! models.
 
 use std::collections::BTreeMap;
 
 use super::dominance_order::pairs_to_post;
+use super::dual_fixing::FixedBound;
+use super::dual_fixing::fixed_bound;
 use super::linear_forms::Row;
 use super::linear_forms::rows_of;
 use super::linear_model::Candidate;
@@ -245,4 +247,40 @@ fn a_non_linear_constraint_has_no_linear_form() {
         &test_bounds,
     );
     assert_eq!(rows, None);
+}
+
+// ---- Dual fixing -----------------------------------------------------------------------------
+
+#[test]
+fn a_variable_with_only_positive_coefficients_is_fixed_to_its_lower_bound() {
+    // minimise 3x + y subject to -x - y <= -2 (row 0) and z - y <= 4 (row 1).
+    let relations = [Relation::LessOrEqual, Relation::LessOrEqual];
+    let x = candidate(0, &[(0, -1)], -3);
+    let y = candidate(1, &[(0, -1), (1, -1)], -1);
+    let z = candidate(2, &[(1, 1)], 0);
+    assert_eq!(fixed_bound(&x, &relations), None);
+    assert_eq!(fixed_bound(&y, &relations), None);
+    assert_eq!(fixed_bound(&z, &relations), Some(FixedBound::Lower));
+}
+
+#[test]
+fn a_profitable_variable_with_only_negative_coefficients_is_fixed_to_its_upper_bound() {
+    let relations = [Relation::LessOrEqual];
+    let x = candidate(0, &[(0, -2)], 4);
+    assert_eq!(fixed_bound(&x, &relations), Some(FixedBound::Upper));
+}
+
+#[test]
+fn an_objective_that_prefers_the_other_bound_prevents_fixing() {
+    // Lowering x never violates the row, but it reduces the objective.
+    let relations = [Relation::LessOrEqual];
+    let x = candidate(0, &[(0, 1)], 2);
+    assert_eq!(fixed_bound(&x, &relations), None);
+}
+
+#[test]
+fn an_equality_prevents_fixing() {
+    let relations = [Relation::Equal];
+    let x = candidate(0, &[(0, 1)], 0);
+    assert_eq!(fixed_bound(&x, &relations), None);
 }

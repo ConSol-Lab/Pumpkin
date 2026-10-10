@@ -387,6 +387,15 @@ struct Args {
     #[arg(long = "dominance-breaking", verbatim_doc_comment)]
     dominance_breaking: bool,
 
+    /// Fix variables of a FlatZinc model to a bound when moving them towards that bound can
+    /// never violate a constraint or make the objective worse (dual fixing, experimental). This
+    /// removes solutions, so it is refused together with `-a` on a satisfaction problem and with
+    /// `--symmetry-breaking`. Skipped under `--proof-format drcp` with a proof.
+    ///
+    /// Possible values: bool
+    #[arg(long = "dual-fixing", verbatim_doc_comment)]
+    dual_fixing: bool,
+
     /// Detect values that are interchangeable for a group of variables of a FlatZinc model and
     /// post value-precedence constraints to break the symmetry (experimental). This removes
     /// solutions, so it is refused together with `-a` on a satisfaction problem and with the
@@ -634,6 +643,7 @@ fn run() -> PumpkinResult<()> {
         let breaking = [
             (&mut args.symmetry_breaking, "--symmetry-breaking"),
             (&mut args.dominance_breaking, "--dominance-breaking"),
+            (&mut args.dual_fixing, "--dual-fixing"),
             (
                 &mut args.value_symmetry_breaking,
                 "--value-symmetry-breaking",
@@ -770,6 +780,7 @@ fn run() -> PumpkinResult<()> {
                     verbose: args.verbose,
                     symmetry_breaking: args.symmetry_breaking,
                     dominance_breaking: args.dominance_breaking,
+                    dual_fixing: args.dual_fixing,
                     value_symmetry_breaking: args.value_symmetry_breaking,
                     preamble: None,
                 },
@@ -804,6 +815,7 @@ fn run() -> PumpkinResult<()> {
                     verbose: args.verbose,
                     symmetry_breaking: args.symmetry_breaking,
                     dominance_breaking: args.dominance_breaking,
+                    dual_fixing: args.dual_fixing,
                     value_symmetry_breaking: args.value_symmetry_breaking,
                     preamble: None,
                 },
@@ -842,6 +854,7 @@ fn run() -> PumpkinResult<()> {
                     verbose: args.verbose,
                     symmetry_breaking: args.symmetry_breaking,
                     dominance_breaking: args.dominance_breaking,
+                    dual_fixing: args.dual_fixing,
                     value_symmetry_breaking: args.value_symmetry_breaking,
                     preamble: None,
                 },
@@ -880,6 +893,7 @@ fn run() -> PumpkinResult<()> {
                     verbose: args.verbose,
                     symmetry_breaking: args.symmetry_breaking,
                     dominance_breaking: args.dominance_breaking,
+                    dual_fixing: args.dual_fixing,
                     value_symmetry_breaking: args.value_symmetry_breaking,
                     preamble: None,
                 },
@@ -918,6 +932,7 @@ fn run() -> PumpkinResult<()> {
                     verbose: args.verbose,
                     symmetry_breaking: args.symmetry_breaking,
                     dominance_breaking: args.dominance_breaking,
+                    dual_fixing: args.dual_fixing,
                     value_symmetry_breaking: args.value_symmetry_breaking,
                     preamble: None,
                 },

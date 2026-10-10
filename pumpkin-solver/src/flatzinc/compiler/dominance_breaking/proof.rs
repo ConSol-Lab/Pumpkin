@@ -1,8 +1,9 @@
-//! The dominance steps of a croc proof for the pairs the pass posts.
+//! The dominance steps of a croc proof for the fixings and pairs the pass posts.
 //!
 //! Only steps the checker decides are logged, and the pass posts only the logged ones: the
 //! variables must occur only in linear or atomic constraints, clauses and half reifications of
-//! those, and a pair must be of 0/1 variables.
+//! those, a fixed variable must not occur in the objective, and a pair must be of 0/1
+//! variables.
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -25,6 +26,7 @@ use super::super::symmetry_breaking::canonical_form::Element;
 use super::super::symmetry_breaking::canonical_form::ModelIndex;
 use super::super::symmetry_breaking::canonical_form::Resolved;
 use super::super::symmetry_breaking::canonical_form::VarIndex;
+use super::dual_fixing::FixedBound;
 use super::linear_model::bounds;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::ast::FlatZincAst;
@@ -47,9 +49,12 @@ pub(super) struct DominanceProof {
     readable: Vec<bool>,
     /// A constraint that makes the variable unreadable, for the log.
     blocking: Vec<Option<String>>,
+    occurrences: Vec<usize>,
     /// For each variable, the other variables of the model the compiler made views of it, with
     /// the scale and offset: the proof keeps them apart, so a witness moves them along with it.
     aliases: Vec<Vec<(Rc<str>, i64, i64)>>,
+    /// For each variable, the variables of the half-reified constraints it is the indicator of.
+    under_indicator: Vec<Vec<VarIndex>>,
     definition: Option<ObjectiveDefinition>,
     /// For a variable, its value and whether the objective is bounded above, the identifier of
     /// the nogood that bounds the objective when the variable has the value.
@@ -78,6 +83,7 @@ impl DominanceProof {
         let mut readable = vec![true; num_variables];
         let mut blocking: Vec<Option<String>> = vec![None; num_variables];
         let mut occurrences = vec![0; num_variables];
+        let mut under_indicator = vec![vec![]; num_variables];
         let mut definitions = Vec::new();
 
         for (position, item) in ast.constraint_decls.iter().enumerate() {
@@ -95,6 +101,18 @@ impl DominanceProof {
                             blocking[*var] = Some(item.id.clone());
                         }
                         occurrences[*var] += 1;
+                    }
+                }
+            }
+            if item.id.ends_with("_imp")
+                && let Some((indicator, inner)) = args.split_last()
+                && let Resolved::Scalar(Element::Var(indicator)) = indicator.as_ref()
+            {
+                for arg in inner {
+                    for element in elements(arg) {
+                        if let Element::Var(var) | Element::View { var, .. } = element {
+                            under_indicator[*indicator].push(*var);
+                        }
                     }
                 }
             }
@@ -153,7 +171,9 @@ impl DominanceProof {
         Ok(DominanceProof {
             readable,
             blocking,
+            occurrences,
             aliases,
+            under_indicator,
             definition,
             objective_bounds: HashMap::new(),
         })
@@ -167,6 +187,14 @@ impl DominanceProof {
                 .find(|&&(other, _)| other == var)
                 .map_or(0, |&(_, a)| a)
         })
+    }
+
+    /// Whether the checker decides the fixing of `var`.
+    pub(super) fn can_fix(&self, index: &ModelIndex, var: VarIndex) -> bool {
+        self.readable[var]
+            && self.occurrences[var] > 0
+            && index.objective != Some(var)
+            && self.weight_in_definition(var) == 0
     }
 
     /// The shift of the objective variable that repairs its definition when `better` goes from
@@ -274,18 +302,26 @@ impl DominanceProof {
         }
     }
 
-    /// Write the order: the variables of the pairs in `pair_order`, each preferring larger
-    /// values.
+    /// Write the order: first the fixed variables, each preferring the bound it is fixed to,
+    /// then the variables of the pairs in `pair_order`, each preferring larger values.
     pub(super) fn log_order(
         &self,
         context: &mut CompilationContext,
         index: &ModelIndex,
+        fixings: &[(VarIndex, FixedBound)],
         pair_order: &[VarIndex],
     ) {
-        for &var in pair_order {
+        let keys = fixings
+            .iter()
+            .copied()
+            .chain(pair_order.iter().map(|&var| (var, FixedBound::Upper)));
+        for (var, side) in keys {
             let domain = index.domain_ids[var];
-            let (_, upper) = bounds(&index.variables[var]);
-            let (preference, bound) = ("larger", predicate![domain >= int_value(upper) + 1]);
+            let (lower, upper) = bounds(&index.variables[var]);
+            let (preference, bound) = match side {
+                FixedBound::Lower => ("smaller", predicate![domain <= int_value(lower) - 1]),
+                FixedBound::Upper => ("larger", predicate![domain >= int_value(upper) + 1]),
+            };
             log_order_key(
                 context,
                 vec![
@@ -297,6 +333,62 @@ impl DominanceProof {
                     HeadField::Label("initial_domain"),
                 ],
             );
+        }
+    }
+
+    /// Write the step that fixes `var` to `side`, as the constraint with the tag.
+    pub(super) fn log_fixing(
+        &self,
+        context: &mut CompilationContext,
+        index: &ModelIndex,
+        var: VarIndex,
+        side: FixedBound,
+        tag: ConstraintTag,
+    ) {
+        let Some(identifier) = take_identifier(context, tag) else {
+            return;
+        };
+        let domain = index.domain_ids[var];
+        let (lower, upper) = bounds(&index.variables[var]);
+        let (lower, upper) = (int_value(lower), int_value(upper));
+        let (removed, value, other_side) = match side {
+            FixedBound::Lower => (
+                predicate![domain >= lower + 1],
+                lower,
+                predicate![domain >= upper + 1],
+            ),
+            FixedBound::Upper => (
+                predicate![domain <= upper - 1],
+                upper,
+                predicate![domain <= lower - 1],
+            ),
+        };
+        log(
+            context,
+            vec![
+                HeadField::Text(format!("w {identifier} ")),
+                HeadField::Atom(removed),
+                HeadField::Text(" : ".to_owned()),
+                HeadField::Name(domain),
+                HeadField::Text(format!(":={value}")),
+                HeadField::Text(
+                    self.aliases[var]
+                        .iter()
+                        .map(|(alias, scale, offset)| {
+                            format!(" {alias}:={}", scale * i64::from(value) + offset)
+                        })
+                        .collect(),
+                ),
+            ],
+        );
+        log_domain_fact(context, other_side);
+        // A constraint `var` is the indicator of may hold for every value its variables can
+        // take, which is why fixing `var` to 1 keeps it.
+        for &inner in &self.under_indicator[var] {
+            let domain = index.domain_ids[inner];
+            let (lower, upper) = bounds(&index.variables[inner]);
+            log_domain_fact(context, predicate![domain <= int_value(lower) - 1]);
+            log_domain_fact(context, predicate![domain >= int_value(upper) + 1]);
         }
     }
 

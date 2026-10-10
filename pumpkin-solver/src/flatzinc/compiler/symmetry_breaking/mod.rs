@@ -238,7 +238,7 @@ pub(crate) fn run_value_symmetry(
             "enumerating all solutions of a satisfaction problem",
         ));
     }
-    if options.symmetry_breaking || options.dominance_breaking {
+    if options.symmetry_breaking || options.dominance_breaking || options.dual_fixing {
         return Err(unsupported("other symmetry or dominance breaking"));
     }
 

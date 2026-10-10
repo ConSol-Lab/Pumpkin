@@ -87,6 +87,12 @@ pub struct FlatZincOptions {
     /// justified.
     pub dominance_breaking: bool,
 
+    /// Fix variables to a bound when moving them towards it cannot violate a constraint or
+    /// worsen the objective. Refused when enumerating all solutions, with symmetry breaking, and
+    /// under proof logging other than a croc block proof or croc scaffold, where each fixing is
+    /// justified.
+    pub dual_fixing: bool,
+
     /// Detect interchangeable values and post value-precedence constraints. Refused when
     /// enumerating all solutions, with the other breaking options, and under proof logging other
     /// than a croc block proof or croc scaffold, where the exchanges are stated as value symmetry

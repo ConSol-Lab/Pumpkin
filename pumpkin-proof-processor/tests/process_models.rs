@@ -96,6 +96,12 @@ process_model!(
     "--dominance-breaking"
 );
 process_model!(
+    dual_fixing_knapsack,
+    "dual_fixing_knapsack",
+    "c UPPER_BOUND 24",
+    "--dual-fixing"
+);
+process_model!(
     value_symmetry_colouring,
     "value_symmetry_colouring",
     "c UNSAT",
@@ -119,7 +125,7 @@ fn symmetry_star_dropping_unused_steps() {
     }
 }
 
-// Some of the dominance steps.
+// Some of the dominance steps, and the dual fixing step, whose `w` line the proof then lacks.
 #[test]
 fn dominance_knapsack_dropping_unused_steps() {
     let name = "dominance_knapsack_dropping_unused_steps";
@@ -135,6 +141,26 @@ fn dominance_knapsack_dropping_unused_steps() {
             &["--drop-unused-breaking-steps"],
         );
         assert!(left_out.is_match(&log), "no step is left out:\n{log}");
+    }
+}
+
+#[test]
+fn dual_fixing_knapsack_dropping_unused_steps() {
+    let name = "dual_fixing_knapsack_dropping_unused_steps";
+    let (model_path, scaffold_path) = solve(name, "dual_fixing_knapsack", &["--dual-fixing"]);
+    for derivation in ["resolution", "refutation"] {
+        let (_, proof) = process_and_check(
+            name,
+            &model_path,
+            &scaffold_path,
+            derivation,
+            "c UPPER_BOUND 24",
+            &["--drop-unused-breaking-steps"],
+        );
+        assert!(
+            !proof.lines().any(|line| line.starts_with("w ")),
+            "the dual fixing step is not left out"
+        );
     }
 }
 

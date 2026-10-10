@@ -68,6 +68,12 @@ croc_proofs!(
     "--dominance-breaking"
 );
 croc_proofs!(
+    dual_fixing_knapsack,
+    "dual_fixing_knapsack",
+    "c UPPER_BOUND 24",
+    "--dual-fixing"
+);
+croc_proofs!(
     value_symmetry_colouring,
     "value_symmetry_colouring",
     "c UNSAT",
@@ -81,7 +87,11 @@ fn a_drcp_proof_skips_the_breaking_passes() {
     let output = Command::new(env!("CARGO_BIN_EXE_pumpkin-solver"))
         .arg("--proof-path")
         .arg(&proof_path)
-        .args(["--symmetry-breaking", "--dominance-breaking"])
+        .args([
+            "--symmetry-breaking",
+            "--dominance-breaking",
+            "--dual-fixing",
+        ])
         .arg(&model_path)
         .output()
         .unwrap();
