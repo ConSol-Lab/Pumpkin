@@ -40,7 +40,10 @@ use crate::flatzinc::ast::VarArrayDecl;
 use crate::flatzinc::compiler::context::Affine;
 use crate::flatzinc::compiler::context::CompilationContext;
 use crate::flatzinc::compiler::context::Domain;
+use crate::flatzinc::compiler::context::LiteralPredicate;
 use crate::flatzinc::compiler::context::UnitBound;
+use crate::flatzinc::preamble::Comparator;
+use crate::flatzinc::preamble::LiteralDefinition;
 use crate::flatzinc::preamble::View;
 
 pub(crate) fn run(
@@ -206,6 +209,9 @@ fn collect(
     context.constraints = kept;
 
     phase(&mut phases, "equalities");
+    if options.literal_predicates {
+        views.collect_literal_predicates(context);
+    }
     // Declared replacements rewrite every constraint in the checker; blocks rewrite each here.
     if !views.declare {
         views.rewrite_posted_constraints(context);
@@ -235,7 +241,9 @@ fn collect(
                 ViewEvent::Definition { .. } => statistics.definitions += 1,
                 ViewEvent::Substitute { .. } => statistics.rewrites += 1,
                 ViewEvent::Declare(_) => statistics.declarations += 1,
-                ViewEvent::Parametrise { .. } | ViewEvent::Equality { .. } => {}
+                ViewEvent::Parametrise { .. }
+                | ViewEvent::Equality { .. }
+                | ViewEvent::DeclareLiteral { .. } => {}
             }
         }
     }
@@ -322,6 +330,22 @@ fn collect(
         .declared_constants
         .iter()
         .map(|name| (name.to_string(), views.constants[name]))
+        .collect();
+    preamble.literals = context
+        .literal_predicates
+        .iter()
+        .map(|literal| LiteralDefinition {
+            boolean: literal.boolean.to_string(),
+            variable: literal.variable.to_string(),
+            comparator: match literal.comparator {
+                "<=" => Comparator::LessOrEqual,
+                ">=" => Comparator::GreaterOrEqual,
+                "==" => Comparator::Equal,
+                _ => Comparator::NotEqual,
+            },
+            value: i64::from(literal.value),
+            constraint: tag_number(literal.tag),
+        })
         .collect();
     // A unit bound is posted, as a bound rather than as a propagator.
     let unit_bounds: HashSet<u64> = context
@@ -853,6 +877,106 @@ impl Views<'_> {
             }
         }
         implied
+    }
+
+    /// The booleans that a reified comparison of a representative with a constant defines and
+    /// that every other constraint reads as a literal: in a clause or a gate, or as the indicator
+    /// of a reified or half-reified constraint. Each is declared to be the comparison's atom.
+    fn collect_literal_predicates(&mut self, context: &mut CompilationContext) {
+        let mut not_literal: HashSet<Rc<str>> = HashSet::default();
+        for (_, item) in &context.constraints {
+            let id = item.id.as_str();
+            let all_literal = matches!(
+                id,
+                "bool_clause" | "array_bool_and" | "array_bool_or" | "bool_and" | "bool_or"
+            );
+            let last = item.exprs.len().saturating_sub(1);
+            for (position, expr) in item.exprs.iter().enumerate() {
+                let literal_position = all_literal
+                    || ((id.ends_with("_reif") || id.ends_with("_imp")) && position == last);
+                if literal_position {
+                    continue;
+                }
+                if let Some(Operand::Variable(name)) = self.operand(context, expr) {
+                    let _ = not_literal.insert(name);
+                }
+                if let Some(operands) = self.array_operands(context, expr) {
+                    for operand in operands {
+                        if let Operand::Variable(name) = operand {
+                            let _ = not_literal.insert(name);
+                        }
+                    }
+                }
+            }
+        }
+        // The equalities of the pair detector stay in the proof, and read their variables linearly.
+        for event in &self.events {
+            if let ViewEvent::Equality { form, .. } = event {
+                for (_, term) in &form.terms {
+                    if let Term::Variable(name) = term {
+                        let _ = not_literal.insert(Rc::clone(name));
+                    }
+                }
+            }
+        }
+        let mut chosen: HashSet<Rc<str>> = HashSet::default();
+        for (tag, item) in &context.constraints {
+            let id = item.id.as_str();
+            if !matches!(
+                id,
+                "int_le_reif" | "int_lt_reif" | "int_eq_reif" | "int_ne_reif"
+            ) || item.exprs.len() != 3
+            {
+                continue;
+            }
+            let (Some(left), Some(right), Some(Operand::Variable(boolean))) = (
+                self.operand(context, &item.exprs[0]),
+                self.operand(context, &item.exprs[1]),
+                self.operand(context, &item.exprs[2]),
+            ) else {
+                continue;
+            };
+            // The atom as the checker reads the comparison `left - right <relation> 0`.
+            let (variable, comparator, value) = match (left, right, id) {
+                (Operand::Variable(x), Operand::Constant(c), "int_le_reif") => (x, "<=", c),
+                (Operand::Constant(c), Operand::Variable(x), "int_le_reif") => (x, ">=", c),
+                (Operand::Variable(x), Operand::Constant(c), "int_lt_reif") => (x, "<=", c - 1),
+                (Operand::Constant(c), Operand::Variable(x), "int_lt_reif") => (x, ">=", c + 1),
+                (Operand::Variable(x), Operand::Constant(c), "int_eq_reif")
+                | (Operand::Constant(c), Operand::Variable(x), "int_eq_reif") => (x, "==", c),
+                (Operand::Variable(x), Operand::Constant(c), "int_ne_reif")
+                | (Operand::Constant(c), Operand::Variable(x), "int_ne_reif") => (x, "!=", c),
+                _ => continue,
+            };
+            let Ok(value) = i32::try_from(value) else {
+                continue;
+            };
+            let is_alone = context.equivalences.representative(&boolean) == boolean
+                && context.equivalences.class_size(&boolean) == 1;
+            if not_literal.contains(&boolean)
+                || chosen.contains(&boolean)
+                || !context.equivalences.booleans.contains(&boolean)
+                || !is_alone
+                || context.equivalences.representative(&variable) != variable
+                || variable == boolean
+            {
+                continue;
+            }
+            let _ = chosen.insert(Rc::clone(&boolean));
+            self.events.push(ViewEvent::DeclareLiteral {
+                boolean: Rc::clone(&boolean),
+                atom: format!("[{variable} {comparator} {value}]"),
+                evidence: tag_number(*tag),
+            });
+            context.view_statistics.literal_predicates += 1;
+            context.literal_predicates.push(LiteralPredicate {
+                boolean,
+                variable,
+                comparator,
+                value,
+                tag: *tag,
+            });
+        }
     }
 
     /// `a * x + b * y = c` when the form is an equality over exactly two variables.

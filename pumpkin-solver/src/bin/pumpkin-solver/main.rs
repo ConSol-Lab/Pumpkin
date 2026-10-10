@@ -120,6 +120,12 @@ struct Args {
     #[arg(long)]
     declare_replacements: bool,
 
+    /// Make each boolean that a reified comparison of a variable with a constant defines, and
+    /// that occurs only as a literal, the literal of the comparison's predicate instead of a
+    /// variable with a reified propagator (experimental).
+    #[arg(long)]
+    literal_predicates: bool,
+
     /// The number of high-lbd learned nogoods that are kept in the database.
     ///
     /// Learned nogoods are kept based on the tiered system introduced in "Improving
@@ -589,7 +595,10 @@ fn run() -> PumpkinResult<()> {
         if let Some((_, option)) = croc_only.iter().find(|(given, _)| *given) {
             return Err(PumpkinError::NeedsCrocProofs((*option).to_owned()));
         }
-        let skipped = [(args.declare_replacements, "--declare-replacements")];
+        let skipped = [
+            (args.declare_replacements, "--declare-replacements"),
+            (args.literal_predicates, "--literal-predicates"),
+        ];
         for (_, option) in skipped.iter().filter(|(given, _)| *given) {
             warn!("{option} is skipped under --proof-format drcp");
         }
@@ -709,6 +718,7 @@ fn run() -> PumpkinResult<()> {
                     writes_preamble,
                     preprocess_only: args.preprocess_only,
                     declare_replacements: args.declare_replacements,
+                    literal_predicates: args.literal_predicates,
                     head_path: if args.preprocess_only {
                         args.proof_path.clone()
                     } else {
@@ -738,6 +748,7 @@ fn run() -> PumpkinResult<()> {
                     writes_preamble,
                     preprocess_only: args.preprocess_only,
                     declare_replacements: args.declare_replacements,
+                    literal_predicates: args.literal_predicates,
                     head_path: if args.preprocess_only {
                         args.proof_path.clone()
                     } else {
@@ -771,6 +782,7 @@ fn run() -> PumpkinResult<()> {
                     writes_preamble,
                     preprocess_only: args.preprocess_only,
                     declare_replacements: args.declare_replacements,
+                    literal_predicates: args.literal_predicates,
                     head_path: if args.preprocess_only {
                         args.proof_path.clone()
                     } else {
@@ -804,6 +816,7 @@ fn run() -> PumpkinResult<()> {
                     writes_preamble,
                     preprocess_only: args.preprocess_only,
                     declare_replacements: args.declare_replacements,
+                    literal_predicates: args.literal_predicates,
                     head_path: if args.preprocess_only {
                         args.proof_path.clone()
                     } else {
@@ -837,6 +850,7 @@ fn run() -> PumpkinResult<()> {
                     writes_preamble,
                     preprocess_only: args.preprocess_only,
                     declare_replacements: args.declare_replacements,
+                    literal_predicates: args.literal_predicates,
                     head_path: if args.preprocess_only {
                         args.proof_path.clone()
                     } else {

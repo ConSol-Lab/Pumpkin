@@ -17,10 +17,24 @@ pub(crate) fn run(
     ast: &FlatZincAst,
     context: &mut CompilationContext,
 ) -> Result<(), FlatZincError> {
+    let literal_booleans: std::collections::HashSet<Rc<str>> = context
+        .literal_predicates
+        .iter()
+        .map(|literal| Rc::clone(&literal.boolean))
+        .collect();
+    let mut literal_outputs = vec![];
     for single_var_decl in &ast.single_variables {
         match single_var_decl {
             SingleVarDecl::Bool { id, annos, .. } => {
                 let id = context.identifiers.get_interned(id);
+                // Made the literal of its predicate once the variables exist.
+                if literal_booleans.contains(&id) {
+                    if is_output_variable(annos) {
+                        literal_outputs.push(Rc::clone(&id));
+                    }
+                    continue;
+                }
+
                 let representative = context.equivalences.representative(&id);
                 let domain = context.equivalences.domain(&id);
 
@@ -60,6 +74,38 @@ pub(crate) fn run(
                     context.outputs.push(Output::int(id, view));
                 }
             }
+        }
+    }
+
+    // A boolean that stands for a comparison is the solver's literal for its predicate, tied to
+    // it by the clauses the solver posts under the comparison's tag; the proof writes its atoms
+    // as the predicate's.
+    for literal in context.literal_predicates.clone() {
+        let domain = context.variable_map[&literal.variable];
+        let predicate = match literal.comparator {
+            "<=" => pumpkin_core::predicate![domain <= literal.value],
+            ">=" => pumpkin_core::predicate![domain >= literal.value],
+            "==" => pumpkin_core::predicate![domain == literal.value],
+            _ => pumpkin_core::predicate![domain != literal.value],
+        };
+        let boolean = context.solver.new_named_literal_for_predicate(
+            predicate,
+            literal.tag,
+            literal.boolean.to_string(),
+        );
+        // Once the boolean is the atom, the clauses are tautologies, and what an inference from
+        // them needs beyond its premises is the bounds of the compared variable.
+        context
+            .solver
+            .name_rule_of_constraint(literal.tag, "initial_domain");
+        let _ = context.variable_map.insert(
+            Rc::clone(&literal.boolean),
+            boolean.get_true_predicate().get_domain(),
+        );
+        if literal_outputs.contains(&literal.boolean) {
+            context
+                .outputs
+                .push(Output::bool(Rc::clone(&literal.boolean), boolean));
         }
     }
 

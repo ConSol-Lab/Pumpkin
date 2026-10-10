@@ -47,7 +47,8 @@ croc_proofs!(
     views_literals_constants_declared,
     "views_literals_constants",
     "c UPPER_BOUND 28",
-    "--declare-replacements"
+    "--declare-replacements",
+    "--literal-predicates"
 );
 
 // An objective that the view pass makes a view of another variable.
@@ -84,7 +85,7 @@ fn a_drcp_proof_skips_the_view_options() {
     let output = Command::new(env!("CARGO_BIN_EXE_pumpkin-solver"))
         .arg("--proof-path")
         .arg(&proof_path)
-        .args(["--declare-replacements"])
+        .args(["--declare-replacements", "--literal-predicates"])
         .arg(&model_path)
         .output()
         .unwrap();

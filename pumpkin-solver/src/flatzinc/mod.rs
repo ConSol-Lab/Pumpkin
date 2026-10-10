@@ -65,6 +65,9 @@ pub struct FlatZincOptions {
     pub head_path: Option<std::path::PathBuf>,
     /// State views as declared replacements rather than rewriting every constraint.
     pub declare_replacements: bool,
+    /// Make a boolean that a reified comparison with a constant defines the literal of the
+    /// comparison, when it occurs only as a literal.
+    pub literal_predicates: bool,
 }
 
 /// The proof format, which decides what the compiler does for a proof.

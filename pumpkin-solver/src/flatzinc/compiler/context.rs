@@ -67,6 +67,10 @@ pub(crate) struct CompilationContext<'a> {
 
     /// What the view pass did and how long it took.
     pub(crate) view_statistics: ViewStatistics,
+    /// Booleans that a reified comparison of a variable with a constant defines and that occur
+    /// only as literals: each becomes the literal of the comparison's predicate, and the
+    /// comparison is not posted.
+    pub(crate) literal_predicates: Vec<LiteralPredicate>,
     /// The variables the proof replaces by their value; each class's domain is that value.
     pub(crate) declared_constants: Vec<Rc<str>>,
     /// Linear inequalities that read over one variable once views and constants are applied:
@@ -106,6 +110,8 @@ pub struct ViewStatistics {
     pub rewrites: usize,
     /// Declared replacements in the log.
     pub declarations: usize,
+    /// The booleans that became the solver's literal for the comparison they reify.
+    pub literal_predicates: usize,
     /// Two-variable equalities still posted as propagators: over two variables already in one
     /// class, declined by the view pass for another reason (a boolean that would not stay a
     /// boolean, no integer solution, an overflow), longer equalities that views reduce to two
@@ -129,6 +135,16 @@ pub struct ViewStatistics {
     pub unit_bounds: usize,
     /// Half-reified comparisons of a variable with a constant posted as a clause.
     pub half_reified_clauses: usize,
+}
+
+/// A boolean that stands for `variable comparator value`, defined by the constraint `tag`.
+#[derive(Clone, Debug)]
+pub(crate) struct LiteralPredicate {
+    pub(crate) boolean: Rc<str>,
+    pub(crate) variable: Rc<str>,
+    pub(crate) comparator: &'static str,
+    pub(crate) value: i32,
+    pub(crate) tag: ConstraintTag,
 }
 
 /// A set parameter.
@@ -168,6 +184,7 @@ impl CompilationContext<'_> {
             constraints: Default::default(),
 
             view_statistics: Default::default(),
+            literal_predicates: vec![],
             declared_constants: vec![],
             unit_bounds: vec![],
             proof_format: crate::flatzinc::ProofFormat::Croc,

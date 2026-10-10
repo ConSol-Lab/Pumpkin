@@ -27,6 +27,11 @@ pub(crate) fn run(
     context: &mut CompilationContext,
     options: &FlatZincOptions,
 ) -> Result<(), FlatZincError> {
+    let defines_literal: std::collections::HashSet<u32> = context
+        .literal_predicates
+        .iter()
+        .map(|literal| std::num::NonZero::<u32>::from(literal.tag).get())
+        .collect();
     // The proof replaced these variables by their value, so it writes no atom over them.
     for name in context.declared_constants.clone() {
         let domain = context.variable_map[&name];
@@ -68,6 +73,10 @@ pub(crate) fn run(
             && let Some(fully) = reification_of(id)
         {
             context.solver.name_reification(constraint_tag, fully);
+        }
+        // The comparison a literal stands for holds by the literal's clauses.
+        if defines_literal.contains(&std::num::NonZero::<u32>::from(constraint_tag).get()) {
+            continue;
         }
         if context.proof_format == ProofFormat::Croc
             && post_half_reified_bound(context, id, exprs, constraint_tag)?

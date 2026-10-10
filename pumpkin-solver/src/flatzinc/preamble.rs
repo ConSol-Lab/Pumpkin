@@ -9,6 +9,7 @@ pub struct Preamble {
     pub views: Vec<View>,
     pub parameters: Vec<String>,
     pub constants: Vec<(String, i64)>,
+    pub literals: Vec<LiteralDefinition>,
     pub skipped: Vec<u64>,
     pub decompositions: Vec<Decomposition>,
     /// The objective variable when it is a view, with the constraint that relates it to its
@@ -25,6 +26,35 @@ pub struct View {
     pub representative: String,
     pub scale: i64,
     pub offset: i64,
+}
+
+/// The boolean is the literal of `[variable comparator value]`, defined by the constraint.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LiteralDefinition {
+    pub boolean: String,
+    pub variable: String,
+    pub comparator: Comparator,
+    pub value: i64,
+    pub constraint: u64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Comparator {
+    LessOrEqual,
+    GreaterOrEqual,
+    Equal,
+    NotEqual,
+}
+
+impl Comparator {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Comparator::LessOrEqual => "<=",
+            Comparator::GreaterOrEqual => ">=",
+            Comparator::Equal => "==",
+            Comparator::NotEqual => "!=",
+        }
+    }
 }
 
 /// A model constraint posted as its decomposition, with the fresh variables it introduces.
@@ -57,6 +87,18 @@ impl Preamble {
         }
         for (variable, value) in &self.constants {
             writeln!(text, "constant {variable} {value}").unwrap();
+        }
+        for literal in &self.literals {
+            writeln!(
+                text,
+                "literal {} {} {} {} {}",
+                literal.boolean,
+                literal.variable,
+                literal.comparator.as_str(),
+                literal.value,
+                literal.constraint
+            )
+            .unwrap();
         }
         for constraint in &self.skipped {
             writeln!(text, "skip {constraint}").unwrap();

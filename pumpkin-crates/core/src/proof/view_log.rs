@@ -66,6 +66,13 @@ pub enum ViewEvent {
     /// `s <variable> := <affine> by c:<evidence>`: the variable replaced in every constraint but
     /// the cited equality, from here on.
     Declare(Replacement),
+    /// `s <boolean> := [<atom>] by c:<evidence>`: the boolean replaced by the atom it reifies,
+    /// where it is a literal.
+    DeclareLiteral {
+        boolean: Rc<str>,
+        atom: String,
+        evidence: u64,
+    },
     /// `q <id> : <equality> by c:<k> ...`: an equality over two variables that the cited
     /// constraints entail, which the checker establishes by enumerating the two variables.
     Equality {
@@ -219,6 +226,11 @@ impl ViewLog {
                     ),
                     replacement.evidence
                 )),
+                ViewEvent::DeclareLiteral {
+                    boolean,
+                    atom,
+                    evidence,
+                } => lines.push(format!("s {boolean} := {atom} by c:{evidence}")),
                 ViewEvent::Equality { id, form, evidence } => {
                     let cited = evidence
                         .iter()

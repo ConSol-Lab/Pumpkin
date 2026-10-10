@@ -119,6 +119,10 @@ pub(crate) fn solve<R: ConflictResolver>(
             ),
             ("viewRewriteSteps", view_statistics.rewrites.to_string()),
             ("viewDeclarations", view_statistics.declarations.to_string()),
+            (
+                "viewLiteralPredicates",
+                view_statistics.literal_predicates.to_string(),
+            ),
             ("viewConstants", view_statistics.constants.to_string()),
             (
                 "viewsOnRereading",

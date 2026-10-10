@@ -82,6 +82,25 @@ fn two_booleans_forced_equal_become_one() {
     check_block_proofs("boolean_pair", "boolean_pair", "c UPPER_BOUND 3", &[]);
 }
 
+#[test]
+fn a_boolean_reifying_a_comparison_becomes_its_literal() {
+    let preamble = preamble_of(
+        "literals",
+        "views_literals_constants",
+        &["--literal-predicates"],
+    );
+    assert!(
+        preamble.iter().any(|line| line.starts_with("literal ")),
+        "{preamble:?}"
+    );
+    check_block_proofs(
+        "views_literals",
+        "views_literals_constants",
+        "c UPPER_BOUND 28",
+        &["--literal-predicates"],
+    );
+}
+
 /// The lines of the preamble of the scaffold the solver writes for the model, before the marker.
 fn preamble_of(name: &str, model: &str, flags: &[&str]) -> Vec<String> {
     let scaffold_path = output_path(&format!("{name}.scaffold"));
