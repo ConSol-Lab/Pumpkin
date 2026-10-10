@@ -54,12 +54,18 @@ croc_proofs!(
 // An objective that the view pass makes a view of another variable.
 croc_proofs!(objective_view, "objective_view", "c UPPER_BOUND 28");
 
-// The symmetry breaking passes, each justified in the proof.
+// The symmetry and dominance breaking passes, each justified in the proof.
 croc_proofs!(
     symmetry_star,
     "symmetry_star",
     "c UPPER_BOUND 5",
     "--symmetry-breaking"
+);
+croc_proofs!(
+    dominance_knapsack,
+    "dominance_knapsack",
+    "c UPPER_BOUND 24",
+    "--dominance-breaking"
 );
 croc_proofs!(
     value_symmetry_colouring,
@@ -75,7 +81,7 @@ fn a_drcp_proof_skips_the_breaking_passes() {
     let output = Command::new(env!("CARGO_BIN_EXE_pumpkin-solver"))
         .arg("--proof-path")
         .arg(&proof_path)
-        .args(["--symmetry-breaking"])
+        .args(["--symmetry-breaking", "--dominance-breaking"])
         .arg(&model_path)
         .output()
         .unwrap();

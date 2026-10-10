@@ -50,6 +50,9 @@ pub enum FlatZincError {
     #[error("symmetry breaking cannot be combined with {0}")]
     SymmetryBreakingUnsupported(&'static str),
 
+    #[error("dominance breaking cannot be combined with {0}")]
+    DominanceBreakingUnsupported(&'static str),
+
     #[error("value symmetry breaking cannot be combined with {0}")]
     ValueSymmetryBreakingUnsupported(&'static str),
 

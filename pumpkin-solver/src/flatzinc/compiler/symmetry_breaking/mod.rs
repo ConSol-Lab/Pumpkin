@@ -238,8 +238,8 @@ pub(crate) fn run_value_symmetry(
             "enumerating all solutions of a satisfaction problem",
         ));
     }
-    if options.symmetry_breaking {
-        return Err(unsupported("symmetry breaking"));
+    if options.symmetry_breaking || options.dominance_breaking {
+        return Err(unsupported("other symmetry or dominance breaking"));
     }
 
     let started = Instant::now();

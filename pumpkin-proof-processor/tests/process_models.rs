@@ -90,6 +90,12 @@ process_model!(
     "--literal-predicates"
 );
 process_model!(
+    dominance_knapsack,
+    "dominance_knapsack",
+    "c UPPER_BOUND 24",
+    "--dominance-breaking"
+);
+process_model!(
     value_symmetry_colouring,
     "value_symmetry_colouring",
     "c UNSAT",
@@ -110,6 +116,25 @@ fn symmetry_star_dropping_unused_steps() {
             "c UPPER_BOUND 5",
             &["--drop-unused-breaking-steps"],
         );
+    }
+}
+
+// Some of the dominance steps.
+#[test]
+fn dominance_knapsack_dropping_unused_steps() {
+    let name = "dominance_knapsack_dropping_unused_steps";
+    let (model_path, scaffold_path) = solve(name, "dominance_knapsack", &["--dominance-breaking"]);
+    let left_out = regex::Regex::new(r"Leaving out [1-9][0-9]* of [0-9]+ held steps").unwrap();
+    for derivation in ["resolution", "refutation"] {
+        let (log, _) = process_and_check(
+            name,
+            &model_path,
+            &scaffold_path,
+            derivation,
+            "c UPPER_BOUND 24",
+            &["--drop-unused-breaking-steps"],
+        );
+        assert!(left_out.is_match(&log), "no step is left out:\n{log}");
     }
 }
 

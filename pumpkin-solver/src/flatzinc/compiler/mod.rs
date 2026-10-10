@@ -8,6 +8,7 @@ mod create_objective;
 mod create_search_strategy;
 mod define_constants;
 mod define_variable_arrays;
+mod dominance_breaking;
 mod handle_set_in;
 mod name_rules;
 mod post_constraints;
@@ -69,6 +70,7 @@ pub(crate) fn compile(
     }
     symmetry_breaking::run(&ast, &mut context, &options)?;
     symmetry_breaking::run_value_symmetry(&ast, &mut context, &options)?;
+    dominance_breaking::run(&ast, &mut context, &options)?;
     let objective_function = create_objective::run(&ast, &mut context)?;
     let search = create_search_strategy::run(&ast, &mut context, objective_function)?;
 

@@ -168,13 +168,13 @@ fn write_signed(writer: &mut impl Write, value: i64) -> std::io::Result<()> {
 
 impl<W: Write, Int: IntValue + Hash> BlockProofWriter<W, Int> {
     /// Write a line: a text record in the binary form, except an inference line inside a
-    /// resolution or refutation block, which is a binary record.
+    /// resolution, refutation or dominance block, which is a binary record.
     fn write_text_line(&mut self, line: &str) -> std::io::Result<()> {
         match line.as_bytes().first() {
             Some(first) if !first.is_ascii_whitespace() => self.block_prefix = *first,
             _ => {
                 if self.binary_names.is_some()
-                    && matches!(self.block_prefix, b'r' | b'g')
+                    && matches!(self.block_prefix, b'r' | b'g' | b'w')
                     && let Some((codes, constraint, label, hint)) = parse_inference_line(line)
                 {
                     return self.write_inference_record(

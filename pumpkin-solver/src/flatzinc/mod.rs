@@ -81,6 +81,12 @@ pub struct FlatZincOptions {
     /// lex-leader step.
     pub symmetry_breaking: bool,
 
+    /// Detect dominated variables in linear models and post dominance-breaking constraints.
+    /// Refused when enumerating all solutions, with symmetry breaking, and under proof logging
+    /// other than a croc block proof or croc scaffold, where each posted constraint is
+    /// justified.
+    pub dominance_breaking: bool,
+
     /// Detect interchangeable values and post value-precedence constraints. Refused when
     /// enumerating all solutions, with the other breaking options, and under proof logging other
     /// than a croc block proof or croc scaffold, where the exchanges are stated as value symmetry
