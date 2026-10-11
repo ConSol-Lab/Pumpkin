@@ -44,6 +44,10 @@ pub struct ReferencedInference {
     pub label: NonZero<u32>,
     /// Positions in the cited constraint that the rule reads.
     pub hint: Vec<u32>,
+    /// Whether the line states only the consequent, `> <consequent>`, for the checker to take
+    /// the premises from the current domains of a refutation; `nogood` then holds the reference
+    /// of the consequent alone. Only a proof for the lenient reading may contain such lines.
+    pub premise_free: bool,
 }
 
 /// The reading of fzn-croc-check a proof is written for: strict, from the initial domains, or
@@ -303,6 +307,7 @@ impl<W: Write, Int: IntValue + Hash> BlockProofWriter<W, Int> {
                 constraint,
                 label,
                 hint,
+                premise_free: false,
             });
         }
 
@@ -366,6 +371,7 @@ impl<W: Write, Int: IntValue + Hash> BlockProofWriter<W, Int> {
                 constraint: inference.constraint,
                 label,
                 hint: inference.hint,
+                premise_free: false,
             });
         }
 
@@ -387,16 +393,58 @@ impl<W: Write, Int: IntValue + Hash> BlockProofWriter<W, Int> {
         self.write_text_line(&line)?;
 
         for inference in inferences {
-            self.write_inference(
-                None,
-                &inference.nogood,
-                inference.constraint,
-                inference.label,
-                &inference.hint,
-            )?;
+            if inference.premise_free {
+                self.write_premise_free_inference(
+                    inference.nogood[0],
+                    inference.constraint,
+                    inference.label,
+                    &inference.hint,
+                )?;
+            } else {
+                self.write_inference(
+                    None,
+                    &inference.nogood,
+                    inference.constraint,
+                    inference.label,
+                    &inference.hint,
+                )?;
+            }
         }
 
         Ok(())
+    }
+
+    /// Write a premise-free inference line of a refutation, `  > <consequent> c:<constraint>
+    /// l:<label> [h:<positions>]`; in the binary form a record of tag 4 with the consequent,
+    /// the constraint, the label and the hint.
+    fn write_premise_free_inference(
+        &mut self,
+        consequent: NonZero<i32>,
+        constraint: Option<ConstraintId>,
+        label: NonZero<u32>,
+        hint: &[u32],
+    ) -> std::io::Result<()> {
+        let constraint = constraint.map(NonZero::get).unwrap_or(0);
+        if self.binary_names.is_some() {
+            self.writer.write_all(&[4])?;
+            write_signed(&mut self.writer, i64::from(consequent.get()))?;
+            write_varint(&mut self.writer, u64::from(constraint))?;
+            write_varint(&mut self.writer, u64::from(label.get()))?;
+            write_varint(&mut self.writer, hint.len() as u64)?;
+            for &position in hint {
+                write_varint(&mut self.writer, u64::from(position))?;
+            }
+            return Ok(());
+        }
+        let mut line = format!("  > {consequent} c:{constraint} l:{label}");
+        for (index, position) in hint.iter().enumerate() {
+            if index == 0 {
+                line.push_str(&format!(" h:{position}"));
+            } else {
+                line.push_str(&format!(",{position}"));
+            }
+        }
+        writeln!(&mut self.writer, "{line}")
     }
 
     /// Write the header that names the reading the proof is written for, `m strict` or
@@ -664,5 +712,63 @@ c UNSAT
 
         let proof = String::from_utf8(buffer).unwrap();
         assert!(proof.contains("c:0"), "{proof}");
+    }
+
+    fn premise_free_refutation<W: Write>(writer: &mut BlockProofWriter<W, i32>) {
+        writer.log_reading(Reading::Lenient).unwrap();
+        let x = writer
+            .atomic_reference(IntAtomic::new("x", GreaterEqual, 1))
+            .unwrap();
+        let y = writer
+            .atomic_reference(IntAtomic::new("y", LessEqual, 3))
+            .unwrap();
+        let label = writer.label_reference("linear_bounds").unwrap();
+        writer
+            .log_referenced_refutation(
+                NonZero::new(7).unwrap(),
+                &[x],
+                &[
+                    ReferencedInference {
+                        nogood: vec![y],
+                        constraint: NonZero::new(1),
+                        label,
+                        hint: vec![0, 2],
+                        premise_free: true,
+                    },
+                    ReferencedInference {
+                        nogood: vec![x, y],
+                        constraint: NonZero::new(2),
+                        label,
+                        hint: vec![],
+                        premise_free: false,
+                    },
+                ],
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn a_premise_free_line_states_its_consequent_after_the_header() {
+        let mut buffer = Vec::new();
+        premise_free_refutation(&mut BlockProofWriter::new(&mut buffer));
+        let proof = String::from_utf8(buffer).unwrap();
+        assert_eq!(
+            proof,
+            "m lenient\na 1 [x >= 1]\na 2 [y <= 3]\nl 1 linear_bounds\ng 7 1\n  > 2 c:1 l:1 h:0,2\n  1 2 c:2 l:1\n"
+        );
+    }
+
+    #[test]
+    fn the_binary_form_starts_with_the_header_and_writes_a_premise_free_line_as_tag_4() {
+        let mut buffer = Vec::new();
+        premise_free_refutation(&mut BlockProofWriter::new_binary(&mut buffer).unwrap());
+        let mut expected = BINARY_MARK.to_vec();
+        expected.extend([0, 9]);
+        expected.extend(b"m lenient");
+        assert_eq!(&buffer[..expected.len()], expected.as_slice());
+        // The premise-free record: tag 4, the consequent 2 zigzag encoded, constraint 1, label
+        // 1, two hint positions 0 and 2; then the ordinary record of tag 3.
+        let record = [4, 4, 1, 1, 2, 0, 2, 3, 2, 2, 4, 2, 1, 0];
+        assert!(buffer.ends_with(&record));
     }
 }

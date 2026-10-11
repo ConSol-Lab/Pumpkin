@@ -85,6 +85,13 @@ struct Cli {
     #[arg(long)]
     root_domains: bool,
 
+    /// With `--root-domains` and `--nogood-derivation refutation`, write each inference by the
+    /// rules `nogood`, `linear_bounds` and `element` (also reified and half-reified) as its
+    /// consequent alone, `> <consequent>`, for the lenient reading to take its premises from the
+    /// current domains of the refutation (experimental).
+    #[arg(long)]
+    omit_premises: bool,
+
     /// Leave out the symmetry and dominance breaking steps of the head whose constraint no kept
     /// inference cites. This holds the head back until trimming is done, which a processor that
     /// writes its proof as it derives it cannot do.
@@ -136,6 +143,11 @@ fn main() -> anyhow::Result<()> {
     if cli.root_domains && cli.format != ProofFormat::Blocks {
         anyhow::bail!("--root-domains needs --format blocks");
     }
+    if cli.omit_premises
+        && (!cli.root_domains || cli.nogood_derivation != NogoodDerivation::Refutation)
+    {
+        anyhow::bail!("--omit-premises needs --root-domains and --nogood-derivation refutation");
+    }
 
     env_logger::Builder::new()
         .format_timestamp(None)
@@ -146,7 +158,7 @@ fn main() -> anyhow::Result<()> {
 
     // A proof in the block format is written through the proof log the compiler fills: the
     // steps that state the views, the rules of the constraints and their reifications.
-    let proof_log = match cli.format {
+    let mut proof_log = match cli.format {
         ProofFormat::Drcp => ProofLog::default(),
         ProofFormat::Blocks => ProofLog::blocks(
             &cli.full_proof_path,
@@ -156,6 +168,9 @@ fn main() -> anyhow::Result<()> {
         )
         .with_context(|| "Failed to create proof writer")?,
     };
+    if cli.omit_premises {
+        proof_log.write_premise_free_inferences();
+    }
 
     // The processor reads the solver's preprocessing from the head of the scaffold and builds its
     // solver once, on the variables the nogoods are written over, before reading any nogood.

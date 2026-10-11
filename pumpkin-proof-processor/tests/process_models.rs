@@ -222,7 +222,16 @@ fn solver() -> &'static Path {
 fn run_pipeline(name: &str, model: &str, conclusion: &str, solver_flags: &[&str]) {
     let (model_path, scaffold_path) = solve(name, model, solver_flags);
     for derivation in ["resolution", "refutation"] {
-        for processor_flags in [&[][..], &["--root-domains"][..]] {
+        let readings: &[&[&str]] = if derivation == "refutation" {
+            &[
+                &[],
+                &["--root-domains"],
+                &["--root-domains", "--omit-premises"],
+            ]
+        } else {
+            &[&[], &["--root-domains"]]
+        };
+        for &processor_flags in readings {
             let _ = process_and_check(
                 name,
                 &model_path,
@@ -271,7 +280,12 @@ fn process_and_check(
 ) -> (String, String) {
     let directory = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("process_models");
     let root_domains = processor_flags.contains(&"--root-domains");
-    let reading = if root_domains { ".root_domains" } else { "" };
+    let omit_premises = processor_flags.contains(&"--omit-premises");
+    let reading = match (root_domains, omit_premises) {
+        (true, true) => ".omit_premises",
+        (true, false) => ".root_domains",
+        _ => "",
+    };
     let proof_path = directory.join(format!("{name}.{derivation}{reading}.croc"));
 
     let processor_output = Command::new(env!("CARGO_BIN_EXE_pumpkin-proof-processor"))
@@ -302,12 +316,58 @@ fn process_and_check(
         header, expected,
         "the {derivation} proof states the wrong reading"
     );
+    check_premise_free_lines(&proof, omit_premises);
 
     check_if_checker_given(model_path, &proof_path);
     (
         String::from_utf8_lossy(&processor_output.stdout).into_owned(),
         proof,
     )
+}
+
+/// A proof states consequents alone, in `>` lines, only when premises are omitted, and then only
+/// for the rules the lenient reading propagates from the current domains (`nogood`,
+/// `linear_bounds`, `element`, and their reified forms), and only in refutations.
+fn check_premise_free_lines(proof: &str, omit_premises: bool) {
+    let mut labels = std::collections::HashMap::new();
+    let mut block = ' ';
+    for line in proof.lines() {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        if !line.starts_with(' ') {
+            block = line.chars().next().unwrap_or(' ');
+            if let ["l", number, name] = fields.as_slice() {
+                let _ = labels.insert((*number).to_owned(), (*name).to_owned());
+            }
+            continue;
+        }
+        if fields.first() != Some(&">") {
+            continue;
+        }
+        assert!(
+            omit_premises,
+            "a proof with every premise states a `>` line: {line}"
+        );
+        assert_eq!(block, 'g', "a `>` line outside a refutation: {line}");
+        let [_, consequent, constraint, label, ..] = fields.as_slice() else {
+            panic!("a `>` line without its fields: {line}");
+        };
+        assert!(
+            consequent
+                .parse::<i32>()
+                .is_ok_and(|reference| reference != 0)
+        );
+        assert!(constraint.starts_with("c:"), "{line}");
+        let rule = &labels[label.strip_prefix("l:").expect("a label follows")];
+        let unreified = rule
+            .strip_prefix("reified(")
+            .or_else(|| rule.strip_prefix("half_reified("))
+            .and_then(|inner| inner.strip_suffix(')'))
+            .unwrap_or(rule);
+        assert!(
+            ["nogood", "linear_bounds", "element"].contains(&unreified),
+            "a `>` line by the rule {rule}"
+        );
+    }
 }
 
 fn check_if_checker_given(model_path: &str, proof_path: &Path) {

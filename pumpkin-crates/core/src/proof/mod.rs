@@ -233,6 +233,7 @@ impl ProofLog {
                 seen_premises: HashSet::default(),
                 facts_from_unit_nogoods: vec![],
                 root_domains: root_domains.then(RootDomains::default),
+                premise_free_inferences: false,
             }))),
             supporting_inferences: vec![],
             supporting_inferences_at_root: vec![],
@@ -527,6 +528,16 @@ impl ProofLog {
             &mut state.constraint_tags,
             &state.assignments,
         )
+    }
+
+    /// Write each inference of a refutation by a rule the lenient reading propagates from the
+    /// current domains (`nogood`, `linear_bounds` and `element`, and their reified and
+    /// half-reified forms) as its consequent alone, `> <consequent>`, in a proof in the block
+    /// format written for the lenient reading. Does nothing for other proofs.
+    pub fn write_premise_free_inferences(&mut self) {
+        if let Some(ProofImpl::BlockProof(proof)) = self.internal_proof.as_mut() {
+            proof.premise_free_inferences = proof.root_domains.is_some();
+        }
     }
 
     /// Log that each predicate holds by the unit nogood of its negation, derived under the tag,
@@ -1217,6 +1228,9 @@ struct BlockProof {
     /// The root domains the checker holds, when the proof is written for its reading within
     /// them.
     root_domains: Option<RootDomains>,
+    /// Whether a refutation states only the consequent of an inference by a rule the lenient
+    /// reading propagates from the current domains.
+    premise_free_inferences: bool,
     /// Whether a learned nogood is written as a resolution chain rather than a refutation.
     resolution_chains: bool,
     /// The constraints the checker reads as reified (`true`) or half-reified (`false`).
@@ -1336,6 +1350,13 @@ impl RootDomains {
         );
         atoms
     }
+}
+
+/// Whether the lenient reading takes the premises of an inference by the rule from the current
+/// domains of a refutation, so that a line may state its consequent alone; the reified and
+/// half-reified forms of these rules too.
+fn premise_free_rule(rule: &str) -> bool {
+    matches!(rule, "nogood" | "linear_bounds" | "element")
 }
 
 /// Apply the facts of the root domains on the variable of each atomic constraint to the state,
@@ -1703,7 +1724,10 @@ impl BlockProof {
                 label.as_ref() != "initial_domain" || self.selector_bound_tags.contains(tag)
             });
             let rule = rule_name(&label);
-            let label = match constraint.and_then(|tag| self.reification.get(&tag)) {
+            let reified = constraint
+                .and_then(|tag| self.reification.get(&tag))
+                .copied();
+            let label = match reified {
                 Some(true) => self.label_reference(&format!("reified({rule})"))?,
                 Some(false) => self.label_reference(&format!("half_reified({rule})"))?,
                 None => self.label_reference(rule)?,
@@ -1714,11 +1738,23 @@ impl BlockProof {
                     .copied()
                     .unwrap_or_else(|| NonZero::<u32>::from(tag))
             });
+            // A refutation in a proof for the lenient reading states only the consequent of an
+            // inference by a rule the checker propagates from the current domains.
+            let premise_free = self.premise_free_inferences
+                && self.root_domains.is_some()
+                && chain.is_none()
+                && consequent.is_some()
+                && premise_free_rule(rule);
+            if premise_free {
+                let consequent = consequent.expect("checked above");
+                atoms = vec![self.atom_reference(consequent, variable_names)?];
+            }
             inferences.push(ReferencedInference {
                 nogood: atoms,
                 constraint,
                 label,
                 hint,
+                premise_free,
             });
         }
 
@@ -1744,6 +1780,7 @@ impl BlockProof {
                                 constraint: None,
                                 label: self.label_reference("initial_domain")?,
                                 hint: vec![],
+                                premise_free: false,
                             });
                         }
                     }
