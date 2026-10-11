@@ -23,10 +23,12 @@ use drcp_format::IntAtomic;
 use drcp_format::IntComparison;
 use drcp_format::writer::ProofWriter;
 use drcp_format::writer::blocks::BlockProofWriter;
+use drcp_format::writer::blocks::Reading;
 use drcp_format::writer::blocks::ReferencedInference;
 pub(crate) use finalizer::*;
 pub use inference_code::*;
 use proof_atomics::ProofAtomics;
+use pumpkin_checking::IntExt;
 use pumpkin_checking::InvalidDeduction;
 use pumpkin_checking::SupportingInference;
 use pumpkin_checking::VariableState;
@@ -169,11 +171,16 @@ impl ProofLog {
     /// nogood as a resolution chain from the conflict when `resolution_chains` holds, and
     /// otherwise as a refutation by the inferences that derived it.
     ///
-    /// With `binary`, the proof is written in the binary form fzn-croc-check reads.
+    /// With `binary`, the proof is written in the binary form fzn-croc-check reads. With
+    /// `root_domains`, the proof is written for the reading of fzn-croc-check within the root
+    /// domains (`--root-domains`): an atomic constraint that the declared domains and the
+    /// nogoods over one atomic constraint written so far entail is left out where that reading
+    /// allows.
     pub fn blocks(
         file_path: &Path,
         resolution_chains: bool,
         binary: bool,
+        root_domains: bool,
     ) -> std::io::Result<ProofLog> {
         let file = File::create(file_path)?;
 
@@ -186,11 +193,15 @@ impl ProofLog {
             Sink::File(file)
         };
 
-        let writer = if binary {
+        let mut writer = if binary {
             BlockProofWriter::new_binary(std::io::BufWriter::new(sink))?
         } else {
             BlockProofWriter::new(std::io::BufWriter::new(sink))
         };
+        // A proof for the strict reading states no header, which the checker reads as strict.
+        if root_domains {
+            writer.log_reading(Reading::Lenient)?;
+        }
 
         Ok(ProofLog {
             internal_proof: Some(ProofImpl::BlockProof(Box::new(BlockProof {
@@ -221,6 +232,7 @@ impl ProofLog {
                 label_references: HashMap::default(),
                 seen_premises: HashSet::default(),
                 facts_from_unit_nogoods: vec![],
+                root_domains: root_domains.then(RootDomains::default),
             }))),
             supporting_inferences: vec![],
             supporting_inferences_at_root: vec![],
@@ -435,6 +447,9 @@ impl ProofLog {
                 .entry(domain)
                 .or_default()
                 .push((constraint_tag, ranges));
+            if let Some(root_domains) = proof.root_domains.as_mut() {
+                root_domains.forget_declared_domain(domain);
+            }
         }
     }
 
@@ -445,6 +460,9 @@ impl ProofLog {
         if let Some(ProofImpl::BlockProof(proof)) = self.internal_proof.as_mut() {
             let _ = proof.selector_bounds.insert(domain, constraint_tag);
             let _ = proof.selector_bound_tags.insert(constraint_tag);
+            if let Some(root_domains) = proof.root_domains.as_mut() {
+                root_domains.forget_declared_domain(domain);
+            }
         }
     }
 
@@ -453,6 +471,9 @@ impl ProofLog {
     pub fn write_as_constant(&mut self, domain: DomainId) {
         if let Some(ProofImpl::BlockProof(proof)) = self.internal_proof.as_mut() {
             let _ = proof.constant_domains.insert(domain);
+            if let Some(root_domains) = proof.root_domains.as_mut() {
+                root_domains.forget_declared_domain(domain);
+            }
         }
     }
 
@@ -1193,6 +1214,9 @@ struct BlockProof {
     seen_premises: HashSet<Predicate>,
     /// The facts the next nogood infers from unit nogoods before its other inferences.
     facts_from_unit_nogoods: Vec<(Predicate, ConstraintTag)>,
+    /// The root domains the checker holds, when the proof is written for its reading within
+    /// them.
+    root_domains: Option<RootDomains>,
     /// Whether a learned nogood is written as a resolution chain rather than a refutation.
     resolution_chains: bool,
     /// The constraints the checker reads as reified (`true`) or half-reified (`false`).
@@ -1208,6 +1232,136 @@ struct BlockProof {
     /// The variables the proof replaces by their value, whose atoms it writes as it writes a
     /// constant's: not at all.
     constant_domains: HashSet<DomainId>,
+}
+
+/// The magnitude of the bounds the FlatZinc front end gives a variable declared without bounds;
+/// the declared domains do not state them.
+const DEFAULT_BOUND_MAGNITUDE: i32 = 500_000_000;
+
+/// The part of the root domains of fzn-croc-check that the writer knows the checker holds: the
+/// declared domain of every variable whose initial domain in the solver is its declared domain,
+/// and the fact of every nogood over one atomic constraint written so far. A writer emits no
+/// deletion, so a fact holds from the nogood that states it to the end of the proof.
+#[derive(Debug, Default)]
+struct RootDomains {
+    /// The facts on every variable they are applied to.
+    facts: VariableState<Predicate>,
+    /// The variables whose declared domain is applied to `facts`, with the atomic constraints
+    /// that state it.
+    declared: HashMap<DomainId, Vec<Predicate>>,
+    /// The negation of the atomic constraint of every nogood over one atomic constraint written.
+    units: Vec<Predicate>,
+}
+
+impl RootDomains {
+    /// Apply the declared domain of the variable to the facts, once, when `declared` holds: the
+    /// initial bounds and holes of the solver's domain, except a bound the front end gives a
+    /// variable declared without one.
+    fn apply_declared_domain(
+        &mut self,
+        domain: DomainId,
+        declared: bool,
+        assignments: &Assignments,
+    ) {
+        if !declared || self.declared.contains_key(&domain) {
+            return;
+        }
+        let lower = assignments.get_initial_lower_bound(domain);
+        let upper = assignments.get_initial_upper_bound(domain);
+        let mut atoms = vec![];
+        if lower > -DEFAULT_BOUND_MAGNITUDE {
+            atoms.push(predicate![domain >= lower]);
+        }
+        if upper < DEFAULT_BOUND_MAGNITUDE {
+            atoms.push(predicate![domain <= upper]);
+        }
+        atoms.extend(
+            assignments
+                .get_initial_holes(domain)
+                .into_iter()
+                .map(|hole| predicate![domain != hole]),
+        );
+        for atom in &atoms {
+            let _ = self.facts.apply(atom);
+        }
+        let _ = self.declared.insert(domain, atoms);
+    }
+
+    /// Stop taking the declared domain of the variable as a fact, for a variable found to have
+    /// an initial domain in the solver other than its declared domain.
+    fn forget_declared_domain(&mut self, domain: DomainId) {
+        if self.declared.remove(&domain).is_none() {
+            return;
+        }
+        eprintln!(
+            "warning: a nogood written for the root domains may rest on the initial domain of a \
+             variable that is not its declared domain"
+        );
+        self.facts = VariableState::default();
+        for atom in self.units.iter().chain(self.declared.values().flatten()) {
+            let _ = self.facts.apply(atom);
+        }
+    }
+
+    /// Record the nogood written: a nogood over one atomic constraint makes its negation a fact.
+    fn record_nogood(&mut self, nogood: &[Predicate]) {
+        if let [atom] = nogood {
+            let fact = !*atom;
+            self.units.push(fact);
+            let _ = self.facts.apply(&fact);
+        }
+    }
+
+    /// Whether the facts on the variable of the atomic constraint entail it. Facts that leave the
+    /// variable no value are taken to entail nothing.
+    fn entails(&self, atom: Predicate) -> bool {
+        let domain = atom.get_domain();
+        self.facts.lower_bound(&domain) <= self.facts.upper_bound(&domain)
+            && self.facts.is_true(&atom)
+    }
+
+    /// The atomic constraints that state the facts on the variable: its bounds and holes.
+    fn facts_on(&self, domain: DomainId) -> Vec<Predicate> {
+        let mut atoms = vec![];
+        if let IntExt::Int(lower) = self.facts.lower_bound(&domain) {
+            atoms.push(predicate![domain >= lower]);
+        }
+        if let IntExt::Int(upper) = self.facts.upper_bound(&domain) {
+            atoms.push(predicate![domain <= upper]);
+        }
+        atoms.extend(
+            self.facts
+                .holes(&domain)
+                .map(|hole| predicate![domain != hole]),
+        );
+        atoms
+    }
+}
+
+/// Apply the facts of the root domains on the variable of each atomic constraint to the state,
+/// once per variable, with the declared domain of the variable when `declares_domain` holds of
+/// it. Returns whether the state keeps a value for every variable.
+fn apply_root_facts(
+    state: &mut VariableState<Predicate>,
+    atoms: impl IntoIterator<Item = Predicate>,
+    root_domains: &mut RootDomains,
+    applied: &mut HashSet<DomainId>,
+    declares_domain: impl Fn(DomainId) -> bool,
+    assignments: &Assignments,
+) -> bool {
+    for atom in atoms {
+        let domain = atom.get_domain();
+        if !applied.insert(domain) {
+            continue;
+        }
+        root_domains.apply_declared_domain(domain, declares_domain(domain), assignments);
+        for fact in root_domains.facts_on(domain) {
+            if !state.apply(&fact) {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 impl Drop for BlockProof {
@@ -1436,139 +1590,38 @@ impl BlockProof {
             .filter(|&predicate| !is_constant(predicate))
             .collect();
 
-        let mut kept: Vec<KeptInference> = vec![];
-        let mut reached_conflict = false;
-
         let mut seen = std::mem::take(&mut self.seen_premises);
         let facts = std::mem::take(&mut self.facts_from_unit_nogoods);
-        if let Ok(mut state) =
-            VariableState::prepare_for_conflict_check(nogood.iter().copied(), None)
-        {
-            let nogood_label: Arc<str> = Arc::from("nogood");
-            for &(fact, tag) in facts.iter() {
-                let fact = self.proof_atomics.canonical(fact);
-                if is_constant(fact) || state.is_true(&fact) {
-                    continue;
-                }
-                let consistent = state.apply(&fact);
-                kept.push((vec![], Some(fact), Some(tag), Arc::clone(&nogood_label)));
-                if !consistent {
-                    reached_conflict = true;
-                    break;
-                }
-            }
-
-            let order = if reached_conflict {
-                vec![]
-            } else {
-                roots_first(
-                    self.propagation_order
-                        .iter()
-                        .rev()
-                        .flatten()
-                        .copied()
-                        .collect(),
+        // When the facts of the root domains leave the nogood no value, as for a nogood over one
+        // atomic constraint derived again, the nogood is derived as it is without them.
+        let mut root_domains = self.root_domains.take();
+        let refutation = match root_domains.as_mut() {
+            Some(root_domains) => self.refuting_inferences(
+                &nogood,
+                &facts,
+                root_explanations,
+                variable_names,
+                assignments,
+                &mut seen,
+                Some(root_domains),
+            ),
+            None => None,
+        };
+        let within_root_domains = refutation.is_some();
+        let (kept, left_out, reached_conflict) = match refutation {
+            Some(refutation) => refutation,
+            None => self
+                .refuting_inferences(
+                    &nogood,
+                    &facts,
                     root_explanations,
+                    variable_names,
+                    assignments,
+                    &mut seen,
+                    None,
                 )
-            };
-            for tag in order {
-                let Some(inference) = self.inferences.get(&tag) else {
-                    continue;
-                };
-                // An explanation can repeat a premise, which a nogood states once.
-                seen.clear();
-                let mut inference_premises: Vec<Predicate> = inference
-                    .premises
-                    .iter()
-                    .map(|&predicate| self.proof_atomics.canonical(predicate))
-                    .filter(|&predicate| !is_constant(predicate) && seen.insert(predicate))
-                    .collect();
-                if !inference_premises
-                    .iter()
-                    .all(|premise| state.is_true(premise))
-                {
-                    continue;
-                }
-                let consequent = inference
-                    .consequent
-                    .map(|predicate| self.proof_atomics.canonical(predicate));
-                // The negation of the consequent ends the nogood, and is not repeated before it.
-                if let Some(consequent) = consequent {
-                    inference_premises.retain(|&premise| premise != !consequent);
-                }
-                let narrows = !matches!(
-                    consequent,
-                    Some(consequent) if !is_constant(consequent) && state.is_true(&consequent)
-                );
-                if narrows {
-                    let mut bounds = self.bounds_fixing_terms(
-                        inference.constraint,
-                        &inference_premises,
-                        consequent,
-                        assignments,
-                    );
-                    bounds.extend(self.declared_bounds_relied_on(
-                        inference.constraint,
-                        &inference_premises,
-                        consequent,
-                        assignments,
-                    ));
-                    for bound in bounds {
-                        if !state.is_true(&bound) {
-                            let _ = state.apply(&bound);
-                            kept.push((vec![], Some(bound), None, Arc::from("initial_domain")));
-                        }
-                        inference_premises.push(bound);
-                    }
-                }
-                match consequent {
-                    // An inference whose consequent already holds narrows nothing.
-                    Some(consequent) if !is_constant(consequent) && state.is_true(&consequent) => {}
-                    Some(consequent) if !is_constant(consequent) => {
-                        let consistent = state.apply(&consequent);
-                        kept.push((
-                            inference_premises,
-                            Some(consequent),
-                            inference.constraint,
-                            Arc::clone(&inference.label),
-                        ));
-                        if !consistent {
-                            reached_conflict = true;
-                            break;
-                        }
-                    }
-                    Some(consequent) => {
-                        // A bound on a constant either holds already, and changes nothing, or
-                        // fails, and then the premises are a conflict on their own.
-                        let value = assignments.get_initial_lower_bound(consequent.get_domain());
-                        if !holds_for_value(consequent, value) {
-                            kept.push((
-                                inference_premises,
-                                None,
-                                inference.constraint,
-                                Arc::clone(&inference.label),
-                            ));
-                            reached_conflict = true;
-                            break;
-                        }
-                    }
-                    None => {
-                        kept.push((
-                            inference_premises,
-                            None,
-                            inference.constraint,
-                            Arc::clone(&inference.label),
-                        ));
-                        reached_conflict = true;
-                        break;
-                    }
-                }
-            }
-        } else {
-            // The nogood's atoms cannot all hold, so it needs no inference.
-            reached_conflict = true;
-        }
-
+                .expect("without the root domains, the refutation is found"),
+        };
         self.seen_premises = seen;
 
         if !reached_conflict {
@@ -1576,7 +1629,11 @@ impl BlockProof {
         }
 
         let chain = if self.resolution_chains && reached_conflict && !kept.is_empty() {
-            let chain = resolution_chain(&nogood, &kept);
+            let chain = resolution_chain(
+                &nogood,
+                &kept,
+                root_domains.as_ref().filter(|_| within_root_domains),
+            );
             if chain.is_none() {
                 eprintln!(
                     "warning: no resolution chain reaches nogood {identifier}; it is written as a \
@@ -1588,8 +1645,12 @@ impl BlockProof {
             None
         };
 
+        self.root_domains = root_domains;
+
         let mut inferences = Vec::with_capacity(kept.len());
-        for (inference_premises, consequent, constraint, label) in kept {
+        for ((inference_premises, consequent, constraint, label), premises_left_out) in
+            kept.into_iter().zip(left_out)
+        {
             let mut atoms = Vec::with_capacity(inference_premises.len() + 1);
             for &predicate in inference_premises.iter() {
                 atoms.push(self.atom_reference(predicate, variable_names)?);
@@ -1597,6 +1658,14 @@ impl BlockProof {
             if let Some(consequent) = consequent {
                 atoms.push(self.atom_reference(!consequent, variable_names)?);
             }
+            // The positions and the rule are those of the inference with every premise.
+            let inference_premises = if premises_left_out.is_empty() {
+                inference_premises
+            } else {
+                let mut premises = inference_premises;
+                premises.extend(premises_left_out);
+                premises
+            };
             let hint = constraint
                 .and_then(|tag| self.positions_of_constraint.get(&tag))
                 .map(|elements| {
@@ -1679,6 +1748,9 @@ impl BlockProof {
                         }
                     }
                 }
+                if let Some(root_domains) = self.root_domains.as_mut() {
+                    root_domains.record_nogood(&derived);
+                }
                 let mut derived_nogood = Vec::with_capacity(derived.len());
                 for predicate in derived {
                     derived_nogood.push(self.atom_reference(predicate, variable_names)?);
@@ -1687,6 +1759,9 @@ impl BlockProof {
                     .log_referenced_block(identifier, &derived_nogood, &chain_inferences)?;
             }
             None => {
+                if let Some(root_domains) = self.root_domains.as_mut() {
+                    root_domains.record_nogood(&nogood);
+                }
                 let mut written = Vec::with_capacity(nogood.len());
                 for &predicate in nogood.iter() {
                     written.push(self.atom_reference(predicate, variable_names)?);
@@ -1703,6 +1778,231 @@ impl BlockProof {
         self.logged_domain_inferences.clear();
 
         Ok(())
+    }
+
+    /// Whether the initial domain of the variable in the solver is the domain the declared
+    /// domains give it: not for a variable the proof leaves out, one a `set_in` constraint
+    /// restricts, or a fresh variable of a decomposition whose bounds a constraint states.
+    fn declares_domain(&self, domain: DomainId, variable_names: &VariableNames) -> bool {
+        domain != Predicate::trivially_true().get_domain()
+            && variable_names.get_int_name(domain).is_some()
+            && !self.constant_domains.contains(&domain)
+            && !self.set_in_domains.contains_key(&domain)
+            && !self.selector_bounds.contains_key(&domain)
+    }
+
+    /// The inferences that refute the nogood, in the order they propagate, each with the
+    /// premises it states, its consequent, its constraint and its label; the premises left out
+    /// of each; and whether they reach a conflict. The facts from unit nogoods come first. An
+    /// inference whose premises do not hold at its turn is left out, and none after the conflict
+    /// is kept.
+    ///
+    /// With the root domains, propagation starts from the nogood within them: a fact or an
+    /// inference whose consequent they entail narrows nothing and is left out, and so is every
+    /// premise they entail. Returns `None` when they leave the nogood no value.
+    #[allow(clippy::too_many_arguments, reason = "the state of one refutation")]
+    fn refuting_inferences(
+        &self,
+        nogood: &[Predicate],
+        facts: &[(Predicate, ConstraintTag)],
+        root_explanations: &HashSet<ConstraintTag>,
+        variable_names: &VariableNames,
+        assignments: &Assignments,
+        seen: &mut HashSet<Predicate>,
+        mut root_domains: Option<&mut RootDomains>,
+    ) -> Option<(Vec<KeptInference>, Vec<Vec<Predicate>>, bool)> {
+        let constant_domains = &self.constant_domains;
+        let is_constant = |predicate: Predicate| {
+            is_unnamed(predicate, variable_names)
+                || constant_domains.contains(&predicate.get_domain())
+        };
+        let declares_domain = |domain: DomainId| self.declares_domain(domain, variable_names);
+        let mut kept: Vec<KeptInference> = vec![];
+        let mut left_out: Vec<Vec<Predicate>> = vec![];
+        let mut reached_conflict = false;
+
+        let Ok(mut state) = VariableState::prepare_for_conflict_check(nogood.iter().copied(), None)
+        else {
+            // The nogood's atoms cannot all hold, so it needs no inference.
+            return Some((kept, left_out, true));
+        };
+        let mut applied: HashSet<DomainId> = HashSet::default();
+        if let Some(root_domains) = root_domains.as_deref_mut()
+            && !apply_root_facts(
+                &mut state,
+                nogood.iter().copied(),
+                root_domains,
+                &mut applied,
+                declares_domain,
+                assignments,
+            )
+        {
+            return None;
+        }
+
+        let nogood_label: Arc<str> = Arc::from("nogood");
+        for &(fact, tag) in facts.iter() {
+            let fact = self.proof_atomics.canonical(fact);
+            if is_constant(fact) {
+                continue;
+            }
+            if let Some(root_domains) = root_domains.as_deref_mut()
+                && !apply_root_facts(
+                    &mut state,
+                    [fact],
+                    root_domains,
+                    &mut applied,
+                    declares_domain,
+                    assignments,
+                )
+            {
+                return None;
+            }
+            if state.is_true(&fact) {
+                continue;
+            }
+            let consistent = state.apply(&fact);
+            kept.push((vec![], Some(fact), Some(tag), Arc::clone(&nogood_label)));
+            left_out.push(vec![]);
+            if !consistent {
+                return Some((kept, left_out, true));
+            }
+        }
+
+        let order = roots_first(
+            self.propagation_order
+                .iter()
+                .rev()
+                .flatten()
+                .copied()
+                .collect(),
+            root_explanations,
+        );
+        for tag in order {
+            let Some(inference) = self.inferences.get(&tag) else {
+                continue;
+            };
+            // An explanation can repeat a premise, which a nogood states once.
+            seen.clear();
+            let mut inference_premises: Vec<Predicate> = inference
+                .premises
+                .iter()
+                .map(|&predicate| self.proof_atomics.canonical(predicate))
+                .filter(|&predicate| !is_constant(predicate) && seen.insert(predicate))
+                .collect();
+            let consequent = inference
+                .consequent
+                .map(|predicate| self.proof_atomics.canonical(predicate));
+            if let Some(root_domains) = root_domains.as_deref_mut() {
+                let atoms = inference_premises
+                    .iter()
+                    .copied()
+                    .chain(consequent.filter(|&consequent| !is_constant(consequent)));
+                if !apply_root_facts(
+                    &mut state,
+                    atoms,
+                    root_domains,
+                    &mut applied,
+                    declares_domain,
+                    assignments,
+                ) {
+                    return None;
+                }
+            }
+            if !inference_premises
+                .iter()
+                .all(|premise| state.is_true(premise))
+            {
+                continue;
+            }
+            // The negation of the consequent ends the nogood, and is not repeated before it.
+            if let Some(consequent) = consequent {
+                inference_premises.retain(|&premise| premise != !consequent);
+            }
+            let narrows = !matches!(
+                consequent,
+                Some(consequent) if !is_constant(consequent) && state.is_true(&consequent)
+            );
+            if narrows {
+                let mut bounds = self.bounds_fixing_terms(
+                    inference.constraint,
+                    &inference_premises,
+                    consequent,
+                    assignments,
+                );
+                bounds.extend(self.declared_bounds_relied_on(
+                    inference.constraint,
+                    &inference_premises,
+                    consequent,
+                    assignments,
+                ));
+                for bound in bounds {
+                    if !state.is_true(&bound) {
+                        let _ = state.apply(&bound);
+                        kept.push((vec![], Some(bound), None, Arc::from("initial_domain")));
+                        left_out.push(vec![]);
+                    }
+                    inference_premises.push(bound);
+                }
+            }
+            let premises_left_out = match root_domains.as_deref() {
+                Some(root_domains) => {
+                    let (premises_left_out, stated) = inference_premises
+                        .into_iter()
+                        .partition(|&premise| root_domains.entails(premise));
+                    inference_premises = stated;
+                    premises_left_out
+                }
+                None => vec![],
+            };
+            match consequent {
+                // An inference whose consequent already holds narrows nothing.
+                Some(consequent) if !is_constant(consequent) && state.is_true(&consequent) => {}
+                Some(consequent) if !is_constant(consequent) => {
+                    let consistent = state.apply(&consequent);
+                    kept.push((
+                        inference_premises,
+                        Some(consequent),
+                        inference.constraint,
+                        Arc::clone(&inference.label),
+                    ));
+                    left_out.push(premises_left_out);
+                    if !consistent {
+                        reached_conflict = true;
+                        break;
+                    }
+                }
+                Some(consequent) => {
+                    // A bound on a constant either holds already, and changes nothing, or
+                    // fails, and then the premises are a conflict on their own.
+                    let value = assignments.get_initial_lower_bound(consequent.get_domain());
+                    if !holds_for_value(consequent, value) {
+                        kept.push((
+                            inference_premises,
+                            None,
+                            inference.constraint,
+                            Arc::clone(&inference.label),
+                        ));
+                        left_out.push(premises_left_out);
+                        reached_conflict = true;
+                        break;
+                    }
+                }
+                None => {
+                    kept.push((
+                        inference_premises,
+                        None,
+                        inference.constraint,
+                        Arc::clone(&inference.label),
+                    ));
+                    left_out.push(premises_left_out);
+                    reached_conflict = true;
+                    break;
+                }
+            }
+        }
+
+        Some((kept, left_out, reached_conflict))
     }
 
     /// The bounds the declared domains give that an inference from a constraint registered with
@@ -2026,11 +2326,16 @@ fn implies(atoms: impl IntoIterator<Item = Predicate>, atom: Predicate) -> bool 
 /// replaced by them through the nogood the domain implies. The atoms left at the end that are
 /// not in the nogood are replaced in the same way by the nogood's atoms on their variable.
 ///
+/// Within the root domains, their facts hold on every variable before the nogood's atoms, an
+/// atom they entail is left out of a nogood the domain implies, and an atom they entail is left
+/// at the end, which the checker drops from the final resolvent.
+///
 /// Returns the steps and the nogood derived, which is part of `nogood`, or `None` when the chain
 /// does not reach one.
 fn resolution_chain(
     nogood: &[Predicate],
     kept: &[KeptInference],
+    root_domains: Option<&RootDomains>,
 ) -> Option<(Vec<ChainStep>, Vec<Predicate>)> {
     // For each variable, the atoms that hold on it in the order they come to hold: the nogood's
     // first, at position -1, then the consequents.
@@ -2050,13 +2355,21 @@ fn resolution_chain(
         }
     }
     let held_before = |domain: DomainId, position: isize| {
-        sources
-            .get(&domain)
+        root_domains
+            .map(|root_domains| root_domains.facts_on(domain))
+            .unwrap_or_default()
             .into_iter()
-            .flatten()
-            .filter(move |(source, _)| *source < position)
-            .map(|(_, atom)| *atom)
+            .chain(
+                sources
+                    .get(&domain)
+                    .into_iter()
+                    .flatten()
+                    .filter(move |(source, _)| *source < position)
+                    .map(|(_, atom)| *atom),
+            )
     };
+    let entailed_by_root_domains =
+        |atom: Predicate| root_domains.is_some_and(|root_domains| root_domains.entails(atom));
 
     let mut reached: HashMap<DomainId, Vec<Predicate>> = HashMap::default();
     let add = |reached: &mut HashMap<DomainId, Vec<Predicate>>, atom: Predicate| {
@@ -2106,6 +2419,7 @@ fn resolution_chain(
                 }
                 premises.push(earlier_atom);
             }
+            premises.retain(|&premise| premise == consequent || !entailed_by_root_domains(premise));
             remove(&mut reached, atom);
             for &premise in &premises {
                 add(&mut reached, premise);
@@ -2128,10 +2442,14 @@ fn resolution_chain(
         .filter(|atom| !nogood.contains(atom))
         .collect();
     for atom in left {
-        let premises: Vec<Predicate> = held_before(atom.get_domain(), 0).collect();
+        if entailed_by_root_domains(atom) {
+            continue;
+        }
+        let mut premises: Vec<Predicate> = held_before(atom.get_domain(), 0).collect();
         if !implies(premises.iter().copied(), atom) {
             return None;
         }
+        premises.retain(|&premise| !entailed_by_root_domains(premise));
         remove(&mut reached, atom);
         for &premise in &premises {
             add(&mut reached, premise);

@@ -46,6 +46,14 @@ pub struct ReferencedInference {
     pub hint: Vec<u32>,
 }
 
+/// The reading of fzn-croc-check a proof is written for: strict, from the initial domains, or
+/// lenient, within the root domains, the declared domains and the held nogoods over one variable.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Reading {
+    Strict,
+    Lenient,
+}
+
 /// One derivation: a resolution chain and the nogood it derives.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Block<Identifier, Int, Label> {
@@ -389,6 +397,16 @@ impl<W: Write, Int: IntValue + Hash> BlockProofWriter<W, Int> {
         }
 
         Ok(())
+    }
+
+    /// Write the header that names the reading the proof is written for, `m strict` or
+    /// `m lenient`, which must be the first line of the proof.
+    pub fn log_reading(&mut self, reading: Reading) -> std::io::Result<()> {
+        let line = match reading {
+            Reading::Strict => "m strict",
+            Reading::Lenient => "m lenient",
+        };
+        self.write_text_line(line)
     }
 
     /// Write a line as it is: the steps another program produced for the head of the proof.

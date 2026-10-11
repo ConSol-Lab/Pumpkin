@@ -2,8 +2,10 @@
 
 //! The solver writes a scaffold, headed by its preamble, for a model with `--proof-format croc`,
 //! and the processor, given only the model and the scaffold, turns it into a proof in the block
-//! format, as resolution chains and as refutations. When the environment variable `CROC_CHECK`
-//! names the fzn-croc-check binary, the proofs are checked.
+//! format, as resolution chains and as refutations, and each also for the checker's lenient reading
+//! within the root domains (`--root-domains`), which the proof's header `m lenient` names. When the
+//! environment variable `CROC_CHECK` names the fzn-croc-check binary, the proofs are checked, in
+//! the reading their header names.
 
 use std::path::Path;
 use std::path::PathBuf;
@@ -220,14 +222,16 @@ fn solver() -> &'static Path {
 fn run_pipeline(name: &str, model: &str, conclusion: &str, solver_flags: &[&str]) {
     let (model_path, scaffold_path) = solve(name, model, solver_flags);
     for derivation in ["resolution", "refutation"] {
-        let _ = process_and_check(
-            name,
-            &model_path,
-            &scaffold_path,
-            derivation,
-            conclusion,
-            &[],
-        );
+        for processor_flags in [&[][..], &["--root-domains"][..]] {
+            let _ = process_and_check(
+                name,
+                &model_path,
+                &scaffold_path,
+                derivation,
+                conclusion,
+                processor_flags,
+            );
+        }
     }
 }
 
@@ -266,7 +270,9 @@ fn process_and_check(
     processor_flags: &[&str],
 ) -> (String, String) {
     let directory = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("process_models");
-    let proof_path = directory.join(format!("{name}.{derivation}.croc"));
+    let root_domains = processor_flags.contains(&"--root-domains");
+    let reading = if root_domains { ".root_domains" } else { "" };
+    let proof_path = directory.join(format!("{name}.{derivation}{reading}.croc"));
 
     let processor_output = Command::new(env!("CARGO_BIN_EXE_pumpkin-proof-processor"))
         .args(["--format", "blocks", "--proof-encoding", "text"])
@@ -290,6 +296,13 @@ fn process_and_check(
         "the {derivation} proof does not conclude {conclusion}"
     );
 
+    let header = proof.lines().next().filter(|line| line.starts_with("m "));
+    let expected = root_domains.then_some("m lenient");
+    assert_eq!(
+        header, expected,
+        "the {derivation} proof states the wrong reading"
+    );
+
     check_if_checker_given(model_path, &proof_path);
     (
         String::from_utf8_lossy(&processor_output.stdout).into_owned(),
@@ -302,6 +315,7 @@ fn check_if_checker_given(model_path: &str, proof_path: &Path) {
         return;
     };
 
+    // The checker takes the reading from the proof's header.
     let output = Command::new(checker)
         .arg(model_path)
         .arg(proof_path)

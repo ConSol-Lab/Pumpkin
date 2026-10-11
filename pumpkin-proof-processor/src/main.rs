@@ -77,6 +77,14 @@ struct Cli {
     #[arg(long, value_enum, default_value_t = ProofEncoding::Binary)]
     proof_encoding: ProofEncoding,
 
+    /// Write a proof in the block format for the lenient reading of the checker, within the root
+    /// domains: the declared domains and the nogoods over one variable the proof holds
+    /// (experimental). The proof starts with the header `m lenient` and leaves out the facts and
+    /// inferences whose atomic constraint these entail, and the premises of an inference they
+    /// entail; the unit nogoods of the facts at the root are still derived once.
+    #[arg(long)]
+    root_domains: bool,
+
     /// Leave out the symmetry and dominance breaking steps of the head whose constraint no kept
     /// inference cites. This holds the head back until trimming is done, which a processor that
     /// writes its proof as it derives it cannot do.
@@ -125,6 +133,10 @@ enum ProofEncoding {
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
+    if cli.root_domains && cli.format != ProofFormat::Blocks {
+        anyhow::bail!("--root-domains needs --format blocks");
+    }
+
     env_logger::Builder::new()
         .format_timestamp(None)
         .format_target(false)
@@ -140,6 +152,7 @@ fn main() -> anyhow::Result<()> {
             &cli.full_proof_path,
             cli.nogood_derivation == NogoodDerivation::Resolution,
             cli.proof_encoding == ProofEncoding::Binary,
+            cli.root_domains,
         )
         .with_context(|| "Failed to create proof writer")?,
     };

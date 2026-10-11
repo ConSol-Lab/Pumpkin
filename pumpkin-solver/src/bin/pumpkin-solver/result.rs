@@ -24,6 +24,8 @@ pub(crate) enum PumpkinError {
     NeedsCrocProofs(String),
     #[error("--proof-encoding binary needs --proof-type blocks.")]
     BinaryNeedsBlocks,
+    #[error("--proof-root-domains needs --proof-format croc --proof-type blocks.")]
+    RootDomainsNeedBlocks,
 }
 
 impl PumpkinError {

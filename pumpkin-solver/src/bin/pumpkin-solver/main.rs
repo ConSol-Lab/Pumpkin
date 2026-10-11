@@ -110,6 +110,14 @@ struct Args {
     #[arg(long, value_enum)]
     proof_encoding: Option<ProofEncoding>,
 
+    /// Write a croc block proof for the lenient reading of the checker, which reads every
+    /// inference, resolution chain and refutation within the root domains (experimental). The
+    /// proof starts with the header `m lenient` and leaves out the inferences that explain an
+    /// atomic constraint the declared domains and the nogoods over one variable entail, and
+    /// the premises they entail.
+    #[arg(long)]
+    proof_root_domains: bool,
+
     /// Compile the model, write the steps that state the views the compiler made to
     /// `proof_path`, report what the view pass did, and stop without solving (experimental).
     #[arg(long)]
@@ -661,6 +669,12 @@ fn run() -> PumpkinResult<()> {
         return Err(PumpkinError::BinaryNeedsBlocks);
     }
 
+    if args.proof_root_domains
+        && (proof_format != ProofFormat::Croc || args.proof_type != ProofType::Blocks)
+    {
+        return Err(PumpkinError::RootDomainsNeedBlocks);
+    }
+
     if pumpkin_solver::core::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION
         >= pumpkin_solver::core::asserts::PUMPKIN_ASSERT_MODERATE
     {
@@ -683,6 +697,7 @@ fn run() -> PumpkinResult<()> {
                 path_buf,
                 args.nogood_derivation == NogoodDerivation::Resolution,
                 args.proof_encoding.unwrap_or(ProofEncoding::Binary) == ProofEncoding::Binary,
+                args.proof_root_domains,
             )?,
             FileFormat::FlatZinc
                 if proof_format == ProofFormat::Croc && args.proof_type == ProofType::Scaffold =>

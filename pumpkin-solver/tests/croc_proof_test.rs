@@ -99,6 +99,31 @@ fn a_drcp_proof_skips_the_breaking_passes() {
     let _ = std::fs::remove_file(&proof_path);
 }
 
+// The lenient reading, within the root domains.
+croc_proofs!(
+    objective_view_lenient,
+    "objective_view",
+    "c UPPER_BOUND 28",
+    "--proof-root-domains"
+);
+
+#[test]
+fn a_proof_for_the_lenient_reading_starts_with_its_header() {
+    let proof_path = output_path("lenient_header.croc");
+    let output = Command::new(env!("CARGO_BIN_EXE_pumpkin-solver"))
+        .arg("--proof-path")
+        .arg(&proof_path)
+        .args(["--proof-format", "croc", "--proof-type", "blocks"])
+        .args(["--proof-encoding", "text", "--proof-root-domains"])
+        .arg(model_path("equalities_and_reifications"))
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let proof = std::fs::read_to_string(&proof_path).expect("the proof is text");
+    assert_eq!(proof.lines().next(), Some("m lenient"));
+    std::fs::remove_file(&proof_path).expect("the proof is removed");
+}
+
 #[test]
 fn a_scaffold_states_its_preamble_before_the_nogoods() {
     let model_path = model_path("views_literals_constants");
