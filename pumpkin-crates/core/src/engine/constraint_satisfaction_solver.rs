@@ -359,33 +359,6 @@ impl ConstraintSatisfactionSolver {
         self.state.new_literal(name)
     }
 
-    pub fn create_new_literal_for_predicate(
-        &mut self,
-        predicate: Predicate,
-        name: Option<Arc<str>>,
-        constraint_tag: ConstraintTag,
-    ) -> Literal {
-        let literal = self.state.new_literal(name);
-
-        self.internal_parameters
-            .proof_log
-            .reify_predicate(literal, predicate);
-
-        // If literal --> predicate
-        self.add_clause(
-            vec![!literal.get_true_predicate(), predicate],
-            constraint_tag,
-        );
-
-        // If !literal --> !predicate
-        self.add_clause(
-            vec![!literal.get_false_predicate(), !predicate],
-            constraint_tag,
-        );
-
-        literal
-    }
-
     /// Create a new integer variable. Its domain will have the given lower and upper bounds.
     pub fn create_new_integer_variable(
         &mut self,

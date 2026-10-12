@@ -7,6 +7,7 @@ use log::warn;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::containers::HashMap;
 use pumpkin_solver::core::containers::HashSet;
+use pumpkin_solver::core::predicate;
 use pumpkin_solver::core::proof::ConstraintTag;
 use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::core::variables::Literal;
@@ -139,7 +140,7 @@ impl CompilationContext<'_> {
             .variable_map
             .get(&self.equivalences.representative(identifier))
         {
-            Ok(Literal::new(*domain_id))
+            Ok(Literal::new(predicate![domain_id >= 1]))
         } else {
             self.boolean_parameters
                 .get(&self.equivalences.representative(identifier))

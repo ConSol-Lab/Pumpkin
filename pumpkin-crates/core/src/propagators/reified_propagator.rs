@@ -59,6 +59,7 @@ where
         let reification_literal_id = registration
             .iter()
             .map(|(_, _, lid)| lid)
+            .chain(registration.iter_literals().map(|(_, _, lid)| lid))
             .max()
             .expect("cannot reify propagators that do not register all variables immediately")
             .successor();
@@ -304,7 +305,7 @@ mod tests {
     use crate::proof::InferenceCode;
     use crate::proof::Unknown;
     use crate::propagation::EventsToRegister;
-    use crate::variables::DomainId;
+    use crate::variables::IntegerVariable;
 
     #[test]
     fn a_detected_inconsistency_is_given_as_reason_for_propagating_reification_literal_to_false() {
@@ -469,16 +470,53 @@ mod tests {
         assert!(matches!(enqueue, EnqueueDecision::Enqueue))
     }
 
-    #[derive(Clone)]
-    struct GenericPropagator<Propagation, ConsistencyCheck> {
-        propagation: Propagation,
-        consistency_check: ConsistencyCheck,
-        variables_to_register: Vec<DomainId>,
+    #[test]
+    fn a_propagator_over_only_literals_can_be_reified() {
+        let mut solver = TestSolver::default();
+
+        let reification_literal = solver.new_literal();
+        let literal = solver.new_literal();
+
+        let propagator = solver
+            .new_propagator(ReifiedPropagatorArgs {
+                propagator: GenericPropagator::new(
+                    vec![literal],
+                    move |mut ctx: PropagationContext| {
+                        ctx.post(
+                            literal.get_true_predicate(),
+                            (
+                                conjunction!(),
+                                &InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
+                            ),
+                        )?;
+                        Ok(())
+                    },
+                    |_: Domains| None,
+                ),
+                reification_literal,
+            })
+            .expect("no conflict");
+        assert!(!solver.is_literal_false(!literal));
+
+        solver
+            .set_literal(reification_literal, true)
+            .expect("no empty domain");
+        solver.propagate(propagator).expect("no conflict");
+
+        assert!(solver.is_literal_false(!literal));
     }
 
-    impl<Propagation, ConsistencyCheck> PropagatorConstructor
-        for GenericPropagator<Propagation, ConsistencyCheck>
+    #[derive(Clone)]
+    struct GenericPropagator<Var, Propagation, ConsistencyCheck> {
+        propagation: Propagation,
+        consistency_check: ConsistencyCheck,
+        variables_to_register: Vec<Var>,
+    }
+
+    impl<Var, Propagation, ConsistencyCheck> PropagatorConstructor
+        for GenericPropagator<Var, Propagation, ConsistencyCheck>
     where
+        Var: IntegerVariable + 'static,
         Propagation: Fn(PropagationContext) -> PropagationStatusCP + 'static + Clone,
         ConsistencyCheck: Fn(Domains) -> Option<PropagatorConflict> + 'static + Clone,
     {
@@ -499,8 +537,10 @@ mod tests {
         }
     }
 
-    impl<Propagation, ConsistencyCheck> Propagator for GenericPropagator<Propagation, ConsistencyCheck>
+    impl<Var, Propagation, ConsistencyCheck> Propagator
+        for GenericPropagator<Var, Propagation, ConsistencyCheck>
     where
+        Var: IntegerVariable + 'static,
         Propagation: Fn(PropagationContext) -> PropagationStatusCP + 'static + Clone,
         ConsistencyCheck: Fn(Domains) -> Option<PropagatorConflict> + 'static + Clone,
     {
@@ -517,13 +557,14 @@ mod tests {
         }
     }
 
-    impl<Propagation, ConsistencyCheck> GenericPropagator<Propagation, ConsistencyCheck>
+    impl<Var, Propagation, ConsistencyCheck> GenericPropagator<Var, Propagation, ConsistencyCheck>
     where
+        Var: Clone,
         Propagation: Fn(PropagationContext) -> PropagationStatusCP,
         ConsistencyCheck: Fn(Domains) -> Option<PropagatorConflict>,
     {
         pub(crate) fn new(
-            variables_to_register: Vec<DomainId>,
+            variables_to_register: Vec<Var>,
             propagation: Propagation,
             consistency_check: ConsistencyCheck,
         ) -> Self {
@@ -534,7 +575,7 @@ mod tests {
             }
         }
 
-        pub(crate) fn with_variables(mut self, variables: &[DomainId]) -> Self {
+        pub(crate) fn with_variables(mut self, variables: &[Var]) -> Self {
             // Necessary for ensuring that the local IDs are correct when notifying
             self.variables_to_register = variables.into();
             self

@@ -170,7 +170,7 @@ impl State {
     /// when backtracking past the checkpoint where the domain was created.
     pub fn new_literal(&mut self, name: Option<Arc<str>>) -> Literal {
         let domain_id = self.new_interval_variable(0, 1, name);
-        Literal::new(domain_id)
+        Literal::new(predicate![domain_id >= 1])
     }
 
     /// Creates a new interval variable with the given lower and upper bound.
@@ -360,6 +360,21 @@ impl State {
 
             self.notification_engine
                 .register(domain_id, events, propagator_var);
+        }
+
+        for (predicate, events, local_id) in registration.iter_literals() {
+            let propagator_var = PropagatorVarId {
+                propagator: original_handle.propagator_id(),
+                variable: local_id,
+            };
+
+            self.notification_engine.watch_literal(
+                predicate,
+                events,
+                propagator_var,
+                &mut self.trailed_values,
+                &self.assignments,
+            );
         }
 
         if cfg!(feature = "check-propagations") {
@@ -604,7 +619,8 @@ impl State {
             propagator.synchronise(context.reborrow());
         }
 
-        let _ = self.notification_engine.process_backtrack_events(
+        self.notification_engine.process_backtrack_events(
+            checkpoint,
             &self.assignments,
             &mut self.trailed_values,
             &mut self.propagators,

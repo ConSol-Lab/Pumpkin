@@ -148,9 +148,7 @@ fn create_from_search_strategy(
                     AnnExpr::Expr(expr) => {
                             let bool_variable_array = context
                                 .resolve_bool_variable_array(expr)?
-                                .iter()
-                                .map(|literal| literal.get_integer_variable())
-                                .collect::<Vec<_>>();
+                                .to_vec();
 
                             match values {
                                     AnnExpr::Expr(expr) => {

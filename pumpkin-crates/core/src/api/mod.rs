@@ -46,11 +46,15 @@ pub mod variables {
     //!   variable with holes in the domain. These variables can be transformed (according to the
     //!   trait [`TransformableVariable`]) to create an [`AffineView`].
     //! - Literals ([`Literal`]) - These specify booleans that can be used when interacting with the
-    //!   [`Solver`]. A [`Literal`] can be created using [`Solver::new_literal`].
+    //!   [`Solver`]. A [`Literal`] can be created using [`Solver::new_literal`], or from a
+    //!   predicate using [`Solver::new_literal_for_predicate`].
+    //!
+    //! An [`AnyInteger`] can be used to post constraints over a mix of both types of variables.
     #[cfg(doc)]
     use crate::Solver;
     pub use crate::engine::Reason;
     pub use crate::engine::variables::AffineView;
+    pub use crate::engine::variables::AnyInteger;
     pub use crate::engine::variables::DomainGeneratorIterator;
     pub use crate::engine::variables::DomainId;
     pub use crate::engine::variables::IntegerVariable;

@@ -4,8 +4,11 @@ use enumset::EnumSet;
 use enumset::EnumSetType;
 
 use crate::containers::KeyedVec;
+use crate::engine::Assignments;
+use crate::engine::TrailedValues;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::variables::DomainId;
+use crate::predicates::Predicate;
 use crate::propagation::PropagatorVarId;
 
 #[derive(Default, Debug, Clone)]
@@ -22,6 +25,8 @@ pub(crate) struct WatchListDomainEvents {
 pub struct Watchers<'a> {
     propagator_var: PropagatorVarId,
     notification_engine: &'a mut NotificationEngine,
+    trailed_values: &'a mut TrailedValues,
+    assignments: &'a Assignments,
 }
 
 /// A description of the kinds of events that can happen on a domain variable.
@@ -95,10 +100,14 @@ impl<'a> Watchers<'a> {
     pub(crate) fn new(
         propagator_var: PropagatorVarId,
         notification_engine: &'a mut NotificationEngine,
+        trailed_values: &'a mut TrailedValues,
+        assignments: &'a Assignments,
     ) -> Self {
         Watchers {
             propagator_var,
             notification_engine,
+            trailed_values,
+            assignments,
         }
     }
 
@@ -110,6 +119,28 @@ impl<'a> Watchers<'a> {
     pub(crate) fn watch_all_backtrack(&mut self, domain: DomainId, events: EnumSet<DomainEvent>) {
         self.notification_engine
             .watch_all_backtrack(domain, events, self.propagator_var);
+    }
+
+    /// Stop watching the events of a literal over the given predicate.
+    pub(crate) fn unwatch_literal(&mut self, predicate: Predicate) {
+        self.notification_engine
+            .unwatch_literal(predicate, self.propagator_var);
+    }
+
+    /// Watch the given events of a literal over the given predicate being undone when
+    /// backtracking.
+    pub(crate) fn watch_literal_backtrack(
+        &mut self,
+        predicate: Predicate,
+        events: EnumSet<DomainEvent>,
+    ) {
+        self.notification_engine.watch_literal_backtrack(
+            predicate,
+            events,
+            self.propagator_var,
+            self.trailed_values,
+            self.assignments,
+        );
     }
 }
 

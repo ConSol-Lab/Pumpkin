@@ -153,6 +153,8 @@ impl<'a> PropagationContext<'a> {
             &mut NotificationEngineWatchers {
                 notificaton_engine: self.notification_engine,
                 propagator_id: self.propagator_id,
+                trailed_values: self.trailed_values,
+                assignments: self.assignments,
             },
             domain_events.events(),
             local_id,
@@ -166,7 +168,12 @@ impl<'a> PropagationContext<'a> {
             variable: local_id,
         };
 
-        let mut watchers = Watchers::new(propagator_var, self.notification_engine);
+        let mut watchers = Watchers::new(
+            propagator_var,
+            self.notification_engine,
+            self.trailed_values,
+            self.assignments,
+        );
         var.unwatch_all(&mut watchers);
     }
 
@@ -306,6 +313,8 @@ pub(crate) fn build_reason(
 struct NotificationEngineWatchers<'a> {
     propagator_id: PropagatorId,
     notificaton_engine: &'a mut NotificationEngine,
+    trailed_values: &'a mut TrailedValues,
+    assignments: &'a Assignments,
 }
 
 impl EventDispatcher for NotificationEngineWatchers<'_> {
@@ -317,6 +326,24 @@ impl EventDispatcher for NotificationEngineWatchers<'_> {
                 propagator: self.propagator_id,
                 variable: local_id,
             },
+        );
+    }
+
+    fn register_literal(
+        &mut self,
+        predicate: Predicate,
+        events: EnumSet<DomainEvent>,
+        local_id: LocalId,
+    ) {
+        self.notificaton_engine.watch_literal(
+            predicate,
+            events,
+            PropagatorVarId {
+                propagator: self.propagator_id,
+                variable: local_id,
+            },
+            self.trailed_values,
+            self.assignments,
         );
     }
 }

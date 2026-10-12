@@ -10,6 +10,7 @@ use pumpkin_solver::core::predicates::Predicate;
 use pumpkin_solver::core::proof::ConstraintTag;
 use pumpkin_solver::core::variables::AffineView;
 use pumpkin_solver::core::variables::DomainId;
+use pumpkin_solver::core::variables::Literal;
 use pumpkin_solver::core::variables::TransformableVariable;
 
 use super::context::CompilationContext;
@@ -499,7 +500,7 @@ fn compile_set_in_reif(
                 .map(|&value| {
                     context
                         .solver
-                        .new_literal_for_predicate(predicate![variable == value], constraint_tag)
+                        .new_literal_for_predicate(predicate![variable == value])
                 })
                 .collect::<Vec<_>>();
 
@@ -630,7 +631,10 @@ fn compile_bool2int(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_integer_variable(&exprs[1])?;
 
-    pumpkin_constraints::binary_equals(a.get_integer_variable(), b.scaled(1), constraint_tag)
+    // a <-> [b == 1] and !a <-> [b == 0]; together these also restrict b to {0, 1}.
+    pumpkin_constraints::clause([!a, Literal::new(predicate![b == 1])], constraint_tag)
+        .post(context.solver);
+    pumpkin_constraints::clause([a, Literal::new(predicate![b == 0])], constraint_tag)
         .post(context.solver);
 
     Ok(())

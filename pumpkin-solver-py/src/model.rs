@@ -6,6 +6,7 @@ use std::time::Instant;
 
 use pumpkin_branching::DefaultBrancher;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
+use pumpkin_constraints::clause;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::containers::HashMap;
 use pumpkin_solver::core::containers::StorageKey;
@@ -13,6 +14,7 @@ use pumpkin_solver::core::optimisation::OptimisationDirection;
 use pumpkin_solver::core::optimisation::linear_sat_unsat::LinearSatUnsat;
 use pumpkin_solver::core::optimisation::linear_unsat_sat::LinearUnsatSat;
 use pumpkin_solver::core::options::SolverOptions;
+use pumpkin_solver::core::predicate;
 use pumpkin_solver::core::proof::ConstraintTag;
 use pumpkin_solver::core::proof::ProofLog;
 use pumpkin_solver::core::rand::SeedableRng;
@@ -22,6 +24,10 @@ use pumpkin_solver::core::results::SolutionReference;
 use pumpkin_solver::core::termination::Indefinite;
 use pumpkin_solver::core::termination::TerminationCondition;
 use pumpkin_solver::core::termination::TimeBudget;
+use pumpkin_solver::core::variables::AffineView;
+use pumpkin_solver::core::variables::DomainId;
+use pumpkin_solver::core::variables::Literal;
+use pumpkin_solver::core::variables::TransformableVariable;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -43,6 +49,9 @@ use crate::variables::Predicate;
 pub(crate) struct Model {
     solver: Solver,
     brancher: PythonBrancher,
+    /// The 0-1 integer variables created by [`Model::boolean_as_integer`] for booleans which do
+    /// not have one.
+    boolean_integers: HashMap<Literal, AffineView<DomainId>>,
 }
 
 #[pyclass(from_py_object)]
@@ -91,7 +100,11 @@ impl Model {
         let solver = Solver::with_options(options);
         let brancher = PythonBrancher::new(DefaultBrancher::default_over_all_variables(&solver));
 
-        Ok(Model { solver, brancher })
+        Ok(Model {
+            solver,
+            brancher,
+            boolean_integers: HashMap::default(),
+        })
     }
 
     /// Create a new integer variable.
@@ -135,10 +148,10 @@ impl Model {
             self.solver.new_literal()
         };
 
-        self.brancher
-            .add_domain(literal.get_true_predicate().get_domain());
+        let domain_id = literal.get_true_predicate().get_domain();
+        self.brancher.add_domain(domain_id);
 
-        Ok(literal.into())
+        Ok(BoolExpression(literal, Some(domain_id.into())))
     }
 
     /// Get the lower bound of the given expression.
@@ -183,41 +196,60 @@ impl Model {
     ///
     /// The integer is 1 if the boolean is `true`, and 0 if the boolean is `false`.
     ///
-    /// This is deprecated as of 0.3.0. Prefer to use `BoolExpression.as_integer`.
-    fn boolean_as_integer(&mut self, boolean: BoolExpression) -> IntExpression {
-        boolean.as_integer()
+    /// Prefer to use `BoolExpression.as_integer` for booleans created with
+    /// `new_boolean_variable`. For booleans created with `predicate_as_boolean`, this creates (at
+    /// most once per boolean) a new 0-1 integer variable which is linked to the boolean.
+    fn boolean_as_integer(&mut self, boolean: BoolExpression) -> PyResult<IntExpression> {
+        if let Some(integer) = boolean.1 {
+            return Ok(IntExpression(integer));
+        }
+
+        if let Some(&integer) = self.boolean_integers.get(&boolean.0) {
+            return Ok(IntExpression(integer));
+        }
+
+        if self.solver.is_inconsistent() {
+            return Err(PyValueError::new_err(
+                "Cannot create variable: solver is in an infeasible state",
+            ));
+        }
+
+        let domain_id = self.solver.new_bounded_integer(0, 1);
+        let constraint_tag = self.solver.new_constraint_tag();
+        let integer_is_one = Literal::new(predicate![domain_id >= 1]);
+
+        // boolean <-> [domain_id >= 1]
+        self.solver
+            .add_constraint(clause([!boolean.0, integer_is_one], constraint_tag))
+            .post();
+        self.solver
+            .add_constraint(clause([boolean.0, !integer_is_one], constraint_tag))
+            .post();
+
+        let integer: AffineView<DomainId> = domain_id.into();
+        let _ = self.boolean_integers.insert(boolean.0, integer);
+        let _ = self
+            .boolean_integers
+            .insert(!boolean.0, integer.scaled(-1).offset(1));
+
+        Ok(IntExpression(integer))
     }
 
-    /// Reify a predicate as an explicit boolean expression.
+    /// Get the boolean expression which is true if and only if the predicate is true.
     ///
-    /// A tag should be provided for this link to be identifiable in the proof.
+    /// No new variable is created for the boolean, so the `tag` and `name` are unused. They are
+    /// kept for backwards compatibility.
     #[pyo3(signature = (predicate, tag, name=None))]
+    #[allow(unused_variables, reason = "kept for backwards compatibility")]
     fn predicate_as_boolean(
         &mut self,
         predicate: Predicate,
         tag: Tag,
         name: Option<&str>,
-    ) -> PyResult<BoolExpression> {
-        if self.solver.is_inconsistent() {
-            return Err(PyValueError::new_err(
-                "Cannot reify predicate: solver is in an infeasible state",
-            ));
-        }
-
-        let solver_predicate = predicate.into_solver_predicate();
-        let Tag(tag) = tag;
-
-        let literal = if let Some(name) = name {
-            self.solver
-                .new_named_literal_for_predicate(solver_predicate, tag, name)
-        } else {
-            self.solver.new_literal_for_predicate(solver_predicate, tag)
-        };
-
-        self.brancher
-            .add_domain(*literal.get_integer_variable().inner());
-
-        Ok(literal.into())
+    ) -> BoolExpression {
+        self.solver
+            .new_literal_for_predicate(predicate.into_solver_predicate())
+            .into()
     }
 
     /// Add the given constraint to the model.
