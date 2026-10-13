@@ -23,10 +23,10 @@ use crate::propagation::LocalId;
 /// When used as an [`IntegerVariable`], a literal is a 0-1 variable which is 1 if the predicate
 /// is true and 0 if the predicate is false.
 ///
-/// A propagator registered for events on a literal is notified once when the literal becomes true
-/// (the lower-bound event) and once when it becomes false (the upper-bound event); if those events
-/// are not registered, the assign event is used instead. Similarly, a single backtrack event is
-/// triggered when the literal becomes unassigned when backtracking.
+/// As for a 0-1 domain, a propagator registered for events on a literal is notified of the
+/// lower-bound and assign events when the literal becomes true, and of the upper-bound and assign
+/// events when it becomes false; each registered event is triggered once. Similarly, each
+/// registered event is triggered once on backtracking when the literal becomes unassigned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Literal {
     predicate: Predicate,
@@ -390,6 +390,7 @@ mod tests {
     #[derive(Clone, Debug)]
     struct EventRecorder {
         literal: Literal,
+        registered_events: DomainEvents,
         events: Vec<DomainEvent>,
         backtrack_events: Vec<DomainEvent>,
     }
@@ -398,11 +399,11 @@ mod tests {
         type PropagatorImpl = Self;
 
         fn create(self, mut context: PropagatorConstructorContext) -> PropagatorSpec<Self> {
-            context.register_backtrack(self.literal, DomainEvents::BOUNDS, LocalId::from(0));
+            context.register_backtrack(self.literal, self.registered_events, LocalId::from(0));
 
             PropagatorSpec {
                 registration: EventsToRegister::builder()
-                    .add(&self.literal, DomainEvents::BOUNDS, LocalId::from(0))
+                    .add(&self.literal, self.registered_events, LocalId::from(0))
                     .build(),
                 checkers: RuntimeCheckers::empty(),
                 propagator: self,
@@ -440,14 +441,16 @@ mod tests {
     }
 
     /// Posts each predicate at its own checkpoint, backtracks to the root, and returns the events
-    /// and backtrack events received for the literal.
+    /// and backtrack events received for the literal, which is registered for the given events.
     fn record_events(
         literal: Literal,
+        registered_events: DomainEvents,
         state: &mut State,
         predicates: &[Predicate],
     ) -> (Vec<DomainEvent>, Vec<DomainEvent>) {
         let handle: PropagatorHandle<EventRecorder> = state.add_propagator(EventRecorder {
             literal,
+            registered_events,
             events: vec![],
             backtrack_events: vec![],
         });
@@ -472,6 +475,7 @@ mod tests {
 
         let events = record_events(
             literal,
+            DomainEvents::BOUNDS,
             &mut state,
             &[
                 predicate![x >= 3],
@@ -495,6 +499,7 @@ mod tests {
 
         let events = record_events(
             literal,
+            DomainEvents::BOUNDS,
             &mut state,
             &[predicate![x >= 7], predicate![x >= 8]],
         );
@@ -513,6 +518,7 @@ mod tests {
 
         let events = record_events(
             literal,
+            DomainEvents::BOUNDS,
             &mut state,
             &[predicate![x != 4], predicate![x >= 5], predicate![x <= 5]],
         );
@@ -531,10 +537,52 @@ mod tests {
 
         let events = record_events(
             literal,
+            DomainEvents::BOUNDS,
             &mut state,
             &[predicate![x >= 3], predicate![x <= 8]],
         );
 
         assert_eq!(events, (vec![], vec![]));
+    }
+
+    #[test]
+    fn assign_events_are_triggered_alongside_bound_events() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, None);
+        let literal = Literal::new(predicate![x >= 5]);
+
+        let events = record_events(
+            literal,
+            DomainEvents::ANY_INT,
+            &mut state,
+            &[predicate![x >= 3], predicate![x >= 6]],
+        );
+
+        assert_eq!(
+            events,
+            (
+                vec![DomainEvent::LowerBound, DomainEvent::Assign],
+                vec![DomainEvent::LowerBound, DomainEvent::Assign]
+            )
+        );
+    }
+
+    #[test]
+    fn only_assign_events_are_triggered_when_only_assign_is_registered() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, None);
+        let literal = Literal::new(predicate![x >= 5]);
+
+        let events = record_events(
+            literal,
+            DomainEvents::ASSIGN,
+            &mut state,
+            &[predicate![x <= 4]],
+        );
+
+        assert_eq!(
+            events,
+            (vec![DomainEvent::Assign], vec![DomainEvent::Assign])
+        );
     }
 }

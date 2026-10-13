@@ -718,21 +718,21 @@ impl NotificationEngine {
 /// For a [`Literal`] over `predicate` registered for the given events, returns the predicates
 /// whose satisfaction triggers an event, together with the event which is triggered.
 ///
-/// The literal becomes true when `predicate` becomes true, and false when `!predicate` becomes
-/// true. In both cases, a single event is triggered: the bound event if it is registered, and
-/// otherwise the assign event.
+/// As for a 0-1 domain, the literal becoming true (i.e., `predicate` becoming true) triggers the
+/// lower-bound and assign events, and the literal becoming false (i.e., `!predicate` becoming
+/// true) triggers the upper-bound and assign events. The assign event is thus watched on both
+/// predicates, but only one of them can become true. The removal event is never triggered, since
+/// the domain of a literal has no values between its bounds.
 fn literal_watches(
     predicate: Predicate,
     events: EnumSet<DomainEvent>,
 ) -> impl Iterator<Item = (Predicate, DomainEvent)> {
-    let first_registered = move |candidates: [DomainEvent; 2]| {
-        candidates.into_iter().find(|&event| events.contains(event))
-    };
-
-    let becomes_true = first_registered([DomainEvent::LowerBound, DomainEvent::Assign])
-        .map(|event| (predicate, event));
-    let becomes_false = first_registered([DomainEvent::UpperBound, DomainEvent::Assign])
-        .map(|event| (!predicate, event));
-
-    becomes_true.into_iter().chain(becomes_false)
+    [
+        (predicate, DomainEvent::LowerBound),
+        (predicate, DomainEvent::Assign),
+        (!predicate, DomainEvent::UpperBound),
+        (!predicate, DomainEvent::Assign),
+    ]
+    .into_iter()
+    .filter(move |&(_, event)| events.contains(event))
 }
