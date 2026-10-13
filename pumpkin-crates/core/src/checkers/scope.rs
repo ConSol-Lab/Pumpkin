@@ -15,7 +15,7 @@ pub struct Scope {
 }
 
 impl Scope {
-    pub fn extend(&mut self, domain_id: DomainId) {
+    pub fn extend_scope(&mut self, domain_id: DomainId) {
         self.domains.push(domain_id);
     }
 
@@ -38,7 +38,7 @@ impl ScopeItem for i32 {
 
 impl ScopeItem for Predicate {
     fn add_to_scope(&self, scope: &mut Scope) {
-        scope.extend(self.get_domain());
+        scope.extend_scope(self.get_domain());
     }
 }
 

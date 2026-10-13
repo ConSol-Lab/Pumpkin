@@ -17,12 +17,16 @@ pub trait ConstraintDescription: ScopeItem {
 
     /// Used to check whether the solution reported by Pumpkin is feasible.
     ///
-    /// Returns [`SolutionCheck::ConstraintSatisfied`] when the constraint holds whatever values the
-    /// variables that are not fixed take, [`SolutionCheck::ConstraintViolated`] when it fails
-    /// whatever they take, and [`SolutionCheck::Unknown`] when the outcome depends on them.
+    /// Returns [`SolutionCheck::ConstraintSatisfied`] when the constraint holds,
+    /// [`SolutionCheck::ConstraintViolated`] when the constraint is violated,
+    /// and [`SolutionCheck::Unknown`] when there is a non-unit domain,
+    /// where feasibility cannot be determined without search.
     ///
-    /// Note that not all variables need to be assigned. A variable that is not fixed does not make
-    /// the outcome [`SolutionCheck::Unknown`] when the constraint is decided without it,
-    /// such as a nogood with a false predicate.
+    /// Note that this implies that not all variables need to be assigned.
+    /// A variable that is not fixed does not make the outcome [`SolutionCheck::Unknown`]
+    /// when the constraint is decided without it, such as a nogood with a false predicate.
+    ///
+    /// However this functionality will be change later, when we will pass a solution
+    /// that has all domains as singletons.
     fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck;
 }
