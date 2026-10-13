@@ -21,13 +21,17 @@ pub(crate) fn run(
     context: &mut CompilationContext,
 ) -> Result<(), FlatZincError> {
     // The literals of booleans defined over a comparison need the domain of the integer variable,
-    // so the integer domains are created first.
+    // so the integer domains are created first. Integers in an equivalence class which is defined
+    // as a literal are a view of that literal, and do not get a domain (see
+    // `CompilationContext::resolve_integer_view`).
     for single_var_decl in &ast.single_variables {
         if let SingleVarDecl::IntInRange { id, .. } | SingleVarDecl::IntInSet { id, .. } =
             single_var_decl
         {
             let id = context.identifiers.get_interned(id);
-            let _ = get_or_create_domain(context, &id);
+            if !is_defined_as_literal(context, &id) {
+                let _ = get_or_create_domain(context, &id);
+            }
         }
     }
 
@@ -49,9 +53,16 @@ pub(crate) fn run(
             } => {
                 let id = context.identifiers.get_interned(id);
 
-                let domain_id = get_or_create_domain(context, &id);
+                if !is_defined_as_literal(context, &id) {
+                    let domain_id = get_or_create_domain(context, &id);
 
-                if is_output_variable(annos) {
+                    if is_output_variable(annos) {
+                        context.outputs.push(Output::int(id, domain_id));
+                    }
+                } else if is_output_variable(annos) {
+                    // The output needs a domain, which is created from the literal.
+                    let _ = get_or_create_literal(context, &id)?;
+                    let domain_id = context.resolve_integer_variable_from_identifier(&id)?;
                     context.outputs.push(Output::int(id, domain_id));
                 }
             }
@@ -81,6 +92,12 @@ fn get_or_create_literal(
 
     let domain_id = get_or_create_domain(context, id);
     Ok(Literal::new(predicate![domain_id >= 1]))
+}
+
+fn is_defined_as_literal(context: &CompilationContext, id: &str) -> bool {
+    context
+        .reified_literals
+        .contains_key(&context.equivalences.representative(id))
 }
 
 fn get_or_create_domain(context: &mut CompilationContext, id: &str) -> DomainId {

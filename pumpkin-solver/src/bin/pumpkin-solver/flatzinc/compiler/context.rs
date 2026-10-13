@@ -4,11 +4,14 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use log::warn;
+use pumpkin_constraints::clause;
 use pumpkin_solver::Solver;
+use pumpkin_solver::core::constraints::Constraint;
 use pumpkin_solver::core::containers::HashMap;
 use pumpkin_solver::core::containers::HashSet;
 use pumpkin_solver::core::predicate;
 use pumpkin_solver::core::proof::ConstraintTag;
+use pumpkin_solver::core::variables::AnyInteger;
 use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::core::variables::Literal;
 
@@ -377,14 +380,14 @@ impl CompilationContext<'_> {
                 expected_type: "integer".into(),
             });
         }
-        if let Some(domain_id) = self
-            .variable_map
-            .get(&self.equivalences.representative(identifier))
-        {
+        let representative = self.equivalences.representative(identifier);
+        if let Some(domain_id) = self.variable_map.get(&representative) {
             Ok(*domain_id)
+        } else if let Some(&literal) = self.boolean_literals.get(&representative) {
+            Ok(self.create_integer_for_literal(representative, literal))
         } else {
             self.integer_parameters
-                .get(&self.equivalences.representative(identifier))
+                .get(&representative)
                 .map(|value| {
                     *self.constant_domain_ids.entry(*value).or_insert_with(|| {
                         self.solver
@@ -395,6 +398,99 @@ impl CompilationContext<'_> {
                     identifier: identifier.into(),
                     expected_type: "integer variable".into(),
                 })
+        }
+    }
+
+    /// Creates the 0-1 domain for an integer variable in an equivalence class which is defined as
+    /// the given literal (see [`CompilationContext::reified_literals`]). The domain is 1 if and
+    /// only if the literal is true.
+    ///
+    /// This is only done when a constraint needs the integer variable as a [`DomainId`]; otherwise
+    /// it is used as a view of the literal (see
+    /// [`CompilationContext::resolve_integer_view_from_identifier`]).
+    fn create_integer_for_literal(
+        &mut self,
+        representative: Rc<str>,
+        literal: Literal,
+    ) -> DomainId {
+        let domain_id = self
+            .solver
+            .new_named_bounded_integer(0, 1, representative.to_string());
+        let constraint_tag = self.solver.new_constraint_tag();
+        let is_one = Literal::new(predicate![domain_id >= 1]);
+
+        clause([!literal, is_one], constraint_tag).post(self.solver);
+        clause([literal, !is_one], constraint_tag).post(self.solver);
+
+        let _ = self.variable_map.insert(representative, domain_id);
+        domain_id
+    }
+
+    /// Resolves an integer variable, which is a 0-1 view of a literal if its equivalence class is
+    /// defined as a literal (see [`CompilationContext::reified_literals`]), and a domain otherwise.
+    pub(crate) fn resolve_integer_view(
+        &mut self,
+        expr: &flatzinc::Expr,
+    ) -> Result<AnyInteger, FlatZincError> {
+        match expr {
+            flatzinc::Expr::VarParIdentifier(id) => self.resolve_integer_view_from_identifier(id),
+            _ => Ok(self.resolve_integer_variable(expr)?.into()),
+        }
+    }
+
+    /// See [`CompilationContext::resolve_integer_view`].
+    pub(crate) fn resolve_integer_view_from_identifier(
+        &mut self,
+        identifier: &str,
+    ) -> Result<AnyInteger, FlatZincError> {
+        if self.equivalences.is_defined(identifier)
+            && let Some(&literal) = self
+                .boolean_literals
+                .get(&self.equivalences.representative(identifier))
+        {
+            return Ok(literal.into());
+        }
+
+        Ok(self
+            .resolve_integer_variable_from_identifier(identifier)?
+            .into())
+    }
+
+    /// Resolves an array of integer variables, where each element is resolved as in
+    /// [`CompilationContext::resolve_integer_view`].
+    ///
+    /// The elements of named arrays are always domains (see `define_variable_arrays`).
+    pub(crate) fn resolve_integer_view_array(
+        &mut self,
+        expr: &flatzinc::Expr,
+    ) -> Result<Vec<AnyInteger>, FlatZincError> {
+        match expr {
+            flatzinc::Expr::ArrayOfInt(array) => array
+                .iter()
+                .map(|elem| match elem {
+                    flatzinc::IntExpr::VarParIdentifier(id) => {
+                        self.resolve_integer_view_from_identifier(id)
+                    }
+                    flatzinc::IntExpr::Int(_) => Ok(self.resolve_int_expr(elem)?.into()),
+                })
+                .collect(),
+
+            // See `resolve_integer_variable_array` for why this variant can occur.
+            flatzinc::Expr::ArrayOfBool(array) => array
+                .iter()
+                .map(|elem| match elem {
+                    flatzinc::BoolExpr::VarParIdentifier(id) => {
+                        self.resolve_integer_view_from_identifier(id)
+                    }
+                    flatzinc::BoolExpr::Bool(_) => Err(FlatZincError::UnexpectedExpr),
+                })
+                .collect(),
+
+            _ => Ok(self
+                .resolve_integer_variable_array(expr)?
+                .iter()
+                .map(|&domain_id| domain_id.into())
+                .collect()),
         }
     }
 
@@ -527,8 +623,6 @@ pub(super) struct EquivalenceClass {
     variables: BTreeSet<Rc<str>>,
     /// The domain to associate with these variables.
     domain: Domain,
-    /// Whether any of the variables is an integer variable (rather than a boolean variable).
-    contains_integer: bool,
 }
 
 impl VariableEquivalences {
@@ -543,8 +637,6 @@ impl VariableEquivalences {
         let equiv_2 = Rc::clone(&self.classes[&variable_2]);
 
         let merged_domain = equiv_1.borrow().domain.merge(&equiv_2.borrow().domain);
-        let contains_integer =
-            equiv_1.borrow().contains_integer || equiv_2.borrow().contains_integer;
         let merged_variables: BTreeSet<Rc<str>> = equiv_1
             .borrow()
             .variables
@@ -556,7 +648,6 @@ impl VariableEquivalences {
         let new_equivalence_class = Rc::new(RefCell::new(EquivalenceClass {
             variables: merged_variables.clone(),
             domain: merged_domain,
-            contains_integer,
         }));
 
         // Update the equivalence class for all the variables in the class.
@@ -567,45 +658,28 @@ impl VariableEquivalences {
         }
     }
 
-    /// Create a new equivalence class for the integer variable `representative`.
+    /// Create a new equivalence class with the given representative.
     pub(crate) fn create_equivalence_class(&mut self, representative: Rc<str>, lb: i32, ub: i32) {
-        self.insert_class(representative, Domain::IntervalDomain { lb, ub }, true);
-    }
-
-    /// Create a new equivalence class for the integer variable `representative`.
-    pub(crate) fn create_equivalence_class_sparse(
-        &mut self,
-        representative: Rc<str>,
-        values: Vec<i32>,
-    ) {
-        self.insert_class(representative, Domain::SparseDomain { values }, true);
-    }
-
-    /// Create a new equivalence class for the boolean variable `representative`.
-    pub(crate) fn create_boolean_equivalence_class(
-        &mut self,
-        representative: Rc<str>,
-        lb: i32,
-        ub: i32,
-    ) {
-        self.insert_class(representative, Domain::IntervalDomain { lb, ub }, false);
-    }
-
-    fn insert_class(&mut self, representative: Rc<str>, domain: Domain, contains_integer: bool) {
         let equivalence_class = Rc::new(RefCell::new(EquivalenceClass {
             variables: [Rc::clone(&representative)].into_iter().collect(),
-            domain,
-            contains_integer,
+            domain: Domain::IntervalDomain { lb, ub },
         }));
 
         let _ = self.classes.insert(representative, equivalence_class);
     }
 
-    /// Returns whether the equivalence class of the given variable contains an integer variable
-    /// (e.g. a boolean merged with an integer through `bool2int`).
-    /// If the variable doesn't belong to an equivalence class, this method panics.
-    pub(crate) fn contains_integer(&self, variable: &str) -> bool {
-        self.classes[variable].borrow().contains_integer
+    /// Create a new equivalence class with the given representative.
+    pub(crate) fn create_equivalence_class_sparse(
+        &mut self,
+        representative: Rc<str>,
+        values: Vec<i32>,
+    ) {
+        let equivalence_class = Rc::new(RefCell::new(EquivalenceClass {
+            variables: [Rc::clone(&representative)].into_iter().collect(),
+            domain: Domain::SparseDomain { values },
+        }));
+
+        let _ = self.classes.insert(representative, equivalence_class);
     }
 
     /// Get the name of the representative variable of the equivalence class the given variable

@@ -96,15 +96,10 @@ pub(crate) fn run(
                                     ),
                                 )
                             }
+                            // This creates the domain of an integer which is a view of a literal
+                            // (see `CompilationContext::resolve_integer_view`).
                             IntExpr::VarParIdentifier(identifier) => {
-                                let other_id = context.identifiers.get_interned(identifier);
-                                let representative = context.equivalences.representative(&other_id);
-
-                                Ok(context
-                                    .variable_map
-                                    .get(&representative)
-                                    .copied()
-                                    .expect("referencing undefined boolean variable"))
+                                context.resolve_integer_variable_from_identifier(identifier)
                             }
                         })
                         .collect::<Result<Rc<[_]>, FlatZincError>>()?,

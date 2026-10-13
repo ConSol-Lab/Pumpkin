@@ -3,13 +3,15 @@
 use std::rc::Rc;
 
 use pumpkin_propagators::disjunctive::ArgDisjunctiveTask;
+use pumpkin_solver::Solver;
 use pumpkin_solver::core::constraints::Constraint;
 use pumpkin_solver::core::constraints::NegatableConstraint;
 use pumpkin_solver::core::predicate;
 use pumpkin_solver::core::predicates::Predicate;
 use pumpkin_solver::core::proof::ConstraintTag;
-use pumpkin_solver::core::variables::AffineView;
+use pumpkin_solver::core::variables::AnyInteger;
 use pumpkin_solver::core::variables::DomainId;
+use pumpkin_solver::core::variables::IntegerVariable;
 use pumpkin_solver::core::variables::Literal;
 use pumpkin_solver::core::variables::TransformableVariable;
 
@@ -119,7 +121,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_eq_imp",
                 constraint_tag,
-                pumpkin_constraints::equals,
+                IntComparison::Equal,
             )?,
             "int_lin_ge_imp" => compile_int_lin_imp_predicate(
                 context,
@@ -127,7 +129,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_ge_imp",
                 constraint_tag,
-                pumpkin_constraints::greater_than_or_equals,
+                IntComparison::GreaterThanOrEqual,
             )?,
             "int_lin_gt_imp" => compile_int_lin_imp_predicate(
                 context,
@@ -135,7 +137,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_gt_imp",
                 constraint_tag,
-                pumpkin_constraints::greater_than,
+                IntComparison::GreaterThan,
             )?,
             "int_lin_le_imp" => compile_int_lin_imp_predicate(
                 context,
@@ -143,7 +145,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_le_imp",
                 constraint_tag,
-                pumpkin_constraints::less_than_or_equals,
+                IntComparison::LessThanOrEqual,
             )?,
             "int_lin_lt_imp" => compile_int_lin_imp_predicate(
                 context,
@@ -151,7 +153,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_lt_imp",
                 constraint_tag,
-                pumpkin_constraints::less_than,
+                IntComparison::LessThan,
             )?,
             "int_lin_ne_imp" => compile_int_lin_imp_predicate(
                 context,
@@ -159,7 +161,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_ne_imp",
                 constraint_tag,
-                pumpkin_constraints::not_equals,
+                IntComparison::NotEqual,
             )?,
 
             "int_lin_ne" => compile_int_lin_predicate(
@@ -168,7 +170,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_ne",
                 constraint_tag,
-                pumpkin_constraints::not_equals,
+                IntComparison::NotEqual,
             )?,
             "int_lin_ne_reif" => compile_reified_int_lin_predicate(
                 context,
@@ -176,7 +178,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_ne_reif",
                 constraint_tag,
-                pumpkin_constraints::not_equals,
+                IntComparison::NotEqual,
             )?,
             "int_lin_le" => compile_int_lin_predicate(
                 context,
@@ -184,7 +186,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_le",
                 constraint_tag,
-                pumpkin_constraints::less_than_or_equals,
+                IntComparison::LessThanOrEqual,
             )?,
             "int_lin_le_reif" => compile_reified_int_lin_predicate(
                 context,
@@ -192,7 +194,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_le_reif",
                 constraint_tag,
-                pumpkin_constraints::less_than_or_equals,
+                IntComparison::LessThanOrEqual,
             )?,
             "int_lin_eq" => compile_int_lin_predicate(
                 context,
@@ -200,7 +202,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_eq",
                 constraint_tag,
-                pumpkin_constraints::equals,
+                IntComparison::Equal,
             )?,
             "int_lin_eq_reif" => compile_reified_int_lin_predicate(
                 context,
@@ -208,7 +210,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_eq_reif",
                 constraint_tag,
-                pumpkin_constraints::equals,
+                IntComparison::Equal,
             )?,
             "int_ne" => compile_binary_int_predicate(
                 context,
@@ -288,14 +290,7 @@ pub(crate) fn run(
                 pumpkin_constraints::plus,
             )?,
 
-            "int_times" => compile_ternary_int_predicate(
-                context,
-                exprs,
-                annos,
-                "int_times",
-                constraint_tag,
-                pumpkin_constraints::times,
-            )?,
+            "int_times" => compile_int_times(context, exprs, constraint_tag)?,
             "int_div" => compile_ternary_int_predicate(
                 context,
                 exprs,
@@ -810,78 +805,201 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
     Ok(())
 }
 
-fn weighted_vars(weights: Rc<[i32]>, vars: Rc<[DomainId]>) -> Box<[AffineView<DomainId>]> {
-    vars.iter()
-        .zip(weights.iter())
-        .filter(|&(_, w)| *w != 0)
-        .map(|(x_i, &w_i)| x_i.scaled(w_i))
-        .collect::<Box<[_]>>()
+/// How a constraint is added to the solver.
+#[derive(Clone, Copy, Debug)]
+enum Reification {
+    /// The constraint has to hold.
+    None,
+    /// The constraint holds if and only if the literal is true.
+    Reified(Literal),
+    /// The constraint holds if the literal is true.
+    ImpliedBy(Literal),
 }
 
-fn compile_int_lin_predicate<C: Constraint>(
+impl Reification {
+    fn add(self, constraint: impl NegatableConstraint, solver: &mut Solver) {
+        match self {
+            Reification::None => constraint.post(solver),
+            Reification::Reified(literal) => constraint.reify(solver, literal),
+            Reification::ImpliedBy(literal) => constraint.implied_by(solver, literal),
+        }
+    }
+}
+
+fn compile_int_lin_predicate(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
     _: &[flatzinc::Annotation],
     predicate_name: &str,
     constraint_tag: ConstraintTag,
-    create_constraint: impl FnOnce(Box<[AffineView<DomainId>]>, i32, ConstraintTag) -> C,
+    comparison: IntComparison,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
-    let weights = context.resolve_array_integer_constants(&exprs[0])?;
-    let vars = context.resolve_integer_variable_array(&exprs[1])?;
-    let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
-
-    let terms = weighted_vars(weights, vars);
-
-    let constraint = create_constraint(terms, rhs, constraint_tag);
-    constraint.post(context.solver);
-
-    Ok(())
+    post_int_lin(
+        context,
+        exprs,
+        constraint_tag,
+        comparison,
+        Reification::None,
+    )
 }
 
-fn compile_reified_int_lin_predicate<C: NegatableConstraint>(
+fn compile_reified_int_lin_predicate(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
     _: &[flatzinc::Annotation],
     predicate_name: &str,
     constraint_tag: ConstraintTag,
-    create_constraint: impl FnOnce(Box<[AffineView<DomainId>]>, i32, ConstraintTag) -> C,
+    comparison: IntComparison,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 4, predicate_name);
 
-    let weights = context.resolve_array_integer_constants(&exprs[0])?;
-    let vars = context.resolve_integer_variable_array(&exprs[1])?;
-    let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
     let reif = context.resolve_bool_variable(&exprs[3])?;
-
-    let terms = weighted_vars(weights, vars);
-
-    let constraint = create_constraint(terms, rhs, constraint_tag);
-    constraint.reify(context.solver, reif);
-
-    Ok(())
+    post_int_lin(
+        context,
+        exprs,
+        constraint_tag,
+        comparison,
+        Reification::Reified(reif),
+    )
 }
 
-fn compile_int_lin_imp_predicate<C: Constraint>(
+fn compile_int_lin_imp_predicate(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
     _: &[flatzinc::Annotation],
     predicate_name: &str,
     constraint_tag: ConstraintTag,
-    create_constraint: impl FnOnce(Box<[AffineView<DomainId>]>, i32, ConstraintTag) -> C,
+    comparison: IntComparison,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 4, predicate_name);
 
-    let weights = context.resolve_array_integer_constants(&exprs[0])?;
-    let vars = context.resolve_integer_variable_array(&exprs[1])?;
-    let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
     let reif = context.resolve_bool_variable(&exprs[3])?;
+    post_int_lin(
+        context,
+        exprs,
+        constraint_tag,
+        comparison,
+        Reification::ImpliedBy(reif),
+    )
+}
 
-    let terms = weighted_vars(weights, vars);
+/// Adds `sum(weights[i] * variables[i]) comparison rhs` where `exprs = [weights, variables, rhs,
+/// ..]`.
+///
+/// The variables can be views of literals (see `CompilationContext::resolve_integer_view`), in
+/// which case the terms are [`AnyInteger`]s. Otherwise, the terms are domains, which avoids the
+/// overhead of [`AnyInteger`].
+fn post_int_lin(
+    context: &mut CompilationContext,
+    exprs: &[flatzinc::Expr],
+    constraint_tag: ConstraintTag,
+    comparison: IntComparison,
+    reification: Reification,
+) -> Result<(), FlatZincError> {
+    let weights = context.resolve_array_integer_constants(&exprs[0])?;
+    let variables = context.resolve_integer_view_array(&exprs[1])?;
+    let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
 
-    let constraint = create_constraint(terms, rhs, constraint_tag);
-    constraint.implied_by(context.solver, reif);
+    let domains = variables
+        .iter()
+        .map(|variable| match variable {
+            AnyInteger::Int(domain) => Some(*domain),
+            AnyInteger::Literal(_) => None,
+        })
+        .collect::<Option<Vec<_>>>();
+
+    match domains {
+        Some(domains) => post_linear(
+            weighted_terms(&weights, domains),
+            rhs,
+            comparison,
+            constraint_tag,
+            reification,
+            context.solver,
+        ),
+        None => post_linear(
+            weighted_terms(&weights, variables),
+            rhs,
+            comparison,
+            constraint_tag,
+            reification,
+            context.solver,
+        ),
+    }
+
+    Ok(())
+}
+
+fn weighted_terms<Var: TransformableVariable<View>, View>(
+    weights: &[i32],
+    variables: impl IntoIterator<Item = Var>,
+) -> Box<[View]> {
+    variables
+        .into_iter()
+        .zip(weights)
+        .filter(|&(_, &weight)| weight != 0)
+        .map(|(variable, &weight)| variable.scaled(weight))
+        .collect()
+}
+
+fn post_linear<Var: IntegerVariable + Clone + 'static>(
+    terms: Box<[Var]>,
+    rhs: i32,
+    comparison: IntComparison,
+    constraint_tag: ConstraintTag,
+    reification: Reification,
+    solver: &mut Solver,
+) {
+    match comparison {
+        IntComparison::Equal => reification.add(
+            pumpkin_constraints::equals(terms, rhs, constraint_tag),
+            solver,
+        ),
+        IntComparison::NotEqual => reification.add(
+            pumpkin_constraints::not_equals(terms, rhs, constraint_tag),
+            solver,
+        ),
+        IntComparison::LessThanOrEqual => reification.add(
+            pumpkin_constraints::less_than_or_equals(terms, rhs, constraint_tag),
+            solver,
+        ),
+        IntComparison::LessThan => reification.add(
+            pumpkin_constraints::less_than(terms, rhs, constraint_tag),
+            solver,
+        ),
+        IntComparison::GreaterThanOrEqual => reification.add(
+            pumpkin_constraints::greater_than_or_equals(terms, rhs, constraint_tag),
+            solver,
+        ),
+        IntComparison::GreaterThan => reification.add(
+            pumpkin_constraints::greater_than(terms, rhs, constraint_tag),
+            solver,
+        ),
+    }
+}
+
+/// Compiles `int_times(a, b, c)`, where the variables can be views of literals (see
+/// `CompilationContext::resolve_integer_view`), e.g. `c = x * bool2int(r)`.
+fn compile_int_times(
+    context: &mut CompilationContext,
+    exprs: &[flatzinc::Expr],
+    constraint_tag: ConstraintTag,
+) -> Result<(), FlatZincError> {
+    check_parameters!(exprs, 3, "int_times");
+
+    let a = context.resolve_integer_view(&exprs[0])?;
+    let b = context.resolve_integer_view(&exprs[1])?;
+    let c = context.resolve_integer_view(&exprs[2])?;
+
+    match (a, b, c) {
+        // Use the domains directly to avoid the overhead of `AnyInteger`.
+        (AnyInteger::Int(a), AnyInteger::Int(b), AnyInteger::Int(c)) => {
+            pumpkin_constraints::times(a, b, c, constraint_tag).post(context.solver)
+        }
+        (a, b, c) => pumpkin_constraints::times(a, b, c, constraint_tag).post(context.solver),
+    }
 
     Ok(())
 }

@@ -4,6 +4,10 @@
 //! For example, `int_le_reif(x, 5, r)` defines `r` as the literal `[x <= 5]`. The boolean then
 //! does not need a domain of its own, and the defining constraint is removed.
 
+use std::rc::Rc;
+
+use pumpkin_solver::core::containers::HashSet;
+
 use super::constant_comparison::ConstantComparison;
 use super::constant_comparison::IntComparison;
 use super::context::CompilationContext;
@@ -21,9 +25,14 @@ pub(crate) fn run(
         return Ok(());
     }
 
+    // The equivalence classes of the integer variables in the comparisons of the definitions.
+    let mut compared_classes = HashSet::default();
+
     // The constraints are taken out since defining the literals requires the whole context.
     let mut constraints = std::mem::take(&mut context.constraints);
-    constraints.retain(|(_, constraint)| !define_reified_literal(constraint, context));
+    constraints.retain(|(_, constraint)| {
+        !define_reified_literal(constraint, context, &mut compared_classes)
+    });
     context.constraints = constraints;
 
     Ok(())
@@ -34,6 +43,7 @@ pub(crate) fn run(
 fn define_reified_literal(
     constraint: &flatzinc::ConstraintItem,
     context: &mut CompilationContext,
+    compared_classes: &mut HashSet<Rc<str>>,
 ) -> bool {
     let comparison = match constraint.id.as_str() {
         "int_eq_reif" => IntComparison::Equal,
@@ -49,20 +59,27 @@ fn define_reified_literal(
         && let Some(comparison) = ConstantComparison::new(comparison, lhs, rhs, context)
     {
         let representative = context.equivalences.representative(boolean);
+        let compared_class = context.equivalences.representative(comparison.variable());
         // The boolean can only be defined as the literal of the comparison if:
-        // - it is not merged with an integer variable (e.g. through `bool2int`), which needs a
-        //   domain to represent it;
-        // - its domain is not fixed, as the literal would not enforce that value;
+        // - its domain is exactly {0, 1}; a fixed domain would not be enforced by the literal. This
+        //   also holds for an integer merged with the boolean (e.g. through `bool2int`), which then
+        //   becomes a 0-1 view of the literal;
         // - it is not already defined by another constraint; that constraint will instead be posted
         //   as clauses linking the two literals;
-        // - the comparison is not over the boolean itself.
-        let can_be_defined = !context.equivalences.contains_integer(boolean)
-            && context.equivalences.domain(boolean) == Domain::IntervalDomain { lb: 0, ub: 1 }
+        // - no class is both defined as a literal and compared in the definition of a literal,
+        //   which also excludes a comparison over the boolean itself. This means that the literals
+        //   do not depend on each other, so the order in which they are created (see
+        //   `collect_domains`) does not matter.
+        let can_be_defined = context.equivalences.domain(boolean)
+            == Domain::IntervalDomain { lb: 0, ub: 1 }
             && !context.reified_literals.contains_key(&representative)
-            && context.equivalences.representative(comparison.variable()) != representative;
+            && !compared_classes.contains(&representative)
+            && !context.reified_literals.contains_key(&compared_class)
+            && compared_class != representative;
 
         if can_be_defined {
             let _ = context.reified_literals.insert(representative, comparison);
+            let _ = compared_classes.insert(compared_class);
         }
 
         can_be_defined
@@ -83,7 +100,7 @@ mod tests {
     use crate::flatzinc::ast::SingleVarDecl;
 
     #[test]
-    fn only_booleans_without_integer_view_or_earlier_definition_are_defined() {
+    fn only_booleans_without_earlier_definition_or_chained_comparison_are_defined() {
         let mut ast_builder = FlatZincAst::builder();
 
         ast_builder.add_variable_decl(SingleVarDecl::IntInRange {
@@ -100,7 +117,7 @@ mod tests {
             expr: None,
             annos: vec![],
         });
-        for id in ["r", "s"] {
+        for id in ["r", "s", "t"] {
             ast_builder.add_variable_decl(SingleVarDecl::Bool {
                 id: id.into(),
                 expr: None,
@@ -114,9 +131,12 @@ mod tests {
             ("int_le_reif", vec![var("x"), Expr::Int(5), var("r")]),
             // `r` is already defined.
             ("int_ne_reif", vec![var("x"), Expr::Int(1), var("r")]),
-            // `s` is merged with the integer `i`.
+            // Defines `s`, which is merged with the integer `i` that becomes a view of the
+            // literal.
             ("int_eq_reif", vec![Expr::Int(3), var("x"), var("s")]),
             ("bool2int", vec![var("s"), var("i")]),
+            // `i` is in the class of `s`, which is already defined as a literal.
+            ("int_eq_reif", vec![var("i"), Expr::Int(1), var("t")]),
         ] {
             ast_builder.add_constraint(ConstraintItem {
                 id: id.into(),
@@ -141,8 +161,14 @@ mod tests {
             .expect("step should not fail");
         run(&mut context, &options).expect("step should not fail");
 
-        let defined = context.reified_literals.keys().cloned().collect::<Vec<_>>();
-        assert_eq!(defined, vec![context.equivalences.representative("r")]);
+        let mut defined = context.reified_literals.keys().cloned().collect::<Vec<_>>();
+        defined.sort();
+        let mut expected = vec![
+            context.equivalences.representative("r"),
+            context.equivalences.representative("s"),
+        ];
+        expected.sort();
+        assert_eq!(defined, expected);
 
         let remaining = context
             .constraints
@@ -150,5 +176,6 @@ mod tests {
             .map(|(_, constraint)| constraint.id.as_str())
             .collect::<Vec<_>>();
         assert_eq!(remaining, vec!["int_ne_reif", "int_eq_reif"]);
+        assert_eq!(context.constraints[1].1.exprs[2], var("t"));
     }
 }

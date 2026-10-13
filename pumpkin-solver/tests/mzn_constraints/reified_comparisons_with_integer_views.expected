@@ -1,0 +1,28 @@
+x = 1;
+y = 1;
+z = 1;
+i = 0;
+e = false;
+g = true;
+t = false;
+ks = array1d(1..2, [1, 1]);
+----------
+x = 1;
+y = 2;
+z = 2;
+i = 0;
+e = false;
+g = true;
+t = false;
+ks = array1d(1..2, [1, 1]);
+----------
+x = 2;
+y = 0;
+z = 0;
+i = 1;
+e = true;
+g = false;
+t = true;
+ks = array1d(1..2, [1, 2]);
+----------
+==========

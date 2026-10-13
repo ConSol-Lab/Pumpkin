@@ -1,0 +1,31 @@
+var 0..3: x :: output_var;
+var 0..3: y :: output_var;
+var 0..6: z :: output_var;
+var 0..1: i :: output_var;
+var 0..1: j;
+var 0..1: k;
+var bool: e :: output_var;
+var bool: g :: output_var;
+var bool: h;
+var bool: t :: output_var;
+array [1..2] of var int: ks :: output_array([1..2]) = [k, x];
+
+% Reified booleans merged with integers through `bool2int`; the integers become views of the
+% literals.
+constraint int_eq_reif(x, 2, e);
+constraint bool2int(e, i);
+constraint int_le_reif(1, y, g);
+constraint bool2int(g, j);
+constraint int_ne_reif(x, 0, h);
+constraint bool2int(h, k);
+
+% Constraints over the views.
+constraint int_lin_eq([1, 1, 1], [i, j, k], 2);
+constraint int_times(y, j, z);
+constraint int_lin_le([1, -1], [z, x], 1);
+constraint int_lin_le([1, 1], ks, 3);
+
+% A comparison over a view, which cannot define `t` itself.
+constraint int_eq_reif(i, 1, t);
+
+solve satisfy;
