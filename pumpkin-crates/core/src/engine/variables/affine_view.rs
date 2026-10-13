@@ -191,13 +191,16 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
                 .into_iter();
         }
 
-        // With a scale other than 1 or -1, every value between the bounds that is not the image of
-        // a value in the inner domain is a hole. Without finite bounds they cannot be listed.
+        // With a scale other than 1 or -1, every value between the bounds that cannot be
+        // represented is a hole. For example, x = 2y and y \in {1, 2, 3}, then the domain
+        // of x is {2, 4, 6}, meaning the holes are {1, 3, 5}.
+        // Without finite bounds they cannot be listed, e.g., x \in [2, \inf],
+        // so we panic currently until we find a better way to handle holes.
         let (IntExt::Int(lower_bound), IntExt::Int(upper_bound)) = (
             self.induced_lower_bound(variable_state),
             self.induced_upper_bound(variable_state),
         ) else {
-            return Vec::new().into_iter();
+            panic!("Cannot list holes for an unbounded domain.");
         };
 
         (lower_bound + 1..upper_bound)
