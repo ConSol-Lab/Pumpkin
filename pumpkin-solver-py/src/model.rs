@@ -179,45 +179,21 @@ impl Model {
         self.solver.is_inconsistent()
     }
 
-    /// Get an integer variable for the given boolean.
+    /// Get the boolean expression which is true if and only if the predicate is true.
     ///
-    /// The integer is 1 if the boolean is `true`, and 0 if the boolean is `false`.
-    ///
-    /// This is deprecated as of 0.3.0. Prefer to use `BoolExpression.as_integer`.
-    fn boolean_as_integer(&mut self, boolean: BoolExpression) -> IntExpression {
-        boolean.as_integer()
-    }
-
-    /// Reify a predicate as an explicit boolean expression.
-    ///
-    /// A tag should be provided for this link to be identifiable in the proof.
+    /// No new variable is created for the boolean, so the `tag` and `name` are unused. They are
+    /// kept for backwards compatibility.
     #[pyo3(signature = (predicate, tag, name=None))]
+    #[allow(unused_variables, reason = "kept for backwards compatibility")]
     fn predicate_as_boolean(
         &mut self,
         predicate: Predicate,
         tag: Tag,
         name: Option<&str>,
-    ) -> PyResult<BoolExpression> {
-        if self.solver.is_inconsistent() {
-            return Err(PyValueError::new_err(
-                "Cannot reify predicate: solver is in an infeasible state",
-            ));
-        }
-
-        let solver_predicate = predicate.into_solver_predicate();
-        let Tag(tag) = tag;
-
-        let literal = if let Some(name) = name {
-            self.solver
-                .new_named_literal_for_predicate(solver_predicate, tag, name)
-        } else {
-            self.solver.new_literal_for_predicate(solver_predicate, tag)
-        };
-
-        self.brancher
-            .add_domain(*literal.get_integer_variable().inner());
-
-        Ok(literal.into())
+    ) -> BoolExpression {
+        self.solver
+            .new_literal_for_predicate(predicate.into_solver_predicate())
+            .into()
     }
 
     /// Add the given constraint to the model.

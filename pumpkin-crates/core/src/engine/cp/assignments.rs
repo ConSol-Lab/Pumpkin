@@ -663,6 +663,17 @@ impl Assignments {
         }
     }
 
+    /// Returns whether the predicate is assigned (either true or false) at the end of the given
+    /// checkpoint.
+    pub(crate) fn is_fixed_at_checkpoint(&self, predicate: Predicate, checkpoint: usize) -> bool {
+        self.trail
+            .last_position_at_checkpoint(checkpoint)
+            .is_some_and(|position| {
+                self.evaluate_predicate_at_trail_position(predicate, position)
+                    .is_some()
+            })
+    }
+
     /// Determines whether the provided [`Predicate`] holds at the provided trail position. In case
     /// the predicate is not assigned yet (neither true nor false), returns None.
     pub(crate) fn evaluate_predicate_at_trail_position(
@@ -1596,6 +1607,32 @@ mod tests {
 
         assert_contains_events(&events, d1, [DomainEvent::LowerBound]);
         assert_contains_events(&events, d1, [DomainEvent::Removal]);
+    }
+
+    #[test]
+    fn predicates_are_fixed_at_the_checkpoint_where_they_are_assigned() {
+        let mut notification_engine = NotificationEngine::default();
+        let mut assignment = Assignments::default();
+        let d = assignment.grow(1, 5);
+        notification_engine.grow();
+
+        let _ = assignment
+            .post_predicate(predicate!(d >= 2), None, &mut notification_engine)
+            .expect("non-empty domain");
+        assignment.new_checkpoint();
+        let _ = assignment
+            .post_predicate(predicate!(d >= 3), None, &mut notification_engine)
+            .expect("non-empty domain");
+
+        // True and false, respectively, at the root.
+        assert!(assignment.is_fixed_at_checkpoint(predicate!(d >= 2), 0));
+        assert!(assignment.is_fixed_at_checkpoint(predicate!(d <= 1), 0));
+
+        assert!(!assignment.is_fixed_at_checkpoint(predicate!(d >= 3), 0));
+        assert!(assignment.is_fixed_at_checkpoint(predicate!(d >= 3), 1));
+
+        assert!(!assignment.is_fixed_at_checkpoint(predicate!(d >= 4), 0));
+        assert!(!assignment.is_fixed_at_checkpoint(predicate!(d >= 4), 1));
     }
 
     #[test]

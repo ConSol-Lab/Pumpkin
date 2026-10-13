@@ -6,6 +6,7 @@ use flatzinc::Annotation;
 use pumpkin_core::Solver;
 use pumpkin_core::containers::HashMap;
 use pumpkin_core::variables::DomainId;
+use pumpkin_solver::core::predicate;
 use pumpkin_solver::core::variables::Literal;
 
 use super::context::CompilationContext;
@@ -19,27 +20,23 @@ pub(crate) fn run(
     ast: &FlatZincAst,
     context: &mut CompilationContext,
 ) -> Result<(), FlatZincError> {
+    // The literals of booleans defined over a comparison need the domain of the integer variable,
+    // so the integer domains are created first.
+    for single_var_decl in &ast.single_variables {
+        if let SingleVarDecl::IntInRange { id, .. } | SingleVarDecl::IntInSet { id, .. } =
+            single_var_decl
+        {
+            let id = context.identifiers.get_interned(id);
+            let _ = get_or_create_domain(context, &id);
+        }
+    }
+
     for single_var_decl in &ast.single_variables {
         match single_var_decl {
             SingleVarDecl::Bool { id, annos, .. } => {
                 let id = context.identifiers.get_interned(id);
 
-                let representative = context.equivalences.representative(&id);
-                let domain = context.equivalences.domain(&id);
-
-                let domain_id = *context
-                    .variable_map
-                    .entry(Rc::clone(&representative))
-                    .or_insert_with(|| {
-                        create_integer_domain(
-                            context.solver,
-                            &mut context.constant_domain_ids,
-                            representative,
-                            domain,
-                        )
-                    });
-
-                let literal = Literal::new(domain_id);
+                let literal = get_or_create_literal(context, &id)?;
 
                 if is_output_variable(annos) {
                     context.outputs.push(Output::bool(id, literal));
@@ -52,20 +49,7 @@ pub(crate) fn run(
             } => {
                 let id = context.identifiers.get_interned(id);
 
-                let representative = context.equivalences.representative(&id);
-                let domain = context.equivalences.domain(&id);
-
-                let domain_id = *context
-                    .variable_map
-                    .entry(Rc::clone(&representative))
-                    .or_insert_with(|| {
-                        create_integer_domain(
-                            context.solver,
-                            &mut context.constant_domain_ids,
-                            representative,
-                            domain,
-                        )
-                    });
+                let domain_id = get_or_create_domain(context, &id);
 
                 if is_output_variable(annos) {
                     context.outputs.push(Output::int(id, domain_id));
@@ -75,6 +59,45 @@ pub(crate) fn run(
     }
 
     Ok(())
+}
+
+/// Returns the literal for the given boolean variable, which is either defined over a comparison
+/// (see [`CompilationContext::reified_literals`]) or over the domain of the boolean.
+fn get_or_create_literal(
+    context: &mut CompilationContext,
+    id: &str,
+) -> Result<Literal, FlatZincError> {
+    let representative = context.equivalences.representative(id);
+
+    if let Some(literal) = context.boolean_literals.get(&representative) {
+        return Ok(*literal);
+    }
+
+    if let Some(comparison) = context.reified_literals.get(&representative).cloned() {
+        let literal = comparison.to_literal(context)?;
+        let _ = context.boolean_literals.insert(representative, literal);
+        return Ok(literal);
+    }
+
+    let domain_id = get_or_create_domain(context, id);
+    Ok(Literal::new(predicate![domain_id >= 1]))
+}
+
+fn get_or_create_domain(context: &mut CompilationContext, id: &str) -> DomainId {
+    let representative = context.equivalences.representative(id);
+    let domain = context.equivalences.domain(id);
+
+    *context
+        .variable_map
+        .entry(Rc::clone(&representative))
+        .or_insert_with(|| {
+            create_integer_domain(
+                context.solver,
+                &mut context.constant_domain_ids,
+                representative,
+                domain,
+            )
+        })
 }
 
 fn create_integer_domain(

@@ -1,5 +1,6 @@
 use pumpkin_solver::core::predicate;
 use pumpkin_solver::core::variables::AffineView;
+use pumpkin_solver::core::variables::AnyInteger;
 use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::core::variables::Literal;
 use pumpkin_solver::core::variables::TransformableVariable;
@@ -7,11 +8,17 @@ use pyo3::prelude::*;
 
 #[pyclass(eq, hash, frozen, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct IntExpression(pub AffineView<DomainId>);
+pub struct IntExpression(pub AffineView<AnyInteger>);
 
 impl From<DomainId> for IntExpression {
     fn from(domain_id: DomainId) -> IntExpression {
-        IntExpression(domain_id.into())
+        IntExpression(AnyInteger::from(domain_id).scaled(1))
+    }
+}
+
+impl From<BoolExpression> for IntExpression {
+    fn from(boolean: BoolExpression) -> IntExpression {
+        IntExpression(AnyInteger::from(boolean.0).scaled(1))
     }
 }
 
@@ -32,8 +39,17 @@ pub struct BoolExpression(pub Literal);
 
 #[pymethods]
 impl BoolExpression {
+    /// Get the integer which is 1 if the boolean is `true`, and 0 if the boolean is `false`.
     pub fn as_integer(&self) -> IntExpression {
-        IntExpression(self.0.get_integer_variable())
+        (*self).into()
+    }
+
+    pub fn scaled(&self, scale: i32) -> IntExpression {
+        self.as_integer().scaled(scale)
+    }
+
+    pub fn offset(&self, offset: i32) -> IntExpression {
+        self.as_integer().offset(offset)
     }
 
     pub fn negate(&self) -> BoolExpression {

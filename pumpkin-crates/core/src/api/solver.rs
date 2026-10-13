@@ -97,7 +97,7 @@ pub struct Solver {
 impl Default for Solver {
     fn default() -> Self {
         let satisfaction_solver = ConstraintSatisfactionSolver::default();
-        let true_literal = Literal::new(Predicate::trivially_true().get_domain());
+        let true_literal = Literal::new(Predicate::trivially_true());
         Self {
             satisfaction_solver,
             true_literal,
@@ -109,7 +109,7 @@ impl Solver {
     /// Creates a solver with the provided [`SolverOptions`].
     pub fn with_options(solver_options: SolverOptions) -> Self {
         let satisfaction_solver = ConstraintSatisfactionSolver::new(solver_options);
-        let true_literal = Literal::new(Predicate::trivially_true().get_domain());
+        let true_literal = Literal::new(Predicate::trivially_true());
         Self {
             satisfaction_solver,
             true_literal,
@@ -220,26 +220,20 @@ impl Solver {
         self.satisfaction_solver.create_new_literal(None)
     }
 
-    pub fn new_literal_for_predicate(
-        &mut self,
-        predicate: Predicate,
-        constraint_tag: ConstraintTag,
-    ) -> Literal {
-        self.satisfaction_solver
-            .create_new_literal_for_predicate(predicate, None, constraint_tag)
-    }
-
-    pub fn new_named_literal_for_predicate(
-        &mut self,
-        predicate: Predicate,
-        constraint_tag: ConstraintTag,
-        name: impl Into<String>,
-    ) -> Literal {
-        self.satisfaction_solver.create_new_literal_for_predicate(
-            predicate,
-            Some(name.into().into()),
-            constraint_tag,
-        )
+    /// Create a literal which is true if and only if the given predicate is true.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use pumpkin_core::Solver;
+    /// # use pumpkin_core::predicate;
+    /// let mut solver = Solver::default();
+    /// let x = solver.new_bounded_integer(0, 10);
+    ///
+    /// let literal = solver.new_literal_for_predicate(predicate![x >= 5]);
+    /// assert_eq!(literal.get_true_predicate(), predicate![x >= 5]);
+    /// ```
+    pub fn new_literal_for_predicate(&self, predicate: Predicate) -> Literal {
+        Literal::new(predicate)
     }
 
     /// Create a fresh propositional variable with a given name and return the literal with positive

@@ -19,7 +19,7 @@ use drcp_format::Inference;
 use drcp_format::writer::ProofWriter;
 pub(crate) use finalizer::*;
 pub use inference_code::*;
-use proof_atomics::ProofAtomics;
+use proof_atomics::map_predicate_to_proof_atomic;
 use pumpkin_checking::InvalidDeduction;
 use pumpkin_checking::SupportingInference;
 use pumpkin_checking::verify_deduction;
@@ -31,7 +31,6 @@ use crate::containers::KeyGenerator;
 use crate::engine::Assignments;
 use crate::engine::variable_names::VariableNames;
 use crate::predicates::Predicate;
-use crate::variables::Literal;
 
 /// A proof log which logs the proof steps necessary to prove unsatisfiability or optimality. We
 /// allow the following types of proofs:
@@ -66,7 +65,6 @@ impl ProofLog {
                 writer,
                 propagation_order_hint: if log_hints { Some(vec![]) } else { None },
                 logged_domain_inferences: HashMap::default(),
-                proof_atomics: ProofAtomics::default(),
             }),
             supporting_inferences: vec![],
         })
@@ -103,7 +101,6 @@ impl ProofLog {
         let Some(ProofImpl::CpProof {
             writer,
             propagation_order_hint: Some(propagation_sequence),
-            proof_atomics,
             ..
         }) = self.internal_proof.as_mut()
         else {
@@ -114,28 +111,12 @@ impl ProofLog {
             constraint_id: inference_tag.into(),
             premises: premises
                 .into_iter()
-                .filter(|&predicate| {
-                    !is_likely_a_constant(
-                        predicate,
-                        variable_names,
-                        assignments,
-                        Some(proof_atomics),
-                    )
-                })
-                .map(|premise| proof_atomics.map_predicate_to_proof_atomic(premise, variable_names))
+                .filter(|&predicate| !is_likely_a_constant(predicate, variable_names, assignments))
+                .map(|premise| map_predicate_to_proof_atomic(premise, variable_names))
                 .collect(),
             consequent: propagated
-                .filter(|&predicate| {
-                    !is_likely_a_constant(
-                        predicate,
-                        variable_names,
-                        assignments,
-                        Some(proof_atomics),
-                    )
-                })
-                .map(|predicate| {
-                    proof_atomics.map_predicate_to_proof_atomic(predicate, variable_names)
-                }),
+                .filter(|&predicate| !is_likely_a_constant(predicate, variable_names, assignments))
+                .map(|predicate| map_predicate_to_proof_atomic(predicate, variable_names)),
             generated_by: Some(inference_code.tag().into()),
             label: Some(inference_code.label()),
         };
@@ -162,7 +143,7 @@ impl ProofLog {
             });
         }
 
-        if is_likely_a_constant(predicate, variable_names, assignments, None) {
+        if is_likely_a_constant(predicate, variable_names, assignments) {
             // The predicate is over a constant variable. We assume we do not want to
             // log these if they have no name.
 
@@ -174,7 +155,6 @@ impl ProofLog {
             writer,
             propagation_order_hint: Some(propagation_sequence),
             logged_domain_inferences,
-            proof_atomics,
             ..
         }) = self.internal_proof.as_mut()
         else {
@@ -195,9 +175,7 @@ impl ProofLog {
         let inference = Inference {
             constraint_id: inference_tag.into(),
             premises: vec![],
-            consequent: Some(
-                proof_atomics.map_predicate_to_proof_atomic(predicate, variable_names),
-            ),
+            consequent: Some(map_predicate_to_proof_atomic(predicate, variable_names)),
             generated_by: None,
             label: Some("initial_domain"),
         };
@@ -232,7 +210,6 @@ impl ProofLog {
             Some(ProofImpl::CpProof {
                 writer,
                 propagation_order_hint,
-                proof_atomics,
                 logged_domain_inferences,
                 ..
             }) => {
@@ -244,16 +221,9 @@ impl ProofLog {
                     premises: premises
                         .into_iter()
                         .filter(|&predicate| {
-                            !is_likely_a_constant(
-                                predicate,
-                                variable_names,
-                                assignments,
-                                Some(proof_atomics),
-                            )
+                            !is_likely_a_constant(predicate, variable_names, assignments)
                         })
-                        .map(|premise| {
-                            proof_atomics.map_predicate_to_proof_atomic(premise, variable_names)
-                        })
+                        .map(|premise| map_predicate_to_proof_atomic(premise, variable_names))
                         .collect(),
                     sequence: propagation_order_hint
                         .as_ref()
@@ -302,13 +272,8 @@ impl ProofLog {
         variable_names: &VariableNames,
     ) -> std::io::Result<()> {
         match self.internal_proof {
-            Some(ProofImpl::CpProof {
-                mut writer,
-                proof_atomics,
-                ..
-            }) => {
-                let atomic =
-                    proof_atomics.map_predicate_to_proof_atomic(objective_bound, variable_names);
+            Some(ProofImpl::CpProof { mut writer, .. }) => {
+                let atomic = map_predicate_to_proof_atomic(objective_bound, variable_names);
 
                 writer.log_conclusion::<&str>(drcp_format::Conclusion::DualBound(atomic))
             }
@@ -329,18 +294,6 @@ impl ProofLog {
                 ..
             })
         ) || cfg!(feature = "check-deductions")
-    }
-
-    pub(crate) fn reify_predicate(&mut self, literal: Literal, predicate: Predicate) {
-        let Some(ProofImpl::CpProof {
-            ref mut proof_atomics,
-            ..
-        }) = self.internal_proof
-        else {
-            return;
-        };
-
-        proof_atomics.reify_predicate(literal, predicate);
     }
 
     pub(crate) fn is_logging_proof(&self) -> bool {
@@ -389,15 +342,8 @@ fn is_likely_a_constant(
     predicate: Predicate,
     variable_names: &VariableNames,
     assignments: &Assignments,
-    proof_atomics: Option<&ProofAtomics>,
 ) -> bool {
     let domain = predicate.get_domain();
-
-    if let Some(proof_atomics) = proof_atomics
-        && let Some(underlying) = proof_atomics.get_underlying_predicate(predicate)
-    {
-        return is_likely_a_constant(underlying, variable_names, assignments, Some(proof_atomics));
-    }
 
     let is_fixed =
         assignments.get_initial_lower_bound(domain) == assignments.get_initial_upper_bound(domain);
@@ -453,7 +399,6 @@ enum ProofImpl {
         // We do this by replacing the existing value with `None` and appending `Some` at
         // the end.
         propagation_order_hint: Option<Vec<Option<ConstraintTag>>>,
-        proof_atomics: ProofAtomics,
         /// The domain inferences that are logged for the next deduction. For each
         /// inference we keep the index in the propagation order hint.
         logged_domain_inferences: HashMap<Predicate, usize>,
