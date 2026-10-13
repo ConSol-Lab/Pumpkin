@@ -3,26 +3,20 @@
 
 use std::rc::Rc;
 
-use pumpkin_solver::core::predicate;
+use pumpkin_solver::core::predicates::Predicate;
+use pumpkin_solver::core::predicates::PredicateType;
 use pumpkin_solver::core::variables::Literal;
 
 use super::context::CompilationContext;
 use crate::flatzinc::FlatZincError;
 
-/// A comparison `variable op value` between an integer variable and a constant.
+/// A comparison `variable op value` between an integer variable and a constant, where the
+/// comparison is that of the corresponding [`Predicate`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ConstantComparison {
     variable: Rc<str>,
-    comparison: Comparison,
+    predicate_type: PredicateType,
     value: i32,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Comparison {
-    Equal,
-    NotEqual,
-    LessThanOrEqual,
-    GreaterThanOrEqual,
 }
 
 impl ConstantComparison {
@@ -66,19 +60,19 @@ impl ConstantComparison {
     }
 
     fn new(variable: Rc<str>, operator: &str, value: i32) -> Option<ConstantComparison> {
-        let (comparison, value) = match operator {
-            "eq" => (Comparison::Equal, value),
-            "ne" => (Comparison::NotEqual, value),
-            "le" => (Comparison::LessThanOrEqual, value),
-            "lt" => (Comparison::LessThanOrEqual, value.checked_sub(1)?),
-            "ge" => (Comparison::GreaterThanOrEqual, value),
-            "gt" => (Comparison::GreaterThanOrEqual, value.checked_add(1)?),
+        let (predicate_type, value) = match operator {
+            "eq" => (PredicateType::Equal, value),
+            "ne" => (PredicateType::NotEqual, value),
+            "le" => (PredicateType::UpperBound, value),
+            "lt" => (PredicateType::UpperBound, value.checked_sub(1)?),
+            "ge" => (PredicateType::LowerBound, value),
+            "gt" => (PredicateType::LowerBound, value.checked_add(1)?),
             _ => return None,
         };
 
         Some(ConstantComparison {
             variable,
-            comparison,
+            predicate_type,
             value,
         })
     }
@@ -96,16 +90,12 @@ impl ConstantComparison {
         context: &mut CompilationContext,
     ) -> Result<Literal, FlatZincError> {
         let variable = context.resolve_integer_variable_from_identifier(&self.variable)?;
-        let value = self.value;
 
-        let predicate = match self.comparison {
-            Comparison::Equal => predicate![variable == value],
-            Comparison::NotEqual => predicate![variable != value],
-            Comparison::LessThanOrEqual => predicate![variable <= value],
-            Comparison::GreaterThanOrEqual => predicate![variable >= value],
-        };
-
-        Ok(Literal::new(predicate))
+        Ok(Literal::new(Predicate::new(
+            variable,
+            self.predicate_type,
+            self.value,
+        )))
     }
 }
 
@@ -154,29 +144,29 @@ mod tests {
         let _ = context.integer_parameters.insert("c".into(), 7);
 
         let x = || flatzinc::Expr::VarParIdentifier("x".into());
-        let expected = |comparison, value| {
+        let expected = |predicate_type, value| {
             Some(ConstantComparison {
                 variable: "x".into(),
-                comparison,
+                predicate_type,
                 value,
             })
         };
 
         assert_eq!(
             comparison(&context, "int_le_reif", x(), flatzinc::Expr::Int(5)),
-            expected(Comparison::LessThanOrEqual, 5)
+            expected(PredicateType::UpperBound, 5)
         );
         assert_eq!(
             comparison(&context, "int_lt_reif", flatzinc::Expr::Int(5), x()),
-            expected(Comparison::GreaterThanOrEqual, 6)
+            expected(PredicateType::LowerBound, 6)
         );
         assert_eq!(
             comparison(&context, "int_gt_imp", x(), flatzinc::Expr::Int(5)),
-            expected(Comparison::GreaterThanOrEqual, 6)
+            expected(PredicateType::LowerBound, 6)
         );
         assert_eq!(
             comparison(&context, "int_ge_imp", flatzinc::Expr::Int(5), x()),
-            expected(Comparison::LessThanOrEqual, 5)
+            expected(PredicateType::UpperBound, 5)
         );
         assert_eq!(
             comparison(
@@ -185,7 +175,7 @@ mod tests {
                 x(),
                 flatzinc::Expr::VarParIdentifier("c".into())
             ),
-            expected(Comparison::NotEqual, 7)
+            expected(PredicateType::NotEqual, 7)
         );
     }
 
