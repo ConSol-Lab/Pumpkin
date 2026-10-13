@@ -4,10 +4,6 @@
 //! For example, `int_le_reif(x, 5, r)` defines `r` as the literal `[x <= 5]`. The boolean then
 //! does not need a domain of its own, and the defining constraint is removed.
 
-use std::rc::Rc;
-
-use pumpkin_solver::core::containers::HashSet;
-
 use super::constant_comparison::ConstantComparison;
 use super::constant_comparison::IntComparison;
 use super::context::CompilationContext;
@@ -15,11 +11,8 @@ use super::context::Domain;
 use crate::FlatZincOptions;
 use crate::ProofType;
 use crate::flatzinc::FlatZincError;
-use crate::flatzinc::ast::FlatZincAst;
-use crate::flatzinc::ast::SingleVarDecl;
 
 pub(crate) fn run(
-    ast: &FlatZincAst,
     context: &mut CompilationContext,
     options: &FlatZincOptions,
 ) -> Result<(), FlatZincError> {
@@ -28,23 +21,10 @@ pub(crate) fn run(
         return Ok(());
     }
 
-    // Equivalence classes containing an integer variable (e.g. due to `bool2int`) need a domain.
-    let integer_classes: HashSet<Rc<str>> = ast
-        .single_variables
-        .iter()
-        .filter_map(|single_var_decl| match single_var_decl {
-            SingleVarDecl::Bool { .. } => None,
-            SingleVarDecl::IntInRange { id, .. } | SingleVarDecl::IntInSet { id, .. } => {
-                Some(context.equivalences.representative(id))
-            }
-        })
-        .collect();
-
-    let constraints = std::mem::take(&mut context.constraints);
-    context.constraints = constraints
-        .into_iter()
-        .filter(|(_, constraint)| !define_reified_literal(constraint, context, &integer_classes))
-        .collect();
+    // The constraints are taken out since defining the literals requires the whole context.
+    let mut constraints = std::mem::take(&mut context.constraints);
+    constraints.retain(|(_, constraint)| !define_reified_literal(constraint, context));
+    context.constraints = constraints;
 
     Ok(())
 }
@@ -54,7 +34,6 @@ pub(crate) fn run(
 fn define_reified_literal(
     constraint: &flatzinc::ConstraintItem,
     context: &mut CompilationContext,
-    integer_classes: &HashSet<Rc<str>>,
 ) -> bool {
     let comparison = match constraint.id.as_str() {
         "int_eq_reif" => IntComparison::Equal,
@@ -77,7 +56,7 @@ fn define_reified_literal(
         // - it is not already defined by another constraint; that constraint will instead be posted
         //   as clauses linking the two literals;
         // - the comparison is not over the boolean itself.
-        let can_be_defined = !integer_classes.contains(&representative)
+        let can_be_defined = !context.equivalences.contains_integer(boolean)
             && context.equivalences.domain(boolean) == Domain::IntervalDomain { lb: 0, ub: 1 }
             && !context.reified_literals.contains_key(&representative)
             && context.equivalences.representative(comparison.variable()) != representative;
@@ -100,6 +79,8 @@ mod tests {
     use pumpkin_solver::Solver;
 
     use super::*;
+    use crate::flatzinc::ast::FlatZincAst;
+    use crate::flatzinc::ast::SingleVarDecl;
 
     #[test]
     fn only_booleans_without_integer_view_or_earlier_definition_are_defined() {
@@ -158,7 +139,7 @@ mod tests {
         super::super::prepare_variables::run(&ast, &mut context).expect("step should not fail");
         super::super::merge_equivalences::run(&ast, &mut context, &options)
             .expect("step should not fail");
-        run(&ast, &mut context, &options).expect("step should not fail");
+        run(&mut context, &options).expect("step should not fail");
 
         let defined = context.reified_literals.keys().cloned().collect::<Vec<_>>();
         assert_eq!(defined, vec![context.equivalences.representative("r")]);
