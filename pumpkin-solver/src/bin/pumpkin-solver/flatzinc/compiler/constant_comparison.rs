@@ -19,55 +19,62 @@ pub(crate) struct ConstantComparison {
     value: i32,
 }
 
+/// The comparison `a op b` of an integer comparison constraint such as `int_le_reif(a, b, r)`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum IntComparison {
+    Equal,
+    NotEqual,
+    LessThanOrEqual,
+    LessThan,
+    GreaterThanOrEqual,
+    GreaterThan,
+}
+
+impl IntComparison {
+    /// Returns the comparison `op'` such that `a op b` is equivalent to `b op' a`.
+    fn mirrored(self) -> IntComparison {
+        match self {
+            IntComparison::Equal => IntComparison::Equal,
+            IntComparison::NotEqual => IntComparison::NotEqual,
+            IntComparison::LessThanOrEqual => IntComparison::GreaterThanOrEqual,
+            IntComparison::LessThan => IntComparison::GreaterThan,
+            IntComparison::GreaterThanOrEqual => IntComparison::LessThanOrEqual,
+            IntComparison::GreaterThan => IntComparison::LessThan,
+        }
+    }
+}
+
 impl ConstantComparison {
-    /// Parses the comparison of a reified (`_reif`) or half-reified (`_imp`) integer comparison
-    /// constraint, e.g. `int_le_reif(a, b, r)`.
-    ///
-    /// Returns [`None`] if the constraint is not such a comparison, or if it does not compare an
-    /// integer variable with a constant.
-    pub(crate) fn from_constraint(
-        constraint_name: &str,
-        exprs: &[flatzinc::Expr],
+    /// Creates the comparison `lhs comparison rhs` if exactly one of `lhs` and `rhs` is a
+    /// constant and the other is an integer variable; otherwise returns [`None`].
+    pub(crate) fn new(
+        comparison: IntComparison,
+        lhs: &flatzinc::Expr,
+        rhs: &flatzinc::Expr,
         context: &CompilationContext,
     ) -> Option<ConstantComparison> {
-        let operator = constraint_name
-            .strip_prefix("int_")?
-            .strip_suffix("_reif")
-            .or_else(|| constraint_name.strip_prefix("int_")?.strip_suffix("_imp"))?;
-        let [lhs, rhs, _] = exprs else {
-            return None;
-        };
-
-        match (
+        let (variable, comparison, value) = match (
             resolve_constant(lhs, context),
             resolve_constant(rhs, context),
         ) {
             // `x op c`
-            (None, Some(value)) => Self::new(resolve_variable(lhs, context)?, operator, value),
-            // `c op x`, which is `x op' c` with the operator mirrored
-            (Some(value), None) => {
-                let mirrored = match operator {
-                    "le" => "ge",
-                    "lt" => "gt",
-                    "ge" => "le",
-                    "gt" => "lt",
-                    symmetric => symmetric,
-                };
-                Self::new(resolve_variable(rhs, context)?, mirrored, value)
-            }
-            _ => None,
-        }
-    }
-
-    fn new(variable: Rc<str>, operator: &str, value: i32) -> Option<ConstantComparison> {
-        let (predicate_type, value) = match operator {
-            "eq" => (PredicateType::Equal, value),
-            "ne" => (PredicateType::NotEqual, value),
-            "le" => (PredicateType::UpperBound, value),
-            "lt" => (PredicateType::UpperBound, value.checked_sub(1)?),
-            "ge" => (PredicateType::LowerBound, value),
-            "gt" => (PredicateType::LowerBound, value.checked_add(1)?),
+            (None, Some(value)) => (resolve_variable(lhs, context)?, comparison, value),
+            // `c op x`, which is `x op' c` with the comparison mirrored
+            (Some(value), None) => (
+                resolve_variable(rhs, context)?,
+                comparison.mirrored(),
+                value,
+            ),
             _ => return None,
+        };
+
+        let (predicate_type, value) = match comparison {
+            IntComparison::Equal => (PredicateType::Equal, value),
+            IntComparison::NotEqual => (PredicateType::NotEqual, value),
+            IntComparison::LessThanOrEqual => (PredicateType::UpperBound, value),
+            IntComparison::LessThan => (PredicateType::UpperBound, value.checked_sub(1)?),
+            IntComparison::GreaterThanOrEqual => (PredicateType::LowerBound, value),
+            IntComparison::GreaterThan => (PredicateType::LowerBound, value.checked_add(1)?),
         };
 
         Some(ConstantComparison {
@@ -124,16 +131,6 @@ mod tests {
 
     use super::*;
 
-    fn comparison(
-        context: &CompilationContext,
-        name: &str,
-        lhs: flatzinc::Expr,
-        rhs: flatzinc::Expr,
-    ) -> Option<ConstantComparison> {
-        let r = flatzinc::Expr::VarParIdentifier("r".into());
-        ConstantComparison::from_constraint(name, &[lhs, rhs, r], context)
-    }
-
     #[test]
     fn comparisons_with_a_constant_are_normalised() {
         let mut solver = Solver::default();
@@ -143,7 +140,9 @@ mod tests {
             .create_equivalence_class("x".into(), 0, 10);
         let _ = context.integer_parameters.insert("c".into(), 7);
 
-        let x = || flatzinc::Expr::VarParIdentifier("x".into());
+        let x = flatzinc::Expr::VarParIdentifier("x".into());
+        let five = flatzinc::Expr::Int(5);
+        let c = flatzinc::Expr::VarParIdentifier("c".into());
         let expected = |predicate_type, value| {
             Some(ConstantComparison {
                 variable: "x".into(),
@@ -153,34 +152,29 @@ mod tests {
         };
 
         assert_eq!(
-            comparison(&context, "int_le_reif", x(), flatzinc::Expr::Int(5)),
+            ConstantComparison::new(IntComparison::LessThanOrEqual, &x, &five, &context),
             expected(PredicateType::UpperBound, 5)
         );
         assert_eq!(
-            comparison(&context, "int_lt_reif", flatzinc::Expr::Int(5), x()),
+            ConstantComparison::new(IntComparison::LessThan, &five, &x, &context),
             expected(PredicateType::LowerBound, 6)
         );
         assert_eq!(
-            comparison(&context, "int_gt_imp", x(), flatzinc::Expr::Int(5)),
+            ConstantComparison::new(IntComparison::GreaterThan, &x, &five, &context),
             expected(PredicateType::LowerBound, 6)
         );
         assert_eq!(
-            comparison(&context, "int_ge_imp", flatzinc::Expr::Int(5), x()),
+            ConstantComparison::new(IntComparison::GreaterThanOrEqual, &five, &x, &context),
             expected(PredicateType::UpperBound, 5)
         );
         assert_eq!(
-            comparison(
-                &context,
-                "int_ne_reif",
-                x(),
-                flatzinc::Expr::VarParIdentifier("c".into())
-            ),
+            ConstantComparison::new(IntComparison::NotEqual, &x, &c, &context),
             expected(PredicateType::NotEqual, 7)
         );
     }
 
     #[test]
-    fn comparisons_without_exactly_one_constant_are_not_parsed() {
+    fn comparisons_without_exactly_one_constant_are_not_created() {
         let mut solver = Solver::default();
         let mut context = CompilationContext::new(&mut solver);
         context
@@ -190,21 +184,17 @@ mod tests {
             .equivalences
             .create_equivalence_class("y".into(), 0, 10);
 
-        let x = || flatzinc::Expr::VarParIdentifier("x".into());
-        let y = || flatzinc::Expr::VarParIdentifier("y".into());
+        let x = flatzinc::Expr::VarParIdentifier("x".into());
+        let y = flatzinc::Expr::VarParIdentifier("y".into());
+        let one = flatzinc::Expr::Int(1);
+        let two = flatzinc::Expr::Int(2);
 
-        assert_eq!(comparison(&context, "int_le_reif", x(), y()), None);
         assert_eq!(
-            comparison(
-                &context,
-                "int_le_reif",
-                flatzinc::Expr::Int(1),
-                flatzinc::Expr::Int(2)
-            ),
+            ConstantComparison::new(IntComparison::LessThanOrEqual, &x, &y, &context),
             None
         );
         assert_eq!(
-            comparison(&context, "int_lin_le_reif", x(), flatzinc::Expr::Int(2)),
+            ConstantComparison::new(IntComparison::LessThanOrEqual, &one, &two, &context),
             None
         );
     }

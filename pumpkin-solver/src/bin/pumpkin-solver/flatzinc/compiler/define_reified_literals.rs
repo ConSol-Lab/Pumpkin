@@ -9,6 +9,7 @@ use std::rc::Rc;
 use pumpkin_solver::core::containers::HashSet;
 
 use super::constant_comparison::ConstantComparison;
+use super::constant_comparison::IntComparison;
 use super::context::CompilationContext;
 use super::context::Domain;
 use crate::FlatZincOptions;
@@ -55,17 +56,22 @@ fn define_reified_literal(
     context: &mut CompilationContext,
     integer_classes: &HashSet<Rc<str>>,
 ) -> bool {
-    if !constraint.id.ends_with("_reif") {
-        return false;
-    }
+    let comparison = match constraint.id.as_str() {
+        "int_eq_reif" => IntComparison::Equal,
+        "int_ne_reif" => IntComparison::NotEqual,
+        "int_le_reif" => IntComparison::LessThanOrEqual,
+        "int_lt_reif" => IntComparison::LessThan,
+        _ => return false,
+    };
 
-    let Some(comparison) =
-        ConstantComparison::from_constraint(&constraint.id, &constraint.exprs, context)
-    else {
+    let [lhs, rhs, reified] = constraint.exprs.as_slice() else {
+        return false;
+    };
+    let Some(comparison) = ConstantComparison::new(comparison, lhs, rhs, context) else {
         return false;
     };
 
-    let flatzinc::Expr::VarParIdentifier(boolean) = &constraint.exprs[2] else {
+    let flatzinc::Expr::VarParIdentifier(boolean) = reified else {
         return false;
     };
     if !context.equivalences.is_defined(boolean) {

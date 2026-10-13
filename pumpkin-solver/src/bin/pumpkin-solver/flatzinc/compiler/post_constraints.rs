@@ -14,6 +14,7 @@ use pumpkin_solver::core::variables::Literal;
 use pumpkin_solver::core::variables::TransformableVariable;
 
 use super::constant_comparison::ConstantComparison;
+use super::constant_comparison::IntComparison;
 use super::context::CompilationContext;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::FlatZincOptions;
@@ -63,6 +64,7 @@ pub(crate) fn run(
                 annos,
                 "int_eq_imp",
                 constraint_tag,
+                IntComparison::Equal,
                 pumpkin_constraints::binary_equals,
             )?,
             "int_ge_imp" => compile_binary_int_imp(
@@ -71,6 +73,7 @@ pub(crate) fn run(
                 annos,
                 "int_ge_imp",
                 constraint_tag,
+                IntComparison::GreaterThanOrEqual,
                 pumpkin_constraints::binary_greater_than_or_equals,
             )?,
             "int_gt_imp" => compile_binary_int_imp(
@@ -79,6 +82,7 @@ pub(crate) fn run(
                 annos,
                 "int_gt_imp",
                 constraint_tag,
+                IntComparison::GreaterThan,
                 pumpkin_constraints::binary_greater_than,
             )?,
             "int_le_imp" => compile_binary_int_imp(
@@ -87,6 +91,7 @@ pub(crate) fn run(
                 annos,
                 "int_le_imp",
                 constraint_tag,
+                IntComparison::LessThanOrEqual,
                 pumpkin_constraints::binary_less_than_or_equals,
             )?,
             "int_lt_imp" => compile_binary_int_imp(
@@ -95,6 +100,7 @@ pub(crate) fn run(
                 annos,
                 "int_lt_imp",
                 constraint_tag,
+                IntComparison::LessThan,
                 pumpkin_constraints::binary_less_than,
             )?,
             "int_ne_imp" => compile_binary_int_imp(
@@ -103,6 +109,7 @@ pub(crate) fn run(
                 annos,
                 "int_ne_imp",
                 constraint_tag,
+                IntComparison::NotEqual,
                 pumpkin_constraints::binary_not_equals,
             )?,
 
@@ -217,6 +224,7 @@ pub(crate) fn run(
                 annos,
                 "int_ne_reif",
                 constraint_tag,
+                IntComparison::NotEqual,
                 pumpkin_constraints::binary_not_equals,
             )?,
             "int_eq" => compile_binary_int_predicate(
@@ -233,6 +241,7 @@ pub(crate) fn run(
                 annos,
                 "int_eq_reif",
                 constraint_tag,
+                IntComparison::Equal,
                 pumpkin_constraints::binary_equals,
             )?,
             "int_le" => compile_binary_int_predicate(
@@ -249,6 +258,7 @@ pub(crate) fn run(
                 annos,
                 "int_le_reif",
                 constraint_tag,
+                IntComparison::LessThanOrEqual,
                 pumpkin_constraints::binary_less_than_or_equals,
             )?,
             "int_lt" => compile_binary_int_predicate(
@@ -265,6 +275,7 @@ pub(crate) fn run(
                 annos,
                 "int_lt_reif",
                 constraint_tag,
+                IntComparison::LessThan,
                 pumpkin_constraints::binary_less_than,
             )?,
 
@@ -773,11 +784,12 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
     _: &[flatzinc::Annotation],
     predicate_name: &str,
     constraint_tag: ConstraintTag,
+    comparison: IntComparison,
     create_constraint: impl FnOnce(DomainId, DomainId, ConstraintTag) -> C,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
-    if let Some(comparison) = ConstantComparison::from_constraint(predicate_name, exprs, context) {
+    if let Some(comparison) = ConstantComparison::new(comparison, &exprs[0], &exprs[1], context) {
         // `r <-> [x op c]`; the boolean could not be defined as the literal of the comparison
         // itself (see `define_reified_literals`), so they are linked with clauses.
         let literal = comparison.to_literal(context)?;
@@ -880,11 +892,12 @@ fn compile_binary_int_imp<C: Constraint>(
     _: &[flatzinc::Annotation],
     predicate_name: &str,
     constraint_tag: ConstraintTag,
+    comparison: IntComparison,
     create_constraint: impl FnOnce(DomainId, DomainId, ConstraintTag) -> C,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
-    if let Some(comparison) = ConstantComparison::from_constraint(predicate_name, exprs, context) {
+    if let Some(comparison) = ConstantComparison::new(comparison, &exprs[0], &exprs[1], context) {
         // `r -> [x op c]` is a clause over the literal of the comparison.
         let literal = comparison.to_literal(context)?;
         let reif = context.resolve_bool_variable(&exprs[2])?;
