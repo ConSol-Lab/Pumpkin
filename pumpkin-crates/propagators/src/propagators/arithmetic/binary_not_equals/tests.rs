@@ -1,6 +1,10 @@
+use pumpkin_core::propagation::ConstraintDescription;
+use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::state::State;
 
+use super::BinaryNotEqualsDescription;
 use crate::StateExt;
+use crate::fixed_domains;
 use crate::propagators::arithmetic::BinaryNotEqualsPropagatorArgs;
 
 #[test]
@@ -11,8 +15,7 @@ fn detects_conflict() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(BinaryNotEqualsPropagatorArgs {
-        a,
-        b,
+        constraint_description: BinaryNotEqualsDescription { a, b },
         constraint_tag,
     });
     let _ = state
@@ -28,8 +31,7 @@ fn propagate_when_one_is_fixed() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(BinaryNotEqualsPropagatorArgs {
-        a,
-        b,
+        constraint_description: BinaryNotEqualsDescription { a, b },
         constraint_tag,
     });
     state
@@ -52,8 +54,7 @@ fn incremental_propagation() {
 
     let propagator = solver
         .new_propagator(BinaryNotEqualsPropagatorArgs {
-            a,
-            b,
+            constraint_description: BinaryNotEqualsDescription { a, b },
             constraint_tag,
         })
         .expect("Expected no conflict to be detected");
@@ -78,8 +79,7 @@ fn non_overlapping_is_ok() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(BinaryNotEqualsPropagatorArgs {
-        a,
-        b,
+        constraint_description: BinaryNotEqualsDescription { a, b },
         constraint_tag,
     });
     state
@@ -88,4 +88,26 @@ fn non_overlapping_is_ok() {
 
     state.assert_bounds(a, 0, 5);
     state.assert_bounds(b, 6, 10);
+}
+
+#[test]
+fn binary_disequality_compares_the_values() {
+    let (variables, domains) = fixed_domains(&[2, 2, 3]);
+
+    assert_eq!(
+        BinaryNotEqualsDescription {
+            a: variables[0],
+            b: variables[2],
+        }
+        .check_solution(&domains),
+        SolutionCheck::ConstraintSatisfied
+    );
+    assert_eq!(
+        BinaryNotEqualsDescription {
+            a: variables[0],
+            b: variables[1],
+        }
+        .check_solution(&domains),
+        SolutionCheck::ConstraintViolated
+    );
 }

@@ -2,13 +2,17 @@ use pumpkin_core::conjunction;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
+use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::CurrentNogood;
+use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::state::State;
 use pumpkin_core::variables::DomainId;
 use pumpkin_core::variables::TransformableVariable;
 
 use super::super::IntegerMultiplicationConstructor;
+use super::IntegerMultiplicationDescription;
 use crate::StateExt;
+use crate::fixed_domains;
 
 fn reason_for(state: &mut State, predicate: Predicate) -> PropositionalConjunction {
     let mut reason_buffer: Vec<Predicate> = vec![];
@@ -19,9 +23,7 @@ fn reason_for(state: &mut State, predicate: Predicate) -> PropositionalConjuncti
 fn new_propagator(state: &mut State, a: DomainId, b: DomainId, c: DomainId) {
     let constraint_tag = state.new_constraint_tag();
     let _ = state.add_propagator(IntegerMultiplicationConstructor {
-        a,
-        b,
-        c,
+        constraint_description: IntegerMultiplicationDescription { a, b, c },
         constraint_tag,
     });
 }
@@ -64,9 +66,7 @@ fn propagates_correctly_through_a_negative_affine_view() {
 
     let constraint_tag = state.new_constraint_tag();
     let _ = state.add_propagator(IntegerMultiplicationConstructor {
-        a,
-        b,
-        c,
+        constraint_description: IntegerMultiplicationDescription { a, b, c },
         constraint_tag,
     });
 
@@ -351,4 +351,29 @@ fn brute_force_cross_check_against_enumeration() {
             }
         }
     }
+}
+
+#[test]
+fn multiplication_compares_the_product() {
+    let (variables, domains) = fixed_domains(&[-3, 4, -12, 12]);
+
+    let satisfied = IntegerMultiplicationDescription {
+        a: variables[0],
+        b: variables[1],
+        c: variables[2],
+    };
+    let violated = IntegerMultiplicationDescription {
+        a: variables[0],
+        b: variables[1],
+        c: variables[3],
+    };
+
+    assert_eq!(
+        satisfied.check_solution(&domains),
+        SolutionCheck::ConstraintSatisfied
+    );
+    assert_eq!(
+        violated.check_solution(&domains),
+        SolutionCheck::ConstraintViolated
+    );
 }

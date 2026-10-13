@@ -30,3 +30,30 @@ impl StateExt for State {
         );
     }
 }
+
+/// Creates a variable for each value, and the domains in which each variable is fixed to its value,
+/// for tests of
+/// [`ConstraintDescription::check_solution`](pumpkin_core::propagation::ConstraintDescription::check_solution).
+#[cfg(test)]
+pub(crate) fn fixed_domains(
+    values: &[i32],
+) -> (
+    Vec<DomainId>,
+    pumpkin_checking::VariableState<pumpkin_core::predicates::Predicate>,
+) {
+    let mut state = State::default();
+    let variables = values
+        .iter()
+        .map(|_| state.new_interval_variable(-100, 100, None))
+        .collect::<Vec<_>>();
+    let domains = pumpkin_checking::VariableState::prepare_for_conflict_check(
+        variables
+            .iter()
+            .zip(values)
+            .map(|(&variable, &value)| pumpkin_core::predicate![variable == value]),
+        None,
+    )
+    .expect("the values are consistent");
+
+    (variables, domains)
+}

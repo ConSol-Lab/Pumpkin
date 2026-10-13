@@ -6,6 +6,7 @@ use crate::AtomicConstraint;
 use crate::Comparison;
 #[cfg(doc)]
 use crate::ConflictChecker;
+use crate::DomainView;
 use crate::IntExt;
 
 /// The domains of all variables in the problem.
@@ -66,88 +67,6 @@ where
         self.domains.keys()
     }
 
-    /// Get the lower bound of a variable.
-    pub fn lower_bound(&self, identifier: &Atomic::Identifier) -> IntExt {
-        self.domains
-            .get(identifier)
-            .map(|domain| domain.lower_bound)
-            .unwrap_or(IntExt::NegativeInf)
-    }
-
-    /// Get the upper bound of a variable.
-    pub fn upper_bound(&self, identifier: &Atomic::Identifier) -> IntExt {
-        self.domains
-            .get(identifier)
-            .map(|domain| domain.upper_bound)
-            .unwrap_or(IntExt::PositiveInf)
-    }
-
-    /// Tests whether the given value is in the domain of the variable.
-    pub fn contains(&self, identifier: &Atomic::Identifier, value: i32) -> bool {
-        self.domains
-            .get(identifier)
-            .map(|domain| {
-                value >= domain.lower_bound
-                    && value <= domain.upper_bound
-                    && !domain.holes.contains(&value)
-            })
-            .unwrap_or(true)
-    }
-
-    /// Get the holes within the lower and upper bound of the variable expression.
-    pub fn holes<'a>(&'a self, identifier: &Atomic::Identifier) -> impl Iterator<Item = i32> + 'a
-    where
-        Atomic::Identifier: 'a,
-    {
-        self.domains
-            .get(identifier)
-            .map(|domain| domain.holes.iter().copied())
-            .into_iter()
-            .flatten()
-    }
-
-    /// Get the fixed value of this variable, if it is fixed.
-    pub fn fixed_value(&self, identifier: &Atomic::Identifier) -> Option<i32> {
-        let domain = self.domains.get(identifier)?;
-
-        if domain.lower_bound == domain.upper_bound {
-            let IntExt::Int(value) = domain.lower_bound else {
-                panic!(
-                    "lower can only equal upper if they are integers, otherwise the sign of infinity makes them different"
-                );
-            };
-
-            Some(value)
-        } else {
-            None
-        }
-    }
-
-    /// Obtain an iterator over the domain of the variable.
-    ///
-    /// If the domain is unbounded, then `None` is returned.
-    pub fn iter_domain<'a>(&'a self, identifier: &Atomic::Identifier) -> Option<DomainIterator<'a>>
-    where
-        Atomic::Identifier: 'a,
-    {
-        let domain = self.domains.get(identifier)?;
-
-        let IntExt::Int(lower_bound) = domain.lower_bound else {
-            // If there is no lower bound, then the domain is unbounded.
-            return None;
-        };
-
-        // Ensure there is also an upper bound.
-        if !matches!(domain.upper_bound, IntExt::Int(_)) {
-            return None;
-        }
-
-        Some(DomainIterator {
-            domain,
-            next_value: lower_bound,
-        })
-    }
-
     /// Apply the given `Atomic` to the state.
     ///
     /// Returns true if the state remains consistent, or false if the atomic cannot be true in
@@ -190,9 +109,95 @@ where
 
         domain.is_consistent()
     }
+}
+
+impl<Atomic: AtomicConstraint> DomainView<Atomic> for VariableState<Atomic> {
+    /// Get the lower bound of a variable.
+    fn lower_bound(&self, identifier: &Atomic::Identifier) -> IntExt {
+        self.domains
+            .get(identifier)
+            .map(|domain| domain.lower_bound)
+            .unwrap_or(IntExt::NegativeInf)
+    }
+
+    /// Get the upper bound of a variable.
+    fn upper_bound(&self, identifier: &Atomic::Identifier) -> IntExt {
+        self.domains
+            .get(identifier)
+            .map(|domain| domain.upper_bound)
+            .unwrap_or(IntExt::PositiveInf)
+    }
+
+    /// Tests whether the given value is in the domain of the variable.
+    fn contains(&self, identifier: &Atomic::Identifier, value: i32) -> bool {
+        self.domains
+            .get(identifier)
+            .map(|domain| {
+                value >= domain.lower_bound
+                    && value <= domain.upper_bound
+                    && !domain.holes.contains(&value)
+            })
+            .unwrap_or(true)
+    }
+
+    /// Get the holes within the lower and upper bound of the variable expression.
+    fn holes<'a>(&'a self, identifier: &Atomic::Identifier) -> Box<dyn Iterator<Item = i32> + 'a> {
+        Box::new(
+            self.domains
+                .get(identifier)
+                .map(|domain| domain.holes.iter().copied())
+                .into_iter()
+                .flatten(),
+        )
+    }
+
+    /// Get the fixed value of this variable, if it is fixed.
+    fn fixed_value(&self, identifier: &Atomic::Identifier) -> Option<i32> {
+        let domain = self.domains.get(identifier)?;
+
+        if domain.lower_bound == domain.upper_bound {
+            let IntExt::Int(value) = domain.lower_bound else {
+                panic!(
+                    "lower can only equal upper if they are integers, otherwise the sign of infinity makes them different"
+                );
+            };
+
+            Some(value)
+        } else {
+            None
+        }
+    }
+
+    /// Obtain an iterator over the domain of the variable.
+    ///
+    /// If the domain is unbounded, then `None` is returned.
+    fn iter_domain<'a>(
+        &'a self,
+        identifier: &Atomic::Identifier,
+    ) -> Option<Box<dyn Iterator<Item = i32> + 'a>>
+    where
+        Atomic::Identifier: 'a,
+    {
+        let domain = self.domains.get(identifier)?;
+
+        let IntExt::Int(lower_bound) = domain.lower_bound else {
+            // If there is no lower bound, then the domain is unbounded.
+            return None;
+        };
+
+        // Ensure there is also an upper bound.
+        if !matches!(domain.upper_bound, IntExt::Int(_)) {
+            return None;
+        }
+
+        Some(Box::new(DomainIterator {
+            domain,
+            next_value: lower_bound,
+        }))
+    }
 
     /// Is the given atomic true in the current state.
-    pub fn is_true(&self, atomic: &Atomic) -> bool {
+    fn is_true(&self, atomic: &Atomic) -> bool {
         let Some(domain) = self.domains.get(&atomic.identifier()) else {
             return false;
         };

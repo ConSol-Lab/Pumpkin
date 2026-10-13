@@ -1,14 +1,19 @@
+use pumpkin_checking::VariableState;
 use pumpkin_core::conjunction;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
+use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::CurrentNogood;
+use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::State;
 use pumpkin_core::variables::TransformableVariable;
 
+use super::LinearNotEqualDescription;
 use super::LinearNotEqualPropagatorArgs;
 use crate::StateExt;
+use crate::fixed_domains;
 
 #[test]
 fn test_value_is_removed() {
@@ -19,8 +24,10 @@ fn test_value_is_removed() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(LinearNotEqualPropagatorArgs {
-        terms: [x.scaled(1), y.scaled(-1)].into(),
-        rhs: 0,
+        constraint_description: LinearNotEqualDescription {
+            terms: [x.scaled(1), y.scaled(-1)].into(),
+            rhs: 0,
+        },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("non-empty domain");
@@ -39,8 +46,10 @@ fn test_empty_domain_is_detected() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(LinearNotEqualPropagatorArgs {
-        terms: [x.scaled(1), y.scaled(-1)].into(),
-        rhs: 0,
+        constraint_description: LinearNotEqualDescription {
+            terms: [x.scaled(1), y.scaled(-1)].into(),
+            rhs: 0,
+        },
         constraint_tag,
     });
     let err = state.propagate_to_fixed_point().expect_err("empty domain");
@@ -62,8 +71,10 @@ fn explanation_for_propagation() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(LinearNotEqualPropagatorArgs {
-        terms: [x, y].into(),
-        rhs: 0,
+        constraint_description: LinearNotEqualDescription {
+            terms: [x, y].into(),
+            rhs: 0,
+        },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("non-empty domain");
@@ -88,8 +99,10 @@ fn satisfied_constraint_does_not_trigger_conflict() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(LinearNotEqualPropagatorArgs {
-        terms: [x.scaled(1), y.scaled(-1)].into(),
-        rhs: 0,
+        constraint_description: LinearNotEqualDescription {
+            terms: [x.scaled(1), y.scaled(-1)].into(),
+            rhs: 0,
+        },
         constraint_tag,
     });
 
@@ -102,4 +115,35 @@ fn satisfied_constraint_does_not_trigger_conflict() {
     let _ = state.post(predicate![y != 2]).unwrap();
 
     state.propagate_to_fixed_point().expect("non-empty domain");
+}
+
+#[test]
+fn a_disequality_over_an_unfixed_variable_is_unknown() {
+    let mut state = State::default();
+    let fixed_variable = state.new_interval_variable(-100, 100, None);
+    let unfixed_variable = state.new_interval_variable(-100, 100, None);
+    let domains =
+        VariableState::prepare_for_conflict_check([predicate![fixed_variable == 1]], None)
+            .expect("the predicate is consistent");
+    let description = LinearNotEqualDescription {
+        terms: [fixed_variable, unfixed_variable].into(),
+        rhs: 0,
+    };
+
+    assert_eq!(description.check_solution(&domains), SolutionCheck::Unknown);
+}
+
+#[test]
+fn a_linear_disequality_over_fixed_variables_is_decided() {
+    let (variables, domains) = fixed_domains(&[1, 2]);
+    let check = |rhs| {
+        LinearNotEqualDescription {
+            terms: [variables[0], variables[1]].into(),
+            rhs,
+        }
+        .check_solution(&domains)
+    };
+
+    assert_eq!(check(4), SolutionCheck::ConstraintSatisfied);
+    assert_eq!(check(3), SolutionCheck::ConstraintViolated);
 }

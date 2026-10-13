@@ -10,6 +10,7 @@ use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::BinaryNotEqualsChecker;
+use super::BinaryNotEqualsDescription;
 use super::BinaryNotEqualsPropagator;
 
 declare_inference_label!(BinaryNotEquals);
@@ -17,8 +18,7 @@ declare_inference_label!(BinaryNotEquals);
 /// The [`PropagatorConstructor`] for the [`BinaryNotEqualsPropagator`].
 #[derive(Clone, Debug)]
 pub struct BinaryNotEqualsPropagatorArgs<AVar, BVar> {
-    pub a: AVar,
-    pub b: BVar,
+    pub constraint_description: BinaryNotEqualsDescription<AVar, BVar>,
     pub constraint_tag: ConstraintTag,
 }
 
@@ -31,10 +31,10 @@ where
 
     fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let BinaryNotEqualsPropagatorArgs {
-            a,
-            b,
+            constraint_description,
             constraint_tag,
         } = self;
+        let BinaryNotEqualsDescription { a, b } = constraint_description;
 
         // We only care about the case where one of the two is assigned
         let registration = EventsToRegister::builder()

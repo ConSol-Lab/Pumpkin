@@ -5,12 +5,16 @@ use pumpkin_core::conjunction;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
+use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::CurrentNogood;
+use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::state::State;
 
 use super::ElementArgs;
 use super::ElementChecker;
+use super::ElementDescription;
 use crate::StateExt;
+use crate::fixed_domains;
 
 #[test]
 fn elements_from_array_with_disjoint_domains_to_rhs_are_filtered_from_index() {
@@ -26,9 +30,11 @@ fn elements_from_array_with_disjoint_domains_to_rhs_are_filtered_from_index() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(ElementArgs {
-        array: vec![x_0, x_1, x_2, x_3].into(),
-        index,
-        rhs,
+        constraint_description: ElementDescription {
+            array: vec![x_0, x_1, x_2, x_3].into(),
+            index,
+            rhs,
+        },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("no empty domains");
@@ -68,9 +74,11 @@ fn bounds_of_rhs_are_min_and_max_of_lower_and_upper_in_array() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(ElementArgs {
-        array: vec![x_0, x_1, x_2, x_3].into(),
-        index,
-        rhs,
+        constraint_description: ElementDescription {
+            array: vec![x_0, x_1, x_2, x_3].into(),
+            index,
+            rhs,
+        },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("no empty domains");
@@ -116,9 +124,11 @@ fn fixed_index_propagates_bounds_on_element() {
     let rhs = state.new_interval_variable(6, 9, None);
 
     let _ = state.add_propagator(ElementArgs {
-        array: vec![x_0, x_1, x_2, x_3].into(),
-        index,
-        rhs,
+        constraint_description: ElementDescription {
+            array: vec![x_0, x_1, x_2, x_3].into(),
+            index,
+            rhs,
+        },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("no empty domains");
@@ -162,9 +172,11 @@ fn index_hole_propagates_bounds_on_rhs() {
     let rhs = state.new_interval_variable(-10, 30, None);
 
     let _ = state.add_propagator(ElementArgs {
-        array: vec![x_0, x_1, x_2, x_3].into(),
-        index,
-        rhs,
+        constraint_description: ElementDescription {
+            array: vec![x_0, x_1, x_2, x_3].into(),
+            index,
+            rhs,
+        },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("no empty domains");
@@ -222,4 +234,34 @@ fn holes_outside_union_bounds_are_ignored() {
     let checker = ElementChecker::new(vec!["x1", "x2"].into(), "x3", "x4");
 
     assert!(checker.check(state, &premises, consequent.as_ref()));
+}
+
+#[test]
+fn element_with_an_index_outside_the_array_is_a_violation() {
+    let (variables, domains) = fixed_domains(&[1, 2, 2, 2]);
+    let description = ElementDescription {
+        array: Box::from([variables[0], variables[1]]),
+        index: variables[2],
+        rhs: variables[3],
+    };
+
+    assert_eq!(
+        description.check_solution(&domains),
+        SolutionCheck::ConstraintViolated
+    );
+}
+
+#[test]
+fn element_selects_by_an_index_starting_at_zero() {
+    let (variables, domains) = fixed_domains(&[5, 7, 1, 7]);
+    let description = ElementDescription {
+        array: Box::from([variables[0], variables[1]]),
+        index: variables[2],
+        rhs: variables[3],
+    };
+
+    assert_eq!(
+        description.check_solution(&domains),
+        SolutionCheck::ConstraintSatisfied
+    );
 }

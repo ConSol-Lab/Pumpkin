@@ -1,7 +1,11 @@
+use pumpkin_core::propagation::ConstraintDescription;
+use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::state::State;
 
 use super::AbsoluteValueArgs;
+use super::AbsoluteValueDescription;
 use crate::StateExt;
+use crate::fixed_domains;
 
 #[test]
 fn absolute_bounds_are_propagated_at_initialise() {
@@ -12,8 +16,7 @@ fn absolute_bounds_are_propagated_at_initialise() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(AbsoluteValueArgs {
-        signed,
-        absolute,
+        constraint_description: AbsoluteValueDescription { signed, absolute },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("no empty domains");
@@ -30,8 +33,7 @@ fn signed_bounds_are_propagated_at_initialise() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(AbsoluteValueArgs {
-        signed,
-        absolute,
+        constraint_description: AbsoluteValueDescription { signed, absolute },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("no empty domains");
@@ -48,8 +50,7 @@ fn absolute_lower_bound_can_be_strictly_positive() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(AbsoluteValueArgs {
-        signed,
-        absolute,
+        constraint_description: AbsoluteValueDescription { signed, absolute },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("no empty domains");
@@ -66,8 +67,7 @@ fn strictly_negative_signed_value_can_propagate_lower_bound_on_absolute() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(AbsoluteValueArgs {
-        signed,
-        absolute,
+        constraint_description: AbsoluteValueDescription { signed, absolute },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("no empty domains");
@@ -84,8 +84,7 @@ fn lower_bound_on_absolute_can_propagate_negative_upper_bound_on_signed() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(AbsoluteValueArgs {
-        signed,
-        absolute,
+        constraint_description: AbsoluteValueDescription { signed, absolute },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("no empty domains");
@@ -102,11 +101,33 @@ fn lower_bound_on_absolute_can_propagate_positive_lower_bound_on_signed() {
     let constraint_tag = state.new_constraint_tag();
 
     let _ = state.add_propagator(AbsoluteValueArgs {
-        signed,
-        absolute,
+        constraint_description: AbsoluteValueDescription { signed, absolute },
         constraint_tag,
     });
     state.propagate_to_fixed_point().expect("no empty domains");
 
     state.assert_bounds(signed, 3, 5);
+}
+
+#[test]
+fn absolute_value_compares_the_magnitude() {
+    let (variables, domains) = fixed_domains(&[-4, 4, 3]);
+
+    let satisfied = AbsoluteValueDescription {
+        signed: variables[0],
+        absolute: variables[1],
+    };
+    let violated = AbsoluteValueDescription {
+        signed: variables[0],
+        absolute: variables[2],
+    };
+
+    assert_eq!(
+        satisfied.check_solution(&domains),
+        SolutionCheck::ConstraintSatisfied
+    );
+    assert_eq!(
+        violated.check_solution(&domains),
+        SolutionCheck::ConstraintViolated
+    );
 }

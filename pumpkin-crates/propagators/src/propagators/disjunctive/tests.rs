@@ -1,7 +1,11 @@
+use pumpkin_core::propagation::ConstraintDescription;
+use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::state::State;
 
+use super::DisjunctiveDescription;
 use crate::disjunctive::ArgDisjunctiveTask;
 use crate::disjunctive::DisjunctiveConstructor;
+use crate::fixed_domains;
 
 #[test]
 fn propagator_propagates_lower_bound() {
@@ -35,4 +39,48 @@ fn propagator_propagates_lower_bound() {
     ));
     state.propagate_to_fixed_point().expect("No conflict");
     assert_eq!(state.lower_bound(c), 18);
+}
+
+#[test]
+fn disjunctive_is_violated_by_overlapping_tasks() {
+    let (variables, domains) = fixed_domains(&[0, 2]);
+    let description = DisjunctiveDescription {
+        tasks: vec![
+            ArgDisjunctiveTask {
+                start_time: variables[0],
+                processing_time: 3,
+            },
+            ArgDisjunctiveTask {
+                start_time: variables[1],
+                processing_time: 1,
+            },
+        ],
+    };
+
+    assert_eq!(
+        description.check_solution(&domains),
+        SolutionCheck::ConstraintViolated
+    );
+}
+
+#[test]
+fn disjunctive_allows_a_task_to_start_when_another_ends() {
+    let (variables, domains) = fixed_domains(&[0, 3]);
+    let description = DisjunctiveDescription {
+        tasks: vec![
+            ArgDisjunctiveTask {
+                start_time: variables[0],
+                processing_time: 3,
+            },
+            ArgDisjunctiveTask {
+                start_time: variables[1],
+                processing_time: 1,
+            },
+        ],
+    };
+
+    assert_eq!(
+        description.check_solution(&domains),
+        SolutionCheck::ConstraintSatisfied
+    );
 }

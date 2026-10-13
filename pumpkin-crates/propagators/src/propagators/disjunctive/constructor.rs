@@ -8,6 +8,7 @@ use pumpkin_core::propagation::PropagatorSpec;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
+use super::DisjunctiveDescription;
 use super::DisjunctivePropagator;
 use super::disjunctive_task::ArgDisjunctiveTask;
 use super::disjunctive_task::DisjunctiveTask;
@@ -17,8 +18,8 @@ use crate::propagators::disjunctive::DisjunctiveEdgeFinding;
 
 #[derive(Debug)]
 pub struct DisjunctiveConstructor<Var> {
+    constraint_description: DisjunctiveDescription<Var>,
     constraint_tag: ConstraintTag,
-    tasks: Vec<ArgDisjunctiveTask<Var>>,
 }
 
 impl<Var> DisjunctiveConstructor<Var> {
@@ -27,8 +28,10 @@ impl<Var> DisjunctiveConstructor<Var> {
         constraint_tag: ConstraintTag,
     ) -> Self {
         Self {
+            constraint_description: DisjunctiveDescription {
+                tasks: tasks.into_iter().collect(),
+            },
             constraint_tag,
-            tasks: tasks.into_iter().collect(),
         }
     }
 }
@@ -38,6 +41,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
 
     fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let tasks = self
+            .constraint_description
             .tasks
             .into_iter()
             .enumerate()

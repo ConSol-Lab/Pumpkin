@@ -4,6 +4,7 @@ use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Literal;
+use pumpkin_propagators::arithmetic::LinearLessOrEqualDescription;
 use pumpkin_propagators::arithmetic::LinearLessOrEqualPropagatorArgs;
 
 /// Create the [`NegatableConstraint`] `∑ terms_i <= rhs`.
@@ -108,8 +109,10 @@ struct Inequality<Var> {
 impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
     fn post(self, solver: &mut Solver) {
         LinearLessOrEqualPropagatorArgs {
-            x: self.terms,
-            c: self.rhs,
+            constraint_description: LinearLessOrEqualDescription {
+                terms: self.terms,
+                bound: self.rhs,
+            },
             constraint_tag: self.constraint_tag,
         }
         .post(solver)
@@ -117,8 +120,10 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
 
     fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
         LinearLessOrEqualPropagatorArgs {
-            x: self.terms,
-            c: self.rhs,
+            constraint_description: LinearLessOrEqualDescription {
+                terms: self.terms,
+                bound: self.rhs,
+            },
             constraint_tag: self.constraint_tag,
         }
         .implied_by(solver, reification_literal)

@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::ConflictChecker;
+use pumpkin_checking::DomainView;
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 
