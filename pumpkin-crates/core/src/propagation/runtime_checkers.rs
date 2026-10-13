@@ -1,5 +1,5 @@
 use pumpkin_checking::BoxedChecker;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 
 use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
@@ -13,7 +13,7 @@ use crate::propagation::PropagatorConstructor;
 /// Used when creating a new propagator in [`PropagatorConstructor::create`].
 #[derive(Clone, Debug)]
 pub struct RuntimeCheckers {
-    inference_checkers: Vec<(InferenceCode, BoxedChecker<Predicate>)>,
+    conflict_checkers: Vec<(InferenceCode, BoxedChecker<Predicate>)>,
 }
 
 impl RuntimeCheckers {
@@ -23,7 +23,7 @@ impl RuntimeCheckers {
     /// use [`RuntimeCheckers::builder`] instead to communicate that intention.
     pub fn empty() -> RuntimeCheckers {
         RuntimeCheckers {
-            inference_checkers: vec![],
+            conflict_checkers: vec![],
         }
     }
 
@@ -33,21 +33,21 @@ impl RuntimeCheckers {
     pub fn builder() -> RuntimeCheckersBuilder {
         RuntimeCheckersBuilder {
             checkers: RuntimeCheckers {
-                inference_checkers: vec![],
+                conflict_checkers: vec![],
             },
         }
     }
 
-    /// Add an [`InferenceChecker`] to verify the soundness of propagations.
-    pub fn add_inference_checker(
+    /// Add an [`ConflictChecker`] to verify the soundness of propagations.
+    pub fn add_conflict_checker(
         &mut self,
         constraint_tag: ConstraintTag,
         inference_label: impl InferenceLabel,
-        checker: impl InferenceChecker<Predicate> + 'static,
+        checker: impl ConflictChecker<Predicate> + 'static,
     ) -> InferenceCode {
         let inference_code = InferenceCode::new(constraint_tag, inference_label);
 
-        self.inference_checkers
+        self.conflict_checkers
             .push((inference_code.clone(), BoxedChecker::new(Box::new(checker))));
 
         inference_code
@@ -60,7 +60,7 @@ impl IntoIterator for RuntimeCheckers {
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.inference_checkers.into_iter()
+        self.conflict_checkers.into_iter()
     }
 }
 
@@ -71,15 +71,15 @@ pub struct RuntimeCheckersBuilder {
 }
 
 impl RuntimeCheckersBuilder {
-    /// Add an [`InferenceChecker`] to verify the soundness of propagations.
-    pub fn add_inference_checker(
+    /// Add an [`ConflictChecker`] to verify the soundness of propagations.
+    pub fn add_conflict_checker(
         &mut self,
         constraint_tag: ConstraintTag,
         inference_label: impl InferenceLabel,
-        checker: impl InferenceChecker<Predicate> + 'static,
+        checker: impl ConflictChecker<Predicate> + 'static,
     ) -> InferenceCode {
         self.checkers
-            .add_inference_checker(constraint_tag, inference_label, checker)
+            .add_conflict_checker(constraint_tag, inference_label, checker)
     }
 
     /// Finish adding runtime checkers.
@@ -89,8 +89,8 @@ impl RuntimeCheckersBuilder {
     pub fn build(self) -> RuntimeCheckers {
         if cfg!(feature = "check-propagations") {
             assert!(
-                !self.checkers.inference_checkers.is_empty(),
-                "did not register any inference checkers"
+                !self.checkers.conflict_checkers.is_empty(),
+                "did not register any conflict checkers"
             );
         }
 

@@ -5,9 +5,9 @@ use dyn_clone::DynClone;
 use crate::AtomicConstraint;
 use crate::VariableState;
 
-/// An inference checker tests whether the given state is a conflict under the sematics of an
+/// A conflict checker tests whether the given state is a conflict under the sematics of an
 /// inference rule.
-pub trait InferenceChecker<Atomic: AtomicConstraint>: Debug + DynClone {
+pub trait ConflictChecker<Atomic: AtomicConstraint>: Debug + DynClone {
     /// Returns `true` if `state` is a conflict, and `false` if not.
     ///
     /// For the conflict check, all the premises are true in the state and the consequent, if
@@ -20,9 +20,9 @@ pub trait InferenceChecker<Atomic: AtomicConstraint>: Debug + DynClone {
     ) -> bool;
 }
 
-/// Wrapper around `Box<dyn InferenceChecker<Atomic>>` that implements [`Clone`].
+/// Wrapper around `Box<dyn ConflictChecker<Atomic>>` that implements [`Clone`].
 #[derive(Debug)]
-pub struct BoxedChecker<Atomic: AtomicConstraint>(Box<dyn InferenceChecker<Atomic>>);
+pub struct BoxedChecker<Atomic: AtomicConstraint>(Box<dyn ConflictChecker<Atomic>>);
 
 impl<Atomic: AtomicConstraint> Clone for BoxedChecker<Atomic> {
     fn clone(&self) -> Self {
@@ -31,13 +31,13 @@ impl<Atomic: AtomicConstraint> Clone for BoxedChecker<Atomic> {
 }
 
 impl<Atomic: AtomicConstraint> BoxedChecker<Atomic> {
-    pub fn new(value: Box<dyn InferenceChecker<Atomic>>) -> Self {
+    pub fn new(value: Box<dyn ConflictChecker<Atomic>>) -> Self {
         BoxedChecker(value)
     }
 }
 
 impl<Atomic: AtomicConstraint> BoxedChecker<Atomic> {
-    /// See [`InferenceChecker::check`].
+    /// See [`ConflictChecker::check`].
     pub fn check(
         &self,
         variable_state: VariableState<Atomic>,

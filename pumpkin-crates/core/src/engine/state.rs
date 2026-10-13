@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_checking::BoxedChecker;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 #[cfg(feature = "check-propagations")]
 use pumpkin_checking::VariableState;
 
@@ -367,7 +367,7 @@ impl State {
             // instead of a #[cfg(...)] to avoid the 'unused variable' warning that we would
             // otherwise get on `self.checkers`.
             for (inference_code, checker) in checkers.into_iter() {
-                self.checkers.add_inference_checker(inference_code, checker);
+                self.checkers.add_conflict_checker(inference_code, checker);
             }
         }
 
@@ -389,27 +389,25 @@ impl State {
         handle
     }
 
-    /// Add an inference checker to the state.
+    /// Add a conflict checker to the state.
     ///
-    /// The inference checker will be used to check propagations performed during
+    /// The conflict checker will be used to check propagations performed during
     /// [`Self::propagate_to_fixed_point`], if the `check-propagations` feature is enabled.
     ///
-    /// Multiple inference checkers may be added for the same inference code. In that case, if
+    /// Multiple conflict checkers may be added for the same inference code. In that case, if
     /// any checker accepts the inference, the inference is accepted.
-    pub fn add_inference_checker(
+    pub fn add_conflict_checker(
         &mut self,
         constraint_tag: ConstraintTag,
         inference_label: impl InferenceLabel,
-        checker: impl InferenceChecker<Predicate> + 'static,
+        checker: impl ConflictChecker<Predicate> + 'static,
     ) -> InferenceCode {
         let inference_code = InferenceCode::new(constraint_tag, inference_label);
         if cfg!(feature = "check-propagations") {
             // The checkers are only used when this feature is enabled, so we avoid storing them
             // otherwise.
-            self.checkers.add_inference_checker(
-                inference_code.clone(),
-                BoxedChecker::new(Box::new(checker)),
-            );
+            self.checkers
+                .add_conflict_checker(inference_code.clone(), BoxedChecker::new(Box::new(checker)));
         }
         inference_code
     }
@@ -704,7 +702,7 @@ impl State {
     ///
     /// Does nothing when the conflict is an empty domain.
     ///
-    /// Panics when the inference checker rejects the conflict.
+    /// Panics when the conflict checker rejects the conflict.
     #[cfg(feature = "check-propagations")]
     fn check_conflict(&mut self, conflict: &Conflict) {
         if let Conflict::Propagator(propagator_conflict) = conflict {
@@ -717,7 +715,7 @@ impl State {
     }
 
     /// For every item on the trail starting at index `first_propagation_index`, run the
-    /// inference checker for it.
+    /// conflict checker for it.
     ///
     /// This method should be called after every propagator invocation, so all elements on the
     /// trail starting at `first_propagation_index` should be propagations. Otherwise this function

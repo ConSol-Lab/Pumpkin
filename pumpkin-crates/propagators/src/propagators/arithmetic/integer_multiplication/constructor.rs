@@ -52,7 +52,7 @@ where
             .build();
 
         let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
+        let inference_code = checkers.add_conflict_checker(
             constraint_tag,
             IntegerMultiplication,
             IntegerMultiplicationChecker {
