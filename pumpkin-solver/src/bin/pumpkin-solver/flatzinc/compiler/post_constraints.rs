@@ -13,6 +13,7 @@ use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::core::variables::Literal;
 use pumpkin_solver::core::variables::TransformableVariable;
 
+use super::constant_comparison::ConstantComparison;
 use super::context::CompilationContext;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::FlatZincOptions;
@@ -776,6 +777,17 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
+    if let Some(comparison) = ConstantComparison::from_constraint(predicate_name, exprs, context) {
+        // `r <-> [x op c]`; the boolean could not be defined as the literal of the comparison
+        // itself (see `define_reified_literals`), so they are linked with clauses.
+        let literal = comparison.to_literal(context)?;
+        let reif = context.resolve_bool_variable(&exprs[2])?;
+
+        pumpkin_constraints::clause([!reif, literal], constraint_tag).post(context.solver);
+        pumpkin_constraints::clause([reif, !literal], constraint_tag).post(context.solver);
+        return Ok(());
+    }
+
     let a = context.resolve_integer_variable(&exprs[0])?;
     let b = context.resolve_integer_variable(&exprs[1])?;
     let reif = context.resolve_bool_variable(&exprs[2])?;
@@ -871,6 +883,15 @@ fn compile_binary_int_imp<C: Constraint>(
     create_constraint: impl FnOnce(DomainId, DomainId, ConstraintTag) -> C,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
+
+    if let Some(comparison) = ConstantComparison::from_constraint(predicate_name, exprs, context) {
+        // `r -> [x op c]` is a clause over the literal of the comparison.
+        let literal = comparison.to_literal(context)?;
+        let reif = context.resolve_bool_variable(&exprs[2])?;
+
+        pumpkin_constraints::clause([!reif, literal], constraint_tag).post(context.solver);
+        return Ok(());
+    }
 
     let a = context.resolve_integer_variable(&exprs[0])?;
     let b = context.resolve_integer_variable(&exprs[1])?;

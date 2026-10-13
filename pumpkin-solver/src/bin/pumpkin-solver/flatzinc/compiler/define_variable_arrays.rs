@@ -32,33 +32,39 @@ pub(crate) fn run(
                 array_expr,
             } => {
                 let id = context.identifiers.get_interned(id);
-                let contents: Rc<[_]> =
-                    match array_expr.as_ref().expect("array did not have expression") {
-                        ArrayOfBoolExpr::Array(array) => array
-                            .iter()
-                            .map(|expr| match expr {
-                                BoolExpr::Bool(true) => context.true_literal,
-                                BoolExpr::Bool(false) => context.false_literal,
-                                BoolExpr::VarParIdentifier(identifier) => {
-                                    let other_id = context.identifiers.get_interned(identifier);
-                                    let representative =
-                                        context.equivalences.representative(&other_id);
+                let contents: Rc<[_]> = match array_expr
+                    .as_ref()
+                    .expect("array did not have expression")
+                {
+                    ArrayOfBoolExpr::Array(array) => array
+                        .iter()
+                        .map(|expr| match expr {
+                            BoolExpr::Bool(true) => context.true_literal,
+                            BoolExpr::Bool(false) => context.false_literal,
+                            BoolExpr::VarParIdentifier(identifier) => {
+                                let other_id = context.identifiers.get_interned(identifier);
+                                let representative = context.equivalences.representative(&other_id);
 
-                                    let domain_id = context
-                                        .variable_map
-                                        .get(&representative)
-                                        .copied()
-                                        .expect("referencing undefined boolean variable");
-
-                                    Literal::new(predicate![domain_id >= 1])
+                                if let Some(literal) = context.boolean_literals.get(&representative)
+                                {
+                                    return *literal;
                                 }
-                            })
-                            .collect(),
 
-                        ArrayOfBoolExpr::VarParIdentifier(_) => {
-                            todo!("array of boolean variable expression is identifier")
-                        }
-                    };
+                                let domain_id = context
+                                    .variable_map
+                                    .get(&representative)
+                                    .copied()
+                                    .expect("referencing undefined boolean variable");
+
+                                Literal::new(predicate![domain_id >= 1])
+                            }
+                        })
+                        .collect(),
+
+                    ArrayOfBoolExpr::VarParIdentifier(_) => {
+                        todo!("array of boolean variable expression is identifier")
+                    }
+                };
 
                 if let Some(shape) = is_output_array(annos) {
                     context.outputs.push(Output::array_of_bool(

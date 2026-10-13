@@ -12,6 +12,7 @@ use pumpkin_solver::core::proof::ConstraintTag;
 use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::core::variables::Literal;
 
+use super::constant_comparison::ConstantComparison;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::instance::Output;
 
@@ -37,6 +38,13 @@ pub(crate) struct CompilationContext<'a> {
     /// then it should be converted to a [`Literal`] as late as possible (e.g. when the constraint
     /// is posted or an array is created).
     pub(crate) variable_map: HashMap<Rc<str>, DomainId>,
+    /// The boolean variables (by the representative of their equivalence class) which are
+    /// defined as the literal over a comparison, e.g. `r` in `int_le_reif(x, 5, r)`. These do not
+    /// get a domain of their own.
+    pub(crate) reified_literals: HashMap<Rc<str>, ConstantComparison>,
+    /// The literals for the boolean variables in [`CompilationContext::reified_literals`], which
+    /// are created once the domains of the integer variables exist.
+    pub(crate) boolean_literals: HashMap<Rc<str>, Literal>,
 
     /// Literal which is always true
     pub(crate) true_literal: Literal,
@@ -94,6 +102,8 @@ impl CompilationContext<'_> {
             integer_parameters: Default::default(),
             integer_array_parameters: Default::default(),
             variable_map: Default::default(),
+            reified_literals: Default::default(),
+            boolean_literals: Default::default(),
             constant_domain_ids: Default::default(),
             integer_variable_arrays: Default::default(),
 
@@ -136,10 +146,10 @@ impl CompilationContext<'_> {
         &self,
         identifier: &str,
     ) -> Result<Literal, FlatZincError> {
-        if let Some(domain_id) = self
-            .variable_map
-            .get(&self.equivalences.representative(identifier))
-        {
+        let representative = self.equivalences.representative(identifier);
+        if let Some(literal) = self.boolean_literals.get(&representative) {
+            Ok(*literal)
+        } else if let Some(domain_id) = self.variable_map.get(&representative) {
             Ok(Literal::new(predicate![domain_id >= 1]))
         } else {
             self.boolean_parameters
