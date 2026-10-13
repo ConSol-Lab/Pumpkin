@@ -64,32 +64,32 @@ fn define_reified_literal(
         _ => return false,
     };
 
-    let [lhs, rhs, reified] = constraint.exprs.as_slice() else {
-        return false;
-    };
-    let Some(comparison) = ConstantComparison::new(comparison, lhs, rhs, context) else {
-        return false;
-    };
+    // The reified boolean should be a variable; parameters do not have an equivalence class.
+    if let [lhs, rhs, flatzinc::Expr::VarParIdentifier(boolean)] = constraint.exprs.as_slice()
+        && context.equivalences.is_defined(boolean)
+        && let Some(comparison) = ConstantComparison::new(comparison, lhs, rhs, context)
+    {
+        let representative = context.equivalences.representative(boolean);
+        // The boolean can only be defined as the literal of the comparison if:
+        // - it is not merged with an integer variable (e.g. through `bool2int`), which needs a
+        //   domain to represent it;
+        // - its domain is not fixed, as the literal would not enforce that value;
+        // - it is not already defined by another constraint; that constraint will instead be posted
+        //   as clauses linking the two literals;
+        // - the comparison is not over the boolean itself.
+        let can_be_defined = !integer_classes.contains(&representative)
+            && context.equivalences.domain(boolean) == Domain::IntervalDomain { lb: 0, ub: 1 }
+            && !context.reified_literals.contains_key(&representative)
+            && context.equivalences.representative(comparison.variable()) != representative;
 
-    let flatzinc::Expr::VarParIdentifier(boolean) = reified else {
-        return false;
-    };
-    if !context.equivalences.is_defined(boolean) {
-        // The boolean is a parameter.
-        return false;
+        if can_be_defined {
+            let _ = context.reified_literals.insert(representative, comparison);
+        }
+
+        can_be_defined
+    } else {
+        false
     }
-
-    let representative = context.equivalences.representative(boolean);
-    let can_be_defined = !integer_classes.contains(&representative)
-        && context.equivalences.domain(boolean) == Domain::IntervalDomain { lb: 0, ub: 1 }
-        && !context.reified_literals.contains_key(&representative)
-        && context.equivalences.representative(comparison.variable()) != representative;
-
-    if can_be_defined {
-        let _ = context.reified_literals.insert(representative, comparison);
-    }
-
-    can_be_defined
 }
 
 #[cfg(test)]
