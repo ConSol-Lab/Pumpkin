@@ -1,12 +1,14 @@
-use pumpkin_checking::checkers::ReifiedChecker;
-
+use super::HalfReified;
+use super::HalfReifiedDescription;
 use super::ReifiedPropagator;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
+use crate::propagation::ConflictRule;
 use crate::propagation::DomainEvents;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorSpec;
-use crate::propagation::RuntimeCheckers;
 use crate::variables::Literal;
 
 /// A [`PropagatorConstructor`] for the reified propagator.
@@ -22,21 +24,36 @@ where
     WrappedPropagator: Propagator + Clone,
 {
     type PropagatorImpl = ReifiedPropagator<WrappedPropagator>;
+    type Rule = HalfReified<WrappedArgs::Rule>;
+
+    fn constraint_description(
+        &self,
+    ) -> HalfReifiedDescription<<WrappedArgs::Rule as ConflictRule>::Description> {
+        HalfReifiedDescription {
+            inner: self.propagator.constraint_description(),
+            reification_literal: self.reification_literal,
+        }
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.propagator.constraint_tag()
+    }
 
     fn create(
         self,
         mut context: PropagatorConstructorContext,
+        inference_code: InferenceCode,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
         let ReifiedPropagatorArgs {
             propagator,
             reification_literal,
         } = self;
 
+        // The wrapped propagator makes the inferences of the half reified rule.
         let PropagatorSpec {
             mut registration,
             propagator,
-            checkers,
-        } = propagator.create(context.reborrow());
+        } = propagator.create(context.reborrow(), inference_code);
 
         // The local ID for the reification literal will be one larger than the largest ID
         // registered by the wrapped propagator.
@@ -53,18 +70,6 @@ where
             reification_literal_id,
         );
 
-        let mut wrapped_checkers = RuntimeCheckers::empty();
-        for (inference_code, checker) in checkers.into_iter() {
-            let _ = wrapped_checkers.add_conflict_checker(
-                inference_code.tag(),
-                inference_code.label(),
-                ReifiedChecker {
-                    inner: checker,
-                    reification_literal,
-                },
-            );
-        }
-
         let name = format!("Reified({})", propagator.name());
 
         let propagator = ReifiedPropagator {
@@ -77,7 +82,6 @@ where
 
         PropagatorSpec {
             registration,
-            checkers: wrapped_checkers,
             propagator,
         }
     }

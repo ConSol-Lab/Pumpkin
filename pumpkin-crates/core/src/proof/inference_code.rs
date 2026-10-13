@@ -4,6 +4,7 @@ use std::sync::Arc;
 #[cfg(doc)]
 use crate::Solver;
 use crate::containers::StorageKey;
+use crate::propagation::ConflictRule;
 
 /// An identifier for constraints, which is used to relate constraints from the model to steps in
 /// the proof. Under the hood, a tag is just a [`NonZero<u32>`]. The underlying integer can be
@@ -61,6 +62,12 @@ impl InferenceCode {
     /// tests.
     pub fn unknown_label(tag: ConstraintTag) -> Self {
         InferenceCode::new(tag, Unknown)
+    }
+
+    /// The inference code of the inferences that the rule `Rule` makes for the constraint with
+    /// `tag`; the name of the rule is the label.
+    pub fn for_rule<Rule: ConflictRule>(tag: ConstraintTag) -> Self {
+        InferenceCode(tag, Arc::from(Rule::name().as_ref()))
     }
 
     /// Get the constraint tag.

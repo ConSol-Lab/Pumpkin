@@ -1,21 +1,19 @@
-use pumpkin_checking::checkers::DisjunctiveCheckerTask;
-use pumpkin_checking::checkers::DisjunctiveEdgeFindingChecker;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::DisjunctiveDescription;
+use super::DisjunctiveEdgeFindingRule;
 use super::DisjunctivePropagator;
 use super::disjunctive_task::ArgDisjunctiveTask;
 use super::disjunctive_task::DisjunctiveTask;
 use super::theta_lambda_tree::ThetaLambdaTree;
-use crate::propagators::disjunctive::DisjunctiveEdgeFinding;
 
 #[derive(Debug)]
 pub struct DisjunctiveConstructor<Var> {
@@ -39,8 +37,21 @@ impl<Var> DisjunctiveConstructor<Var> {
 
 impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstructor<Var> {
     type PropagatorImpl = DisjunctivePropagator<Var>;
+    type Rule = DisjunctiveEdgeFindingRule<Var>;
 
-    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
+    fn constraint_description(&self) -> DisjunctiveDescription<Var> {
+        self.constraint_description.clone()
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
+
+    fn create(
+        self,
+        _: PropagatorConstructorContext,
+        inference_code: InferenceCode,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let tasks = self
             .constraint_description
             .tasks
@@ -59,21 +70,6 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
             registration = registration.add(&task.start_time, DomainEvents::BOUNDS, task.id);
         }
 
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_conflict_checker(
-            self.constraint_tag,
-            DisjunctiveEdgeFinding,
-            DisjunctiveEdgeFindingChecker {
-                tasks: tasks
-                    .iter()
-                    .map(|task| DisjunctiveCheckerTask {
-                        start_time: task.start_time.clone(),
-                        processing_time: task.processing_time,
-                    })
-                    .collect(),
-            },
-        );
-
         let propagator = DisjunctivePropagator {
             tasks: tasks.clone().into_boxed_slice(),
             sorted_tasks: tasks,
@@ -84,7 +80,6 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
 
         PropagatorSpec {
             registration: registration.build(),
-            checkers: checkers.build(),
             propagator,
         }
     }

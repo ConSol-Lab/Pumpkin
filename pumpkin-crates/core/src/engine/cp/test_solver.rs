@@ -42,7 +42,7 @@ pub struct TestSolver {
 impl Default for TestSolver {
     fn default() -> Self {
         let mut state = State::default();
-        let handle = state.add_propagator(NogoodPropagatorConstructor::new(
+        let handle = state.add_nogood_propagator(NogoodPropagatorConstructor::new(
             0,
             LearningOptions::default(),
             PropagationMode::UnitPropagation,

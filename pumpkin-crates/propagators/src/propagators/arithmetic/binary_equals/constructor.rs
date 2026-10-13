@@ -1,21 +1,18 @@
-use pumpkin_checking::checkers::BinaryEqualsChecker;
 use pumpkin_core::containers::HashSet;
-use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
-use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::BinaryEqualsDescription;
 use super::BinaryEqualsPropagator;
-
-declare_inference_label!(BinaryEquals);
+use super::BinaryEqualsRule;
 
 /// The [`PropagatorConstructor`] for the [`BinaryEqualsPropagator`].
 #[derive(Clone, Debug)]
@@ -30,11 +27,24 @@ where
     BVar: IntegerVariable + 'static,
 {
     type PropagatorImpl = BinaryEqualsPropagator<AVar, BVar>;
+    type Rule = BinaryEqualsRule<AVar, BVar>;
 
-    fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
+    fn constraint_description(&self) -> BinaryEqualsDescription<AVar, BVar> {
+        self.constraint_description.clone()
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
+
+    fn create(
+        self,
+        _: PropagatorConstructorContext,
+        inference_code: InferenceCode,
+    ) -> PropagatorSpec<Self::PropagatorImpl> {
         let BinaryEqualsPropagatorArgs {
             constraint_description,
-            constraint_tag,
+            constraint_tag: _,
         } = self;
         let BinaryEqualsDescription { a, b } = constraint_description;
 
@@ -42,16 +52,6 @@ where
             .add(&a, DomainEvents::ANY_INT, LocalId::from(0))
             .add(&b, DomainEvents::ANY_INT, LocalId::from(1))
             .build();
-
-        let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_conflict_checker(
-            constraint_tag,
-            BinaryEquals,
-            BinaryEqualsChecker {
-                lhs: a.clone(),
-                rhs: b.clone(),
-            },
-        );
 
         let propagator = BinaryEqualsPropagator {
             a,
@@ -69,7 +69,6 @@ where
 
         PropagatorSpec {
             registration,
-            checkers: checkers.build(),
             propagator,
         }
     }

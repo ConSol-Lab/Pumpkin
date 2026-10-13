@@ -56,6 +56,7 @@
 //! Conference, CP 2015, Cork, Ireland, August 31--September 4, 2015, Proceedings 21, 2015, pp.
 //! 149–157.
 
+mod conflict_rule;
 mod constraint_description;
 mod explanations;
 mod over_interval_incremental_propagator;
@@ -67,11 +68,11 @@ mod time_table_over_interval;
 mod time_table_per_point;
 mod time_table_util;
 
+pub use conflict_rule::*;
 pub use constraint_description::*;
 pub use explanations::CumulativeExplanationType;
 pub use over_interval_incremental_propagator::*;
 pub use per_point_incremental_propagator::*;
-use pumpkin_core::declare_inference_label;
 pub use time_table_over_interval::*;
 pub use time_table_per_point::*;
 
@@ -79,5 +80,3 @@ pub use time_table_per_point::*;
 use crate::cumulative::Task;
 #[cfg(doc)]
 use crate::propagators::cumulative::time_table::time_table_util::*;
-
-declare_inference_label!(TimeTable);
