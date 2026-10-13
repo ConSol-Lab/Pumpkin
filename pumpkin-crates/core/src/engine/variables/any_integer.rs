@@ -26,8 +26,8 @@ use crate::propagation::LocalId;
 /// and literals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AnyInteger {
-    Int(AffineView<DomainId>),
-    Literal(AffineView<Literal>),
+    Int(DomainId),
+    Literal(Literal),
 }
 
 /// Calls `$body` with `$var` bound to the variable inside the [`AnyInteger`].
@@ -52,25 +52,13 @@ macro_rules! dispatch_iter {
 
 impl From<DomainId> for AnyInteger {
     fn from(domain_id: DomainId) -> Self {
-        AnyInteger::Int(domain_id.into())
-    }
-}
-
-impl From<AffineView<DomainId>> for AnyInteger {
-    fn from(view: AffineView<DomainId>) -> Self {
-        AnyInteger::Int(view)
+        AnyInteger::Int(domain_id)
     }
 }
 
 impl From<Literal> for AnyInteger {
     fn from(literal: Literal) -> Self {
-        AnyInteger::Literal(literal.scaled(1))
-    }
-}
-
-impl From<AffineView<Literal>> for AnyInteger {
-    fn from(view: AffineView<Literal>) -> Self {
-        AnyInteger::Literal(view)
+        AnyInteger::Literal(literal)
     }
 }
 
