@@ -1,4 +1,6 @@
 use pumpkin_checking::IntExt;
+use pumpkin_checking::checkers::compute_quotient_bound_ext;
+use pumpkin_checking::checkers::product_bound_ext;
 use pumpkin_core::predicate;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::ExplanationContext;
@@ -11,8 +13,6 @@ use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::explainer::IntegerMultiplicationExplainer;
-use super::shared::compute_quotient_bound_ext;
-use super::shared::product_bound_ext;
 use crate::arithmetic::integer_multiplication::explainer::MultiplicationPropagation;
 use crate::arithmetic::integer_multiplication::explainer::PropagatedBound;
 

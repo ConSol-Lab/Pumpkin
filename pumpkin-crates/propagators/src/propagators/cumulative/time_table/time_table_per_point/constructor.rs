@@ -1,3 +1,5 @@
+use pumpkin_checking::checkers::CheckerTask;
+use pumpkin_checking::checkers::TimeTableChecker;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
@@ -6,8 +8,6 @@ use pumpkin_core::variables::IntegerVariable;
 
 use super::super::TimeTable;
 use super::TimeTablePerPointPropagator;
-use crate::cumulative::time_table::CheckerTask;
-use crate::cumulative::time_table::TimeTableChecker;
 use crate::cumulative::util::register_tasks;
 
 impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPointPropagator<Var> {

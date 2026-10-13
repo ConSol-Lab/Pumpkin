@@ -1,11 +1,11 @@
 use pumpkin_checking::ConflictChecker;
+use pumpkin_checking::checkers::IntegerDivisionChecker;
 use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::state::State;
 
 use super::DivisionArgs;
 use super::DivisionDescription;
-use super::IntegerDivisionChecker;
 use crate::fixed_domains;
 
 #[test]

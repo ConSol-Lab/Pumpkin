@@ -1,13 +1,8 @@
-use pumpkin_checking::AtomicConstraint;
-use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::ConflictChecker;
-use pumpkin_checking::IntExt;
-
-#[derive(Clone, Debug)]
-pub struct AbsoluteValueChecker<VA, VB> {
-    pub(super) signed: VA,
-    pub(super) absolute: VB,
-}
+use super::AbsoluteValueChecker;
+use crate::AtomicConstraint;
+use crate::CheckerVariable;
+use crate::ConflictChecker;
+use crate::IntExt;
 
 impl<VA, VB, Atomic> ConflictChecker<Atomic> for AbsoluteValueChecker<VA, VB>
 where
@@ -15,12 +10,7 @@ where
     VB: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
-    fn check(
-        &self,
-        state: pumpkin_checking::VariableState<Atomic>,
-        _: &[Atomic],
-        _: Option<&Atomic>,
-    ) -> bool {
+    fn check(&self, state: crate::VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
         let signed_lower = self.signed.induced_lower_bound(&state);
         let signed_upper = self.signed.induced_upper_bound(&state);
         let absolute_lower = self.absolute.induced_lower_bound(&state);

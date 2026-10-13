@@ -1,20 +1,9 @@
-use pumpkin_checking::AtomicConstraint;
-use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::ConflictChecker;
-use pumpkin_checking::IntExt;
-use pumpkin_checking::VariableState;
-
-#[derive(Debug, Clone)]
-pub struct LinearLessOrEqualConflictChecker<Var> {
-    terms: Box<[Var]>,
-    bound: i32,
-}
-
-impl<Var> LinearLessOrEqualConflictChecker<Var> {
-    pub fn new(terms: Box<[Var]>, bound: i32) -> Self {
-        LinearLessOrEqualConflictChecker { terms, bound }
-    }
-}
+use super::LinearLessOrEqualConflictChecker;
+use crate::AtomicConstraint;
+use crate::CheckerVariable;
+use crate::ConflictChecker;
+use crate::IntExt;
+use crate::VariableState;
 
 impl<Var, Atomic> ConflictChecker<Atomic> for LinearLessOrEqualConflictChecker<Var>
 where
