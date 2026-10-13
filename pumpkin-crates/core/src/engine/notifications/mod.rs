@@ -231,6 +231,14 @@ impl NotificationEngine {
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
+        // A literal which is fixed at the root never triggers an event, so it does not need to be
+        // watched. Watching it would also be incorrect: the `PredicateNotifier` does not know
+        // whether a predicate is already true when it starts tracking it, so it may report the
+        // predicate as becoming true later on.
+        if assignments.is_fixed_at_checkpoint(predicate, 0) {
+            return;
+        }
+
         for (predicate, event) in literal_watches(predicate, events) {
             let predicate_id = self.get_id(predicate);
             self.watch_list_predicate_id
@@ -268,6 +276,11 @@ impl NotificationEngine {
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
+        // See `NotificationEngine::watch_literal`.
+        if assignments.is_fixed_at_checkpoint(predicate, 0) {
+            return;
+        }
+
         for (predicate, event) in literal_watches(predicate, events) {
             let predicate_id = self.get_id(predicate);
             self.backtrack_watch_list_predicate_id

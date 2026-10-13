@@ -585,4 +585,45 @@ mod tests {
             (vec![DomainEvent::Assign], vec![DomainEvent::Assign])
         );
     }
+
+    #[test]
+    fn no_events_for_literal_which_is_fixed_at_registration() {
+        // `[x != 2]` is true at the root, and its negation `[x == 2]` is false at the root.
+        for negate in [false, true] {
+            let mut state = State::default();
+            let x = state.new_sparse_variable(vec![1, 3], None);
+            let literal = Literal::new(predicate![x != 2]);
+            let literal = if negate { !literal } else { literal };
+
+            let events = record_events(
+                literal,
+                DomainEvents::ANY_INT,
+                &mut state,
+                &[predicate![x >= 3]],
+            );
+
+            assert_eq!(events, (vec![], vec![]), "negated: {negate}");
+        }
+    }
+
+    #[test]
+    fn no_events_for_literal_which_is_fixed_at_the_root_when_registered_during_search() {
+        // `[x != 2]` is true at the root, and its negation `[x == 2]` is false at the root.
+        for negate in [false, true] {
+            let mut state = State::default();
+            let x = state.new_sparse_variable(vec![1, 3], None);
+            let literal = Literal::new(predicate![x != 2]);
+            let literal = if negate { !literal } else { literal };
+            state.new_checkpoint();
+
+            let events = record_events(
+                literal,
+                DomainEvents::ANY_INT,
+                &mut state,
+                &[predicate![x >= 3]],
+            );
+
+            assert_eq!(events, (vec![], vec![]), "negated: {negate}");
+        }
+    }
 }
