@@ -1,10 +1,12 @@
 //! The checkers of the inference rules.
 //!
-//! Each constraint has a folder holding the checker of its rule: the type in `mod.rs` and the
-//! [`ConflictChecker`] implementation in `conflict.rs`.
+//! Each constraint has a folder holding the checker of its rule: the type in `mod.rs`, the
+//! [`ConflictChecker`] implementation in `conflict.rs` and, where the rule has one, the
+//! [`RetentionChecker`] implementation in `retention.rs`.
 
 mod conflict_checker;
 mod deduction_checker;
+mod retention_checker;
 
 mod absolute_value;
 mod binary_equals;
@@ -37,3 +39,13 @@ pub use linear_not_equal::*;
 pub use maximum::*;
 pub use nogood::*;
 pub use reified::*;
+pub use retention_checker::*;
+
+/// The state in which the given atomic constraints hold, for tests of the checkers.
+#[cfg(test)]
+pub(crate) fn test_state(
+    atomics: impl IntoIterator<Item = crate::TestAtomic>,
+) -> crate::VariableState<crate::TestAtomic> {
+    crate::VariableState::prepare_for_conflict_check(atomics, None)
+        .expect("the atomic constraints are consistent")
+}

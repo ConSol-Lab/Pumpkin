@@ -1,4 +1,7 @@
 mod conflict;
+mod retention;
+#[cfg(test)]
+mod tests;
 
 #[derive(Clone, Debug)]
 pub struct BinaryNotEqualsChecker<Lhs, Rhs> {
