@@ -13,8 +13,8 @@ use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::core::variables::Literal;
 use pumpkin_solver::core::variables::TransformableVariable;
 
-use super::constant_comparison::ConstantComparison;
 use super::constant_comparison::IntComparison;
+use super::constant_comparison::constant_comparison_predicate;
 use super::context::CompilationContext;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::FlatZincOptions;
@@ -789,10 +789,12 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
-    if let Some(comparison) = ConstantComparison::new(comparison, &exprs[0], &exprs[1], context) {
+    if let Some(predicate) =
+        constant_comparison_predicate(comparison, &exprs[0], &exprs[1], context)
+    {
         // `r <-> [x op c]`; the boolean could not be defined as the literal of the comparison
         // itself (see `define_reified_literals`), so they are linked with clauses.
-        let literal = comparison.to_literal(context)?;
+        let literal = Literal::new(predicate);
         let reif = context.resolve_bool_variable(&exprs[2])?;
 
         pumpkin_constraints::clause([!reif, literal], constraint_tag).post(context.solver);
@@ -897,9 +899,11 @@ fn compile_binary_int_imp<C: Constraint>(
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
-    if let Some(comparison) = ConstantComparison::new(comparison, &exprs[0], &exprs[1], context) {
+    if let Some(predicate) =
+        constant_comparison_predicate(comparison, &exprs[0], &exprs[1], context)
+    {
         // `r -> [x op c]` is a clause over the literal of the comparison.
-        let literal = comparison.to_literal(context)?;
+        let literal = Literal::new(predicate);
         let reif = context.resolve_bool_variable(&exprs[2])?;
 
         pumpkin_constraints::clause([!reif, literal], constraint_tag).post(context.solver);

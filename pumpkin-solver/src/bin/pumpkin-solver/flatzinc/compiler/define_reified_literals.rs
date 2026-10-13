@@ -4,8 +4,10 @@
 //! For example, `int_le_reif(x, 5, r)` defines `r` as the literal `[x <= 5]`. The boolean then
 //! does not need a domain of its own, and the defining constraint is removed.
 
-use super::constant_comparison::ConstantComparison;
+use pumpkin_solver::core::variables::Literal;
+
 use super::constant_comparison::IntComparison;
+use super::constant_comparison::constant_comparison_predicate;
 use super::context::CompilationContext;
 use super::context::Domain;
 use crate::FlatZincOptions;
@@ -43,32 +45,35 @@ fn define_reified_literal(
         _ => return false,
     };
 
+    let [lhs, rhs, flatzinc::Expr::VarParIdentifier(boolean)] = constraint.exprs.as_slice() else {
+        return false;
+    };
     // The reified boolean should be a variable; parameters do not have an equivalence class.
-    if let [lhs, rhs, flatzinc::Expr::VarParIdentifier(boolean)] = constraint.exprs.as_slice()
-        && context.equivalences.is_defined(boolean)
-        && let Some(comparison) = ConstantComparison::new(comparison, lhs, rhs, context)
-    {
-        let representative = context.equivalences.representative(boolean);
-        // The boolean can only be defined as the literal of the comparison if:
-        // - it is not merged with an integer variable (e.g. through `bool2int`), which needs a
-        //   domain to represent it;
-        // - its domain is not fixed, as the literal would not enforce that value;
-        // - it is not already defined by another constraint; that constraint will instead be posted
-        //   as clauses linking the two literals;
-        // - the comparison is not over the boolean itself.
-        let can_be_defined = !context.equivalences.contains_integer(boolean)
-            && context.equivalences.domain(boolean) == Domain::IntervalDomain { lb: 0, ub: 1 }
-            && !context.reified_literals.contains_key(&representative)
-            && context.equivalences.representative(comparison.variable()) != representative;
-
-        if can_be_defined {
-            let _ = context.reified_literals.insert(representative, comparison);
-        }
-
-        can_be_defined
-    } else {
-        false
+    if !context.equivalences.is_defined(boolean) {
+        return false;
     }
+
+    let representative = context.equivalences.representative(boolean);
+    // The boolean can only be defined as the literal of the comparison if:
+    // - it is not merged with an integer variable (e.g. through `bool2int`), which needs a domain
+    //   to represent it;
+    // - its domain is not fixed, as the literal would not enforce that value;
+    // - it is not already defined by another constraint; that constraint will instead be posted as
+    //   clauses linking the two literals.
+    let can_be_defined = !context.equivalences.contains_integer(boolean)
+        && context.equivalences.domain(boolean) == Domain::IntervalDomain { lb: 0, ub: 1 }
+        && !context.boolean_literals.contains_key(&representative);
+    if !can_be_defined {
+        return false;
+    }
+
+    let Some(predicate) = constant_comparison_predicate(comparison, lhs, rhs, context) else {
+        return false;
+    };
+    let _ = context
+        .boolean_literals
+        .insert(representative, Literal::new(predicate));
+    true
 }
 
 #[cfg(test)]
@@ -141,7 +146,7 @@ mod tests {
             .expect("step should not fail");
         run(&mut context, &options).expect("step should not fail");
 
-        let defined = context.reified_literals.keys().cloned().collect::<Vec<_>>();
+        let defined = context.boolean_literals.keys().cloned().collect::<Vec<_>>();
         assert_eq!(defined, vec![context.equivalences.representative("r")]);
 
         let remaining = context

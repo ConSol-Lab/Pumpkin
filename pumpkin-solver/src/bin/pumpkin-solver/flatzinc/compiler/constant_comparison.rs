@@ -1,23 +1,11 @@
 //! Comparisons between an integer variable and a constant, e.g. the `x <= 5` in
-//! `int_le_reif(x, 5, r)`, which can be represented by a single [`Literal`].
+//! `int_le_reif(x, 5, r)`, which can be represented by a single literal.
 
-use std::rc::Rc;
-
+use pumpkin_solver::core::predicate;
 use pumpkin_solver::core::predicates::Predicate;
-use pumpkin_solver::core::predicates::PredicateType;
-use pumpkin_solver::core::variables::Literal;
 
+use super::collect_domains::get_or_create_domain;
 use super::context::CompilationContext;
-use crate::flatzinc::FlatZincError;
-
-/// A comparison `variable op value` between an integer variable and a constant, where the
-/// comparison is that of the corresponding [`Predicate`].
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ConstantComparison {
-    variable: Rc<str>,
-    predicate_type: PredicateType,
-    value: i32,
-}
 
 /// The comparison `a op b` of an integer comparison constraint such as `int_le_reif(a, b, r)`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,66 +32,41 @@ impl IntComparison {
     }
 }
 
-impl ConstantComparison {
-    /// Creates the comparison `lhs comparison rhs` if exactly one of `lhs` and `rhs` is a
-    /// constant and the other is an integer variable; otherwise returns [`None`].
-    pub(crate) fn new(
-        comparison: IntComparison,
-        lhs: &flatzinc::Expr,
-        rhs: &flatzinc::Expr,
-        context: &CompilationContext,
-    ) -> Option<ConstantComparison> {
-        let (variable, comparison, value) = match (
-            resolve_constant(lhs, context),
-            resolve_constant(rhs, context),
-        ) {
-            // `x op c`
-            (None, Some(value)) => (resolve_variable(lhs, context)?, comparison, value),
-            // `c op x`, which is `x op' c` with the comparison mirrored
-            (Some(value), None) => (
-                resolve_variable(rhs, context)?,
-                comparison.mirrored(),
-                value,
-            ),
-            _ => return None,
-        };
-
-        let (predicate_type, value) = match comparison {
-            IntComparison::Equal => (PredicateType::Equal, value),
-            IntComparison::NotEqual => (PredicateType::NotEqual, value),
-            IntComparison::LessThanOrEqual => (PredicateType::UpperBound, value),
-            IntComparison::LessThan => (PredicateType::UpperBound, value.checked_sub(1)?),
-            IntComparison::GreaterThanOrEqual => (PredicateType::LowerBound, value),
-            IntComparison::GreaterThan => (PredicateType::LowerBound, value.checked_add(1)?),
-        };
-
-        Some(ConstantComparison {
-            variable,
-            predicate_type,
+/// Returns the predicate for `lhs comparison rhs` if exactly one of `lhs` and `rhs` is a
+/// constant and the other is an integer variable; otherwise returns [`None`].
+///
+/// The domain of the integer variable is created if it does not exist yet.
+pub(crate) fn constant_comparison_predicate(
+    comparison: IntComparison,
+    lhs: &flatzinc::Expr,
+    rhs: &flatzinc::Expr,
+    context: &mut CompilationContext,
+) -> Option<Predicate> {
+    let (variable, comparison, value) = match (
+        resolve_constant(lhs, context),
+        resolve_constant(rhs, context),
+    ) {
+        // `x op c`
+        (None, Some(value)) => (resolve_variable(lhs, context)?, comparison, value),
+        // `c op x`, which is `x op' c` with the comparison mirrored
+        (Some(value), None) => (
+            resolve_variable(rhs, context)?,
+            comparison.mirrored(),
             value,
-        })
-    }
+        ),
+        _ => return None,
+    };
 
-    /// The identifier of the integer variable in the comparison.
-    pub(crate) fn variable(&self) -> &str {
-        &self.variable
-    }
+    let variable = get_or_create_domain(context, variable);
 
-    /// Creates the literal which is true if and only if the comparison holds.
-    ///
-    /// The domain of the integer variable should already have been created.
-    pub(crate) fn to_literal(
-        &self,
-        context: &mut CompilationContext,
-    ) -> Result<Literal, FlatZincError> {
-        let variable = context.resolve_integer_variable_from_identifier(&self.variable)?;
-
-        Ok(Literal::new(Predicate::new(
-            variable,
-            self.predicate_type,
-            self.value,
-        )))
-    }
+    Some(match comparison {
+        IntComparison::Equal => predicate![variable == value],
+        IntComparison::NotEqual => predicate![variable != value],
+        IntComparison::LessThanOrEqual => predicate![variable <= value],
+        IntComparison::LessThan => predicate![variable <= value.checked_sub(1)?],
+        IntComparison::GreaterThanOrEqual => predicate![variable >= value],
+        IntComparison::GreaterThan => predicate![variable >= value.checked_add(1)?],
+    })
 }
 
 fn resolve_constant(expr: &flatzinc::Expr, context: &CompilationContext) -> Option<i32> {
@@ -116,11 +79,9 @@ fn resolve_constant(expr: &flatzinc::Expr, context: &CompilationContext) -> Opti
     }
 }
 
-fn resolve_variable(expr: &flatzinc::Expr, context: &CompilationContext) -> Option<Rc<str>> {
+fn resolve_variable<'a>(expr: &'a flatzinc::Expr, context: &CompilationContext) -> Option<&'a str> {
     match expr {
-        flatzinc::Expr::VarParIdentifier(id) if context.equivalences.is_defined(id) => {
-            Some(Rc::from(id.as_str()))
-        }
+        flatzinc::Expr::VarParIdentifier(id) if context.equivalences.is_defined(id) => Some(id),
         _ => None,
     }
 }
@@ -139,38 +100,39 @@ mod tests {
             .equivalences
             .create_equivalence_class("x".into(), 0, 10);
         let _ = context.integer_parameters.insert("c".into(), 7);
+        let domain = get_or_create_domain(&mut context, "x");
 
         let x = flatzinc::Expr::VarParIdentifier("x".into());
         let five = flatzinc::Expr::Int(5);
         let c = flatzinc::Expr::VarParIdentifier("c".into());
-        let expected = |predicate_type, value| {
-            Some(ConstantComparison {
-                variable: "x".into(),
-                predicate_type,
-                value,
-            })
-        };
 
-        assert_eq!(
-            ConstantComparison::new(IntComparison::LessThanOrEqual, &x, &five, &context),
-            expected(PredicateType::UpperBound, 5)
-        );
-        assert_eq!(
-            ConstantComparison::new(IntComparison::LessThan, &five, &x, &context),
-            expected(PredicateType::LowerBound, 6)
-        );
-        assert_eq!(
-            ConstantComparison::new(IntComparison::GreaterThan, &x, &five, &context),
-            expected(PredicateType::LowerBound, 6)
-        );
-        assert_eq!(
-            ConstantComparison::new(IntComparison::GreaterThanOrEqual, &five, &x, &context),
-            expected(PredicateType::UpperBound, 5)
-        );
-        assert_eq!(
-            ConstantComparison::new(IntComparison::NotEqual, &x, &c, &context),
-            expected(PredicateType::NotEqual, 7)
-        );
+        for (comparison, lhs, rhs, expected) in [
+            (
+                IntComparison::LessThanOrEqual,
+                &x,
+                &five,
+                predicate![domain <= 5],
+            ),
+            (IntComparison::LessThan, &five, &x, predicate![domain >= 6]),
+            (
+                IntComparison::GreaterThan,
+                &x,
+                &five,
+                predicate![domain >= 6],
+            ),
+            (
+                IntComparison::GreaterThanOrEqual,
+                &five,
+                &x,
+                predicate![domain <= 5],
+            ),
+            (IntComparison::NotEqual, &x, &c, predicate![domain != 7]),
+        ] {
+            assert_eq!(
+                constant_comparison_predicate(comparison, lhs, rhs, &mut context),
+                Some(expected)
+            );
+        }
     }
 
     #[test]
@@ -190,11 +152,11 @@ mod tests {
         let two = flatzinc::Expr::Int(2);
 
         assert_eq!(
-            ConstantComparison::new(IntComparison::LessThanOrEqual, &x, &y, &context),
+            constant_comparison_predicate(IntComparison::LessThanOrEqual, &x, &y, &mut context),
             None
         );
         assert_eq!(
-            ConstantComparison::new(IntComparison::LessThanOrEqual, &one, &two, &context),
+            constant_comparison_predicate(IntComparison::LessThanOrEqual, &one, &two, &mut context),
             None
         );
     }

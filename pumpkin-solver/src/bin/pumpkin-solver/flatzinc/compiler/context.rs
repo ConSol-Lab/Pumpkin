@@ -12,7 +12,6 @@ use pumpkin_solver::core::proof::ConstraintTag;
 use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::core::variables::Literal;
 
-use super::constant_comparison::ConstantComparison;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::instance::Output;
 
@@ -41,9 +40,6 @@ pub(crate) struct CompilationContext<'a> {
     /// The boolean variables (by the representative of their equivalence class) which are
     /// defined as the literal over a comparison, e.g. `r` in `int_le_reif(x, 5, r)`. These do not
     /// get a domain of their own.
-    pub(crate) reified_literals: HashMap<Rc<str>, ConstantComparison>,
-    /// The literals for the boolean variables in [`CompilationContext::reified_literals`], which
-    /// are created once the domains of the integer variables exist.
     pub(crate) boolean_literals: HashMap<Rc<str>, Literal>,
 
     /// Literal which is always true
@@ -102,7 +98,6 @@ impl CompilationContext<'_> {
             integer_parameters: Default::default(),
             integer_array_parameters: Default::default(),
             variable_map: Default::default(),
-            reified_literals: Default::default(),
             boolean_literals: Default::default(),
             constant_domain_ids: Default::default(),
             integer_variable_arrays: Default::default(),
