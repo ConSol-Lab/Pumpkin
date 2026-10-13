@@ -746,6 +746,7 @@ mod tests {
     use drcp_format::IntComparison::*;
     use drcp_format::reader::ReadAtomic;
     use drcp_format::reader::ReadStep;
+    use pumpkin_checking::ConflictCheck;
     use pumpkin_checking::ConflictChecker;
     use pumpkin_checking::DomainView;
     use pumpkin_checking::VariableState;
@@ -1068,11 +1069,15 @@ mod tests {
     impl ConflictChecker<Predicate> for AlwaysConflictChecker {
         fn check(
             &self,
-            state: VariableState<Predicate>,
+            state: &VariableState<Predicate>,
             _premises: &[Predicate],
             _consequent: Option<&Predicate>,
-        ) -> bool {
-            state.is_true(&self.watched) && state.is_true(&self.other)
+        ) -> ConflictCheck {
+            if state.is_true(&self.watched) && state.is_true(&self.other) {
+                ConflictCheck::ConflictDetected
+            } else {
+                ConflictCheck::NoConflictDetected
+            }
         }
     }
 

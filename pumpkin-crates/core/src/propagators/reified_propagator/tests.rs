@@ -2,6 +2,7 @@
 
 use std::borrow::Cow;
 
+use pumpkin_checking::ConflictCheck;
 use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::DomainView;
 use pumpkin_checking::VariableState;
@@ -320,7 +321,12 @@ impl ConflictRule for GenericRule {
 struct AcceptEverything;
 
 impl ConflictChecker<Predicate> for AcceptEverything {
-    fn check(&self, _: VariableState<Predicate>, _: &[Predicate], _: Option<&Predicate>) -> bool {
-        true
+    fn check(
+        &self,
+        _: &VariableState<Predicate>,
+        _: &[Predicate],
+        _: Option<&Predicate>,
+    ) -> ConflictCheck {
+        ConflictCheck::ConflictDetected
     }
 }

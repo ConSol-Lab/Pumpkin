@@ -1,19 +1,23 @@
 use super::ReifiedChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::ConflictCheck;
 use crate::ConflictChecker;
+use crate::VariableState;
 
-impl<Atomic: AtomicConstraint + Clone, Var: CheckerVariable<Atomic>> ConflictChecker<Atomic>
-    for ReifiedChecker<Atomic, Var>
+impl<Atomic, Var> ConflictChecker<Atomic> for ReifiedChecker<Atomic, Var>
+where
+    Atomic: AtomicConstraint + Clone,
+    Var: CheckerVariable<Atomic>,
 {
     fn check(
         &self,
-        state: crate::VariableState<Atomic>,
+        state: &VariableState<Atomic>,
         premises: &[Atomic],
         consequent: Option<&Atomic>,
-    ) -> bool {
-        if self.reification_literal.induced_domain_contains(&state, 0) {
-            return false;
+    ) -> ConflictCheck {
+        if self.reification_literal.induced_domain_contains(state, 0) {
+            return ConflictCheck::NoConflictDetected;
         }
 
         if let Some(consequent) = consequent

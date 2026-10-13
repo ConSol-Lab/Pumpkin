@@ -1,8 +1,10 @@
 use super::MaximumChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::ConflictCheck;
 use crate::ConflictChecker;
 use crate::IntExt;
+use crate::VariableState;
 
 impl<ElementVar, Rhs, Atomic> ConflictChecker<Atomic> for MaximumChecker<ElementVar, Rhs>
 where
@@ -10,24 +12,34 @@ where
     ElementVar: CheckerVariable<Atomic>,
     Rhs: CheckerVariable<Atomic>,
 {
-    fn check(&self, state: crate::VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
+    fn check(
+        &self,
+        state: &VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> ConflictCheck {
         let lowest_maximum = self
             .array
             .iter()
-            .map(|element| element.induced_lower_bound(&state))
+            .map(|element| element.induced_lower_bound(state))
             .max()
             .unwrap_or(IntExt::NegativeInf);
         let highest_maximum = self
             .array
             .iter()
-            .map(|element| element.induced_upper_bound(&state))
+            .map(|element| element.induced_upper_bound(state))
             .max()
             .unwrap_or(IntExt::PositiveInf);
 
         // If the intersection between the domain of `rhs` and `[lowest_maximum,
         // highest_maximum]` is empty, there is a conflict.
 
-        lowest_maximum > self.rhs.induced_upper_bound(&state)
-            || highest_maximum < self.rhs.induced_lower_bound(&state)
+        if lowest_maximum > self.rhs.induced_upper_bound(state)
+            || highest_maximum < self.rhs.induced_lower_bound(state)
+        {
+            ConflictCheck::ConflictDetected
+        } else {
+            ConflictCheck::NoConflictDetected
+        }
     }
 }

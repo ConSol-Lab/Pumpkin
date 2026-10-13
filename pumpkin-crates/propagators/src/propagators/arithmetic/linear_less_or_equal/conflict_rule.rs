@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::marker::PhantomData;
 
 use pumpkin_checking::ConflictChecker;
-use pumpkin_checking::checkers::LinearLessOrEqualConflictChecker;
+use pumpkin_checking::checkers::LinearLessOrEqualChecker;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConflictRule;
 use pumpkin_core::variables::IntegerVariable;
@@ -23,7 +23,7 @@ impl<Var: IntegerVariable + 'static> ConflictRule for LinearLessOrEqualRule<Var>
     fn create_conflict_checker(
         constraint_description: &LinearLessOrEqualDescription<Var>,
     ) -> impl ConflictChecker<Predicate> + 'static {
-        LinearLessOrEqualConflictChecker::new(
+        LinearLessOrEqualChecker::new(
             constraint_description.terms.clone(),
             constraint_description.bound,
         )

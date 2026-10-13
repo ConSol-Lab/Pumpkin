@@ -1,3 +1,5 @@
+//! The time-table rule of the cumulative constraint.
+
 mod conflict;
 #[cfg(test)]
 mod tests;

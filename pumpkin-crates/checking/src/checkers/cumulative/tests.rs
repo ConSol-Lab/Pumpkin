@@ -1,19 +1,22 @@
-use super::*;
+use crate::Comparison;
+use crate::ConflictCheck;
 use crate::ConflictChecker;
 use crate::TestAtomic;
 use crate::VariableState;
+use crate::checkers::CheckerTask;
+use crate::checkers::TimeTableChecker;
 
 #[test]
 fn conflict() {
     let premises = [
         TestAtomic {
             name: "x1",
-            comparison: crate::Comparison::Equal,
+            comparison: Comparison::Equal,
             value: 1,
         },
         TestAtomic {
             name: "x2",
-            comparison: crate::Comparison::Equal,
+            comparison: Comparison::Equal,
             value: 1,
         },
     ];
@@ -38,20 +41,23 @@ fn conflict() {
         capacity: 1,
     };
 
-    assert!(checker.check(state, &premises, None));
+    assert_eq!(
+        checker.check(&state, &premises, None),
+        ConflictCheck::ConflictDetected
+    );
 }
 
 #[test]
 fn hole_in_domain() {
     let premises = [TestAtomic {
         name: "x1",
-        comparison: crate::Comparison::Equal,
+        comparison: Comparison::Equal,
         value: 6,
     }];
 
     let consequent = Some(TestAtomic {
         name: "x2",
-        comparison: crate::Comparison::NotEqual,
+        comparison: Comparison::NotEqual,
         value: 2,
     });
     let state = VariableState::prepare_for_conflict_check(premises, consequent)
@@ -74,7 +80,10 @@ fn hole_in_domain() {
         capacity: 4,
     };
 
-    assert!(checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(&state, &premises, consequent.as_ref()),
+        ConflictCheck::ConflictDetected
+    );
 }
 
 #[test]
@@ -82,24 +91,24 @@ fn lower_bound_chain() {
     let premises = [
         TestAtomic {
             name: "x1",
-            comparison: crate::Comparison::Equal,
+            comparison: Comparison::Equal,
             value: 1,
         },
         TestAtomic {
             name: "x2",
-            comparison: crate::Comparison::Equal,
+            comparison: Comparison::Equal,
             value: 6,
         },
         TestAtomic {
             name: "x3",
-            comparison: crate::Comparison::GreaterEqual,
+            comparison: Comparison::GreaterEqual,
             value: 0,
         },
     ];
 
     let consequent = Some(TestAtomic {
         name: "x3",
-        comparison: crate::Comparison::GreaterEqual,
+        comparison: Comparison::GreaterEqual,
         value: 16,
     });
     let state = VariableState::prepare_for_conflict_check(premises, consequent)
@@ -127,7 +136,10 @@ fn lower_bound_chain() {
         capacity: 4,
     };
 
-    assert!(checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(&state, &premises, consequent.as_ref()),
+        ConflictCheck::ConflictDetected
+    );
 }
 
 #[test]
@@ -135,24 +147,24 @@ fn upper_bound_chain() {
     let premises = [
         TestAtomic {
             name: "x1",
-            comparison: crate::Comparison::Equal,
+            comparison: Comparison::Equal,
             value: 1,
         },
         TestAtomic {
             name: "x2",
-            comparison: crate::Comparison::Equal,
+            comparison: Comparison::Equal,
             value: 6,
         },
         TestAtomic {
             name: "x3",
-            comparison: crate::Comparison::LessEqual,
+            comparison: Comparison::LessEqual,
             value: 15,
         },
     ];
 
     let consequent = Some(TestAtomic {
         name: "x3",
-        comparison: crate::Comparison::LessEqual,
+        comparison: Comparison::LessEqual,
         value: -4,
     });
     let state = VariableState::prepare_for_conflict_check(premises, consequent)
@@ -180,20 +192,23 @@ fn upper_bound_chain() {
         capacity: 4,
     };
 
-    assert!(checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(&state, &premises, consequent.as_ref()),
+        ConflictCheck::ConflictDetected
+    );
 }
 
 #[test]
 fn hole_in_domain_not_accepted() {
     let premises = [TestAtomic {
         name: "x1",
-        comparison: crate::Comparison::Equal,
+        comparison: Comparison::Equal,
         value: 6,
     }];
 
     let consequent = Some(TestAtomic {
         name: "x2",
-        comparison: crate::Comparison::NotEqual,
+        comparison: Comparison::NotEqual,
         value: 1,
     });
     let state = VariableState::prepare_for_conflict_check(premises, consequent)
@@ -216,7 +231,10 @@ fn hole_in_domain_not_accepted() {
         capacity: 4,
     };
 
-    assert!(!checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(&state, &premises, consequent.as_ref()),
+        ConflictCheck::NoConflictDetected
+    );
 }
 
 #[test]
@@ -224,24 +242,24 @@ fn lower_bound_chain_not_accepted() {
     let premises = [
         TestAtomic {
             name: "x1",
-            comparison: crate::Comparison::Equal,
+            comparison: Comparison::Equal,
             value: 1,
         },
         TestAtomic {
             name: "x2",
-            comparison: crate::Comparison::Equal,
+            comparison: Comparison::Equal,
             value: 8,
         },
         TestAtomic {
             name: "x3",
-            comparison: crate::Comparison::GreaterEqual,
+            comparison: Comparison::GreaterEqual,
             value: 0,
         },
     ];
 
     let consequent = Some(TestAtomic {
         name: "x3",
-        comparison: crate::Comparison::GreaterEqual,
+        comparison: Comparison::GreaterEqual,
         value: 16,
     });
     let state = VariableState::prepare_for_conflict_check(premises, consequent)
@@ -269,7 +287,10 @@ fn lower_bound_chain_not_accepted() {
         capacity: 4,
     };
 
-    assert!(!checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(&state, &premises, consequent.as_ref()),
+        ConflictCheck::NoConflictDetected
+    );
 }
 
 #[test]
@@ -277,24 +298,24 @@ fn upper_bound_chain_not_accepted() {
     let premises = [
         TestAtomic {
             name: "x1",
-            comparison: crate::Comparison::Equal,
+            comparison: Comparison::Equal,
             value: 1,
         },
         TestAtomic {
             name: "x2",
-            comparison: crate::Comparison::Equal,
+            comparison: Comparison::Equal,
             value: 8,
         },
         TestAtomic {
             name: "x3",
-            comparison: crate::Comparison::LessEqual,
+            comparison: Comparison::LessEqual,
             value: 15,
         },
     ];
 
     let consequent = Some(TestAtomic {
         name: "x3",
-        comparison: crate::Comparison::LessEqual,
+        comparison: Comparison::LessEqual,
         value: -4,
     });
     let state = VariableState::prepare_for_conflict_check(premises, consequent)
@@ -322,7 +343,10 @@ fn upper_bound_chain_not_accepted() {
         capacity: 4,
     };
 
-    assert!(!checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(&state, &premises, consequent.as_ref()),
+        ConflictCheck::NoConflictDetected
+    );
 }
 
 #[test]
@@ -330,24 +354,24 @@ fn simple_test() {
     let premises = [
         TestAtomic {
             name: "x3",
-            comparison: crate::Comparison::GreaterEqual,
+            comparison: Comparison::GreaterEqual,
             value: 5,
         },
         TestAtomic {
             name: "x3",
-            comparison: crate::Comparison::LessEqual,
+            comparison: Comparison::LessEqual,
             value: 6,
         },
         TestAtomic {
             name: "x2",
-            comparison: crate::Comparison::LessEqual,
+            comparison: Comparison::LessEqual,
             value: 7,
         },
     ];
 
     let consequent = Some(TestAtomic {
         name: "x2",
-        comparison: crate::Comparison::LessEqual,
+        comparison: Comparison::LessEqual,
         value: 4,
     });
     let state = VariableState::prepare_for_conflict_check(premises, consequent)
@@ -370,7 +394,10 @@ fn simple_test() {
         capacity: 2,
     };
 
-    assert!(checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(&state, &premises, consequent.as_ref()),
+        ConflictCheck::ConflictDetected
+    );
 }
 
 #[test]
@@ -378,34 +405,34 @@ fn test_holes_in_domain() {
     let premises = [
         TestAtomic {
             name: "x3",
-            comparison: crate::Comparison::GreaterEqual,
+            comparison: Comparison::GreaterEqual,
             value: 1,
         },
         TestAtomic {
             name: "x3",
-            comparison: crate::Comparison::LessEqual,
+            comparison: Comparison::LessEqual,
             value: 3,
         },
         TestAtomic {
             name: "x1",
-            comparison: crate::Comparison::GreaterEqual,
+            comparison: Comparison::GreaterEqual,
             value: 4,
         },
         TestAtomic {
             name: "x1",
-            comparison: crate::Comparison::LessEqual,
+            comparison: Comparison::LessEqual,
             value: 4,
         },
         TestAtomic {
             name: "x2",
-            comparison: crate::Comparison::GreaterEqual,
+            comparison: Comparison::GreaterEqual,
             value: 2,
         },
     ];
 
     let consequent = Some(TestAtomic {
         name: "x2",
-        comparison: crate::Comparison::GreaterEqual,
+        comparison: Comparison::GreaterEqual,
         value: 5,
     });
     let state = VariableState::prepare_for_conflict_check(premises, consequent)
@@ -433,5 +460,8 @@ fn test_holes_in_domain() {
         capacity: 2,
     };
 
-    assert!(checker.check(state, &premises, consequent.as_ref()));
+    assert_eq!(
+        checker.check(&state, &premises, consequent.as_ref()),
+        ConflictCheck::ConflictDetected
+    );
 }

@@ -1,7 +1,7 @@
 //! This module facilitates runtime verification in Pumpkin. It defines common types as well as the
 //! [`CheckerStore`] that owns the checkers that are active in the solver.
 
-use pumpkin_checking::BoxedChecker;
+use pumpkin_checking::BoxedConflictChecker;
 #[cfg(doc)]
 use pumpkin_checking::ConflictChecker;
 
@@ -16,7 +16,7 @@ use crate::proof::InferenceCode;
 #[derive(Clone, Debug, Default)]
 pub struct CheckerStore {
     /// For each inference code we associate possibly many conflict checkers.
-    conflict_checkers: HashMap<InferenceCode, Vec<BoxedChecker<Predicate>>>,
+    conflict_checkers: HashMap<InferenceCode, Vec<BoxedConflictChecker<Predicate>>>,
 }
 
 impl CheckerStore {
@@ -24,7 +24,7 @@ impl CheckerStore {
     pub fn for_inference_code(
         &self,
         inference_code: &InferenceCode,
-    ) -> impl ExactSizeIterator<Item = &BoxedChecker<Predicate>> {
+    ) -> impl ExactSizeIterator<Item = &BoxedConflictChecker<Predicate>> {
         self.conflict_checkers
             .get(inference_code)
             .map(|checkers| itertools::Either::Left(checkers.iter()))
@@ -38,7 +38,7 @@ impl CheckerStore {
     pub fn add_conflict_checker(
         &mut self,
         inference_code: InferenceCode,
-        checker: BoxedChecker<Predicate>,
+        checker: BoxedConflictChecker<Predicate>,
     ) {
         self.conflict_checkers
             .entry(inference_code.clone())

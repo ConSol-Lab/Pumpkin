@@ -1,23 +1,18 @@
-//! Exposes a common interface used to check inferences.
+//! The inference rules of Pumpkin and the checkers that verify them.
 //!
-//! The main exposed type is the [`ConflictChecker`], which can be implemented to verify whether
-//! inferences are sound w.r.t. an inference rule.
+//! [`types`] holds the vocabulary the rules are stated in: atomic constraints, variables and the
+//! [`VariableState`] they are evaluated against. [`checkers`] holds, per constraint, the
+//! [`ConflictChecker`] that verifies an inference is sound. Both the solver and the proof checker
+//! use them.
 
-mod atomic_constraint;
 pub mod checkers;
-mod conflict_checker;
-mod deduction_checker;
-mod domain_view;
-mod int_ext;
-mod union;
-mod variable;
-mod variable_state;
+pub mod types;
 
-pub use atomic_constraint::*;
-pub use conflict_checker::*;
-pub use deduction_checker::*;
-pub use domain_view::*;
-pub use int_ext::*;
-pub use union::*;
-pub use variable::*;
-pub use variable_state::*;
+pub use checkers::BoxedConflictChecker;
+pub use checkers::ConflictCheck;
+pub use checkers::ConflictChecker;
+pub use checkers::IgnoredInference;
+pub use checkers::InvalidDeduction;
+pub use checkers::SupportingInference;
+pub use checkers::verify_deduction;
+pub use types::*;

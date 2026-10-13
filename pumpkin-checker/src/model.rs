@@ -14,7 +14,6 @@ use fzn_rs::ast::Domain;
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::Comparison;
-use pumpkin_checking::DomainView;
 use pumpkin_checking::IntExt;
 
 use crate::math::div_ceil;
@@ -190,7 +189,7 @@ impl CheckerVariable<Atomic> for Variable {
 
     fn induced_lower_bound<View>(&self, variable_state: &View) -> IntExt
     where
-        View: DomainView<Atomic> + ?Sized,
+        View: pumpkin_checking::DomainView<Atomic> + ?Sized,
     {
         match self.0 {
             VariableExpr::Identifier(ref ident) => variable_state.lower_bound(ident),
@@ -200,7 +199,7 @@ impl CheckerVariable<Atomic> for Variable {
 
     fn induced_upper_bound<View>(&self, variable_state: &View) -> IntExt
     where
-        View: DomainView<Atomic> + ?Sized,
+        View: pumpkin_checking::DomainView<Atomic> + ?Sized,
     {
         match self.0 {
             VariableExpr::Identifier(ref ident) => variable_state.upper_bound(ident),
@@ -210,7 +209,7 @@ impl CheckerVariable<Atomic> for Variable {
 
     fn induced_fixed_value<View>(&self, variable_state: &View) -> Option<i32>
     where
-        View: DomainView<Atomic> + ?Sized,
+        View: pumpkin_checking::DomainView<Atomic> + ?Sized,
     {
         match self.0 {
             VariableExpr::Identifier(ref ident) => variable_state.fixed_value(ident),
@@ -224,7 +223,7 @@ impl CheckerVariable<Atomic> for Variable {
     ) -> impl Iterator<Item = i32> + 'state
     where
         'this: 'state,
-        View: DomainView<Atomic> + ?Sized,
+        View: pumpkin_checking::DomainView<Atomic> + ?Sized,
     {
         match self.0 {
             #[allow(
@@ -244,7 +243,7 @@ impl CheckerVariable<Atomic> for Variable {
     ) -> Option<impl Iterator<Item = i32> + 'state>
     where
         'this: 'state,
-        View: DomainView<Atomic> + ?Sized,
+        View: pumpkin_checking::DomainView<Atomic> + ?Sized,
     {
         match self.0 {
             #[allow(
@@ -260,7 +259,7 @@ impl CheckerVariable<Atomic> for Variable {
 
     fn induced_domain_contains<View>(&self, variable_state: &View, value: i32) -> bool
     where
-        View: DomainView<Atomic> + ?Sized,
+        View: pumpkin_checking::DomainView<Atomic> + ?Sized,
     {
         match self.0 {
             VariableExpr::Identifier(ref ident) => variable_state.contains(ident, value),
@@ -342,7 +341,7 @@ impl CheckerVariable<Atomic> for Term {
 
     fn induced_lower_bound<View>(&self, variable_state: &View) -> IntExt
     where
-        View: DomainView<Atomic> + ?Sized,
+        View: pumpkin_checking::DomainView<Atomic> + ?Sized,
     {
         if self.weight.is_positive() {
             self.variable.induced_lower_bound(variable_state) * self.weight.get()
@@ -353,7 +352,7 @@ impl CheckerVariable<Atomic> for Term {
 
     fn induced_upper_bound<View>(&self, variable_state: &View) -> IntExt
     where
-        View: DomainView<Atomic> + ?Sized,
+        View: pumpkin_checking::DomainView<Atomic> + ?Sized,
     {
         if self.weight.is_positive() {
             self.variable.induced_upper_bound(variable_state) * self.weight.get()
@@ -364,7 +363,7 @@ impl CheckerVariable<Atomic> for Term {
 
     fn induced_fixed_value<View>(&self, variable_state: &View) -> Option<i32>
     where
-        View: DomainView<Atomic> + ?Sized,
+        View: pumpkin_checking::DomainView<Atomic> + ?Sized,
     {
         self.variable
             .induced_fixed_value(variable_state)
@@ -377,7 +376,7 @@ impl CheckerVariable<Atomic> for Term {
     ) -> impl Iterator<Item = i32> + 'state
     where
         'this: 'state,
-        View: DomainView<Atomic> + ?Sized,
+        View: pumpkin_checking::DomainView<Atomic> + ?Sized,
     {
         todo!("how to compute holes in a scaled domain?");
 
@@ -394,7 +393,7 @@ impl CheckerVariable<Atomic> for Term {
     ) -> Option<impl Iterator<Item = i32> + 'state>
     where
         'this: 'state,
-        View: DomainView<Atomic> + ?Sized,
+        View: pumpkin_checking::DomainView<Atomic> + ?Sized,
     {
         self.variable
             .iter_induced_domain(variable_state)
@@ -403,7 +402,7 @@ impl CheckerVariable<Atomic> for Term {
 
     fn induced_domain_contains<View>(&self, variable_state: &View, value: i32) -> bool
     where
-        View: DomainView<Atomic> + ?Sized,
+        View: pumpkin_checking::DomainView<Atomic> + ?Sized,
     {
         if value % self.weight.get() == 0 {
             let inverted = self.invert(value, Rounding::Up);

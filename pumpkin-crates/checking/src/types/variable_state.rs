@@ -36,9 +36,10 @@ where
     /// consequent.
     ///
     /// If `premises /\ !consequent` contain mutually exclusive atomic constraints (e.g., `[x >=
-    /// 5]` and `[x <= 2]`) then `None` is returned.
+    /// 5]` and `[x <= 2]`) then the identifier of the variable of the first contradicting atomic
+    /// constraint is returned.
     ///
-    /// An [`ConflictChecker`] will receive a [`VariableState`] that conforms to this description.
+    /// A [`ConflictChecker`] receives a [`VariableState`] that conforms to this description.
     pub fn prepare_for_conflict_check(
         premises: impl IntoIterator<Item = Atomic>,
         consequent: Option<Atomic>,
@@ -94,11 +95,17 @@ where
 
             Comparison::NotEqual => {
                 if domain.lower_bound == atomic.value() {
-                    domain.tighten_lower_bound(atomic.value() + 1);
+                    match atomic.value().checked_add(1) {
+                        Some(bound) => domain.tighten_lower_bound(bound),
+                        None => *domain = Domain::empty(),
+                    }
                 }
 
                 if domain.upper_bound == atomic.value() {
-                    domain.tighten_upper_bound(atomic.value() - 1);
+                    match atomic.value().checked_sub(1) {
+                        Some(bound) => domain.tighten_upper_bound(bound),
+                        None => *domain = Domain::empty(),
+                    }
                 }
 
                 if domain.lower_bound < atomic.value() && domain.upper_bound > atomic.value() {
@@ -112,7 +119,6 @@ where
 }
 
 impl<Atomic: AtomicConstraint> DomainView<Atomic> for VariableState<Atomic> {
-    /// Get the lower bound of a variable.
     fn lower_bound(&self, identifier: &Atomic::Identifier) -> IntExt {
         self.domains
             .get(identifier)
@@ -120,7 +126,6 @@ impl<Atomic: AtomicConstraint> DomainView<Atomic> for VariableState<Atomic> {
             .unwrap_or(IntExt::NegativeInf)
     }
 
-    /// Get the upper bound of a variable.
     fn upper_bound(&self, identifier: &Atomic::Identifier) -> IntExt {
         self.domains
             .get(identifier)
@@ -128,7 +133,6 @@ impl<Atomic: AtomicConstraint> DomainView<Atomic> for VariableState<Atomic> {
             .unwrap_or(IntExt::PositiveInf)
     }
 
-    /// Tests whether the given value is in the domain of the variable.
     fn contains(&self, identifier: &Atomic::Identifier, value: i32) -> bool {
         self.domains
             .get(identifier)
@@ -140,18 +144,15 @@ impl<Atomic: AtomicConstraint> DomainView<Atomic> for VariableState<Atomic> {
             .unwrap_or(true)
     }
 
-    /// Get the holes within the lower and upper bound of the variable expression.
     fn holes<'a>(&'a self, identifier: &Atomic::Identifier) -> Box<dyn Iterator<Item = i32> + 'a> {
         Box::new(
             self.domains
                 .get(identifier)
-                .map(|domain| domain.holes.iter().copied())
                 .into_iter()
-                .flatten(),
+                .flat_map(|domain| domain.holes.iter().copied()),
         )
     }
 
-    /// Get the fixed value of this variable, if it is fixed.
     fn fixed_value(&self, identifier: &Atomic::Identifier) -> Option<i32> {
         let domain = self.domains.get(identifier)?;
 
@@ -168,9 +169,6 @@ impl<Atomic: AtomicConstraint> DomainView<Atomic> for VariableState<Atomic> {
         }
     }
 
-    /// Obtain an iterator over the domain of the variable.
-    ///
-    /// If the domain is unbounded, then `None` is returned.
     fn iter_domain<'a>(
         &'a self,
         identifier: &Atomic::Identifier,
@@ -192,11 +190,10 @@ impl<Atomic: AtomicConstraint> DomainView<Atomic> for VariableState<Atomic> {
 
         Some(Box::new(DomainIterator {
             domain,
-            next_value: lower_bound,
+            next_value: i64::from(lower_bound),
         }))
     }
 
-    /// Is the given atomic true in the current state.
     fn is_true(&self, atomic: &Atomic) -> bool {
         let Some(domain) = self.domains.get(&atomic.identifier()) else {
             return false;
@@ -298,9 +295,13 @@ impl Domain {
         self.lower_bound = IntExt::Int(bound);
         self.holes = self.holes.split_off(&bound);
 
-        // Take care of the condition where the new bound is already a hole in the domain.
+        // Take care of the condition where the new bound is already a hole in the domain. No value
+        // lies above i32::MAX, so then the domain is empty.
         if self.holes.contains(&bound) {
-            self.tighten_lower_bound(bound + 1);
+            match bound.checked_add(1) {
+                Some(next) => self.tighten_lower_bound(next),
+                None => *self = Domain::empty(),
+            }
         }
     }
 
@@ -314,12 +315,18 @@ impl Domain {
         self.upper_bound = IntExt::Int(bound);
 
         // Note the '+ 1' to keep the elements <= the upper bound instead of <
-        // the upper bound.
-        let _ = self.holes.split_off(&(bound + 1));
+        // the upper bound. No hole lies above i32::MAX.
+        if let Some(above) = bound.checked_add(1) {
+            let _ = self.holes.split_off(&above);
+        }
 
-        // Take care of the condition where the new bound is already a hole in the domain.
+        // Take care of the condition where the new bound is already a hole in the domain. No value
+        // lies below i32::MIN, so then the domain is empty.
         if self.holes.contains(&bound) {
-            self.tighten_upper_bound(bound - 1);
+            match bound.checked_sub(1) {
+                Some(next) => self.tighten_upper_bound(next),
+                None => *self = Domain::empty(),
+            }
         }
     }
 
@@ -336,7 +343,7 @@ impl Domain {
 #[derive(Debug)]
 pub struct DomainIterator<'a> {
     domain: &'a Domain,
-    next_value: i32,
+    next_value: i64,
 }
 
 impl Iterator for DomainIterator<'_> {
@@ -351,11 +358,11 @@ impl Iterator for DomainIterator<'_> {
 
         loop {
             // We have completed iterating the domain.
-            if *next_value > upper_bound {
+            if *next_value > i64::from(upper_bound) {
                 return None;
             }
 
-            let value = *next_value;
+            let value = i32::try_from(*next_value).expect("the value is at most the upper bound");
             *next_value += 1;
 
             // The next value is not part of the domain.
@@ -464,6 +471,84 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(values, vec![5, 6, 8, 9, 10]);
+    }
+
+    #[test]
+    fn upper_bound_at_i32_max_keeps_the_holes() {
+        let mut state = VariableState::default();
+        let x = |comparison, value| TestAtomic {
+            name: "x1",
+            comparison,
+            value,
+        };
+
+        assert!(state.apply(&x(Comparison::NotEqual, 5)));
+        assert!(state.apply(&x(Comparison::LessEqual, i32::MAX)));
+
+        assert!(state.is_true(&x(Comparison::NotEqual, 5)));
+    }
+
+    #[test]
+    fn holes_at_the_extremes_of_i32_move_the_bounds() {
+        let mut state = VariableState::default();
+        let x = |comparison, value| TestAtomic {
+            name: "x1",
+            comparison,
+            value,
+        };
+
+        assert!(state.apply(&x(Comparison::NotEqual, i32::MIN)));
+        assert!(state.apply(&x(Comparison::NotEqual, i32::MAX)));
+        assert!(state.apply(&x(Comparison::GreaterEqual, i32::MIN)));
+        assert!(state.apply(&x(Comparison::LessEqual, i32::MAX)));
+
+        assert!(state.is_true(&x(Comparison::GreaterEqual, i32::MIN + 1)));
+        assert!(state.is_true(&x(Comparison::LessEqual, i32::MAX - 1)));
+    }
+
+    #[test]
+    fn removing_the_last_value_at_the_extremes_of_i32_empties_the_domain() {
+        let x = |comparison, value| TestAtomic {
+            name: "x1",
+            comparison,
+            value,
+        };
+
+        for value in [i32::MIN, i32::MAX] {
+            let mut removed_last = VariableState::default();
+            assert!(removed_last.apply(&x(Comparison::Equal, value)));
+            assert!(!removed_last.apply(&x(Comparison::NotEqual, value)));
+
+            let mut bound_on_hole = VariableState::default();
+            assert!(bound_on_hole.apply(&x(Comparison::NotEqual, value)));
+            let comparison = if value == i32::MAX {
+                Comparison::GreaterEqual
+            } else {
+                Comparison::LessEqual
+            };
+            assert!(!bound_on_hole.apply(&x(comparison, value)));
+        }
+    }
+
+    #[test]
+    fn domain_iterator_ends_at_i32_max() {
+        let mut state = VariableState::default();
+        let x = |comparison, value| TestAtomic {
+            name: "x1",
+            comparison,
+            value,
+        };
+
+        let _ = state.apply(&x(Comparison::GreaterEqual, i32::MAX - 2));
+        let _ = state.apply(&x(Comparison::LessEqual, i32::MAX));
+        let _ = state.apply(&x(Comparison::NotEqual, i32::MAX - 1));
+
+        let values = state
+            .iter_domain(&"x1")
+            .expect("the domain is bounded")
+            .collect::<Vec<_>>();
+
+        assert_eq!(values, vec![i32::MAX - 2, i32::MAX]);
     }
 
     #[test]

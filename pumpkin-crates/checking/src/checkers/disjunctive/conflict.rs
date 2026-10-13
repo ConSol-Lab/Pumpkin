@@ -1,112 +1,99 @@
-use std::cmp::min;
-
-use super::CheckerThetaLambdaTree;
+use super::DisjunctiveCheckerTask;
 use super::DisjunctiveEdgeFindingChecker;
-use super::IndexedTask;
+use super::helpers::CheckerThetaLambdaTree;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
+use crate::ConflictCheck;
 use crate::ConflictChecker;
 use crate::IntExt;
 use crate::VariableState;
+
+/// Whether overload checking finds a set `omega` of the tasks with finite bounds such that
+/// `p_omega > lct_omega - est_omega`.
+fn overload_checking<Atomic: AtomicConstraint, Var: CheckerVariable<Atomic>>(
+    tasks: &[DisjunctiveCheckerTask<Var>],
+    state: &VariableState<Atomic>,
+) -> bool {
+    let mut theta = CheckerThetaLambdaTree::new(tasks);
+    theta.update(state);
+
+    // The tasks with finite bounds, in non-decreasing order of latest completion time.
+    let mut sorted_tasks = tasks
+        .iter()
+        .enumerate()
+        .filter(|(_, task)| {
+            task.start_time.induced_lower_bound(state) != IntExt::NegativeInf
+                && task.start_time.induced_upper_bound(state) != IntExt::PositiveInf
+        })
+        .collect::<Vec<_>>();
+    sorted_tasks
+        .sort_by_key(|(_, task)| task.start_time.induced_upper_bound(state) + task.processing_time);
+
+    for (index, task) in sorted_tasks {
+        debug_assert!(
+            task.start_time.induced_lower_bound(state) != IntExt::NegativeInf
+                && task.start_time.induced_upper_bound(state) != IntExt::PositiveInf
+        );
+        theta.add_to_theta(index, task, state);
+
+        // Theta cannot complete by the latest completion time of `task`: an overload.
+        if theta.ect() > task.start_time.induced_upper_bound(state) + task.processing_time {
+            return true;
+        }
+    }
+
+    false
+}
 
 impl<Var, Atomic> ConflictChecker<Atomic> for DisjunctiveEdgeFindingChecker<Var>
 where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
+    <Atomic as AtomicConstraint>::Identifier: Clone,
 {
     fn check(
         &self,
-        state: VariableState<Atomic>,
+        state: &VariableState<Atomic>,
         _premises: &[Atomic],
         consequent: Option<&Atomic>,
-    ) -> bool {
-        // Recall the following:
-        // - For conflict detection, the explanation represents a set omega with the following
-        //   property: `p_omega > lct_omega - est_omega`.
-        //
-        //   We simply need to check whether the interval [est_omega, lct_omega] is overloaded
-        // - For propagation, the explanation represents a set omega (and omega') such that the
-        //   following holds: `min(est_i, est_omega) + p_omega + p_i > lct_omega -> [s_i >=
-        //   ect_omega]`.
-        let mut lb_interval = i32::MAX;
-        let mut ub_interval = i32::MIN;
-        let mut p = 0;
-        let mut propagating_task = None;
-        let mut theta = Vec::new();
+    ) -> ConflictCheck {
+        // Two cases:
+        // 1. If it is a conflict explanation then overload checking can be applied directly and
+        //    should lead to a conflict.
+        // 2. If it is a propagation explanation, then for any value in the domain of the propagated
+        //    variable, scheduling it at that time-point should lead to a conflict (using overload
+        //    checking).
+        if let Some(consequent) = consequent {
+            let task = self
+                .tasks
+                .iter()
+                .find(|task| task.start_time.does_atomic_constrain_self(consequent))
+                .expect("Expected to be able to find atomic");
 
-        // We go over all of the tasks
-        for task in self.tasks.iter() {
-            // Only if they are present in the explanation, do we actually process them
-            // - For tasks in omega, both bounds should be present to define the interval
-            // - For the propagating task, the lower-bound should be present, and the negation of
-            //   the consequent ensures that an upper-bound is present
-            if task.start_time.induced_lower_bound(&state) != IntExt::NegativeInf
-                && task.start_time.induced_upper_bound(&state) != IntExt::PositiveInf
-            {
-                // Now we calculate the durations of tasks
-                let est_task: i32 = task
-                    .start_time
-                    .induced_lower_bound(&state)
-                    .try_into()
-                    .unwrap();
-                let lst_task =
-                    <IntExt as TryInto<i32>>::try_into(task.start_time.induced_upper_bound(&state))
-                        .unwrap();
+            let lb: i32 = task
+                .start_time
+                .induced_lower_bound(state)
+                .try_into()
+                .expect("expected non-infinity value");
+            let ub: i32 = task
+                .start_time
+                .induced_upper_bound(state)
+                .try_into()
+                .expect("expected non-infinity value");
 
-                let is_propagating_task = if let Some(consequent) = consequent {
-                    task.start_time.does_atomic_constrain_self(consequent)
-                } else {
-                    false
-                };
-                if !is_propagating_task {
-                    theta.push(task.clone());
-                    p += task.processing_time;
-                    lb_interval = lb_interval.min(est_task);
-                    ub_interval = ub_interval.max(lst_task + task.processing_time);
-                } else {
-                    propagating_task = Some(task.clone());
+            for i in lb..=ub {
+                let mut assigned_state = state.clone();
+                let _ = assigned_state.apply(&task.start_time.atomic_equal(i));
+
+                if !overload_checking(&self.tasks, &assigned_state) {
+                    return ConflictCheck::NoConflictDetected;
                 }
             }
-        }
-
-        if consequent.is_some() {
-            let propagating_task = propagating_task
-                .expect("If there is a consequent then there should be a propagating task");
-
-            let est_task = propagating_task
-                .start_time
-                .induced_lower_bound(&state)
-                .try_into()
-                .unwrap();
-
-            let mut theta_lambda_tree = CheckerThetaLambdaTree::new(
-                &theta
-                    .iter()
-                    .enumerate()
-                    .map(|(index, task)| IndexedTask {
-                        start_time: task.start_time.clone(),
-                        processing_time: task.processing_time,
-                        id: index,
-                    })
-                    .collect::<Vec<_>>(),
-            );
-            theta_lambda_tree.update(&state);
-            for (index, task) in theta.iter().enumerate() {
-                theta_lambda_tree.add_to_theta(
-                    &IndexedTask {
-                        start_time: task.start_time.clone(),
-                        processing_time: task.processing_time,
-                        id: index,
-                    },
-                    &state,
-                );
-            }
-
-            min(est_task, lb_interval) + p + propagating_task.processing_time > ub_interval
-                && theta_lambda_tree.ect() > propagating_task.start_time.induced_upper_bound(&state)
+            ConflictCheck::ConflictDetected
+        } else if overload_checking(&self.tasks, state) {
+            ConflictCheck::ConflictDetected
         } else {
-            // We simply check whether the interval is overloaded
-            p > (ub_interval - lb_interval)
+            ConflictCheck::NoConflictDetected
         }
     }
 }
