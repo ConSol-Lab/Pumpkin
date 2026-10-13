@@ -201,7 +201,6 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
             self.induced_upper_bound(variable_state),
         ) else {
             panic!("Cannot list holes for an unbounded domain.");
-            return Vec::new().into_iter();
         };
 
         (lower_bound + 1..upper_bound)
