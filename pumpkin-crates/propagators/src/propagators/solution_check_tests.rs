@@ -21,6 +21,7 @@ use super::cumulative::time_table::CumulativeDescription;
 use super::disjunctive::ArgDisjunctiveTask;
 use super::disjunctive::DisjunctiveDescription;
 use super::element::ElementDescription;
+use super::lexicographic::LexLessOrEqualDescription;
 
 /// Creates a variable for each value, and the domains in which each variable is fixed to its
 /// value.
@@ -354,4 +355,23 @@ fn a_linear_disequality_over_fixed_variables_is_decided() {
 
     assert_eq!(check(4), SolutionCheck::ConstraintSatisfied);
     assert_eq!(check(3), SolutionCheck::ConstraintViolated);
+}
+
+#[test]
+fn lex_less_or_equal_compares_at_the_first_difference() {
+    let (variables, domains) = fixed(&[1, 5, 2, 0, 1, 5]);
+    let check = |x: [usize; 2], y: [usize; 2]| {
+        LexLessOrEqualDescription {
+            x: x.map(|index| variables[index]).into(),
+            y: y.map(|index| variables[index]).into(),
+        }
+        .check_solution(&domains)
+    };
+
+    // [1, 5] <=lex [2, 0]: the first position decides.
+    assert_eq!(check([0, 1], [2, 3]), SolutionCheck::ConstraintSatisfied);
+    // [2, 0] <=lex [1, 5] is violated at the first position.
+    assert_eq!(check([2, 3], [0, 1]), SolutionCheck::ConstraintViolated);
+    // [1, 5] <=lex [1, 5]: equal vectors satisfy the constraint.
+    assert_eq!(check([0, 1], [4, 5]), SolutionCheck::ConstraintSatisfied);
 }

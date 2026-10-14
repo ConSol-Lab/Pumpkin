@@ -25,6 +25,7 @@ mod tests {
     use super::cumulative::time_table::TimeTableRule;
     use super::disjunctive::DisjunctiveEdgeFindingRule;
     use super::element::ElementRule;
+    use super::lexicographic::LexLessOrEqualRule;
 
     #[test]
     fn rule_names_are_distinct() {
@@ -42,6 +43,7 @@ mod tests {
             TimeTableRule::<DomainId>::name(),
             DisjunctiveEdgeFindingRule::<DomainId>::name(),
             ElementRule::<DomainId, DomainId, DomainId>::name(),
+            LexLessOrEqualRule::<DomainId>::name(),
             HypercubeLinearRule::name(),
             UnitNogoodRule::name(),
             "initial_domain".into(),

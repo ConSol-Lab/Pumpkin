@@ -29,6 +29,23 @@ fn linear_less_or_equal_built_in_rust() {
 }
 
 #[test]
+fn lex_less_or_equal_built_in_rust() {
+    let configuration = Configuration {
+        cases: 10,
+        ..Configuration::default()
+    };
+
+    let outcome = fuzz_propagator(
+        "lex_less_or_equal",
+        50,
+        &configuration,
+        build_lex_less_or_equal,
+    );
+
+    outcome.assert_no_failures();
+}
+
+#[test]
 fn cumulative_built_in_rust_with_its_parameters() {
     let configuration = Configuration {
         cases: 10,
@@ -80,6 +97,36 @@ fn build_linear_less_or_equal(rng: &mut SmallRng, solver: &mut Solver) {
             rng.random_range(-4..6),
             constraint_tag,
         ))
+        .post();
+}
+
+/// Two lists of up to four variables with small, overlapping domains, some of them views, so
+/// that equal prefixes, strict tails and conflicts all occur.
+fn build_lex_less_or_equal(rng: &mut SmallRng, solver: &mut Solver) {
+    let length = rng.random_range(1..5);
+    let mut list = |name: &str, rng: &mut SmallRng| {
+        (0..length)
+            .map(|index| {
+                let lower_bound = rng.random_range(0..3);
+                let upper_bound = lower_bound + rng.random_range(0..3);
+                let variable = solver.new_named_bounded_integer(
+                    lower_bound,
+                    upper_bound,
+                    format!("{name}{index}"),
+                );
+                if rng.random_bool(0.25) {
+                    variable.scaled(-1).offset(upper_bound + lower_bound)
+                } else {
+                    variable.scaled(1)
+                }
+            })
+            .collect::<Vec<_>>()
+    };
+    let x = list("x", rng);
+    let y = list("y", rng);
+    let constraint_tag = solver.new_constraint_tag();
+    solver
+        .add_constraint(pumpkin_solver::lex_less_or_equal(x, y, constraint_tag))
         .post();
 }
 
