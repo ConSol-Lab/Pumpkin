@@ -1,0 +1,10 @@
+var bool: a :: output_var;
+var bool: b :: output_var;
+var bool: c :: output_var;
+var 0..3: x :: output_var;
+constraint bool_clause([a],[b]);
+constraint bool_clause([b],[a]);
+constraint bool_clause([a,c],[]);
+constraint int_le_reif(x,1,c);
+constraint bool_clause([b],[c]);
+solve maximize x;

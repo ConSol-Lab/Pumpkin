@@ -2,7 +2,7 @@ use pumpkin_core::branching::BrancherEvent;
 use pumpkin_core::branching::SelectionContext;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
-use pumpkin_core::variables::DomainId;
+use pumpkin_core::variables::IntegerVariable;
 
 use crate::value_selection::ValueSelector;
 
@@ -10,11 +10,11 @@ use crate::value_selection::ValueSelector;
 #[derive(Debug, Copy, Clone)]
 pub struct OutDomainMin;
 
-impl ValueSelector<DomainId> for OutDomainMin {
+impl<Var: IntegerVariable + Copy> ValueSelector<Var> for OutDomainMin {
     fn select_value(
         &mut self,
         context: &mut SelectionContext,
-        decision_variable: DomainId,
+        decision_variable: Var,
     ) -> Predicate {
         predicate!(decision_variable >= context.lower_bound(decision_variable) + 1)
     }

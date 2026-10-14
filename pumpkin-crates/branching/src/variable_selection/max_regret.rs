@@ -3,7 +3,7 @@ use pumpkin_core::asserts::pumpkin_assert_eq_simple;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::branching::BrancherEvent;
 use pumpkin_core::branching::SelectionContext;
-use pumpkin_core::variables::DomainId;
+use pumpkin_core::variables::IntegerVariable;
 
 use crate::tie_breaking::Direction;
 use crate::tie_breaking::InOrderTieBreaker;
@@ -68,11 +68,12 @@ impl<Var: Clone + 'static, TieBreaking: TieBreaker<Var, i32>> MaxRegret<Var, Tie
     }
 }
 
-impl<TieBreaking> VariableSelector<DomainId> for MaxRegret<DomainId, TieBreaking>
+impl<Var, TieBreaking> VariableSelector<Var> for MaxRegret<Var, TieBreaking>
 where
-    TieBreaking: TieBreaker<DomainId, i32>,
+    Var: IntegerVariable + Copy,
+    TieBreaking: TieBreaker<Var, i32>,
 {
-    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<DomainId> {
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<Var> {
         self.variables
             .iter()
             .filter(|variable| !context.is_integer_fixed(**variable))

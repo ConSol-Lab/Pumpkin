@@ -35,7 +35,9 @@ use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::engine::State;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::predicates::predicate::PredicateType;
 use crate::options::LearningOptions;
+use crate::predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::FinalizingContext;
 use crate::proof::InferenceCode;
@@ -266,6 +268,159 @@ impl ConstraintSatisfactionSolver {
 
     pub(crate) fn is_logging_proof(&self) -> bool {
         self.internal_parameters.proof_log.is_logging_proof()
+    }
+
+    pub(crate) fn name_rule_of_constraint(&mut self, constraint_tag: ConstraintTag, rule: &str) {
+        self.internal_parameters
+            .proof_log
+            .name_rule_of_constraint(constraint_tag, rule)
+    }
+
+    pub(crate) fn name_rules_by_indicator_side(
+        &mut self,
+        constraint_tag: ConstraintTag,
+        indicator: Predicate,
+        rule_when_true: &str,
+        rule_when_false: &str,
+    ) {
+        self.internal_parameters
+            .proof_log
+            .name_rules_by_indicator_side(
+                constraint_tag,
+                indicator,
+                rule_when_true,
+                rule_when_false,
+            )
+    }
+
+    pub(crate) fn state_fixing_bounds_when_true(&mut self, constraint_tag: ConstraintTag) {
+        self.internal_parameters
+            .proof_log
+            .state_fixing_bounds_when_true(constraint_tag)
+    }
+
+    pub(crate) fn name_objective_view(
+        &mut self,
+        objective: &str,
+        representative: &str,
+        scale: i32,
+        offset: i32,
+        evidence: u32,
+    ) {
+        self.internal_parameters.proof_log.name_objective_view(
+            objective,
+            representative,
+            scale,
+            offset,
+            evidence,
+        )
+    }
+
+    pub(crate) fn name_reification(&mut self, constraint_tag: ConstraintTag, fully: bool) {
+        self.internal_parameters
+            .proof_log
+            .name_reification(constraint_tag, fully)
+    }
+
+    pub(crate) fn name_set_in_domain(
+        &mut self,
+        constraint_tag: ConstraintTag,
+        domain: DomainId,
+        ranges: Vec<(i32, i32)>,
+    ) {
+        self.internal_parameters
+            .proof_log
+            .name_set_in_domain(constraint_tag, domain, ranges)
+    }
+
+    pub(crate) fn name_selector_bounds(&mut self, domain: DomainId, constraint_tag: ConstraintTag) {
+        self.internal_parameters
+            .proof_log
+            .name_selector_bounds(domain, constraint_tag)
+    }
+
+    pub(crate) fn write_as_constant(&mut self, domain: DomainId) {
+        self.internal_parameters.proof_log.write_as_constant(domain)
+    }
+
+    pub(crate) fn name_positions_of_constraint(
+        &mut self,
+        constraint_tag: ConstraintTag,
+        elements: Vec<crate::engine::variables::AffineView<DomainId>>,
+    ) {
+        self.internal_parameters
+            .proof_log
+            .name_positions_of_constraint(constraint_tag, elements)
+    }
+
+    pub(crate) fn log_proof_head_line(
+        &mut self,
+        fields: &[crate::proof::HeadField],
+    ) -> std::io::Result<()> {
+        self.internal_parameters
+            .proof_log
+            .log_head_line(fields, &self.state.variable_names)
+    }
+
+    pub(crate) fn render_head_line_as_text(&self, fields: &[crate::proof::HeadField]) -> String {
+        use crate::proof::HeadField;
+        let name = |domain: DomainId| {
+            self.state
+                .variable_names
+                .get_int_name(domain)
+                .expect("a variable in a proof line is named")
+                .to_owned()
+        };
+        let mut line = String::new();
+        for field in fields {
+            match field {
+                HeadField::Text(text) => line.push_str(text),
+                HeadField::Label(label) => line.push_str(label),
+                HeadField::Name(domain) => line.push_str(&name(*domain)),
+                HeadField::Identifier(tag) => {
+                    line.push_str(&std::num::NonZero::<u32>::from(*tag).to_string())
+                }
+                HeadField::Atom(predicate) => {
+                    let comparison = match predicate.get_predicate_type() {
+                        PredicateType::LowerBound => ">=",
+                        PredicateType::UpperBound => "<=",
+                        PredicateType::Equal => "==",
+                        PredicateType::NotEqual => "!=",
+                    };
+                    line.push_str(&format!(
+                        "[{} {comparison} {}]",
+                        name(predicate.get_domain()),
+                        predicate.get_right_hand_side()
+                    ));
+                }
+            }
+        }
+        line
+    }
+
+    pub(crate) fn log_proof_order_key_line(
+        &mut self,
+        fields: &[crate::proof::HeadField],
+    ) -> std::io::Result<()> {
+        self.internal_parameters
+            .proof_log
+            .log_order_key_line(fields, &self.state.variable_names)
+    }
+
+    pub(crate) fn take_proof_identifier(&mut self, constraint_tag: ConstraintTag) -> Option<u32> {
+        self.internal_parameters
+            .proof_log
+            .take_identifier(constraint_tag)
+    }
+
+    pub(crate) fn log_proof_head(
+        &mut self,
+        lines: &[String],
+        first_free_identifier: u32,
+    ) -> std::io::Result<()> {
+        self.internal_parameters
+            .proof_log
+            .log_head(lines, first_free_identifier)
     }
 }
 
@@ -915,6 +1070,9 @@ impl ConstraintSatisfactionSolver {
     fn add_nogood(&mut self, nogood: Vec<Predicate>, constraint_tag: ConstraintTag) {
         pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
 
+        let (nogood, constraint_tag) =
+            self.derive_nogood_without_root_facts(nogood, constraint_tag);
+
         let propagation_mode = self
             .state
             .get_propagator(self.nogood_propagator_handle)
@@ -938,6 +1096,100 @@ impl ConstraintSatisfactionSolver {
 
         #[allow(deprecated, reason = "Will be refactored")]
         self.state.enqueue_propagator(self.nogood_propagator_handle);
+    }
+
+    /// The nogood propagator leaves out the predicates of a nogood that hold at the root, and
+    /// states the others through the root bounds, as `[x >= 3]` for `[x == 3]` when 3 is the
+    /// upper bound of `x`; it then explains its propagations by that nogood, which a proof
+    /// cannot cite the constraint for when a predicate it states implies less than the one it
+    /// replaces. When inferences are logged, that nogood is derived here: the original nogood
+    /// cited as a conflict of its constraint, the root predicates and the root bounds of the
+    /// variables whose predicates it weakened explained, refute it, and it is added under the
+    /// identifier of that derivation.
+    fn derive_nogood_without_root_facts(
+        &mut self,
+        nogood: Vec<Predicate>,
+        constraint_tag: ConstraintTag,
+    ) -> (Vec<Predicate>, ConstraintTag) {
+        if !self.internal_parameters.proof_log.is_logging_inferences() {
+            return (nogood, constraint_tag);
+        }
+
+        let (root_facts, rest): (Vec<Predicate>, Vec<Predicate>) = nogood
+            .iter()
+            .partition(|&&predicate| self.state.truth_value(predicate) == Some(true));
+        let is_falsified = rest
+            .iter()
+            .any(|&predicate| self.state.truth_value(predicate) == Some(false));
+        if rest.is_empty() || is_falsified {
+            return (nogood, constraint_tag);
+        }
+
+        let preprocessed = {
+            let (nogood_propagator, mut context) = self
+                .state
+                .get_propagator_mut_with_context(self.nogood_propagator_handle);
+            nogood_propagator
+                .expect("Nogood propagator handle should refer to nogood propagator")
+                .preprocessed(&rest, &mut context)
+        };
+        let restated: Vec<DomainId> = {
+            let mut domains: Vec<DomainId> = rest
+                .iter()
+                .filter(|&&predicate| !preprocessed.iter().any(|stated| stated.implies(predicate)))
+                .map(|predicate| predicate.get_domain())
+                .collect();
+            domains.sort_unstable();
+            domains.dedup();
+            domains
+        };
+        let is_trivial = preprocessed.iter().any(|&predicate| {
+            predicate == Predicate::trivially_true() || predicate == Predicate::trivially_false()
+        });
+        if is_trivial || (root_facts.is_empty() && restated.is_empty()) {
+            return (nogood, constraint_tag);
+        }
+        let root_bounds: Vec<Predicate> = restated
+            .iter()
+            .flat_map(|&domain| {
+                [
+                    predicate![domain >= self.state.assignments.get_lower_bound(domain)],
+                    predicate![domain <= self.state.assignments.get_upper_bound(domain)],
+                ]
+            })
+            .collect();
+        let rest = preprocessed;
+
+        let inference_code = self.state.rule_code::<UnitNogoodRule>(constraint_tag);
+        let _ = self.internal_parameters.proof_log.log_inference(
+            &mut self.state.constraint_tags,
+            &self.state.inference_rules,
+            inference_code,
+            nogood.iter().copied(),
+            None,
+            &self.state.variable_names,
+            &self.state.assignments,
+        );
+        for fact in root_facts.into_iter().chain(root_bounds) {
+            let mut context = RootExplanationContext {
+                proof_log: &mut self.internal_parameters.proof_log,
+                unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
+                state: &mut self.state,
+            };
+            explain_root_assignment(&mut context, fact);
+        }
+        let derived_tag = self
+            .internal_parameters
+            .proof_log
+            .log_deduction(
+                rest.iter().copied(),
+                &self.state.variable_names,
+                &mut self.state.constraint_tags,
+                &self.state.assignments,
+            )
+            .expect("failed to write to proof");
+
+        (rest, derived_tag)
     }
 
     /// Creates a clause from `literals` and adds it to the current formula.

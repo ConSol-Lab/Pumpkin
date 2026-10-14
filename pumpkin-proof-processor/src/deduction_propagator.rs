@@ -1,10 +1,15 @@
 use std::rc::Rc;
+use std::sync::OnceLock;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering as AtomicOrdering;
 
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::EventsToRegister;
+use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::PredicateId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -14,10 +19,11 @@ use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorWithEvents;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::propagators::nogoods::NogoodDescription;
-use pumpkin_core::propagators::nogoods::UnitNogoodRule;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
+
+use crate::deduction_rule::DeductionRule;
 
 /// The [`PropagatorConstructor`] for the [`DeductionPropagator`].
 #[derive(Clone, Debug)]
@@ -56,7 +62,7 @@ pub(crate) const MARKED_PROPAGATION_PRIORITY: Priority = Priority::VeryLow;
 
 impl PropagatorConstructor for DeductionPropagatorConstructor {
     type PropagatorImpl = DeductionPropagator;
-    type Rule = UnitNogoodRule;
+    type Rule = DeductionRule;
 
     fn constraint_description(&self) -> NogoodDescription {
         NogoodDescription {
@@ -84,6 +90,8 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
             .map(|&predicate| context.register_predicate(predicate))
             .collect();
 
+        let watched = [0, nogood.len().saturating_sub(1)];
+
         let propagator = DeductionPropagator {
             nogood,
             ids,
@@ -91,6 +99,7 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
             active: true,
             propagation_priority: priority,
             propagation_mode,
+            watched,
         };
 
         PropagatorWithEvents {
@@ -99,6 +108,23 @@ impl PropagatorConstructor for DeductionPropagatorConstructor {
         }
     }
 }
+
+/// Measurement switches, read once.
+fn notify_skip_enabled() -> bool {
+    static FLAG: OnceLock<bool> = OnceLock::new();
+    *FLAG.get_or_init(|| std::env::var_os("PUMPKIN_PROCESSOR_NOTIFY_SKIP").is_some())
+}
+
+fn watches_disabled() -> bool {
+    static FLAG: OnceLock<bool> = OnceLock::new();
+    *FLAG.get_or_init(|| std::env::var_os("PUMPKIN_PROCESSOR_NO_WATCHES").is_some())
+}
+
+/// Instrumentation: how often the deduction propagators run and how often the watched pair lets
+/// them return immediately.
+pub(crate) static PROPAGATE_CALLS: AtomicU64 = AtomicU64::new(0);
+pub(crate) static PROPAGATE_SHORTCUTS: AtomicU64 = AtomicU64::new(0);
+pub(crate) static PROPAGATE_INACTIVE: AtomicU64 = AtomicU64::new(0);
 
 /// A nogood propagator used to propagate deductions in the proof processor.
 ///
@@ -126,6 +152,13 @@ pub(crate) struct DeductionPropagator {
     /// Whether this propagator is part of the 'conflict detection' stage or the 'unit propagation'
     /// stage.
     propagation_mode: DeductionPropagationMode,
+    /// Indices into `nogood` of two predicates that were not satisfied when the nogood was last
+    /// examined. While both are still unsatisfied, at least two predicates of the nogood are, so
+    /// the nogood can neither conflict nor propagate and [`DeductionPropagator::propagate`] has
+    /// nothing to do.
+    ///
+    /// The two indices are equal only for a nogood of one predicate, which has no such pair.
+    watched: [usize; 2],
 }
 
 impl DeductionPropagator {
@@ -147,7 +180,125 @@ impl Propagator for DeductionPropagator {
         "ProcessorNogoodPropagator"
     }
 
+    /// Decide at notification time whether propagating is worth a trip through the queue.
+    ///
+    /// The engine's default enqueues on every satisfied predicate. While both watched predicates
+    /// are still unsatisfied the nogood can do nothing, so the dispatch — queue, context, virtual
+    /// call and the notification pass afterwards — is skipped here for the price of two lookups.
+    fn notify_predicate_id_satisfied(
+        &mut self,
+        mut context: NotificationContext,
+        _predicate_id: PredicateId,
+    ) -> EnqueueDecision {
+        // Opt-in, for measurement: deciding here changes the order in which propagators reach
+        // the queue, hence which conflict is found, hence the proof.
+        if !notify_skip_enabled() || !self.active {
+            return EnqueueDecision::Enqueue;
+        }
+
+        let [first, second] = self.watched;
+        let domains = context.domains();
+        if first != second
+            && domains.evaluate_predicate(self.nogood[first]) != Some(true)
+            && domains.evaluate_predicate(self.nogood[second]) != Some(true)
+        {
+            return EnqueueDecision::Skip;
+        }
+
+        EnqueueDecision::Enqueue
+    }
+
+    fn priority(&self) -> Priority {
+        self.propagation_priority
+    }
+
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        // An escape hatch for measurement: with this set, propagation goes through the stateless
+        // path, which is what this propagator did before it kept a watched pair.
+        if watches_disabled() {
+            return self.propagate_without_watches(context);
+        }
+
+        let _ = PROPAGATE_CALLS.fetch_add(1, AtomicOrdering::Relaxed);
+
+        if !self.active {
+            for &predicate_id in self.ids.iter() {
+                context.unregister_predicate(predicate_id);
+            }
+
+            let _ = PROPAGATE_INACTIVE.fetch_add(1, AtomicOrdering::Relaxed);
+            return Ok(());
+        }
+
+        // While two distinct predicates of the nogood are unsatisfied, at least two are, so the
+        // nogood can neither conflict nor propagate and there is nothing to do. Checking the
+        // pair is O(1), where re-counting the whole nogood is not, and learned nogoods are long.
+        let [first, second] = self.watched;
+        if first != second
+            && context.evaluate_predicate(self.nogood[first]) != Some(true)
+            && context.evaluate_predicate(self.nogood[second]) != Some(true)
+        {
+            let _ = PROPAGATE_SHORTCUTS.fetch_add(1, AtomicOrdering::Relaxed);
+            return Ok(());
+        }
+
+        // The pair no longer holds, so look for a new one. Whether that succeeds decides what
+        // the nogood does, so the same scan answers both questions.
+        let mut unsatisfied = [0_usize; 2];
+        let mut num_unsatisfied = 0;
+
+        for (index, &predicate) in self.nogood.iter().enumerate() {
+            if context.evaluate_predicate(predicate) != Some(true) {
+                if num_unsatisfied < 2 {
+                    unsatisfied[num_unsatisfied] = index;
+                }
+
+                num_unsatisfied += 1;
+
+                if num_unsatisfied == 2 {
+                    self.watched = unsatisfied;
+                    return Ok(());
+                }
+            }
+        }
+
+        match self.propagation_mode {
+            DeductionPropagationMode::OnlyConflictDetection if num_unsatisfied == 0 => {
+                Err(Conflict::Propagator(PropagatorConflict {
+                    conjunction: self.nogood.iter().copied().collect(),
+                    inference_code: self.inference_code,
+                }))
+            }
+
+            DeductionPropagationMode::OnlyUnitPropagation if num_unsatisfied == 1 => {
+                let unassigned_predicate = self.nogood[unsatisfied[0]];
+
+                if context.evaluate_predicate(unassigned_predicate).is_none() {
+                    let explanation = self
+                        .nogood
+                        .iter()
+                        .copied()
+                        .filter(|&predicate| predicate != unassigned_predicate)
+                        .collect::<PropositionalConjunction>();
+
+                    // This will never fail, as the predicate is known to be unassigned. So this
+                    // propagator only returns explicit conflicts and never empty domain
+                    // conflicts.
+                    context.post(!unassigned_predicate, (explanation, &self.inference_code))?;
+                }
+
+                Ok(())
+            }
+
+            _ => Ok(()),
+        }
+    }
+}
+
+impl DeductionPropagator {
+    /// Propagate by reading the whole nogood, as this propagator did before it kept a watched
+    /// pair.
+    fn propagate_without_watches(&self, mut context: PropagationContext) -> PropagationStatusCP {
         if !self.active {
             for &predicate_id in self.ids.iter() {
                 context.unregister_predicate(predicate_id);
@@ -207,9 +358,5 @@ impl Propagator for DeductionPropagator {
             _ => {}
         };
         Ok(())
-    }
-
-    fn priority(&self) -> Priority {
-        self.propagation_priority
     }
 }

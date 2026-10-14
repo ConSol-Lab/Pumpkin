@@ -7,6 +7,7 @@ use pumpkin_propagators::disjunctive::ArgDisjunctiveTask;
 use super::context::CompilationContext;
 use crate::core::constraints::Constraint;
 use crate::core::constraints::NegatableConstraint;
+use crate::core::containers::HashMap;
 use crate::core::predicate;
 use crate::core::predicates::Predicate;
 use crate::core::proof::ConstraintTag;
@@ -15,16 +16,163 @@ use crate::core::variables::DomainId;
 use crate::core::variables::TransformableVariable;
 use crate::flatzinc::CompilationOptions;
 use crate::flatzinc::FlatZincError;
+use crate::flatzinc::ProofFormat;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::compiler::context::Set;
+use crate::flatzinc::preamble::Decomposition;
+use crate::flatzinc::preamble::DecompositionKind;
 
 pub(crate) fn run(
     _: &FlatZincAst,
     context: &mut CompilationContext,
     options: &CompilationOptions,
 ) -> Result<(), FlatZincError> {
+    let defines_literal: std::collections::HashSet<u32> = context
+        .literal_predicates
+        .iter()
+        .map(|literal| std::num::NonZero::<u32>::from(literal.tag).get())
+        .collect();
+    // The proof replaced these variables by their value, so it writes no atom over them.
+    for name in context.declared_constants.clone() {
+        let domain = context.variable_map[&name];
+        context.solver.write_as_constant(domain);
+    }
+    // An inequality over one variable is a bound on it, set at the root by a unit clause that
+    // cites the inequality.
+    for unit in std::mem::take(&mut context.unit_bounds) {
+        let domain = context.variable_map[&unit.variable];
+        let scaled = domain.scaled(i32::try_from(unit.coefficient).expect("checked to fit"));
+        let bound = i32::try_from(unit.bound).expect("checked to fit");
+        context
+            .solver
+            .name_rule_of_constraint(unit.tag, "linear_less_or_equal");
+        context
+            .solver
+            .add_clause([predicate![scaled <= bound]], unit.tag);
+    }
+    // 'set_in' constraints are handled in pre-processing steps, which restrict the domain of the
+    // variable to the set. fzn-croc-check holds the constraint apart from the declared domains,
+    // so the proof cites it for what the set excludes. The sets are named before any constraint
+    // is posted, since posting one can explain a predicate a set implies at the root.
+    if context.proof_format == ProofFormat::Croc && context.solver.is_logging_proof() {
+        let set_ins: Vec<(ConstraintTag, Vec<flatzinc::Expr>)> = context
+            .constraints
+            .iter()
+            .filter(|(_, item)| item.id == "set_in")
+            .map(|(tag, item)| (*tag, item.exprs.clone()))
+            .collect();
+        for (constraint_tag, exprs) in set_ins {
+            name_set_in_domain(context, &exprs, constraint_tag)?;
+        }
+    }
     for (constraint_tag, constraint_item) in std::mem::take(&mut context.constraints) {
         let flatzinc::ConstraintItem { id, exprs, annos } = &constraint_item;
+        // fzn-croc-check reads these as a reified or half-reified constraint, whose inferences
+        // cite the rule of the inner constraint wrapped as reified(R) or half_reified(R).
+        if context.proof_format == ProofFormat::Croc
+            && let Some(fully) = reification_of(id)
+        {
+            context.solver.name_reification(constraint_tag, fully);
+        }
+        // The comparison a literal stands for holds by the literal's clauses.
+        if defines_literal.contains(&std::num::NonZero::<u32>::from(constraint_tag).get()) {
+            continue;
+        }
+        if context.proof_format == ProofFormat::Croc
+            && post_half_reified_bound(context, id, exprs, constraint_tag)?
+        {
+            continue;
+        }
+
+        // Two-term equalities that stay propagators, counted for the statistics.
+        match id.as_str() {
+            "int_eq_reif" | "int_eq_imp" | "bool_eq_reif" | "bool_eq_imp" => {
+                let fixed_true = context
+                    .resolve_bool_variable(&exprs[2])
+                    .is_ok_and(|literal| {
+                        context.solver.lower_bound(&literal.get_integer_variable()) == 1
+                    });
+                if fixed_true {
+                    context.view_statistics.affine_relations_not_read += 1;
+                } else {
+                    context.view_statistics.reified_two_term_equalities += 1;
+                }
+            }
+            "int_plus" | "int_times" => {
+                let fixed = exprs
+                    .iter()
+                    .filter(|expr| {
+                        context.resolve_integer_variable(expr).is_ok_and(|view| {
+                            context.solver.lower_bound(&view) == context.solver.upper_bound(&view)
+                        })
+                    })
+                    .count();
+                if fixed == 1 {
+                    context.view_statistics.affine_relations_not_read += 1;
+                }
+            }
+            "bool_lin_eq" => {
+                if context
+                    .resolve_array_integer_constants(&exprs[0])
+                    .is_ok_and(|weights| weights.len() == 2)
+                {
+                    context.view_statistics.affine_relations_not_read += 1;
+                }
+            }
+            "int_lin_eq_reif" | "int_lin_eq_imp" | "int_lin_eq" => {
+                if let (Ok(weights), Ok(vars)) = (
+                    context.resolve_array_integer_constants(&exprs[0]),
+                    context.resolve_integer_variable_array(&exprs[1]),
+                ) {
+                    let original = weights.len();
+                    let (terms, _) = merged_weighted_vars(weights, vars, 0);
+                    let variable_terms = terms
+                        .iter()
+                        .filter(|term| {
+                            context.solver.lower_bound(*term) != context.solver.upper_bound(*term)
+                        })
+                        .count();
+                    if variable_terms == 2 {
+                        if id == "int_lin_eq" {
+                            if original > 2 {
+                                context.view_statistics.equalities_reduced_to_two_terms += 1;
+                            }
+                        } else {
+                            context.view_statistics.reified_two_term_equalities += 1;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        // Constraints Pumpkin decomposes are cited under the rule for the whole constraint.
+        match id.as_str() {
+            "pumpkin_all_different" | "all_different_int" | "fzn_all_different_int" => context
+                .solver
+                .name_rule_of_constraint(constraint_tag, "all_different_hall"),
+            "array_int_minimum" | "int_min" => context
+                .solver
+                .name_rule_of_constraint(constraint_tag, "minimum"),
+            "bool_clause" => context
+                .solver
+                .name_rule_of_constraint(constraint_tag, "clause"),
+            "array_bool_and" | "bool_and" => context
+                .solver
+                .name_rule_of_constraint(constraint_tag, "boolean_and"),
+            "array_bool_or" | "bool_or" => context
+                .solver
+                .name_rule_of_constraint(constraint_tag, "boolean_or"),
+            // fzn-croc-check reads set_in_reif as set_in under an indicator.
+            "set_in_reif" if context.proof_format == ProofFormat::Croc => context
+                .solver
+                .name_rule_of_constraint(constraint_tag, "set_in"),
+            // fzn-croc-check reads bool_not(a, b) as the equality a + b = 1.
+            "bool_not" if context.proof_format == ProofFormat::Croc => context
+                .solver
+                .name_rule_of_constraint(constraint_tag, "linear_equal_binary"),
+            _ => {}
+        }
 
         match id.as_str() {
             "pumpkin_disjunctive_strict" => {
@@ -335,10 +483,8 @@ pub(crate) fn run(
             "bool_eq_reif" => compile_bool_eq_reif(context, exprs, constraint_tag)?,
             "bool_not" => compile_bool_not(context, exprs, constraint_tag)?,
             "set_in_reif" => compile_set_in_reif(context, exprs, constraint_tag)?,
-            "set_in" => {
-                // 'set_in' constraints are handled in pre-processing steps.
-                // TODO: remove it from the AST, so it does not need to be matched here
-            }
+            // Named before the constraints were posted.
+            "set_in" => {}
 
             "pumpkin_cumulative" => compile_cumulative(context, exprs, options, constraint_tag)?,
             "pumpkin_cumulative_var" => todo!(
@@ -445,6 +591,93 @@ fn compile_array_int_minimum(
     pumpkin_constraints::minimum(array.as_ref().to_owned(), rhs, constraint_tag)
         .post(context.solver);
 
+    Ok(())
+}
+
+/// Whether fzn-croc-check reads the FlatZinc constraint as reified (`Some(true)`) or half-reified
+/// (`Some(false)`), or as neither.
+fn reification_of(id: &str) -> Option<bool> {
+    match id {
+        "int_lin_le_reif"
+        | "int_lin_eq_reif"
+        | "int_lin_ne_reif"
+        | "int_le_reif"
+        | "int_lt_reif"
+        | "int_eq_reif"
+        | "bool_eq_reif"
+        | "int_ne_reif"
+        | "pumpkin_bool_xor_reif"
+        | "set_in_reif" => Some(true),
+        "int_lin_le_imp" | "int_lin_eq_imp" | "int_lin_ne_imp" | "int_le_imp" | "int_lt_imp"
+        | "int_eq_imp" | "int_ne_imp" | "set_in_imp" => Some(false),
+        _ => None,
+    }
+}
+
+/// Give the proof the set of a `set_in` constraint over a variable or a view of one, as the ranges
+/// of values of the variable's domain whose image lies in the set, so that a bound the set implies
+/// at the root cites the constraint.
+fn name_set_in_domain(
+    context: &mut CompilationContext<'_>,
+    exprs: &[flatzinc::Expr],
+    constraint_tag: ConstraintTag,
+) -> Result<(), FlatZincError> {
+    check_parameters!(exprs, 2, "set_in");
+    let Ok(member) = context.resolve_integer_variable(&exprs[0]) else {
+        return Ok(());
+    };
+    let scale = i64::from(member.scale());
+    let offset = i64::from(member.view_offset());
+    if scale == 0 {
+        return Ok(());
+    }
+    let member_ranges = match context.resolve_set_constant(&exprs[1])? {
+        Set::Interval {
+            lower_bound,
+            upper_bound,
+        } => vec![(lower_bound, upper_bound)],
+        Set::Sparse { values } => {
+            let mut values = values.to_vec();
+            values.sort_unstable();
+            values.dedup();
+            let mut ranges: Vec<(i32, i32)> = vec![];
+            for value in values {
+                match ranges.last_mut() {
+                    Some((_, upper)) if *upper + 1 == value => *upper = value,
+                    _ => ranges.push((value, value)),
+                }
+            }
+            ranges
+        }
+    };
+    // The values x with lower <= scale * x + offset <= upper form one range.
+    let ranges = member_ranges
+        .into_iter()
+        .filter_map(|(lower, upper)| {
+            let (low, high) = (i64::from(lower) - offset, i64::from(upper) - offset);
+            let (low, high) = if scale > 0 {
+                (
+                    low.div_euclid(scale) + i64::from(low.rem_euclid(scale) != 0),
+                    high.div_euclid(scale),
+                )
+            } else {
+                let scale = -scale;
+                (
+                    (-high).div_euclid(scale) + i64::from((-high).rem_euclid(scale) != 0),
+                    (-low).div_euclid(scale),
+                )
+            };
+            (low <= high).then(|| {
+                (
+                    i32::try_from(low).unwrap_or(i32::MIN),
+                    i32::try_from(high).unwrap_or(i32::MAX),
+                )
+            })
+        })
+        .collect();
+    context
+        .solver
+        .name_set_in_domain(constraint_tag, *member.inner(), ranges);
     Ok(())
 }
 
@@ -729,7 +962,12 @@ fn compile_ternary_int_predicate<C: Constraint>(
     _: &[flatzinc::Annotation],
     predicate_name: &str,
     constraint_tag: ConstraintTag,
-    create_constraint: impl FnOnce(DomainId, DomainId, DomainId, ConstraintTag) -> C,
+    create_constraint: impl FnOnce(
+        AffineView<DomainId>,
+        AffineView<DomainId>,
+        AffineView<DomainId>,
+        ConstraintTag,
+    ) -> C,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
@@ -749,7 +987,7 @@ fn compile_binary_int_predicate<C: Constraint>(
     _: &[flatzinc::Annotation],
     predicate_name: &str,
     constraint_tag: ConstraintTag,
-    create_constraint: impl FnOnce(DomainId, DomainId, ConstraintTag) -> C,
+    create_constraint: impl FnOnce(AffineView<DomainId>, AffineView<DomainId>, ConstraintTag) -> C,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 2, predicate_name);
 
@@ -768,7 +1006,7 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
     _: &[flatzinc::Annotation],
     predicate_name: &str,
     constraint_tag: ConstraintTag,
-    create_constraint: impl FnOnce(DomainId, DomainId, ConstraintTag) -> C,
+    create_constraint: impl FnOnce(AffineView<DomainId>, AffineView<DomainId>, ConstraintTag) -> C,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
@@ -782,12 +1020,63 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
     Ok(())
 }
 
-fn weighted_vars(weights: Rc<[i32]>, vars: Rc<[DomainId]>) -> Box<[AffineView<DomainId>]> {
+fn weighted_vars(
+    weights: Rc<[i32]>,
+    vars: Rc<[AffineView<DomainId>]>,
+) -> Box<[AffineView<DomainId>]> {
     vars.iter()
         .zip(weights.iter())
         .filter(|&(_, w)| *w != 0)
         .map(|(x_i, &w_i)| x_i.scaled(w_i))
         .collect::<Box<[_]>>()
+}
+
+/// The terms of a linear constraint once the views are applied: offsets move into the
+/// right-hand side, terms over the same variable are merged in the order they first appear, and
+/// terms left with coefficient zero are dropped. Two views of one variable then propagate as one
+/// term, and an explanation names one bound of it rather than two. `None` when a coefficient or
+/// the right-hand side leaves the range of `i32`, or when every term cancels.
+fn merged_terms(
+    terms: impl IntoIterator<Item = AffineView<DomainId>>,
+    rhs: i32,
+) -> Option<(Box<[AffineView<DomainId>]>, i32)> {
+    let mut order: Vec<DomainId> = vec![];
+    let mut coefficients: HashMap<DomainId, i64> = HashMap::default();
+    let mut bound = i64::from(rhs);
+    for view in terms {
+        bound -= i64::from(view.view_offset());
+        let inner = *view.inner();
+        let entry = coefficients.entry(inner).or_insert_with(|| {
+            order.push(inner);
+            0
+        });
+        *entry += i64::from(view.scale());
+    }
+    let merged = order
+        .into_iter()
+        .filter_map(|inner| {
+            let coefficient = coefficients[&inner];
+            (coefficient != 0).then_some((inner, coefficient))
+        })
+        .map(|(inner, coefficient)| i32::try_from(coefficient).map(|c| inner.scaled(c)))
+        .collect::<Result<Box<[_]>, _>>()
+        .ok()?;
+    // Terms that cancel out leave no variable for a propagator to watch; the caller then keeps
+    // the terms as they were.
+    if merged.is_empty() {
+        return None;
+    }
+    Some((merged, i32::try_from(bound).ok()?))
+}
+
+/// [`weighted_vars`] merged by [`merged_terms`]; the terms as they are when merging overflows.
+fn merged_weighted_vars(
+    weights: Rc<[i32]>,
+    vars: Rc<[AffineView<DomainId>]>,
+    rhs: i32,
+) -> (Box<[AffineView<DomainId>]>, i32) {
+    let terms = weighted_vars(weights, vars);
+    merged_terms(terms.iter().copied(), rhs).unwrap_or((terms, rhs))
 }
 
 fn compile_int_lin_predicate<C: Constraint>(
@@ -804,7 +1093,11 @@ fn compile_int_lin_predicate<C: Constraint>(
     let vars = context.resolve_integer_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
 
-    let terms = weighted_vars(weights, vars);
+    let (terms, rhs) = if context.proof_format == ProofFormat::Croc {
+        merged_weighted_vars(weights, vars, rhs)
+    } else {
+        (weighted_vars(weights, vars), rhs)
+    };
 
     let constraint = create_constraint(terms, rhs, constraint_tag);
     constraint.post(context.solver);
@@ -827,7 +1120,11 @@ fn compile_reified_int_lin_predicate<C: NegatableConstraint>(
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
     let reif = context.resolve_bool_variable(&exprs[3])?;
 
-    let terms = weighted_vars(weights, vars);
+    let (terms, rhs) = if context.proof_format == ProofFormat::Croc {
+        merged_weighted_vars(weights, vars, rhs)
+    } else {
+        (weighted_vars(weights, vars), rhs)
+    };
 
     let constraint = create_constraint(terms, rhs, constraint_tag);
     constraint.reify(context.solver, reif);
@@ -850,12 +1147,66 @@ fn compile_int_lin_imp_predicate<C: Constraint>(
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
     let reif = context.resolve_bool_variable(&exprs[3])?;
 
-    let terms = weighted_vars(weights, vars);
+    let (terms, rhs) = if context.proof_format == ProofFormat::Croc {
+        merged_weighted_vars(weights, vars, rhs)
+    } else {
+        (weighted_vars(weights, vars), rhs)
+    };
 
     let constraint = create_constraint(terms, rhs, constraint_tag);
     constraint.implied_by(context.solver, reif);
 
     Ok(())
+}
+
+/// `b -> x <= c` and its kin, with one side a constant, as the clause `!b \/ [x <= c]` instead of
+/// a propagator. Returns `false` for any other constraint. Its inferences are the comparison's,
+/// read under the indicator.
+fn post_half_reified_bound(
+    context: &mut CompilationContext,
+    id: &str,
+    exprs: &[flatzinc::Expr],
+    constraint_tag: ConstraintTag,
+) -> Result<bool, FlatZincError> {
+    if !matches!(
+        id,
+        "int_le_imp" | "int_lt_imp" | "int_ge_imp" | "int_gt_imp"
+    ) || exprs.len() != 3
+    {
+        return Ok(false);
+    }
+    let left = context.resolve_integer_constant_from_expr(&exprs[0]).ok();
+    let right = context.resolve_integer_constant_from_expr(&exprs[1]).ok();
+    let predicate = match (left, right) {
+        (None, Some(value)) => {
+            let x = context.resolve_integer_variable(&exprs[0])?;
+            match id {
+                "int_le_imp" => predicate![x <= value],
+                "int_lt_imp" => predicate![x <= value - 1],
+                "int_ge_imp" => predicate![x >= value],
+                _ => predicate![x >= value + 1],
+            }
+        }
+        (Some(value), None) => {
+            let x = context.resolve_integer_variable(&exprs[1])?;
+            match id {
+                "int_le_imp" => predicate![x >= value],
+                "int_lt_imp" => predicate![x >= value + 1],
+                "int_ge_imp" => predicate![x <= value],
+                _ => predicate![x <= value - 1],
+            }
+        }
+        _ => return Ok(false),
+    };
+    let indicator = context.resolve_bool_variable(&exprs[2])?;
+    context
+        .solver
+        .name_rule_of_constraint(constraint_tag, "linear_less_or_equal");
+    context
+        .solver
+        .add_clause([!indicator.get_true_predicate(), predicate], constraint_tag);
+    context.view_statistics.half_reified_clauses += 1;
+    Ok(true)
 }
 
 fn compile_binary_int_imp<C: Constraint>(
@@ -864,7 +1215,7 @@ fn compile_binary_int_imp<C: Constraint>(
     _: &[flatzinc::Annotation],
     predicate_name: &str,
     constraint_tag: ConstraintTag,
-    create_constraint: impl FnOnce(DomainId, DomainId, ConstraintTag) -> C,
+    create_constraint: impl FnOnce(AffineView<DomainId>, AffineView<DomainId>, ConstraintTag) -> C,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
@@ -889,13 +1240,30 @@ fn compile_bool_lin_eq_predicate(
     let bools = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
-    pumpkin_constraints::boolean_equals(
-        weights.as_ref().to_owned(),
-        bools.as_ref().to_owned(),
-        rhs,
-        constraint_tag,
-    )
-    .post(context.solver);
+    if rhs.scale() == 1 && rhs.view_offset() == 0 {
+        pumpkin_constraints::boolean_equals(
+            weights.as_ref().to_owned(),
+            bools.as_ref().to_owned(),
+            *rhs.inner(),
+            constraint_tag,
+        )
+        .post(context.solver);
+    } else {
+        // The right-hand side is a view of another variable: the sum is then a linear equality
+        // over the variables the views are of.
+        let terms: Box<[AffineView<DomainId>]> = bools
+            .iter()
+            .zip(weights.iter())
+            .map(|(literal, weight)| literal.get_integer_variable().scaled(*weight))
+            .chain(std::iter::once(rhs.scaled(-1)))
+            .collect();
+        let (terms, bound) = if context.proof_format == ProofFormat::Croc {
+            merged_terms(terms.iter().copied(), 0).unwrap_or((terms, 0))
+        } else {
+            (terms, 0)
+        };
+        pumpkin_constraints::equals(terms, bound, constraint_tag).post(context.solver);
+    }
 
     Ok(())
 }
@@ -931,6 +1299,10 @@ fn compile_all_different(
     check_parameters!(exprs, 1, "fzn_all_different");
 
     let variables = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
+    // The disequalities it is decomposed into are cited as the Hall rule on the pair.
+    context
+        .solver
+        .name_positions_of_constraint(constraint_tag, variables.clone());
     pumpkin_constraints::all_different(variables, constraint_tag).post(context.solver);
 
     Ok(())
@@ -948,6 +1320,7 @@ fn compile_table(
 
     let flat_table = context.resolve_array_integer_constants(&exprs[1])?;
     let table = create_table(flat_table, variables.len());
+    record_table_decomposition(context, constraint_tag, table.len());
 
     pumpkin_constraints::table(variables, table, constraint_tag).post(context.solver);
 
@@ -968,10 +1341,30 @@ fn compile_table_reif(
     let table = create_table(flat_table, variables.len());
 
     let reified = context.resolve_bool_variable(&exprs[2])?;
+    record_table_decomposition(context, constraint_tag, table.len());
 
     pumpkin_constraints::table(variables, table, constraint_tag).reify(context.solver, reified);
 
     Ok(())
+}
+
+/// Under proof logging a table is posted as its decomposition, with a named selector per row,
+/// which the preamble states.
+fn record_table_decomposition(
+    context: &mut CompilationContext,
+    constraint_tag: ConstraintTag,
+    rows: usize,
+) {
+    if !context.solver.is_logging_proof() {
+        return;
+    }
+    context.preamble.decompositions.push(Decomposition {
+        kind: DecompositionKind::Table,
+        constraint: u64::from(std::num::NonZero::<u32>::from(constraint_tag).get()),
+        fresh_variables: (0..rows)
+            .map(|row| pumpkin_constraints::table_selector_name(constraint_tag, row))
+            .collect(),
+    });
 }
 
 fn create_table(flat_table: Rc<[i32]>, num_variables: usize) -> Vec<Vec<i32>> {

@@ -32,6 +32,33 @@ pub enum FlatZincError {
         expected_type: Box<str>,
     },
 
+    #[error(
+        "the declaration of '{0}' makes it equal to another variable, which the DRCP format cannot \
+         state; use --proof-format croc"
+    )]
+    VariableAlias(Box<str>),
+
     #[error("missing solve item")]
     MissingSolveItem,
+
+    #[error(
+        "a croc proof cannot be logged when enumerating all solutions of a satisfaction problem: \
+         the clauses that exclude each solution found are not derivable"
+    )]
+    ProofOfSolutionEnumeration,
+
+    #[error("symmetry breaking cannot be combined with {0}")]
+    SymmetryBreakingUnsupported(&'static str),
+
+    #[error("dominance breaking cannot be combined with {0}")]
+    DominanceBreakingUnsupported(&'static str),
+
+    #[error("dual fixing cannot be combined with {0}")]
+    DualFixingUnsupported(&'static str),
+
+    #[error("value symmetry breaking cannot be combined with {0}")]
+    ValueSymmetryBreakingUnsupported(&'static str),
+
+    #[error("the preamble cannot be applied to the model: {0}")]
+    Preamble(String),
 }

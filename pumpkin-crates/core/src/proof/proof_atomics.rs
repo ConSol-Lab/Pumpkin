@@ -42,6 +42,13 @@ impl ProofAtomics {
         IntAtomic::new(name, comparison, value)
     }
 
+    /// The predicate a proof writes for the given one: the reified predicate for a literal
+    /// that reifies one, and the predicate itself otherwise.
+    pub(crate) fn canonical(&self, predicate: Predicate) -> Predicate {
+        self.get_underlying_predicate(predicate)
+            .unwrap_or(predicate)
+    }
+
     /// Given a literal, whenever it shows up in a proof step, substitute it with the provided
     /// predicate.
     pub(crate) fn reify_predicate(&mut self, literal: Literal, predicate: Predicate) {

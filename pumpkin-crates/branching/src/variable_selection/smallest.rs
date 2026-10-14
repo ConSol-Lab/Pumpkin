@@ -2,7 +2,7 @@ use log::warn;
 use pumpkin_core::asserts::pumpkin_assert_eq_simple;
 use pumpkin_core::branching::BrancherEvent;
 use pumpkin_core::branching::SelectionContext;
-use pumpkin_core::variables::DomainId;
+use pumpkin_core::variables::IntegerVariable;
 
 use super::VariableSelector;
 use crate::tie_breaking::Direction;
@@ -59,11 +59,12 @@ impl<Var: Clone + 'static, TieBreaking: TieBreaker<Var, i32>> Smallest<Var, TieB
     }
 }
 
-impl<TieBreaking> VariableSelector<DomainId> for Smallest<DomainId, TieBreaking>
+impl<Var, TieBreaking> VariableSelector<Var> for Smallest<Var, TieBreaking>
 where
-    TieBreaking: TieBreaker<DomainId, i32>,
+    Var: IntegerVariable + Copy,
+    TieBreaking: TieBreaker<Var, i32>,
 {
-    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<DomainId> {
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<Var> {
         self.variables
             .iter()
             .filter(|variable| !context.is_integer_fixed(**variable))

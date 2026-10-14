@@ -1,10 +1,12 @@
-//! Parses a FlatZinc instance and compiles it into a [`Solver`].
+//! Parses a FlatZinc instance and compiles it into a [`Solver`]. The compiler is shared by the
+//! solver binary and the proof processor, which posts the same propagators.
 
 mod ast;
 mod compiler;
 mod error;
 mod instance;
 mod parser;
+pub mod preamble;
 
 use std::io::Read;
 
@@ -16,6 +18,7 @@ pub use instance::Output;
 pub use instance::VariableOutput;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 
+pub use self::compiler::ViewStatistics;
 use crate::Solver;
 
 /// The minimum value of an unbounded integer.
@@ -30,14 +33,104 @@ pub const MIN_INTEGER_VALUE: i32 = -500_000_000;
 pub const MAX_INTEGER_VALUE: i32 = 500_000_000;
 
 /// The options that influence how a FlatZinc instance is compiled.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct CompilationOptions {
     /// Options used for the cumulative constraint (see [`crate::cumulative`]).
     pub cumulative_options: CumulativeOptions,
 
-    /// A full proof needs a constraint tag for every inference, so the equivalences between
-    /// variables are then not merged.
-    pub is_logging_full_proof: bool,
+    /// The type of proof that is logged. This influences which preprocessing steps we can do: a
+    /// full proof needs a constraint tag for every inference.
+    pub proof_type: Option<ProofType>,
+
+    /// The proof format, which decides whether the view pass runs.
+    pub proof_format: ProofFormat,
+
+    /// Whether all solutions are enumerated, which the passes that remove solutions refuse.
+    pub all_solutions: bool,
+
+    /// Write the preamble that states the compiler's preprocessing, for the proof processor, at
+    /// the head of the croc scaffold the proof log writes.
+    pub writes_preamble: bool,
+
+    /// Apply the preprocessing the preamble states instead of deciding it: the views, constants
+    /// and literals it gives are made, the constraints it skips are not posted, and its steps
+    /// head the proof. Used by the proof processor, which reads a scaffold over the variables of
+    /// the solver that wrote the preamble.
+    pub preamble: Option<preamble::Preamble>,
+
+    /// Stop after compiling: write the proof steps that state the views, in the format of
+    /// fzn-drcp-check, to `head_path`, report what the view pass did, and do not solve.
+    pub preprocess_only: bool,
+    pub head_path: Option<std::path::PathBuf>,
+    /// State views as declared replacements rather than rewriting every constraint.
+    pub declare_replacements: bool,
+    /// Make a boolean that a reified comparison with a constant defines the literal of the
+    /// comparison, when it occurs only as a literal.
+    pub literal_predicates: bool,
+
+    /// Detect interchangeable variables and post lex-leader constraints to break the
+    /// symmetry. Refused when enumerating all solutions and under proof logging other than a
+    /// croc block proof or croc scaffold, where each lex-leader constraint is justified by a
+    /// lex-leader step.
+    pub symmetry_breaking: bool,
+
+    /// Detect dominated variables in linear models and post dominance-breaking constraints.
+    /// Refused when enumerating all solutions, with symmetry breaking, and under proof logging
+    /// other than a croc block proof or croc scaffold, where each posted constraint is
+    /// justified.
+    pub dominance_breaking: bool,
+
+    /// Fix variables to a bound when moving them towards it cannot violate a constraint or
+    /// worsen the objective. Refused when enumerating all solutions, with symmetry breaking, and
+    /// under proof logging other than a croc block proof or croc scaffold, where each fixing is
+    /// justified.
+    pub dual_fixing: bool,
+
+    /// Detect interchangeable values and post value-precedence constraints. Refused when
+    /// enumerating all solutions, with the other breaking options, and under proof logging other
+    /// than a croc block proof or croc scaffold, where the exchanges are stated as value symmetry
+    /// steps and nothing is posted.
+    pub value_symmetry_breaking: bool,
+}
+
+impl CompilationOptions {
+    /// Whether a full proof is logged, under which the equivalences between variables are not
+    /// merged.
+    pub fn is_logging_full_proof(&self) -> bool {
+        matches!(self.proof_type, Some(ProofType::Full))
+    }
+
+    /// Whether the proof, if any, states symmetry and dominance breaking steps: a croc proof in
+    /// the block format, or a croc scaffold, whose preamble states them.
+    pub(crate) fn proof_states_breaking_steps(&self) -> bool {
+        match self.proof_type {
+            None => true,
+            Some(ProofType::Blocks | ProofType::Scaffold) => self.proof_format == ProofFormat::Croc,
+            Some(ProofType::Full) => false,
+        }
+    }
+}
+
+/// The proof format, which decides what the compiler does for a proof.
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum ProofFormat {
+    /// The DRCP format, without the steps it cannot state.
+    #[default]
+    Drcp,
+    /// The croc format of fzn-croc-check, with every step.
+    Croc,
+}
+
+/// The type of proof that is logged.
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum ProofType {
+    /// Log only the proof scaffold.
+    #[default]
+    Scaffold,
+    /// Log the full proof with hints.
+    Full,
+    /// Log the full proof in the croc block format (experimental).
+    Blocks,
 }
 
 /// Parses the FlatZinc instance in `source` and adds its variables and constraints to `solver`.

@@ -24,6 +24,7 @@ use pumpkin_branching::variable_selection::Smallest;
 use super::error::FlatZincError;
 use crate::core::pumpkin_assert_eq_simple;
 use crate::core::pumpkin_assert_simple;
+use crate::core::variables::AffineView;
 use crate::core::variables::DomainId;
 use crate::core::variables::Literal;
 #[derive(Debug)]
@@ -88,10 +89,10 @@ impl VariableSelectionStrategy {
         })
     }
 
-    pub(crate) fn create_from_domains(
+    pub(crate) fn create_from_views(
         &self,
-        variables: &[DomainId],
-    ) -> DynamicVariableSelector<DomainId> {
+        variables: &[AffineView<DomainId>],
+    ) -> DynamicVariableSelector<AffineView<DomainId>> {
         DynamicVariableSelector::new(match self {
             VariableSelectionStrategy::AntiFirstFail => Box::new(AntiFirstFail::new(variables)),
             VariableSelectionStrategy::DomWDeg => todo!("DomWDeg is not yet implemented"),

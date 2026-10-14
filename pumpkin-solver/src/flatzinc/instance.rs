@@ -5,19 +5,21 @@ use std::rc::Rc;
 use pumpkin_branching::branching::dynamic_brancher::DynamicBrancher;
 
 use crate::core::optimisation::OptimisationDirection;
+use crate::core::variables::AffineView;
 use crate::core::variables::DomainId;
 use crate::core::variables::Literal;
+use crate::flatzinc::ViewStatistics;
 
 /// The objective function of a FlatZinc model,
 /// consisting of the direction (e.g. maximization or minimization) and the integer variable which
 /// is being optimised
 #[derive(Debug, Clone, Copy)]
 pub enum FlatzincObjective {
-    Maximize(DomainId),
-    Minimize(DomainId),
+    Maximize(AffineView<DomainId>),
+    Minimize(AffineView<DomainId>),
 }
 
-impl From<FlatzincObjective> for (OptimisationDirection, DomainId) {
+impl From<FlatzincObjective> for (OptimisationDirection, AffineView<DomainId>) {
     fn from(value: FlatzincObjective) -> Self {
         match value {
             FlatzincObjective::Maximize(domain_id) => (OptimisationDirection::Maximise, domain_id),
@@ -26,11 +28,14 @@ impl From<FlatzincObjective> for (OptimisationDirection, DomainId) {
     }
 }
 
+/// The compiled model: what to print of a solution, the objective, the search, and what the view
+/// pass did.
 #[derive(Debug, Default)]
 pub struct FlatZincInstance {
     pub outputs: Vec<Output>,
     pub objective_function: Option<FlatzincObjective>,
     pub search: Option<DynamicBrancher>,
+    pub view_statistics: ViewStatistics,
 }
 
 impl FlatZincInstance {
@@ -43,9 +48,9 @@ impl FlatZincInstance {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Output {
     Bool(VariableOutput<Literal>),
-    Int(VariableOutput<DomainId>),
+    Int(VariableOutput<AffineView<DomainId>>),
     ArrayOfBool(ArrayOutput<Literal>),
-    ArrayOfInt(ArrayOutput<DomainId>),
+    ArrayOfInt(ArrayOutput<AffineView<DomainId>>),
 }
 
 impl Output {
@@ -68,17 +73,14 @@ impl Output {
         })
     }
 
-    pub(crate) fn int(id: Rc<str>, domain_id: DomainId) -> Output {
-        Output::Int(VariableOutput {
-            id,
-            variable: domain_id,
-        })
+    pub(crate) fn int(id: Rc<str>, view: AffineView<DomainId>) -> Output {
+        Output::Int(VariableOutput { id, variable: view })
     }
 
     pub(crate) fn array_of_int(
         id: Rc<str>,
         shape: Box<[(i32, i32)]>,
-        contents: Rc<[DomainId]>,
+        contents: Rc<[AffineView<DomainId>]>,
     ) -> Output {
         Output::ArrayOfInt(ArrayOutput {
             id,

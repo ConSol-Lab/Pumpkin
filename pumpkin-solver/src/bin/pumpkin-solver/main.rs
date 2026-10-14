@@ -45,6 +45,9 @@ use pumpkin_solver::core::results::SatisfactionResult;
 use pumpkin_solver::core::results::SolutionReference;
 use pumpkin_solver::core::statistics::configure_statistic_logging;
 use pumpkin_solver::core::termination::TimeBudget;
+use pumpkin_solver::flatzinc::CompilationOptions;
+use pumpkin_solver::flatzinc::ProofFormat;
+use pumpkin_solver::flatzinc::ProofType;
 use result::PumpkinError;
 use result::PumpkinResult;
 
@@ -82,6 +85,9 @@ struct Args {
     ///
     /// In case of a DRCP proof, if the file extension ends with `.gz`, a gzipped proof will be
     /// produced.
+    ///
+    /// A croc scaffold starts with a preamble that states the preprocessing the solver did, for
+    /// the proof processor.
     #[arg(long, verbatim_doc_comment)]
     proof_path: Option<PathBuf>,
 
@@ -90,6 +96,45 @@ struct Args {
     /// If the `proof_path` option is not provided, this is ignored.
     #[arg(long, value_enum, default_value_t)]
     proof_type: ProofType,
+
+    /// The proof format: `drcp`, or `croc`, which is experimental. Preprocessing that a DRCP
+    /// proof cannot justify is skipped under `drcp`.
+    #[arg(long, value_enum, default_value_t)]
+    proof_format: ProofFormat,
+
+    /// How a croc proof of the block proof type derives each learned nogood: by a resolution
+    /// chain or by a refutation (experimental).
+    #[arg(long, value_enum, default_value_t)]
+    nogood_derivation: NogoodDerivation,
+
+    /// How a croc proof of the block proof type is written: in binary (the default) or as text
+    /// (experimental).
+    #[arg(long, value_enum)]
+    proof_encoding: Option<ProofEncoding>,
+
+    /// Write a croc block proof for the lenient reading of the checker, which reads every
+    /// inference, resolution chain and refutation within the root domains (experimental). The
+    /// proof starts with the header `m lenient` and leaves out the inferences that explain an
+    /// atomic constraint the declared domains and the nogoods over one variable entail, and
+    /// the premises they entail.
+    #[arg(long)]
+    proof_root_domains: bool,
+
+    /// Compile the model, write the steps that state the views the compiler made to
+    /// `proof_path`, report what the view pass did, and stop without solving (experimental).
+    #[arg(long)]
+    preprocess_only: bool,
+
+    /// State each view the compiler makes as one declared replacement in a croc proof, instead
+    /// of rewriting each constraint that mentions the variable (experimental).
+    #[arg(long)]
+    declare_replacements: bool,
+
+    /// Make each boolean that a reified comparison of a variable with a constant defines, and
+    /// that occurs only as a literal, the literal of the comparison's predicate instead of a
+    /// variable with a reified propagator (experimental).
+    #[arg(long)]
+    literal_predicates: bool,
 
     /// The number of high-lbd learned nogoods that are kept in the database.
     ///
@@ -335,6 +380,42 @@ struct Args {
     #[arg(short = 'a', long = "all-solutions", verbatim_doc_comment)]
     all_solutions: bool,
 
+    /// Detect interchangeable variables of a FlatZinc model and post lex-leader constraints to
+    /// break the symmetry (experimental). This removes solutions, so it is refused together with
+    /// `-a` on a satisfaction problem. Skipped under `--proof-format drcp` with a proof.
+    ///
+    /// Possible values: bool
+    #[arg(long = "symmetry-breaking", verbatim_doc_comment)]
+    symmetry_breaking: bool,
+
+    /// Detect dominated variables of a FlatZinc model with linear constraints and post
+    /// dominance-breaking constraints (experimental). This removes solutions, so it is refused
+    /// together with `-a` on a satisfaction problem and with `--symmetry-breaking`. Skipped under
+    /// `--proof-format drcp` with a proof.
+    ///
+    /// Possible values: bool
+    #[arg(long = "dominance-breaking", verbatim_doc_comment)]
+    dominance_breaking: bool,
+
+    /// Fix variables of a FlatZinc model to a bound when moving them towards that bound can
+    /// never violate a constraint or make the objective worse (dual fixing, experimental). This
+    /// removes solutions, so it is refused together with `-a` on a satisfaction problem and with
+    /// `--symmetry-breaking`. Skipped under `--proof-format drcp` with a proof.
+    ///
+    /// Possible values: bool
+    #[arg(long = "dual-fixing", verbatim_doc_comment)]
+    dual_fixing: bool,
+
+    /// Detect values that are interchangeable for a group of variables of a FlatZinc model and
+    /// post value-precedence constraints to break the symmetry (experimental). This removes
+    /// solutions, so it is refused together with `-a` on a satisfaction problem and with the
+    /// other breaking options. Under croc proof logging, the exchanges are stated in the proof
+    /// and no constraint is posted. Skipped under `--proof-format drcp` with a proof.
+    ///
+    /// Possible values: bool
+    #[arg(long = "value-symmetry-breaking", verbatim_doc_comment)]
+    value_symmetry_breaking: bool,
+
     /// If `--verbose` is enabled then this option removes the timestamp information from the log
     /// messages. Note that this option will only take affect in the case of a (W)CNF instance.
     ///
@@ -518,7 +599,7 @@ fn main() {
 }
 
 fn run() -> PumpkinResult<()> {
-    let args = Args::parse();
+    let mut args = Args::parse();
 
     let file_format = match args.instance_path.extension().and_then(|ext| ext.to_str()) {
         Some("cnf") => FileFormat::CnfDimacsPLine,
@@ -538,6 +619,64 @@ fn run() -> PumpkinResult<()> {
         args.omit_call_site,
     )?;
 
+    // Without a proof there is nothing to justify, and the view pass runs as for croc proofs.
+    let proof_format = if args.proof_path.is_some() {
+        args.proof_format
+    } else {
+        ProofFormat::Croc
+    };
+
+    if proof_format == ProofFormat::Drcp {
+        if file_format == FileFormat::FlatZinc {
+            warn!("the view pass is skipped under --proof-format drcp");
+        }
+        let croc_only = [
+            (args.proof_type == ProofType::Blocks, "--proof-type blocks"),
+            (args.preprocess_only, "--preprocess-only"),
+            (
+                args.proof_encoding == Some(ProofEncoding::Binary),
+                "--proof-encoding binary",
+            ),
+        ];
+        if let Some((_, option)) = croc_only.iter().find(|(given, _)| *given) {
+            return Err(PumpkinError::NeedsCrocProofs((*option).to_owned()));
+        }
+        let skipped = [
+            (args.declare_replacements, "--declare-replacements"),
+            (args.literal_predicates, "--literal-predicates"),
+        ];
+        for (_, option) in skipped.iter().filter(|(given, _)| *given) {
+            warn!("{option} is skipped under --proof-format drcp");
+        }
+        // A DRCP proof derives only nogoods the model implies, and these passes remove
+        // solutions.
+        let breaking = [
+            (&mut args.symmetry_breaking, "--symmetry-breaking"),
+            (&mut args.dominance_breaking, "--dominance-breaking"),
+            (&mut args.dual_fixing, "--dual-fixing"),
+            (
+                &mut args.value_symmetry_breaking,
+                "--value-symmetry-breaking",
+            ),
+        ];
+        for (given, option) in breaking {
+            if *given {
+                warn!("{option} is skipped under --proof-format drcp");
+                *given = false;
+            }
+        }
+    }
+
+    if args.proof_encoding == Some(ProofEncoding::Binary) && args.proof_type != ProofType::Blocks {
+        return Err(PumpkinError::BinaryNeedsBlocks);
+    }
+
+    if args.proof_root_domains
+        && (proof_format != ProofFormat::Croc || args.proof_type != ProofType::Blocks)
+    {
+        return Err(PumpkinError::RootDomainsNeedBlocks);
+    }
+
     if pumpkin_solver::core::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION
         >= pumpkin_solver::core::asserts::PUMPKIN_ASSERT_MODERATE
     {
@@ -547,11 +686,25 @@ fn run() -> PumpkinResult<()> {
         );
     };
 
-    let proof_log = if let Some(path_buf) = args.proof_path.as_ref() {
+    // In preprocess-only mode the proof file receives the view steps instead.
+    let proof_log = if let Some(path_buf) =
+        args.proof_path.as_ref().filter(|_| !args.preprocess_only)
+    {
         match file_format {
             FileFormat::CnfDimacsPLine => ProofLog::dimacs(path_buf)?,
             FileFormat::WcnfDimacsPLine => {
                 return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()));
+            }
+            FileFormat::FlatZinc if args.proof_type == ProofType::Blocks => ProofLog::blocks(
+                path_buf,
+                args.nogood_derivation == NogoodDerivation::Resolution,
+                args.proof_encoding.unwrap_or(ProofEncoding::Binary) == ProofEncoding::Binary,
+                args.proof_root_domains,
+            )?,
+            FileFormat::FlatZinc
+                if proof_format == ProofFormat::Croc && args.proof_type == ProofType::Scaffold =>
+            {
+                ProofLog::croc_scaffold(path_buf)?
             }
             FileFormat::FlatZinc => ProofLog::cp(path_buf, args.proof_type == ProofType::Full)?,
         }
@@ -597,6 +750,44 @@ fn run() -> PumpkinResult<()> {
         .to_str()
         .ok_or(PumpkinError::invalid_instance(args.instance_path.display()))?;
 
+    // A croc scaffold starts with the preamble that states the compiler's preprocessing.
+    let writes_preamble = args.proof_path.is_some()
+        && proof_format == ProofFormat::Croc
+        && !args.preprocess_only
+        && args.proof_type == ProofType::Scaffold;
+
+    let flatzinc_options = FlatZincOptions {
+        free_search: args.free_search,
+        optimisation_strategy: args.optimisation_strategy,
+        verbose: args.verbose,
+        compilation: CompilationOptions {
+            cumulative_options: CumulativeOptions::new(
+                args.cumulative_allow_holes,
+                args.cumulative_explanation_type,
+                !args.cumulative_single_profiles,
+                args.cumulative_propagation_method,
+                args.cumulative_incremental_backtracking,
+            ),
+            proof_type: args.proof_path.as_ref().map(|_| args.proof_type),
+            proof_format,
+            all_solutions: args.all_solutions,
+            writes_preamble,
+            preamble: None,
+            preprocess_only: args.preprocess_only,
+            head_path: if args.preprocess_only {
+                args.proof_path.clone()
+            } else {
+                None
+            },
+            declare_replacements: args.declare_replacements,
+            literal_predicates: args.literal_predicates,
+            symmetry_breaking: args.symmetry_breaking,
+            dominance_breaking: args.dominance_breaking,
+            dual_fixing: args.dual_fixing,
+            value_symmetry_breaking: args.value_symmetry_breaking,
+        },
+    };
+
     let recursive_minimisation = args.recursive_minimisation;
     let iterative_minimisation = !args.no_iterative_minimisation;
 
@@ -613,40 +804,14 @@ fn run() -> PumpkinResult<()> {
                 Solver::with_options(solver_options),
                 instance_path,
                 time_limit,
-                FlatZincOptions {
-                    free_search: args.free_search,
-                    all_solutions: args.all_solutions,
-                    cumulative_options: CumulativeOptions::new(
-                        args.cumulative_allow_holes,
-                        args.cumulative_explanation_type,
-                        !args.cumulative_single_profiles,
-                        args.cumulative_propagation_method,
-                        args.cumulative_incremental_backtracking,
-                    ),
-                    optimisation_strategy: args.optimisation_strategy,
-                    proof_type: args.proof_path.map(|_| args.proof_type),
-                    verbose: args.verbose,
-                },
+                flatzinc_options.clone(),
                 NoLearningResolver,
             )?,
             ConflictResolverType::OneUIP => flatzinc::solve(
                 Solver::with_options(solver_options),
                 instance_path,
                 time_limit,
-                FlatZincOptions {
-                    free_search: args.free_search,
-                    all_solutions: args.all_solutions,
-                    cumulative_options: CumulativeOptions::new(
-                        args.cumulative_allow_holes,
-                        args.cumulative_explanation_type,
-                        !args.cumulative_single_profiles,
-                        args.cumulative_propagation_method,
-                        args.cumulative_incremental_backtracking,
-                    ),
-                    optimisation_strategy: args.optimisation_strategy,
-                    proof_type: args.proof_path.map(|_| args.proof_type),
-                    verbose: args.verbose,
-                },
+                flatzinc_options.clone(),
                 ResolutionResolver::new(
                     AnalysisMode::OneUIP,
                     recursive_minimisation,
@@ -657,20 +822,7 @@ fn run() -> PumpkinResult<()> {
                 Solver::with_options(solver_options),
                 instance_path,
                 time_limit,
-                FlatZincOptions {
-                    free_search: args.free_search,
-                    all_solutions: args.all_solutions,
-                    cumulative_options: CumulativeOptions::new(
-                        args.cumulative_allow_holes,
-                        args.cumulative_explanation_type,
-                        !args.cumulative_single_profiles,
-                        args.cumulative_propagation_method,
-                        args.cumulative_incremental_backtracking,
-                    ),
-                    optimisation_strategy: args.optimisation_strategy,
-                    proof_type: args.proof_path.map(|_| args.proof_type),
-                    verbose: args.verbose,
-                },
+                flatzinc_options.clone(),
                 ResolutionResolver::new(
                     AnalysisMode::CPIP,
                     recursive_minimisation,
@@ -681,20 +833,7 @@ fn run() -> PumpkinResult<()> {
                 Solver::with_options(solver_options),
                 instance_path,
                 time_limit,
-                FlatZincOptions {
-                    free_search: args.free_search,
-                    all_solutions: args.all_solutions,
-                    cumulative_options: CumulativeOptions::new(
-                        args.cumulative_allow_holes,
-                        args.cumulative_explanation_type,
-                        !args.cumulative_single_profiles,
-                        args.cumulative_propagation_method,
-                        args.cumulative_incremental_backtracking,
-                    ),
-                    optimisation_strategy: args.optimisation_strategy,
-                    proof_type: args.proof_path.map(|_| args.proof_type),
-                    verbose: args.verbose,
-                },
+                flatzinc_options.clone(),
                 ResolutionResolver::new(
                     AnalysisMode::BoundsCPIP,
                     recursive_minimisation,
@@ -705,20 +844,7 @@ fn run() -> PumpkinResult<()> {
                 Solver::with_options(solver_options),
                 instance_path,
                 time_limit,
-                FlatZincOptions {
-                    free_search: args.free_search,
-                    all_solutions: args.all_solutions,
-                    cumulative_options: CumulativeOptions::new(
-                        args.cumulative_allow_holes,
-                        args.cumulative_explanation_type,
-                        !args.cumulative_single_profiles,
-                        args.cumulative_propagation_method,
-                        args.cumulative_incremental_backtracking,
-                    ),
-                    optimisation_strategy: args.optimisation_strategy,
-                    proof_type: args.proof_path.map(|_| args.proof_type),
-                    verbose: args.verbose,
-                },
+                flatzinc_options.clone(),
                 ResolutionResolver::new(
                     AnalysisMode::AllDecision,
                     recursive_minimisation,
@@ -801,11 +927,19 @@ fn stringify_solution(
         .collect::<String>()
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+enum ProofEncoding {
+    /// The binary form: atomic constraint declarations and inference lines as binary records.
+    Binary,
+    /// The text form.
+    Text,
+}
+
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
-enum ProofType {
-    /// Log only the proof scaffold.
+enum NogoodDerivation {
+    /// A resolution chain from the conflict.
     #[default]
-    Scaffold,
-    /// Log the full proof with hints.
-    Full,
+    Resolution,
+    /// A refutation of the nogood by the inferences in the order they propagated.
+    Refutation,
 }

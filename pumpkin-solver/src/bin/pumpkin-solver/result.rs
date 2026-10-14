@@ -20,6 +20,12 @@ pub(crate) enum PumpkinError {
     FlatZinc(#[from] FlatZincError),
     #[error("Proof generation for {0} is not supported.")]
     ProofGenerationNotSupported(String),
+    #[error("{0} needs --proof-format croc.")]
+    NeedsCrocProofs(String),
+    #[error("--proof-encoding binary needs --proof-type blocks.")]
+    BinaryNeedsBlocks,
+    #[error("--proof-root-domains needs --proof-format croc --proof-type blocks.")]
+    RootDomainsNeedBlocks,
 }
 
 impl PumpkinError {

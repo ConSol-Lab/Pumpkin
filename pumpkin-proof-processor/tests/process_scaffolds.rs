@@ -1,10 +1,12 @@
 #![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
-#![allow(deprecated, reason = "the Command::cargo_bin function is fine for us")]
 
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
+use std::sync::OnceLock;
 
 use drcp_format::Step;
 use drcp_format::reader::ProofReader;
@@ -48,18 +50,11 @@ fn run_processor_on_proof(model: &str, assert_trimming: bool) {
         "{}/tests/scaffolds/{model}.scaffold.drcp.gz",
         env!("CARGO_MANIFEST_DIR")
     );
-    let full_proof_path = format!(
-        "{}/tests/scaffolds/{model}.full.drcp",
-        env!("CARGO_MANIFEST_DIR")
-    );
+    let directory = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("process_scaffolds");
+    std::fs::create_dir_all(&directory).expect("can create the output directory");
+    let full_proof_path = directory.join(format!("{model}.full.drcp"));
 
-    let processor_output = escargot::CargoBuild::new()
-        .bin("pumpkin-proof-processor")
-        .current_target()
-        .current_release()
-        .run()
-        .unwrap()
-        .command()
+    let processor_output = Command::new(env!("CARGO_BIN_EXE_pumpkin-proof-processor"))
         .arg(&model_path)
         .arg(&scaffold_path)
         .arg(&full_proof_path)
@@ -76,19 +71,28 @@ fn run_processor_on_proof(model: &str, assert_trimming: bool) {
         );
     }
 
-    let checker_status = escargot::CargoBuild::new()
-        .package("pumpkin-checker")
-        .bin("pumpkin-checker")
-        .current_target()
-        .current_release()
-        .run()
-        .unwrap()
-        .command()
+    let checker_status = Command::new(checker())
         .arg(&model_path)
         .arg(&full_proof_path)
         .output()
         .unwrap();
     assert!(checker_status.status.success());
+}
+
+/// The DRCP checker binary, built once for all tests.
+fn checker() -> &'static Path {
+    static CHECKER: OnceLock<PathBuf> = OnceLock::new();
+    CHECKER.get_or_init(|| {
+        escargot::CargoBuild::new()
+            .package("pumpkin-checker")
+            .bin("pumpkin-checker")
+            .current_target()
+            .current_release()
+            .run()
+            .expect("the checker builds")
+            .path()
+            .to_path_buf()
+    })
 }
 
 fn count_nogoods(proof_path: impl AsRef<Path>) -> usize {

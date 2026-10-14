@@ -11,9 +11,9 @@ use flatzinc::Expr;
 use flatzinc::IntExpr;
 use flatzinc::SetExpr;
 use flatzinc::SetLiteralExpr;
-use pumpkin_core::variables::Literal;
 
 use super::context::CompilationContext;
+use crate::core::variables::TransformableVariable;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::ast::VarArrayDecl;
@@ -40,16 +40,9 @@ pub(crate) fn run(
                                 BoolExpr::Bool(false) => context.false_literal,
                                 BoolExpr::VarParIdentifier(identifier) => {
                                     let other_id = context.identifiers.get_interned(identifier);
-                                    let representative =
-                                        context.equivalences.representative(&other_id);
-
-                                    let domain_id = context
-                                        .variable_map
-                                        .get(&representative)
-                                        .copied()
-                                        .expect("referencing undefined boolean variable");
-
-                                    Literal::new(domain_id)
+                                    context
+                                        .resolve_bool_variable_from_identifier(&other_id)
+                                        .expect("referencing undefined boolean variable")
                                 }
                             })
                             .collect(),
@@ -83,21 +76,16 @@ pub(crate) fn run(
                             IntExpr::Int(int) => {
                                 let value = i32::try_from(*int)?;
 
-                                Ok(
-                                    *context.constant_domain_ids.entry(value).or_insert_with(
-                                        || context.solver.new_bounded_integer(value, value),
-                                    ),
-                                )
+                                Ok(context
+                                    .constant_domain_ids
+                                    .entry(value)
+                                    .or_insert_with(|| {
+                                        context.solver.new_bounded_integer(value, value)
+                                    })
+                                    .scaled(1))
                             }
                             IntExpr::VarParIdentifier(identifier) => {
-                                let other_id = context.identifiers.get_interned(identifier);
-                                let representative = context.equivalences.representative(&other_id);
-
-                                Ok(context
-                                    .variable_map
-                                    .get(&representative)
-                                    .copied()
-                                    .expect("referencing undefined boolean variable"))
+                                context.resolve_integer_variable_from_identifier(identifier)
                             }
                         })
                         .collect::<Result<Rc<[_]>, FlatZincError>>()?,

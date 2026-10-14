@@ -325,7 +325,7 @@ impl Session {
         } else if let Err(error) = parse_and_compile(
             &mut solver,
             example.source.as_bytes(),
-            setting.compilation_options,
+            setting.compilation_options.clone(),
         ) {
             return Opening::Rejected(format!("compilation failed: {error}"));
         }

@@ -5,12 +5,27 @@ use pumpkin_branching::DefaultBrancher;
 use pumpkin_branching::branching::dynamic_brancher::DynamicBrancher;
 use pumpkin_branching::branching::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_branching::branching::warm_start::WarmStart;
+use pumpkin_branching::value_selection::DynamicValueSelector;
+use pumpkin_branching::value_selection::InDomainInterval;
 use pumpkin_branching::value_selection::InDomainMax;
+use pumpkin_branching::value_selection::InDomainMedian;
+use pumpkin_branching::value_selection::InDomainMiddle;
 use pumpkin_branching::value_selection::InDomainMin;
+use pumpkin_branching::value_selection::InDomainSplit;
+use pumpkin_branching::value_selection::OutDomainMax;
+use pumpkin_branching::value_selection::OutDomainMedian;
+use pumpkin_branching::value_selection::OutDomainMin;
+use pumpkin_branching::value_selection::ReverseInDomainSplit;
+use pumpkin_branching::value_selection::ValueSelector;
 use pumpkin_branching::variable_selection::InputOrder;
 
 use super::context::CompilationContext;
 use crate::core::branching::Brancher;
+use crate::core::branching::BrancherEvent;
+use crate::core::branching::SelectionContext;
+use crate::core::predicates::Predicate;
+use crate::core::results::SolutionReference;
+use crate::core::variables::AffineView;
 use crate::core::variables::DomainId;
 use crate::core::variables::Literal;
 use crate::flatzinc::ast::FlatZincAst;
@@ -45,7 +60,7 @@ fn get_bool_variables(
 fn get_int_variables(
     context: &mut CompilationContext,
     variables: &AnnExpr,
-) -> Result<Rc<[DomainId]>, FlatZincError> {
+) -> Result<Rc<[AffineView<DomainId>]>, FlatZincError> {
     Ok(match variables {
         AnnExpr::String(identifier) => {
             // TODO: unnecessary to create Rc here, for now it's just for the return type
@@ -203,11 +218,11 @@ fn create_from_search_strategy(
 
         // First we ensure that the objective is fixed to its extremum.
         match objective {
-            Some(FlatzincObjective::Maximize(domain_id)) => brancher.add_brancher(Box::new(
-                IndependentVariableValueBrancher::new(InputOrder::new(&[domain_id]), InDomainMax),
+            Some(FlatzincObjective::Maximize(view)) => brancher.add_brancher(Box::new(
+                IndependentVariableValueBrancher::new(InputOrder::new(&[view]), InDomainMax),
             )),
-            Some(FlatzincObjective::Minimize(domain_id)) => brancher.add_brancher(Box::new(
-                IndependentVariableValueBrancher::new(InputOrder::new(&[domain_id]), InDomainMin),
+            Some(FlatzincObjective::Minimize(view)) => brancher.add_brancher(Box::new(
+                IndependentVariableValueBrancher::new(InputOrder::new(&[view]), InDomainMin),
             )),
             None => {}
         }
@@ -220,14 +235,70 @@ fn create_from_search_strategy(
 }
 
 fn create_search_over_domains(
-    search_variables: &[DomainId],
+    search_variables: &[AffineView<DomainId>],
     variable_selection_strategy: &VariableSelectionStrategy,
     value_selection_strategy: &ValueSelectionStrategy,
 ) -> DynamicBrancher {
     DynamicBrancher::new(vec![Box::new(IndependentVariableValueBrancher::new(
-        variable_selection_strategy.create_from_domains(search_variables),
-        value_selection_strategy.create_for_domains(),
+        variable_selection_strategy.create_from_views(search_variables),
+        value_selection_for_views(value_selection_strategy),
     ))])
+}
+
+/// A value selector for plain variables applied to the variable a view is of. Used for the
+/// random strategies, which exist only for plain variables.
+#[derive(Debug)]
+struct OnInner {
+    selector: DynamicValueSelector<DomainId>,
+}
+
+impl ValueSelector<AffineView<DomainId>> for OnInner {
+    fn select_value(
+        &mut self,
+        context: &mut SelectionContext,
+        decision_variable: AffineView<DomainId>,
+    ) -> Predicate {
+        self.selector
+            .select_value(context, *decision_variable.inner())
+    }
+
+    fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {
+        self.selector.on_unassign_integer(variable, value)
+    }
+
+    fn on_solution(&mut self, solution: SolutionReference) {
+        self.selector.on_solution(solution)
+    }
+
+    fn is_restart_pointless(&mut self) -> bool {
+        self.selector.is_restart_pointless()
+    }
+
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+        self.selector.subscribe_to_events()
+    }
+}
+
+fn value_selection_for_views(
+    strategy: &ValueSelectionStrategy,
+) -> DynamicValueSelector<AffineView<DomainId>> {
+    DynamicValueSelector::new(match strategy {
+        ValueSelectionStrategy::InDomain | ValueSelectionStrategy::InDomainMin => {
+            Box::new(InDomainMin)
+        }
+        ValueSelectionStrategy::InDomainMax => Box::new(InDomainMax),
+        ValueSelectionStrategy::InDomainMedian => Box::new(InDomainMedian),
+        ValueSelectionStrategy::InDomainMiddle => Box::new(InDomainMiddle),
+        ValueSelectionStrategy::InDomainSplit => Box::new(InDomainSplit),
+        ValueSelectionStrategy::InDomainReverseSplit => Box::new(ReverseInDomainSplit),
+        ValueSelectionStrategy::InDomainInterval => Box::new(InDomainInterval),
+        ValueSelectionStrategy::OutDomainMax => Box::new(OutDomainMax),
+        ValueSelectionStrategy::OutDomainMin => Box::new(OutDomainMin),
+        ValueSelectionStrategy::OutDomainMedian => Box::new(OutDomainMedian),
+        other => Box::new(OnInner {
+            selector: other.create_for_domains(),
+        }),
+    })
 }
 
 fn create_search_over_propositional_variables(

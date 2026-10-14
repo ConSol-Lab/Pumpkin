@@ -1,3 +1,5 @@
+//! Solving a FlatZinc model with the solver, after the library compiled it.
+
 use std::fs::File;
 use std::ops::ControlFlow;
 use std::path::Path;
@@ -10,11 +12,8 @@ use pumpkin_branching::branching::alternating::until_solution::UntilSolution;
 use pumpkin_branching::branching::dynamic_brancher::DynamicBrancher;
 use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_core::statistics::log_statistic;
-use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::branching::Brancher;
-#[cfg(doc)]
-use pumpkin_solver::core::constraints::cumulative;
 use pumpkin_solver::core::optimisation::OptimisationDirection;
 use pumpkin_solver::core::optimisation::OptimisationStrategy;
 use pumpkin_solver::core::optimisation::linear_sat_unsat::LinearSatUnsat;
@@ -27,47 +26,33 @@ use pumpkin_solver::core::results::solution_iterator::IteratedSolution;
 use pumpkin_solver::core::termination::Combinator;
 use pumpkin_solver::core::termination::TerminationCondition;
 use pumpkin_solver::core::termination::TimeBudget;
+use pumpkin_solver::core::variables::AffineView;
 use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::flatzinc::CompilationOptions;
 use pumpkin_solver::flatzinc::FlatZincError;
 use pumpkin_solver::flatzinc::Output;
 use pumpkin_solver::flatzinc::parse_and_compile;
 
-use crate::ProofType;
 use crate::os_signal_termination::OsSignal;
 
 const MSG_UNKNOWN: &str = "=====UNKNOWN=====";
 const MSG_UNSATISFIABLE: &str = "=====UNSATISFIABLE=====";
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct FlatZincOptions {
     /// If `true`, the solver will not strictly keep to the search annotations in the flatzinc.
     pub(crate) free_search: bool,
 
-    /// For satisfaction problems, print all solutions. For optimisation problems, this instructs
-    /// the solver to print intermediate solutions.
-    pub(crate) all_solutions: bool,
-
-    /// Options used for the cumulative constraint (see [`cumulative`]).
-    pub(crate) cumulative_options: CumulativeOptions,
-
     /// Determines which type of search is performed by the solver
     pub(crate) optimisation_strategy: OptimisationStrategy,
 
-    /// The type of proof that is logged. This influences which preprocessing steps we can do.
-    pub(crate) proof_type: Option<ProofType>,
-
     /// Indicates that the solver should perform verbose logging
     pub(crate) verbose: bool,
-}
 
-impl FlatZincOptions {
-    fn compilation_options(&self) -> CompilationOptions {
-        CompilationOptions {
-            cumulative_options: self.cumulative_options,
-            is_logging_full_proof: matches!(self.proof_type, Some(ProofType::Full)),
-        }
-    }
+    /// The options of the FlatZinc compiler, among which whether all solutions are printed: for
+    /// satisfaction problems, print all solutions; for optimisation problems, print intermediate
+    /// solutions.
+    pub(crate) compilation: CompilationOptions,
 }
 
 fn log_statistics(
@@ -90,7 +75,7 @@ fn log_statistics(
 fn solution_callback(
     brancher: &impl Brancher,
     resolver: &impl ConflictResolver,
-    instance_objective_function: Option<DomainId>,
+    instance_objective_function: Option<AffineView<DomainId>>,
     options_all_solutions: bool,
     outputs: &[Output],
     solver: &Solver,
@@ -130,10 +115,74 @@ pub(crate) fn solve<R: ConflictResolver>(
         time_limit.map(TimeBudget::starting_now),
     );
 
-    let instance = parse_and_compile(&mut solver, instance, options.compilation_options())?;
+    let instance = parse_and_compile(&mut solver, instance, options.compilation.clone())?;
+    let view_statistics = instance.view_statistics;
     let outputs = instance.outputs.clone();
 
     let init_time = init_start_time.elapsed();
+
+    if options.compilation.preprocess_only {
+        // Written whether or not statistics were asked for, since reporting them is the point.
+        let statistics = [
+            ("initTime", format!("{}", init_time.as_secs_f64())),
+            ("viewPassTime", format!("{}", view_statistics.seconds)),
+            ("viewAliases", view_statistics.aliases.to_string()),
+            ("viewNegations", view_statistics.negations.to_string()),
+            ("viewOtherViews", view_statistics.other_views.to_string()),
+            ("viewParameters", view_statistics.parameters.to_string()),
+            ("viewDefinitions", view_statistics.definitions.to_string()),
+            (
+                "viewSkippedConstraints",
+                view_statistics.skipped.to_string(),
+            ),
+            ("viewRewriteSteps", view_statistics.rewrites.to_string()),
+            ("viewDeclarations", view_statistics.declarations.to_string()),
+            (
+                "viewLiteralPredicates",
+                view_statistics.literal_predicates.to_string(),
+            ),
+            ("viewConstants", view_statistics.constants.to_string()),
+            (
+                "viewsOnRereading",
+                view_statistics.views_on_rereading.to_string(),
+            ),
+            (
+                "redundantEqualities",
+                view_statistics.redundant_equalities.to_string(),
+            ),
+            ("unitBounds", view_statistics.unit_bounds.to_string()),
+            (
+                "halfReifiedClauses",
+                view_statistics.half_reified_clauses.to_string(),
+            ),
+            (
+                "postedTwoTermEqualitiesInOneClass",
+                view_statistics.two_term_equalities_in_one_class.to_string(),
+            ),
+            (
+                "postedTwoTermEqualitiesDeclined",
+                view_statistics.two_term_equalities_declined.to_string(),
+            ),
+            (
+                "postedEqualitiesReducedToTwoTerms",
+                view_statistics.equalities_reduced_to_two_terms.to_string(),
+            ),
+            (
+                "postedReifiedTwoTermEqualities",
+                view_statistics.reified_two_term_equalities.to_string(),
+            ),
+            (
+                "postedAffineRelationsNotRead",
+                view_statistics.affine_relations_not_read.to_string(),
+            ),
+        ];
+        for (name, value) in statistics {
+            println!("%%%mzn-stat: {name}={value}");
+        }
+        println!("%%%mzn-stat-end");
+        return Ok(());
+    }
+    log_statistic("viewPassTime", view_statistics.seconds);
 
     let mut brancher = if options.free_search {
         // The free search flag is active
@@ -158,7 +207,7 @@ pub(crate) fn solve<R: ConflictResolver>(
         instance.search.expect("Expected a search to be defined")
     };
 
-    let (direction, objective): (OptimisationDirection, DomainId) =
+    let (direction, objective): (OptimisationDirection, AffineView<DomainId>) =
         match instance.objective_function {
             Some(objective) => objective.into(),
             None => {
@@ -184,7 +233,7 @@ pub(crate) fn solve<R: ConflictResolver>(
             brancher,
             resolver,
             Some(objective),
-            options.all_solutions,
+            options.compilation.all_solutions,
             &outputs,
             solver,
             solution,
@@ -216,7 +265,7 @@ pub(crate) fn solve<R: ConflictResolver>(
         }
         OptimisationResult::Optimal(optimal_solution) => {
             let objective_value = optimal_solution.get_integer_value(objective) as i64;
-            if !options.all_solutions {
+            if !options.compilation.all_solutions {
                 log_statistics(
                     &solver,
                     &brancher,
@@ -285,7 +334,7 @@ fn satisfy(
     init_time: Duration,
     mut resolver: impl ConflictResolver,
 ) {
-    if options.all_solutions {
+    if options.compilation.all_solutions {
         let mut solution_iterator =
             solver.get_solution_iterator(&mut brancher, &mut termination, &mut resolver);
         let mut has_found_solution = false;
@@ -297,7 +346,7 @@ fn satisfy(
                         brancher,
                         resolver,
                         None,
-                        options.all_solutions,
+                        options.compilation.all_solutions,
                         &outputs,
                         solver,
                         solution.as_reference(),
@@ -353,7 +402,7 @@ fn satisfy(
                 satisfiable.brancher(),
                 satisfiable.conflict_resolver(),
                 None,
-                options.all_solutions,
+                options.compilation.all_solutions,
                 &outputs,
                 satisfiable.solver(),
                 satisfiable.solution(),
