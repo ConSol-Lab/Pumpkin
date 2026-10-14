@@ -33,8 +33,9 @@ use crate::core::proof::view_log::Term;
 use crate::core::proof::view_log::ViewEvent;
 use crate::core::proof::view_log::ViewLog;
 use crate::flatzinc::CompilationOptions;
+use crate::flatzinc::CrocProofType;
 use crate::flatzinc::FlatZincError;
-use crate::flatzinc::ProofType;
+use crate::flatzinc::ProofLogging;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::ast::SingleVarDecl;
 use crate::flatzinc::ast::VarArrayDecl;
@@ -367,7 +368,15 @@ fn collect(
     }
     preamble.first_free = Some(views.next_id);
     // In a scaffold, the breaking steps are stated in the preamble, numbered on from here.
-    if context.solver.is_logging_proof() && options.proof_type == Some(ProofType::Scaffold) {
+    if context.solver.is_logging_proof()
+        && matches!(
+            options.proof_logging,
+            ProofLogging::Croc {
+                proof_type: CrocProofType::Scaffold,
+                ..
+            }
+        )
+    {
         context.next_preamble_identifier = u32::try_from(views.next_id).ok();
     }
     preamble.steps = ViewLog {

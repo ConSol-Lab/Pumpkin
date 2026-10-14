@@ -16,7 +16,7 @@ use crate::core::variables::DomainId;
 use crate::core::variables::TransformableVariable;
 use crate::flatzinc::CompilationOptions;
 use crate::flatzinc::FlatZincError;
-use crate::flatzinc::ProofFormat;
+use crate::flatzinc::ProofLogging;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::compiler::context::Set;
 use crate::flatzinc::preamble::Decomposition;
@@ -54,7 +54,9 @@ pub(crate) fn run(
     // variable to the set. fzn-croc-check holds the constraint apart from the declared domains,
     // so the proof cites it for what the set excludes. The sets are named before any constraint
     // is posted, since posting one can explain a predicate a set implies at the root.
-    if context.proof_format == ProofFormat::Croc && context.solver.is_logging_proof() {
+    if matches!(context.proof_logging, ProofLogging::Croc { .. })
+        && context.solver.is_logging_proof()
+    {
         let set_ins: Vec<(ConstraintTag, Vec<flatzinc::Expr>)> = context
             .constraints
             .iter()
@@ -69,7 +71,7 @@ pub(crate) fn run(
         let flatzinc::ConstraintItem { id, exprs, annos } = &constraint_item;
         // fzn-croc-check reads these as a reified or half-reified constraint, whose inferences
         // cite the rule of the inner constraint wrapped as reified(R) or half_reified(R).
-        if context.proof_format == ProofFormat::Croc
+        if matches!(context.proof_logging, ProofLogging::Croc { .. })
             && let Some(fully) = reification_of(id)
         {
             context.solver.name_reification(constraint_tag, fully);
@@ -78,7 +80,7 @@ pub(crate) fn run(
         if defines_literal.contains(&std::num::NonZero::<u32>::from(constraint_tag).get()) {
             continue;
         }
-        if context.proof_format == ProofFormat::Croc
+        if !context.proof_logging.is_drcp()
             && post_half_reified_bound(context, id, exprs, constraint_tag)?
         {
             continue;
@@ -164,11 +166,11 @@ pub(crate) fn run(
                 .solver
                 .name_rule_of_constraint(constraint_tag, "boolean_or"),
             // fzn-croc-check reads set_in_reif as set_in under an indicator.
-            "set_in_reif" if context.proof_format == ProofFormat::Croc => context
+            "set_in_reif" if matches!(context.proof_logging, ProofLogging::Croc { .. }) => context
                 .solver
                 .name_rule_of_constraint(constraint_tag, "set_in"),
             // fzn-croc-check reads bool_not(a, b) as the equality a + b = 1.
-            "bool_not" if context.proof_format == ProofFormat::Croc => context
+            "bool_not" if matches!(context.proof_logging, ProofLogging::Croc { .. }) => context
                 .solver
                 .name_rule_of_constraint(constraint_tag, "linear_equal_binary"),
             _ => {}
@@ -1093,7 +1095,7 @@ fn compile_int_lin_predicate<C: Constraint>(
     let vars = context.resolve_integer_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
 
-    let (terms, rhs) = if context.proof_format == ProofFormat::Croc {
+    let (terms, rhs) = if !context.proof_logging.is_drcp() {
         merged_weighted_vars(weights, vars, rhs)
     } else {
         (weighted_vars(weights, vars), rhs)
@@ -1120,7 +1122,7 @@ fn compile_reified_int_lin_predicate<C: NegatableConstraint>(
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
     let reif = context.resolve_bool_variable(&exprs[3])?;
 
-    let (terms, rhs) = if context.proof_format == ProofFormat::Croc {
+    let (terms, rhs) = if !context.proof_logging.is_drcp() {
         merged_weighted_vars(weights, vars, rhs)
     } else {
         (weighted_vars(weights, vars), rhs)
@@ -1147,7 +1149,7 @@ fn compile_int_lin_imp_predicate<C: Constraint>(
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
     let reif = context.resolve_bool_variable(&exprs[3])?;
 
-    let (terms, rhs) = if context.proof_format == ProofFormat::Croc {
+    let (terms, rhs) = if !context.proof_logging.is_drcp() {
         merged_weighted_vars(weights, vars, rhs)
     } else {
         (weighted_vars(weights, vars), rhs)
@@ -1257,7 +1259,7 @@ fn compile_bool_lin_eq_predicate(
             .map(|(literal, weight)| literal.get_integer_variable().scaled(*weight))
             .chain(std::iter::once(rhs.scaled(-1)))
             .collect();
-        let (terms, bound) = if context.proof_format == ProofFormat::Croc {
+        let (terms, bound) = if !context.proof_logging.is_drcp() {
             merged_terms(terms.iter().copied(), 0).unwrap_or((terms, 0))
         } else {
             (terms, 0)

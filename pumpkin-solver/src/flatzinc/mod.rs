@@ -38,25 +38,11 @@ pub struct CompilationOptions {
     /// Options used for the cumulative constraint (see [`crate::cumulative`]).
     pub cumulative_options: CumulativeOptions,
 
-    /// The type of proof that is logged. This influences which preprocessing steps we can do: a
-    /// full proof needs a constraint tag for every inference.
-    pub proof_type: Option<ProofType>,
-
-    /// The proof format, which decides whether the view pass runs.
-    pub proof_format: ProofFormat,
+    /// The proof that is logged, which decides the preprocessing the compiler may do.
+    pub proof_logging: ProofLogging,
 
     /// Whether all solutions are enumerated, which the passes that remove solutions refuse.
     pub all_solutions: bool,
-
-    /// Write the preamble that states the compiler's preprocessing, for the proof processor, at
-    /// the head of the croc scaffold the proof log writes.
-    pub writes_preamble: bool,
-
-    /// Apply the preprocessing the preamble states instead of deciding it: the views, constants
-    /// and literals it gives are made, the constraints it skips are not posted, and its steps
-    /// head the proof. Used by the proof processor, which reads a scaffold over the variables of
-    /// the solver that wrote the preamble.
-    pub preamble: Option<preamble::Preamble>,
 
     /// Stop after compiling: write the proof steps that state the views, in the format of
     /// fzn-drcp-check, to `head_path`, report what the view pass did, and do not solve.
@@ -94,42 +80,68 @@ pub struct CompilationOptions {
 }
 
 impl CompilationOptions {
-    /// Whether a full proof is logged, under which the equivalences between variables are not
-    /// merged.
+    /// Whether a full DRCP proof is logged.
     pub fn is_logging_full_proof(&self) -> bool {
-        matches!(self.proof_type, Some(ProofType::Full))
+        matches!(
+            self.proof_logging,
+            ProofLogging::Drcp {
+                proof_type: DrcpProofType::Full
+            }
+        )
     }
 
     /// Whether the proof, if any, states symmetry and dominance breaking steps: a croc proof in
     /// the block format, or a croc scaffold, whose preamble states them.
     pub(crate) fn proof_states_breaking_steps(&self) -> bool {
-        match self.proof_type {
-            None => true,
-            Some(ProofType::Blocks | ProofType::Scaffold) => self.proof_format == ProofFormat::Croc,
-            Some(ProofType::Full) => false,
-        }
+        !self.proof_logging.is_drcp()
     }
 }
 
-/// The proof format, which decides what the compiler does for a proof.
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
-pub enum ProofFormat {
-    /// The DRCP format, without the steps it cannot state.
+/// The proof that is logged, in its format and with the options of that format.
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
+#[allow(clippy::large_enum_variant, reason = "there is one per compilation")]
+#[allow(variant_size_differences, reason = "there is one per compilation")]
+pub enum ProofLogging {
+    /// No proof is logged.
     #[default]
-    Drcp,
-    /// The croc format of fzn-croc-check, with every step.
-    Croc,
+    Disabled,
+    /// A proof in the DRCP format.
+    Drcp { proof_type: DrcpProofType },
+    /// A proof in the croc format of fzn-croc-check (experimental).
+    Croc {
+        proof_type: CrocProofType,
+        /// The preamble of a croc scaffold, whose preprocessing the compiler applies instead of
+        /// deciding it: the views, constants and literals it gives are made, the constraints it
+        /// skips are not posted, and its steps head the proof. Used by the proof processor,
+        /// which reads a scaffold over the variables of the solver that wrote the preamble.
+        applied_preamble: Option<preamble::Preamble>,
+    },
 }
 
-/// The type of proof that is logged.
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
-pub enum ProofType {
-    /// Log only the proof scaffold.
-    #[default]
+impl ProofLogging {
+    /// Whether the proof is in the DRCP format, for which the compiler makes no views and posts
+    /// the terms of each constraint as the model writes them, as the DRCP checker reads them.
+    pub(crate) fn is_drcp(&self) -> bool {
+        matches!(self, ProofLogging::Drcp { .. })
+    }
+}
+
+/// The type of a DRCP proof.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DrcpProofType {
+    /// Only the proof scaffold.
     Scaffold,
-    /// Log the full proof with hints.
+    /// The full proof with hints.
     Full,
-    /// Log the full proof in the croc block format (experimental).
+}
+
+/// The type of a croc proof.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CrocProofType {
+    /// The proof scaffold, headed by the preamble that states the compiler's preprocessing, for
+    /// the proof processor.
+    Scaffold,
+    /// The full proof in the block format.
     Blocks,
 }
 
@@ -411,5 +423,24 @@ mod tests {
 
         let outputs = instance.outputs().collect::<Vec<_>>();
         assert_eq!(1, outputs.len());
+    }
+
+    #[test]
+    fn variable_alias_compiles_without_proof_logging() {
+        let instance = r#"
+            var 1..10: a :: output_var;
+            var 1..10: b :: output_var = a;
+            solve satisfy;
+        "#;
+        let mut solver = Solver::default();
+
+        let instance = parse_and_compile(
+            &mut solver,
+            instance.as_bytes(),
+            CompilationOptions::default(),
+        )
+        .expect("compilation should succeed");
+
+        assert_eq!(2, instance.outputs().count());
     }
 }

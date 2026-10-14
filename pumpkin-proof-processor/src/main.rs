@@ -36,8 +36,9 @@ use pumpkin_propagators::cumulative::time_table::CumulativeExplanationType;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::options::SolverOptions;
 use pumpkin_solver::flatzinc::CompilationOptions;
-use pumpkin_solver::flatzinc::ProofFormat as CompilerProofFormat;
-use pumpkin_solver::flatzinc::ProofType;
+use pumpkin_solver::flatzinc::CrocProofType;
+use pumpkin_solver::flatzinc::DrcpProofType;
+use pumpkin_solver::flatzinc::ProofLogging;
 use pumpkin_solver::flatzinc::parse_and_compile;
 use pumpkin_solver::flatzinc::preamble::Preamble;
 
@@ -233,9 +234,14 @@ fn build_solver(
         ..Default::default()
     });
 
-    let (proof_format, proof_type) = match cli.format {
-        ProofFormat::Drcp => (CompilerProofFormat::Drcp, ProofType::Scaffold),
-        ProofFormat::Blocks => (CompilerProofFormat::Croc, ProofType::Blocks),
+    let proof_logging = match cli.format {
+        ProofFormat::Drcp => ProofLogging::Drcp {
+            proof_type: DrcpProofType::Scaffold,
+        },
+        ProofFormat::Blocks => ProofLogging::Croc {
+            proof_type: CrocProofType::Blocks,
+            applied_preamble: Some(preprocessing),
+        },
     };
 
     let model = File::open(&cli.model_path)?;
@@ -251,9 +257,7 @@ fn build_solver(
                 CumulativePropagationMethod::default(),
                 false,
             ),
-            proof_type: Some(proof_type),
-            proof_format,
-            preamble: Some(preprocessing),
+            proof_logging,
             ..Default::default()
         },
     )?;

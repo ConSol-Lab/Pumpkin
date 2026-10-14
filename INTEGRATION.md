@@ -19,7 +19,13 @@ on it has been reviewed, and it is not meant to be merged as it is.
 ## How the two were joined
 
 - The FlatZinc compiler keeps the lead's move into the library. `CompilationOptions` holds the
-  compile options of both sides; `is_logging_full_proof` became a method over `proof_type`.
+  compile options of both sides. The logged proof is one option, `proof_logging`, of the enum
+  `ProofLogging`: `Disabled` (the default), `Drcp { proof_type }` or
+  `Croc { proof_type, applied_preamble }`. `Disabled` and `Croc` run the view pass and allow the
+  breaking passes; `Drcp` skips them and refuses `var b = a`. A library caller with default
+  options, such as the fuzzer, takes the `Disabled` path. `is_logging_full_proof` is a method
+  over `proof_logging`. The solver maps `--proof-path`, `--proof-format` and `--proof-type` to
+  the enum and refuses `--proof-format croc --proof-type full`.
   `parse_and_compile` returns `FlatZincInstance`, which now also carries `view_statistics`.
 - The generalised variable and value selectors are re-applied in `pumpkin-crates/branching`.
 - `lex_less_or_equal` has the per-propagator folder, a constraint description, a conflict and a

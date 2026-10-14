@@ -22,6 +22,8 @@ pub(crate) enum PumpkinError {
     ProofGenerationNotSupported(String),
     #[error("{0} needs --proof-format croc.")]
     NeedsCrocProofs(String),
+    #[error("{0} needs --proof-format drcp.")]
+    NeedsDrcpProofs(String),
     #[error("--proof-encoding binary needs --proof-type blocks.")]
     BinaryNeedsBlocks,
     #[error("--proof-root-domains needs --proof-format croc --proof-type blocks.")]

@@ -76,9 +76,9 @@ pub(crate) struct CompilationContext<'a> {
     /// Linear inequalities that read over one variable once views and constants are applied:
     /// each is a bound on that variable, posted at the root instead of as a propagator.
     pub(crate) unit_bounds: Vec<UnitBound>,
-    /// The proof format: in the DRCP format, terms are posted as the model writes them and a
-    /// half-reified bound stays a propagator, as the DRCP checker reads them.
-    pub(crate) proof_format: crate::flatzinc::ProofFormat,
+    /// The proof that is logged: under a DRCP proof, terms are posted as the model writes them
+    /// and a half-reified bound stays a propagator, as the DRCP checker reads them.
+    pub(crate) proof_logging: &'a crate::flatzinc::ProofLogging,
     /// The preprocessing done, as the preamble of a scaffold states it.
     pub(crate) preamble: crate::flatzinc::preamble::Preamble,
     /// When the symmetry and dominance breaking steps are stated in the preamble rather than in
@@ -192,7 +192,7 @@ impl CompilationContext<'_> {
             literal_predicates: vec![],
             declared_constants: vec![],
             unit_bounds: vec![],
-            proof_format: crate::flatzinc::ProofFormat::Croc,
+            proof_logging: &crate::flatzinc::ProofLogging::Disabled,
             preamble: Default::default(),
             next_preamble_identifier: None,
             preamble_identifiers: Default::default(),

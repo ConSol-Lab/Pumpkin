@@ -46,8 +46,9 @@ use pumpkin_solver::core::results::SolutionReference;
 use pumpkin_solver::core::statistics::configure_statistic_logging;
 use pumpkin_solver::core::termination::TimeBudget;
 use pumpkin_solver::flatzinc::CompilationOptions;
-use pumpkin_solver::flatzinc::ProofFormat;
-use pumpkin_solver::flatzinc::ProofType;
+use pumpkin_solver::flatzinc::CrocProofType;
+use pumpkin_solver::flatzinc::DrcpProofType;
+use pumpkin_solver::flatzinc::ProofLogging;
 use result::PumpkinError;
 use result::PumpkinResult;
 
@@ -619,27 +620,11 @@ fn run() -> PumpkinResult<()> {
         args.omit_call_site,
     )?;
 
-    // Without a proof there is nothing to justify, and the view pass runs as for croc proofs.
-    let proof_format = if args.proof_path.is_some() {
-        args.proof_format
-    } else {
-        ProofFormat::Croc
-    };
+    let proof_logging = proof_logging(&args)?;
 
-    if proof_format == ProofFormat::Drcp {
+    if let ProofLogging::Drcp { .. } = proof_logging {
         if file_format == FileFormat::FlatZinc {
             warn!("the view pass is skipped under --proof-format drcp");
-        }
-        let croc_only = [
-            (args.proof_type == ProofType::Blocks, "--proof-type blocks"),
-            (args.preprocess_only, "--preprocess-only"),
-            (
-                args.proof_encoding == Some(ProofEncoding::Binary),
-                "--proof-encoding binary",
-            ),
-        ];
-        if let Some((_, option)) = croc_only.iter().find(|(given, _)| *given) {
-            return Err(PumpkinError::NeedsCrocProofs((*option).to_owned()));
         }
         let skipped = [
             (args.declare_replacements, "--declare-replacements"),
@@ -671,9 +656,8 @@ fn run() -> PumpkinResult<()> {
         return Err(PumpkinError::BinaryNeedsBlocks);
     }
 
-    if args.proof_root_domains
-        && (proof_format != ProofFormat::Croc || args.proof_type != ProofType::Blocks)
-    {
+    // Under --proof-format drcp, --proof-type blocks is refused above.
+    if args.proof_root_domains && args.proof_type != ProofType::Blocks {
         return Err(PumpkinError::RootDomainsNeedBlocks);
     }
 
@@ -695,18 +679,25 @@ fn run() -> PumpkinResult<()> {
             FileFormat::WcnfDimacsPLine => {
                 return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()));
             }
-            FileFormat::FlatZinc if args.proof_type == ProofType::Blocks => ProofLog::blocks(
-                path_buf,
-                args.nogood_derivation == NogoodDerivation::Resolution,
-                args.proof_encoding.unwrap_or(ProofEncoding::Binary) == ProofEncoding::Binary,
-                args.proof_root_domains,
-            )?,
-            FileFormat::FlatZinc
-                if proof_format == ProofFormat::Croc && args.proof_type == ProofType::Scaffold =>
-            {
-                ProofLog::croc_scaffold(path_buf)?
-            }
-            FileFormat::FlatZinc => ProofLog::cp(path_buf, args.proof_type == ProofType::Full)?,
+            FileFormat::FlatZinc => match proof_logging {
+                ProofLogging::Disabled => ProofLog::default(),
+                ProofLogging::Drcp { proof_type } => {
+                    ProofLog::cp(path_buf, proof_type == DrcpProofType::Full)?
+                }
+                ProofLogging::Croc {
+                    proof_type: CrocProofType::Scaffold,
+                    ..
+                } => ProofLog::croc_scaffold(path_buf)?,
+                ProofLogging::Croc {
+                    proof_type: CrocProofType::Blocks,
+                    ..
+                } => ProofLog::blocks(
+                    path_buf,
+                    args.nogood_derivation == NogoodDerivation::Resolution,
+                    args.proof_encoding.unwrap_or(ProofEncoding::Binary) == ProofEncoding::Binary,
+                    args.proof_root_domains,
+                )?,
+            },
         }
     } else {
         ProofLog::default()
@@ -750,12 +741,6 @@ fn run() -> PumpkinResult<()> {
         .to_str()
         .ok_or(PumpkinError::invalid_instance(args.instance_path.display()))?;
 
-    // A croc scaffold starts with the preamble that states the compiler's preprocessing.
-    let writes_preamble = args.proof_path.is_some()
-        && proof_format == ProofFormat::Croc
-        && !args.preprocess_only
-        && args.proof_type == ProofType::Scaffold;
-
     let flatzinc_options = FlatZincOptions {
         free_search: args.free_search,
         optimisation_strategy: args.optimisation_strategy,
@@ -768,11 +753,8 @@ fn run() -> PumpkinResult<()> {
                 args.cumulative_propagation_method,
                 args.cumulative_incremental_backtracking,
             ),
-            proof_type: args.proof_path.as_ref().map(|_| args.proof_type),
-            proof_format,
+            proof_logging,
             all_solutions: args.all_solutions,
-            writes_preamble,
-            preamble: None,
             preprocess_only: args.preprocess_only,
             head_path: if args.preprocess_only {
                 args.proof_path.clone()
@@ -925,6 +907,74 @@ fn stringify_solution(
             std::iter::once(String::new())
         })
         .collect::<String>()
+}
+
+/// The proof that the command-line options ask for: none without a proof path, otherwise one in
+/// the given format and of the given type.
+fn proof_logging(args: &Args) -> PumpkinResult<ProofLogging> {
+    if args.proof_path.is_none() {
+        return Ok(ProofLogging::Disabled);
+    }
+    match args.proof_format {
+        ProofFormat::Drcp => {
+            let proof_type = match args.proof_type {
+                ProofType::Scaffold => DrcpProofType::Scaffold,
+                ProofType::Full => DrcpProofType::Full,
+                ProofType::Blocks => {
+                    return Err(PumpkinError::NeedsCrocProofs(
+                        "--proof-type blocks".to_owned(),
+                    ));
+                }
+            };
+            if args.preprocess_only {
+                return Err(PumpkinError::NeedsCrocProofs(
+                    "--preprocess-only".to_owned(),
+                ));
+            }
+            if args.proof_encoding == Some(ProofEncoding::Binary) {
+                return Err(PumpkinError::NeedsCrocProofs(
+                    "--proof-encoding binary".to_owned(),
+                ));
+            }
+            Ok(ProofLogging::Drcp { proof_type })
+        }
+        ProofFormat::Croc => {
+            let proof_type = match args.proof_type {
+                ProofType::Scaffold => CrocProofType::Scaffold,
+                ProofType::Blocks => CrocProofType::Blocks,
+                ProofType::Full => {
+                    return Err(PumpkinError::NeedsDrcpProofs(
+                        "--proof-type full".to_owned(),
+                    ));
+                }
+            };
+            Ok(ProofLogging::Croc {
+                proof_type,
+                applied_preamble: None,
+            })
+        }
+    }
+}
+
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+enum ProofType {
+    /// Log only the proof scaffold.
+    #[default]
+    Scaffold,
+    /// Log the full proof with hints.
+    Full,
+    /// Log the full proof in the croc block format (experimental).
+    Blocks,
+}
+
+/// The proof format, which decides what the compiler does for a proof.
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+enum ProofFormat {
+    /// The DRCP format, without the steps it cannot state.
+    #[default]
+    Drcp,
+    /// The croc format of fzn-croc-check, with every step.
+    Croc,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]

@@ -26,7 +26,8 @@ use super::FlatZincError;
 use super::ast::FlatZincAst;
 use super::instance::FlatZincInstance;
 use crate::Solver;
-use crate::flatzinc::ProofFormat;
+use crate::flatzinc::CrocProofType;
+use crate::flatzinc::ProofLogging;
 
 pub(crate) fn compile(
     mut ast: FlatZincAst,
@@ -34,10 +35,10 @@ pub(crate) fn compile(
     options: CompilationOptions,
 ) -> Result<FlatZincInstance, FlatZincError> {
     let mut context = CompilationContext::new(solver);
-    context.proof_format = options.proof_format;
+    context.proof_logging = &options.proof_logging;
 
     if context.solver.is_logging_proof()
-        && options.proof_format == ProofFormat::Croc
+        && matches!(options.proof_logging, ProofLogging::Croc { .. })
         && options.all_solutions
         && matches!(ast.solve_item.goal, flatzinc::Goal::Satisfy)
     {
@@ -49,14 +50,21 @@ pub(crate) fn compile(
     remove_unused_variables::run(&mut ast, &mut context)?;
     prepare_variables::run(&ast, &mut context)?;
     let named_constraints = name_rules::collect(&context);
-    match options.proof_format {
-        ProofFormat::Croc => match options.preamble.as_ref() {
-            Some(preamble) => apply_preamble::run(&ast, &mut context, preamble)?,
-            None => collect_views::run(&ast, &mut context, &options)?,
-        },
-        ProofFormat::Drcp => check_no_variable_aliases::run(&ast, &mut context)?,
+    match &options.proof_logging {
+        ProofLogging::Disabled
+        | ProofLogging::Croc {
+            applied_preamble: None,
+            ..
+        } => collect_views::run(&ast, &mut context, &options)?,
+        ProofLogging::Croc {
+            applied_preamble: Some(preamble),
+            ..
+        } => apply_preamble::run(&ast, &mut context, preamble)?,
+        ProofLogging::Drcp { .. } => check_no_variable_aliases::run(&ast, &mut context)?,
     }
-    if context.solver.is_logging_proof() && options.proof_format == ProofFormat::Croc {
+    if context.solver.is_logging_proof()
+        && matches!(options.proof_logging, ProofLogging::Croc { .. })
+    {
         warn_default_bounds::run(&ast, &mut context);
     }
     handle_set_in::run(&mut context)?;
@@ -64,7 +72,11 @@ pub(crate) fn compile(
     name_rules::run(&mut context, named_constraints)?;
     define_variable_arrays::run(&ast, &mut context)?;
     post_constraints::run(&ast, &mut context, &options)?;
-    if let Some(preamble) = options.preamble.as_ref() {
+    if let ProofLogging::Croc {
+        applied_preamble: Some(preamble),
+        ..
+    } = &options.proof_logging
+    {
         apply_preamble::check_decompositions(&context, preamble)?;
         apply_preamble::apply_breaking(&mut context, preamble)?;
     }
@@ -74,7 +86,11 @@ pub(crate) fn compile(
     let objective_function = create_objective::run(&ast, &mut context)?;
     let search = create_search_strategy::run(&ast, &mut context, objective_function)?;
 
-    if options.writes_preamble {
+    if let ProofLogging::Croc {
+        proof_type: CrocProofType::Scaffold,
+        ..
+    } = options.proof_logging
+    {
         let preamble = context.preamble.render();
         context
             .solver

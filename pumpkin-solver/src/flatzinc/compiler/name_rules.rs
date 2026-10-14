@@ -4,7 +4,7 @@
 
 use super::context::CompilationContext;
 use crate::core::proof::ConstraintTag;
-use crate::flatzinc::ProofFormat;
+use crate::flatzinc::ProofLogging;
 use crate::flatzinc::error::FlatZincError;
 
 /// The constraints of the model, before compilation consumes any.
@@ -31,7 +31,9 @@ pub(crate) fn run(
     context: &mut CompilationContext,
     constraints: Vec<(ConstraintTag, String, Vec<flatzinc::Expr>)>,
 ) -> Result<(), FlatZincError> {
-    if context.proof_format != ProofFormat::Croc || !context.solver.is_logging_proof() {
+    if !matches!(context.proof_logging, ProofLogging::Croc { .. })
+        || !context.solver.is_logging_proof()
+    {
         return Ok(());
     }
     for (constraint_tag, id, exprs) in constraints {
