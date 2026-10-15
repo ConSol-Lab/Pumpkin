@@ -1,19 +1,18 @@
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::DomainView;
 
+use crate::checkers::ScopeItem;
 use crate::predicates::Predicate;
 use crate::propagation::ConstraintDescription;
 use crate::propagation::SolutionCheck;
 use crate::variables::Literal;
 
-crate::scoped_struct! {
 /// The description of a constraint that only has to hold when the reification literal is true.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ScopeItem)]
 pub struct HalfReifiedDescription<Description> {
     /// The description of the constraint that is reified.
     pub inner: Description,
     pub reification_literal: Literal,
-}
 }
 
 impl<Description: ConstraintDescription> ConstraintDescription

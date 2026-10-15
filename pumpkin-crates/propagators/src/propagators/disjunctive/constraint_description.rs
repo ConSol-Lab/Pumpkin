@@ -1,4 +1,5 @@
 use pumpkin_checking::DomainView;
+use pumpkin_core::checkers::ScopeItem;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::SolutionCheck;
@@ -6,12 +7,10 @@ use pumpkin_core::variables::IntegerVariable;
 
 use super::disjunctive_task::ArgDisjunctiveTask;
 
-pumpkin_core::scoped_struct! {
 /// The description of the disjunctive constraint: no two of the tasks overlap.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ScopeItem)]
 pub struct DisjunctiveDescription<Var> {
     pub tasks: Vec<ArgDisjunctiveTask<Var>>,
-}
 }
 
 impl<Var: IntegerVariable> ConstraintDescription for DisjunctiveDescription<Var> {

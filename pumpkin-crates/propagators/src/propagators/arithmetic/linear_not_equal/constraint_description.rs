@@ -1,20 +1,19 @@
 use std::rc::Rc;
 
 use pumpkin_checking::DomainView;
+use pumpkin_core::checkers::ScopeItem;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::variables::IntegerVariable;
 
-pumpkin_core::scoped_struct! {
 /// The description of the linear disequality `∑ terms_i != rhs`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ScopeItem)]
 pub struct LinearNotEqualDescription<Var> {
     /// The terms of the sum
     pub terms: Rc<[Var]>,
     /// The right-hand side of the sum
     pub rhs: i32,
-}
 }
 
 impl<Var: IntegerVariable> ConstraintDescription for LinearNotEqualDescription<Var> {

@@ -1,4 +1,5 @@
 use pumpkin_checking::DomainView;
+use pumpkin_core::checkers::ScopeItem;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::SolutionCheck;
@@ -7,14 +8,12 @@ use pumpkin_core::variables::IntegerVariable;
 use crate::cumulative::ArgTask;
 use crate::cumulative::CumulativeParameters;
 
-pumpkin_core::scoped_struct! {
 /// The description of the cumulative constraint: at no time do the tasks that run use more than
 /// the capacity of the resource.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ScopeItem)]
 pub struct CumulativeDescription<Var> {
     pub tasks: Box<[ArgTask<Var>]>,
     pub capacity: i32,
-}
 }
 
 impl<Var: IntegerVariable + 'static> CumulativeDescription<Var> {

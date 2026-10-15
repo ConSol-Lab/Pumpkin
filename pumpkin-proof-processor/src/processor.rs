@@ -752,6 +752,7 @@ mod tests {
     use pumpkin_checking::RetentionCheck;
     use pumpkin_checking::RetentionChecker;
     use pumpkin_checking::VariableState;
+    use pumpkin_core::checkers::ScopeItem;
     use pumpkin_core::propagation::ConflictRule;
     use pumpkin_core::propagation::ConstraintDescription;
     use pumpkin_core::propagation::EventsToRegister;
@@ -1020,13 +1021,11 @@ mod tests {
         }
     }
 
-    pumpkin_core::scoped_struct! {
     /// The constraint of [`AlwaysConflictPropagator`]: `watched` and `other` are not both true.
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, ScopeItem)]
     struct AlwaysConflictDescription {
         watched: Predicate,
         other: Predicate,
-    }
     }
 
     impl ConstraintDescription for AlwaysConflictDescription {

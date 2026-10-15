@@ -1,16 +1,15 @@
 use pumpkin_checking::DomainView;
+use pumpkin_core::checkers::ScopeItem;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::variables::IntegerVariable;
 
-pumpkin_core::scoped_struct! {
 /// The description of the constraint `a != b`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ScopeItem)]
 pub struct BinaryNotEqualsDescription<AVar, BVar> {
     pub a: AVar,
     pub b: BVar,
-}
 }
 
 impl<AVar: IntegerVariable, BVar: IntegerVariable> ConstraintDescription

@@ -2,20 +2,19 @@ use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::DomainView;
 use pumpkin_checking::IntExt;
 
+use crate::checkers::ScopeItem;
 use crate::predicates::Predicate;
 use crate::propagation::ConstraintDescription;
 use crate::propagation::SolutionCheck;
 use crate::propagators::hypercube_linear::Hypercube;
 use crate::propagators::hypercube_linear::LinearInequality;
 
-crate::scoped_struct! {
 /// The description of the hypercube linear constraint: when every predicate of the hypercube
 /// holds, the linear inequality holds.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ScopeItem)]
 pub struct HypercubeLinearDescription {
     pub hypercube: Hypercube,
     pub linear: LinearInequality,
-}
 }
 
 impl ConstraintDescription for HypercubeLinearDescription {

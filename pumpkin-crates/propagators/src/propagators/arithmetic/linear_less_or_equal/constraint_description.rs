@@ -1,17 +1,16 @@
 use pumpkin_checking::DomainView;
 use pumpkin_checking::IntExt;
+use pumpkin_core::checkers::ScopeItem;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::variables::IntegerVariable;
 
-pumpkin_core::scoped_struct! {
 /// The description of the linear inequality `∑ terms_i <= bound`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ScopeItem)]
 pub struct LinearLessOrEqualDescription<Var> {
     pub terms: Box<[Var]>,
     pub bound: i32,
-}
 }
 
 impl<Var: IntegerVariable> ConstraintDescription for LinearLessOrEqualDescription<Var> {

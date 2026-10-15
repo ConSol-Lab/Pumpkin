@@ -1,15 +1,14 @@
 use pumpkin_checking::DomainView;
 
+use crate::checkers::ScopeItem;
 use crate::predicates::Predicate;
 use crate::propagation::ConstraintDescription;
 use crate::propagation::SolutionCheck;
 
-crate::scoped_struct! {
 /// The description of a nogood: the atomic constraints that cannot all hold at once.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ScopeItem)]
 pub struct NogoodDescription {
     pub nogood: Box<[Predicate]>,
-}
 }
 
 impl ConstraintDescription for NogoodDescription {

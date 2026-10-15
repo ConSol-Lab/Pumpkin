@@ -13,8 +13,8 @@ use crate::propagation::SolutionCheck;
 /// cumulative, are not part of it; the constructor arguments of a propagator hold them next to the
 /// constraint description.
 ///
-/// The scope comes from [`ScopeItem`], which is usually implemented with [`crate::scoped_struct`]
-/// so that every field of the description is part of it.
+/// The scope comes from [`ScopeItem`], which is usually derived (`#[derive(ScopeItem)]`) so that
+/// every field of the description is part of it.
 pub trait ConstraintDescription: ScopeItem {
     /// The variables of the constraint.
     fn scope(&self) -> Scope {

@@ -1,5 +1,7 @@
 use std::rc::Rc;
 
+pub use pumpkin_core_derive::ScopeItem;
+
 use crate::predicates::Predicate;
 use crate::variables::DomainId;
 
@@ -24,7 +26,23 @@ impl Scope {
 /// Implemented by everything a constraint description is made of: a variable adds its domains to
 /// the scope, and data without variables, such as a constant, adds nothing.
 ///
-/// Usually derived, so that every field of a description is accounted for.
+/// Usually derived, so that every field of a description is accounted for:
+///
+/// ```
+/// use pumpkin_core::checkers::ScopeItem;
+/// use pumpkin_core::variables::DomainId;
+///
+/// /// The description of the constraint `x + y <= bound`.
+/// #[derive(Clone, Debug, ScopeItem)]
+/// pub struct SumDescription {
+///     pub x: DomainId,
+///     pub y: DomainId,
+///     pub bound: i32,
+/// }
+/// ```
+///
+/// The scope of a `SumDescription` holds the domains of `x` and `y`; the constant `bound` adds
+/// nothing.
 pub trait ScopeItem {
     fn add_to_scope(&self, scope: &mut Scope);
 }
@@ -67,55 +85,23 @@ impl<Item: ScopeItem> ScopeItem for Vec<Item> {
     }
 }
 
-/// Defines a struct and implements [`ScopeItem`] for it from all its fields, so that no field that
-/// holds variables can be left out of the scope. Every field has to implement [`ScopeItem`].
-///
-/// It is a declarative macro rather than a derive, so that `pumpkin-core` does not depend on a
-/// procedural-macro crate.
-#[macro_export]
-macro_rules! scoped_struct {
-    (
-        $(#[$meta:meta])*
-        $vis:vis struct $name:ident $(<$($parameter:ident),+ $(,)?>)? {
-            $($(#[$field_meta:meta])* $field_vis:vis $field:ident : $field_type:ty),* $(,)?
-        }
-    ) => {
-        $(#[$meta])*
-        $vis struct $name $(<$($parameter),+>)? {
-            $($(#[$field_meta])* $field_vis $field : $field_type),*
-        }
-
-        impl $(<$($parameter),+>)? $crate::checkers::ScopeItem for $name $(<$($parameter),+>)?
-        where
-            $($field_type: $crate::checkers::ScopeItem),*
-        {
-            fn add_to_scope(&self, scope: &mut $crate::checkers::Scope) {
-                let _ = &scope;
-                $($crate::checkers::ScopeItem::add_to_scope(&self.$field, scope);)*
-            }
-        }
-    };
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::containers::StorageKey;
 
-    crate::scoped_struct! {
-        struct Task {
-            start: DomainId,
-            duration: i32,
-        }
+    #[derive(ScopeItem)]
+    struct Task {
+        start: DomainId,
+        duration: i32,
     }
 
-    crate::scoped_struct! {
-        struct Description {
-            variable: DomainId,
-            terms: Box<[DomainId]>,
-            tasks: Vec<Task>,
-            bound: i32,
-        }
+    #[derive(ScopeItem)]
+    struct Description {
+        variable: DomainId,
+        terms: Box<[DomainId]>,
+        tasks: Vec<Task>,
+        bound: i32,
     }
 
     #[test]

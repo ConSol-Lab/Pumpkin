@@ -1,16 +1,15 @@
 use pumpkin_checking::DomainView;
+use pumpkin_core::checkers::ScopeItem;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::variables::IntegerVariable;
 
-pumpkin_core::scoped_struct! {
 /// The description of the constraint `absolute = |signed|`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ScopeItem)]
 pub struct AbsoluteValueDescription<VA, VB> {
     pub signed: VA,
     pub absolute: VB,
-}
 }
 
 impl<VA: IntegerVariable, VB: IntegerVariable> ConstraintDescription

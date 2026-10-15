@@ -1059,10 +1059,20 @@ dependencies = [
  "log",
  "num",
  "pumpkin-checking",
+ "pumpkin-core-derive",
  "rand",
  "thiserror",
  "wasm-bindgen-test",
  "web-time",
+]
+
+[[package]]
+name = "pumpkin-core-derive"
+version = "0.5.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.6",
 ]
 
 [[package]]
