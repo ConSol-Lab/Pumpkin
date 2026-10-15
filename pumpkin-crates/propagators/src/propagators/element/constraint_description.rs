@@ -1,6 +1,5 @@
-use pumpkin_checking::DomainContext;
+use pumpkin_core::checkers::CompleteSolution;
 use pumpkin_core::checkers::ScopeItem;
-use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::variables::IntegerVariable;
@@ -19,26 +18,18 @@ where
     VI: IntegerVariable,
     VE: IntegerVariable,
 {
-    fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck {
-        let (Some(index), Some(rhs)) = (
-            self.index.induced_fixed_value(domains),
-            self.rhs.induced_fixed_value(domains),
-        ) else {
-            return SolutionCheck::Unknown;
-        };
-
-        // The index starts at zero.
-        let Some(selected) = usize::try_from(index)
+    fn check_solution(&self, solution: &CompleteSolution<'_>) -> SolutionCheck {
+        // The index starts at zero; an index outside the array violates the constraint.
+        let selected = usize::try_from(solution.integer_value(&self.index))
             .ok()
-            .and_then(|index| self.array.get(index))
-        else {
-            return SolutionCheck::ConstraintViolated;
-        };
+            .and_then(|index| self.array.get(index));
 
-        match selected.induced_fixed_value(domains) {
-            None => SolutionCheck::Unknown,
-            Some(value) if value == rhs => SolutionCheck::ConstraintSatisfied,
-            Some(_) => SolutionCheck::ConstraintViolated,
+        if selected.is_some_and(|element| {
+            solution.integer_value(element) == solution.integer_value(&self.rhs)
+        }) {
+            SolutionCheck::ConstraintSatisfied
+        } else {
+            SolutionCheck::ConstraintViolated
         }
     }
 }

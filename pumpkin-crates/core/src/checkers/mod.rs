@@ -1,3 +1,4 @@
+mod complete_solution;
 mod conflict_store;
 mod domain_context;
 #[cfg(feature = "inference-checkers")]
@@ -10,6 +11,7 @@ mod scope;
 #[cfg(feature = "check-solutions")]
 mod solution_store;
 
+pub use complete_solution::*;
 pub use conflict_store::*;
 #[cfg(feature = "inference-checkers")]
 pub(crate) use inference_checks::*;

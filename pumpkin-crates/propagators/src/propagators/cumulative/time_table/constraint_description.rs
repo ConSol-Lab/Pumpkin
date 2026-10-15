@@ -1,6 +1,5 @@
-use pumpkin_checking::DomainContext;
+use pumpkin_core::checkers::CompleteSolution;
 use pumpkin_core::checkers::ScopeItem;
-use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::variables::IntegerVariable;
@@ -38,15 +37,12 @@ impl<Var: IntegerVariable + 'static> CumulativeDescription<Var> {
 }
 
 impl<Var: IntegerVariable> ConstraintDescription for CumulativeDescription<Var> {
-    fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck {
-        let Some(start_times) = self
+    fn check_solution(&self, solution: &CompleteSolution<'_>) -> SolutionCheck {
+        let start_times = self
             .tasks
             .iter()
-            .map(|task| task.start_time.induced_fixed_value(domains).map(i64::from))
-            .collect::<Option<Vec<_>>>()
-        else {
-            return SolutionCheck::Unknown;
-        };
+            .map(|task| i64::from(solution.integer_value(&task.start_time)))
+            .collect::<Vec<_>>();
 
         // The usage only increases when a task starts, so an overload anywhere is an overload at
         // the start of one of the tasks.
@@ -64,10 +60,10 @@ impl<Var: IntegerVariable> ConstraintDescription for CumulativeDescription<Var> 
             usage > i64::from(self.capacity)
         });
 
-        if is_overloaded {
-            SolutionCheck::ConstraintViolated
-        } else {
+        if !is_overloaded {
             SolutionCheck::ConstraintSatisfied
+        } else {
+            SolutionCheck::ConstraintViolated
         }
     }
 }

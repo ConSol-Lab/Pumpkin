@@ -1,6 +1,5 @@
-use pumpkin_checking::DomainContext;
+use pumpkin_core::checkers::CompleteSolution;
 use pumpkin_core::checkers::ScopeItem;
-use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::variables::IntegerVariable;
@@ -15,18 +14,14 @@ pub struct MaximumDescription<ElementVar, Rhs> {
 impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> ConstraintDescription
     for MaximumDescription<ElementVar, Rhs>
 {
-    fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck {
-        let (Some(elements), Some(rhs)) = (
-            self.array
-                .iter()
-                .map(|element| element.induced_fixed_value(domains))
-                .collect::<Option<Vec<_>>>(),
-            self.rhs.induced_fixed_value(domains),
-        ) else {
-            return SolutionCheck::Unknown;
-        };
+    fn check_solution(&self, solution: &CompleteSolution<'_>) -> SolutionCheck {
+        let maximum = self
+            .array
+            .iter()
+            .map(|element| solution.integer_value(element))
+            .max();
 
-        if elements.iter().max() == Some(&rhs) {
+        if maximum == Some(solution.integer_value(&self.rhs)) {
             SolutionCheck::ConstraintSatisfied
         } else {
             SolutionCheck::ConstraintViolated

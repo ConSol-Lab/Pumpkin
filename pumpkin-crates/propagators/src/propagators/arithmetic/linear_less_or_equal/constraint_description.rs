@@ -1,7 +1,5 @@
-use pumpkin_checking::DomainContext;
-use pumpkin_checking::IntExt;
+use pumpkin_core::checkers::CompleteSolution;
 use pumpkin_core::checkers::ScopeItem;
-use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::variables::IntegerVariable;
@@ -14,25 +12,17 @@ pub struct LinearLessOrEqualDescription<Var> {
 }
 
 impl<Var: IntegerVariable> ConstraintDescription for LinearLessOrEqualDescription<Var> {
-    fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck {
-        let bound = i64::from(self.bound);
-        let highest_sum = self
+    fn check_solution(&self, solution: &CompleteSolution<'_>) -> SolutionCheck {
+        let sum = self
             .terms
             .iter()
-            .map(|term| IntExt::<i64>::from(term.induced_upper_bound(domains)))
-            .sum::<IntExt<i64>>();
-        let lowest_sum = self
-            .terms
-            .iter()
-            .map(|term| IntExt::<i64>::from(term.induced_lower_bound(domains)))
-            .sum::<IntExt<i64>>();
+            .map(|term| i64::from(solution.integer_value(term)))
+            .sum::<i64>();
 
-        if highest_sum <= bound {
+        if sum <= i64::from(self.bound) {
             SolutionCheck::ConstraintSatisfied
-        } else if lowest_sum > bound {
-            SolutionCheck::ConstraintViolated
         } else {
-            SolutionCheck::Unknown
+            SolutionCheck::ConstraintViolated
         }
     }
 }

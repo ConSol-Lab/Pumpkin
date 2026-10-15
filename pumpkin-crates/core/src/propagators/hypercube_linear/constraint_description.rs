@@ -1,9 +1,5 @@
-use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::DomainContext;
-use pumpkin_checking::IntExt;
-
+use crate::checkers::CompleteSolution;
 use crate::checkers::ScopeItem;
-use crate::predicates::Predicate;
 use crate::propagation::ConstraintDescription;
 use crate::propagation::SolutionCheck;
 use crate::propagators::hypercube_linear::Hypercube;
@@ -18,34 +14,21 @@ pub struct HypercubeLinearDescription {
 }
 
 impl ConstraintDescription for HypercubeLinearDescription {
-    fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck {
-        let bound = i64::from(self.linear.bound());
-        let highest_sum = self
-            .linear
-            .terms()
-            .map(|term| IntExt::<i64>::from(term.induced_upper_bound(domains)))
-            .sum::<IntExt<i64>>();
-        let lowest_sum = self
-            .linear
-            .terms()
-            .map(|term| IntExt::<i64>::from(term.induced_lower_bound(domains)))
-            .sum::<IntExt<i64>>();
-
-        let is_hypercube_violated = self
-            .hypercube
-            .iter_predicates()
-            .any(|predicate| domains.is_true(&!predicate));
+    fn check_solution(&self, solution: &CompleteSolution<'_>) -> SolutionCheck {
         let is_hypercube_satisfied = self
             .hypercube
             .iter_predicates()
-            .all(|predicate| domains.is_true(&predicate));
+            .all(|predicate| solution.predicate_holds(predicate));
+        let sum = self
+            .linear
+            .terms()
+            .map(|term| i64::from(solution.integer_value(&term)))
+            .sum::<i64>();
 
-        if is_hypercube_violated || highest_sum <= bound {
+        if !is_hypercube_satisfied || sum <= i64::from(self.linear.bound()) {
             SolutionCheck::ConstraintSatisfied
-        } else if is_hypercube_satisfied && lowest_sum > bound {
-            SolutionCheck::ConstraintViolated
         } else {
-            SolutionCheck::Unknown
+            SolutionCheck::ConstraintViolated
         }
     }
 }
@@ -74,17 +57,13 @@ mod tests {
                 .expect("not trivially true"),
         };
 
-        assert_eq!(
-            description.check_solution(&state.assignments),
-            SolutionCheck::Unknown
-        );
-
         state.new_checkpoint();
         let _ = state
             .post(predicate![x == 7])
             .expect("the value is in the domain");
         assert_eq!(
-            description.check_solution(&state.assignments),
+            description
+                .check_solution(&state.complete_solution().expect("every variable is fixed")),
             SolutionCheck::ConstraintViolated
         );
 
@@ -93,7 +72,8 @@ mod tests {
             .post(predicate![x == 2])
             .expect("the value is in the domain");
         assert_eq!(
-            description.check_solution(&state.assignments),
+            description
+                .check_solution(&state.complete_solution().expect("every variable is fixed")),
             SolutionCheck::ConstraintSatisfied
         );
     }

@@ -1386,7 +1386,7 @@ mod tests {
     impl<Checker> crate::propagation::ConstraintDescription for CheckedPropagator<Checker> {
         fn check_solution(
             &self,
-            _: &dyn pumpkin_checking::DomainContext<crate::predicates::Predicate>,
+            _: &crate::checkers::CompleteSolution<'_>,
         ) -> crate::propagation::SolutionCheck {
             crate::propagation::SolutionCheck::ConstraintSatisfied
         }

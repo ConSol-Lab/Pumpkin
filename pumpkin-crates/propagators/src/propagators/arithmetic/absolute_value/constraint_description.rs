@@ -1,6 +1,5 @@
-use pumpkin_checking::DomainContext;
+use pumpkin_core::checkers::CompleteSolution;
 use pumpkin_core::checkers::ScopeItem;
-use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::variables::IntegerVariable;
@@ -15,15 +14,11 @@ pub struct AbsoluteValueDescription<VA, VB> {
 impl<VA: IntegerVariable, VB: IntegerVariable> ConstraintDescription
     for AbsoluteValueDescription<VA, VB>
 {
-    fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck {
-        let (Some(signed), Some(absolute)) = (
-            self.signed.induced_fixed_value(domains),
-            self.absolute.induced_fixed_value(domains),
-        ) else {
-            return SolutionCheck::Unknown;
-        };
+    fn check_solution(&self, solution: &CompleteSolution<'_>) -> SolutionCheck {
+        let signed = i64::from(solution.integer_value(&self.signed));
+        let absolute = i64::from(solution.integer_value(&self.absolute));
 
-        if i64::from(absolute) == i64::from(signed).abs() {
+        if absolute == signed.abs() {
             SolutionCheck::ConstraintSatisfied
         } else {
             SolutionCheck::ConstraintViolated

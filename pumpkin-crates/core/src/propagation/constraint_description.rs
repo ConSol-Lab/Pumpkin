@@ -1,8 +1,6 @@
-use pumpkin_checking::DomainContext;
-
+use crate::checkers::CompleteSolution;
 use crate::checkers::Scope;
 use crate::checkers::ScopeItem;
-use crate::predicates::Predicate;
 use crate::propagation::SolutionCheck;
 
 /// Implemented by the type that holds the data that defines a constraint, such as the terms and
@@ -23,10 +21,6 @@ pub trait ConstraintDescription: ScopeItem {
         scope
     }
 
-    /// Whether `domains` satisfy the constraint.
-    ///
-    /// A variable that is not fixed does not make the outcome [`SolutionCheck::Unknown`] when the
-    /// constraint is decided without it, such as a nogood with a false predicate. A constraint may
-    /// also answer [`SolutionCheck::Unknown`] when it does not reason about partial assignments.
-    fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck;
+    /// Whether `solution` satisfies the constraint.
+    fn check_solution(&self, solution: &CompleteSolution<'_>) -> SolutionCheck;
 }

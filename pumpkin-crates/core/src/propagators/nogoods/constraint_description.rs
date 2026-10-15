@@ -1,5 +1,4 @@
-use pumpkin_checking::DomainContext;
-
+use crate::checkers::CompleteSolution;
 use crate::checkers::ScopeItem;
 use crate::predicates::Predicate;
 use crate::propagation::ConstraintDescription;
@@ -12,21 +11,15 @@ pub struct NogoodDescription {
 }
 
 impl ConstraintDescription for NogoodDescription {
-    fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck {
-        if self
+    fn check_solution(&self, solution: &CompleteSolution<'_>) -> SolutionCheck {
+        if !self
             .nogood
             .iter()
-            .any(|&predicate| domains.is_true(&!predicate))
+            .all(|&predicate| solution.predicate_holds(predicate))
         {
             SolutionCheck::ConstraintSatisfied
-        } else if self
-            .nogood
-            .iter()
-            .all(|predicate| domains.is_true(predicate))
-        {
-            SolutionCheck::ConstraintViolated
         } else {
-            SolutionCheck::Unknown
+            SolutionCheck::ConstraintViolated
         }
     }
 }

@@ -287,7 +287,7 @@ impl crate::checkers::ScopeItem for GenericDescription {
 impl ConstraintDescription for GenericDescription {
     fn check_solution(
         &self,
-        _: &dyn DomainContext<Predicate>,
+        _: &crate::checkers::CompleteSolution<'_>,
     ) -> crate::propagation::SolutionCheck {
         crate::propagation::SolutionCheck::ConstraintSatisfied
     }
