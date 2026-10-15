@@ -15,6 +15,16 @@ on it has been reviewed, and it is not meant to be merged as it is.
   reading croc scaffolds (deduction databases, `--root-domains` with the header `m lenient`,
   `--omit-premises`), the `lex_less_or_equal` propagator and constraint, opt-in symmetry
   breaking (lex-leader, value symmetry), dominance breaking and dual fixing.
+- Two steps on top of the checkers stack, `features/checkers-16-scope-item-derive` and
+  `features/checkers-17-complete-solution`:
+  - `#[derive(ScopeItem)]`, from the new crate `pumpkin-core-derive`, replaces the
+    `scoped_struct!` macro: the struct keeps its own definition and gets the derive.
+  - The trait `DomainView` is renamed `DomainContext` (file `domain_context.rs`).
+  - `ConstraintDescription::check_solution` takes a `CompleteSolution`, an assignment in which
+    every domain is fixed (from `State::complete_solution`), and returns `ConstraintSatisfied` or
+    `ConstraintViolated`; `SolutionCheck::Unknown` is gone. Under `check-solutions`, a reported
+    solution with a domain that is not fixed fails with that domain. The `lex_less_or_equal`
+    description and the processor's deduction descriptions follow these changes.
 
 ## How the two were joined
 

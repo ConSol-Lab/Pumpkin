@@ -10,6 +10,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+#[cfg(unix)]
 use std::process::Stdio;
 use std::sync::OnceLock;
 

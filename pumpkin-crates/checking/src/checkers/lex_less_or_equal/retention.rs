@@ -1,7 +1,7 @@
 use super::LexLessOrEqualChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
-use crate::DomainView;
+use crate::DomainContext;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
 
@@ -16,7 +16,7 @@ where
     Atomic: AtomicConstraint,
     Var: CheckerVariable<Atomic>,
 {
-    fn check_retention(&self, state: &dyn DomainView<Atomic>) -> RetentionCheck {
+    fn check_retention(&self, state: &dyn DomainContext<Atomic>) -> RetentionCheck {
         let length = self.x.len().min(self.y.len());
 
         let Some(alpha) = (0..length).find(|&position| {

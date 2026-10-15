@@ -332,13 +332,13 @@ fn a_linear_disequality_over_fixed_variables_is_decided() {
 
 #[test]
 fn lex_less_or_equal_compares_at_the_first_difference() {
-    let (variables, domains) = fixed(&[1, 5, 2, 0, 1, 5]);
+    let (variables, state) = fixed(&[1, 5, 2, 0, 1, 5]);
     let check = |x: [usize; 2], y: [usize; 2]| {
         LexLessOrEqualDescription {
             x: x.map(|index| variables[index]).into(),
             y: y.map(|index| variables[index]).into(),
         }
-        .check_solution(&domains)
+        .check_solution(&solution(&state))
     };
 
     // [1, 5] <=lex [2, 0]: the first position decides.
