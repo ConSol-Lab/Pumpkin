@@ -748,7 +748,7 @@ mod tests {
     use drcp_format::reader::ReadStep;
     use pumpkin_checking::ConflictCheck;
     use pumpkin_checking::ConflictChecker;
-    use pumpkin_checking::DomainView;
+    use pumpkin_checking::DomainContext;
     use pumpkin_checking::RetentionCheck;
     use pumpkin_checking::RetentionChecker;
     use pumpkin_checking::VariableState;
@@ -1029,7 +1029,7 @@ mod tests {
     }
 
     impl ConstraintDescription for AlwaysConflictDescription {
-        fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck {
+        fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck {
             if domains.is_true(&!self.watched) || domains.is_true(&!self.other) {
                 SolutionCheck::ConstraintSatisfied
             } else if domains.is_true(&self.watched) && domains.is_true(&self.other) {
@@ -1072,7 +1072,7 @@ mod tests {
     struct AcceptEverything;
 
     impl RetentionChecker<Predicate> for AcceptEverything {
-        fn check_retention(&self, _: &dyn DomainView<Predicate>) -> RetentionCheck {
+        fn check_retention(&self, _: &dyn DomainContext<Predicate>) -> RetentionCheck {
             RetentionCheck::NothingToPropagate
         }
     }

@@ -1,7 +1,7 @@
 use super::IntegerDivisionChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
-use crate::DomainView;
+use crate::DomainContext;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
 
@@ -15,7 +15,7 @@ struct Bounds {
 impl Bounds {
     fn of<Atomic: AtomicConstraint, Var: CheckerVariable<Atomic>>(
         variable: &Var,
-        state: &dyn DomainView<Atomic>,
+        state: &dyn DomainContext<Atomic>,
     ) -> Bounds {
         let lower: i32 = variable
             .induced_lower_bound(state)
@@ -50,7 +50,7 @@ where
     VB: CheckerVariable<Atomic>,
     VC: CheckerVariable<Atomic>,
 {
-    fn check_retention(&self, state: &dyn DomainView<Atomic>) -> RetentionCheck {
+    fn check_retention(&self, state: &dyn DomainContext<Atomic>) -> RetentionCheck {
         let mut numerator = Bounds::of(&self.numerator, state);
         let mut denominator = Bounds::of(&self.denominator, state);
         let rhs = Bounds::of(&self.rhs, state);

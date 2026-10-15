@@ -1,4 +1,4 @@
-use pumpkin_checking::DomainView;
+use pumpkin_checking::DomainContext;
 
 use crate::checkers::Scope;
 use crate::checkers::ScopeItem;
@@ -28,5 +28,5 @@ pub trait ConstraintDescription: ScopeItem {
     /// A variable that is not fixed does not make the outcome [`SolutionCheck::Unknown`] when the
     /// constraint is decided without it, such as a nogood with a false predicate. A constraint may
     /// also answer [`SolutionCheck::Unknown`] when it does not reason about partial assignments.
-    fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck;
+    fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck;
 }

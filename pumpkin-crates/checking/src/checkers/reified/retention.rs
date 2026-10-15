@@ -1,7 +1,7 @@
 use super::ReifiedRetentionChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
-use crate::DomainView;
+use crate::DomainContext;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
 
@@ -10,7 +10,7 @@ where
     Atomic: AtomicConstraint,
     Var: CheckerVariable<Atomic>,
 {
-    fn check_retention(&self, state: &dyn DomainView<Atomic>) -> RetentionCheck {
+    fn check_retention(&self, state: &dyn DomainContext<Atomic>) -> RetentionCheck {
         if self.reification_literal.induced_domain_contains(state, 0) {
             return RetentionCheck::NothingToPropagate;
         }

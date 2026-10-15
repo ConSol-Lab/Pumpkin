@@ -1,5 +1,5 @@
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::DomainView;
+use pumpkin_checking::DomainContext;
 use pumpkin_checking::IntExt;
 
 use crate::checkers::ScopeItem;
@@ -18,7 +18,7 @@ pub struct HypercubeLinearDescription {
 }
 
 impl ConstraintDescription for HypercubeLinearDescription {
-    fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck {
+    fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck {
         let bound = i64::from(self.linear.bound());
         let highest_sum = self
             .linear

@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use pumpkin_checking::DomainView;
+use pumpkin_checking::DomainContext;
 use pumpkin_core::checkers::ScopeItem;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConstraintDescription;
@@ -17,7 +17,7 @@ pub struct LinearNotEqualDescription<Var> {
 }
 
 impl<Var: IntegerVariable> ConstraintDescription for LinearNotEqualDescription<Var> {
-    fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck {
+    fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck {
         let Some(sum) = self
             .terms
             .iter()

@@ -1,12 +1,12 @@
 use super::NogoodChecker;
 use super::truth_value;
 use crate::AtomicConstraint;
-use crate::DomainView;
+use crate::DomainContext;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
 
 impl<Atomic: AtomicConstraint> RetentionChecker<Atomic> for NogoodChecker<Atomic> {
-    fn check_retention(&self, state: &dyn DomainView<Atomic>) -> RetentionCheck {
+    fn check_retention(&self, state: &dyn DomainContext<Atomic>) -> RetentionCheck {
         let untrue_predicate_count = self
             .nogood
             .iter()

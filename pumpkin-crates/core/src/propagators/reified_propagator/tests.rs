@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use pumpkin_checking::ConflictCheck;
 use pumpkin_checking::ConflictChecker;
-use pumpkin_checking::DomainView;
+use pumpkin_checking::DomainContext;
 use pumpkin_checking::RetentionCheck;
 use pumpkin_checking::RetentionChecker;
 use pumpkin_checking::VariableState;
@@ -285,7 +285,10 @@ impl crate::checkers::ScopeItem for GenericDescription {
 }
 
 impl ConstraintDescription for GenericDescription {
-    fn check_solution(&self, _: &dyn DomainView<Predicate>) -> crate::propagation::SolutionCheck {
+    fn check_solution(
+        &self,
+        _: &dyn DomainContext<Predicate>,
+    ) -> crate::propagation::SolutionCheck {
         crate::propagation::SolutionCheck::ConstraintSatisfied
     }
 }
@@ -329,7 +332,7 @@ impl ConflictChecker<Predicate> for AcceptEverything {
 }
 
 impl RetentionChecker<Predicate> for AcceptEverything {
-    fn check_retention(&self, _: &dyn DomainView<Predicate>) -> RetentionCheck {
+    fn check_retention(&self, _: &dyn DomainContext<Predicate>) -> RetentionCheck {
         RetentionCheck::NothingToPropagate
     }
 }

@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::rc::Rc;
 
-use pumpkin_checking::DomainView;
+use pumpkin_checking::DomainContext;
 
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
@@ -62,7 +62,7 @@ impl SolutionCheckerStore {
 
     /// Check that `domains` satisfy every constraint, stopping at the first that they do not:
     /// either violate it, or leave it depending on variables that are not fixed.
-    pub fn check(&self, domains: &dyn DomainView<Predicate>) -> Result<(), SolutionFailure> {
+    pub fn check(&self, domains: &dyn DomainContext<Predicate>) -> Result<(), SolutionFailure> {
         for entry in self.entries.iter().flatten() {
             match entry.constraint_description.check_solution(domains) {
                 SolutionCheck::ConstraintSatisfied => {}

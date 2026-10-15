@@ -1,5 +1,5 @@
 mod conflict_store;
-mod domain_view;
+mod domain_context;
 #[cfg(feature = "inference-checkers")]
 mod inference_checks;
 mod retention_store;

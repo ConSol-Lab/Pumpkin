@@ -1,4 +1,4 @@
-use pumpkin_checking::DomainView;
+use pumpkin_checking::DomainContext;
 
 use crate::checkers::ScopeItem;
 use crate::predicates::Predicate;
@@ -12,7 +12,7 @@ pub struct NogoodDescription {
 }
 
 impl ConstraintDescription for NogoodDescription {
-    fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck {
+    fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck {
         if self
             .nogood
             .iter()

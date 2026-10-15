@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::AtomicConstraint;
 use crate::Comparison;
-use crate::DomainView;
+use crate::DomainContext;
 use crate::IntExt;
 use crate::TestAtomic;
 
@@ -26,22 +26,22 @@ pub trait CheckerVariable<Atomic: AtomicConstraint>: Debug + Clone {
     /// Get the lower bound of the domain.
     fn induced_lower_bound<View>(&self, domains: &View) -> IntExt
     where
-        View: DomainView<Atomic> + ?Sized;
+        View: DomainContext<Atomic> + ?Sized;
 
     /// Get the upper bound of the domain.
     fn induced_upper_bound<View>(&self, domains: &View) -> IntExt
     where
-        View: DomainView<Atomic> + ?Sized;
+        View: DomainContext<Atomic> + ?Sized;
 
     /// Get the value the variable is fixed to, if the variable is fixed.
     fn induced_fixed_value<View>(&self, domains: &View) -> Option<i32>
     where
-        View: DomainView<Atomic> + ?Sized;
+        View: DomainContext<Atomic> + ?Sized;
 
     /// Returns whether the value is in the domain.
     fn induced_domain_contains<View>(&self, domains: &View, value: i32) -> bool
     where
-        View: DomainView<Atomic> + ?Sized;
+        View: DomainContext<Atomic> + ?Sized;
 
     /// Get the holes in the domain.
     fn induced_holes<'this, 'state, View>(
@@ -50,7 +50,7 @@ pub trait CheckerVariable<Atomic: AtomicConstraint>: Debug + Clone {
     ) -> impl Iterator<Item = i32> + 'state
     where
         'this: 'state,
-        View: DomainView<Atomic> + ?Sized;
+        View: DomainContext<Atomic> + ?Sized;
 
     /// Iterate the domain of the variable.
     ///
@@ -61,7 +61,7 @@ pub trait CheckerVariable<Atomic: AtomicConstraint>: Debug + Clone {
     ) -> Option<impl Iterator<Item = i32> + 'state>
     where
         'this: 'state,
-        View: DomainView<Atomic> + ?Sized;
+        View: DomainContext<Atomic> + ?Sized;
 }
 
 impl CheckerVariable<TestAtomic> for &'static str {
@@ -103,28 +103,28 @@ impl CheckerVariable<TestAtomic> for &'static str {
 
     fn induced_lower_bound<View>(&self, domains: &View) -> IntExt
     where
-        View: DomainView<TestAtomic> + ?Sized,
+        View: DomainContext<TestAtomic> + ?Sized,
     {
         domains.lower_bound(self)
     }
 
     fn induced_upper_bound<View>(&self, domains: &View) -> IntExt
     where
-        View: DomainView<TestAtomic> + ?Sized,
+        View: DomainContext<TestAtomic> + ?Sized,
     {
         domains.upper_bound(self)
     }
 
     fn induced_fixed_value<View>(&self, domains: &View) -> Option<i32>
     where
-        View: DomainView<TestAtomic> + ?Sized,
+        View: DomainContext<TestAtomic> + ?Sized,
     {
         domains.fixed_value(self)
     }
 
     fn induced_domain_contains<View>(&self, domains: &View, value: i32) -> bool
     where
-        View: DomainView<TestAtomic> + ?Sized,
+        View: DomainContext<TestAtomic> + ?Sized,
     {
         domains.contains(self, value)
     }
@@ -135,7 +135,7 @@ impl CheckerVariable<TestAtomic> for &'static str {
     ) -> impl Iterator<Item = i32> + 'state
     where
         'this: 'state,
-        View: DomainView<TestAtomic> + ?Sized,
+        View: DomainContext<TestAtomic> + ?Sized,
     {
         domains.holes(self)
     }
@@ -146,7 +146,7 @@ impl CheckerVariable<TestAtomic> for &'static str {
     ) -> Option<impl Iterator<Item = i32> + 'state>
     where
         'this: 'state,
-        View: DomainView<TestAtomic> + ?Sized,
+        View: DomainContext<TestAtomic> + ?Sized,
     {
         domains.iter_domain(self)
     }

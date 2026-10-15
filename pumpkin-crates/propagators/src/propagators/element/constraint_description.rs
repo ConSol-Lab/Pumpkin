@@ -1,4 +1,4 @@
-use pumpkin_checking::DomainView;
+use pumpkin_checking::DomainContext;
 use pumpkin_core::checkers::ScopeItem;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConstraintDescription;
@@ -19,7 +19,7 @@ where
     VI: IntegerVariable,
     VE: IntegerVariable,
 {
-    fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck {
+    fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck {
         let (Some(index), Some(rhs)) = (
             self.index.induced_fixed_value(domains),
             self.rhs.induced_fixed_value(domains),

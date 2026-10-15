@@ -1,4 +1,4 @@
-use pumpkin_checking::DomainView;
+use pumpkin_checking::DomainContext;
 use pumpkin_core::checkers::ScopeItem;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConstraintDescription;
@@ -15,7 +15,7 @@ pub struct MaximumDescription<ElementVar, Rhs> {
 impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> ConstraintDescription
     for MaximumDescription<ElementVar, Rhs>
 {
-    fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck {
+    fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck {
         let (Some(elements), Some(rhs)) = (
             self.array
                 .iter()

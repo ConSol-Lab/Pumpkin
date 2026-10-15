@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use super::BinaryEqualsChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
-use crate::DomainView;
+use crate::DomainContext;
 use crate::IntExt;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
@@ -14,7 +14,7 @@ where
     Lhs: CheckerVariable<Atomic>,
     Rhs: CheckerVariable<Atomic>,
 {
-    fn check_retention(&self, state: &dyn DomainView<Atomic>) -> RetentionCheck {
+    fn check_retention(&self, state: &dyn DomainContext<Atomic>) -> RetentionCheck {
         // 1. Assert that the bounds are equal
         let lower = self.lhs.induced_lower_bound(state);
         let upper = self.lhs.induced_upper_bound(state);
@@ -49,7 +49,7 @@ where
 }
 
 fn holes_within<Atomic: AtomicConstraint, Var: CheckerVariable<Atomic>>(
-    state: &dyn DomainView<Atomic>,
+    state: &dyn DomainContext<Atomic>,
     variable: &Var,
     lower: IntExt,
     upper: IntExt,

@@ -1,5 +1,5 @@
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::DomainView;
+use pumpkin_checking::DomainContext;
 
 use crate::checkers::ScopeItem;
 use crate::predicates::Predicate;
@@ -18,7 +18,7 @@ pub struct HalfReifiedDescription<Description> {
 impl<Description: ConstraintDescription> ConstraintDescription
     for HalfReifiedDescription<Description>
 {
-    fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck {
+    fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck {
         match self.reification_literal.induced_fixed_value(domains) {
             Some(1) => self.inner.check_solution(domains),
             Some(_) => SolutionCheck::ConstraintSatisfied,

@@ -1,4 +1,4 @@
-use pumpkin_checking::DomainView;
+use pumpkin_checking::DomainContext;
 use pumpkin_core::checkers::ScopeItem;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConstraintDescription;
@@ -15,7 +15,7 @@ pub struct AbsoluteValueDescription<VA, VB> {
 impl<VA: IntegerVariable, VB: IntegerVariable> ConstraintDescription
     for AbsoluteValueDescription<VA, VB>
 {
-    fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck {
+    fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck {
         let (Some(signed), Some(absolute)) = (
             self.signed.induced_fixed_value(domains),
             self.absolute.induced_fixed_value(domains),

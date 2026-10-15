@@ -1,4 +1,4 @@
-use pumpkin_checking::DomainView;
+use pumpkin_checking::DomainContext;
 use pumpkin_core::checkers::ScopeItem;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConstraintDescription;
@@ -15,7 +15,7 @@ pub struct BinaryNotEqualsDescription<AVar, BVar> {
 impl<AVar: IntegerVariable, BVar: IntegerVariable> ConstraintDescription
     for BinaryNotEqualsDescription<AVar, BVar>
 {
-    fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck {
+    fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck {
         let (Some(a), Some(b)) = (
             self.a.induced_fixed_value(domains),
             self.b.induced_fixed_value(domains),

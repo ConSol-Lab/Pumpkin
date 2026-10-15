@@ -1,4 +1,4 @@
-use pumpkin_checking::DomainView;
+use pumpkin_checking::DomainContext;
 use pumpkin_checking::IntExt;
 use pumpkin_core::checkers::ScopeItem;
 use pumpkin_core::predicates::Predicate;
@@ -14,7 +14,7 @@ pub struct LinearLessOrEqualDescription<Var> {
 }
 
 impl<Var: IntegerVariable> ConstraintDescription for LinearLessOrEqualDescription<Var> {
-    fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck {
+    fn check_solution(&self, domains: &dyn DomainContext<Predicate>) -> SolutionCheck {
         let bound = i64::from(self.bound);
         let highest_sum = self
             .terms
