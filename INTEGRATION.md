@@ -54,11 +54,24 @@ The CI command (`cargo test --release --no-fail-fast` with `pumpkin-solver/check
 with `CROC_CHECK` naming `croc_check.exe` of fzn-drcp-check, passes except for two tests that
 also fail on the checkers branch merged with `upstream/main`, without the croc stack:
 
-- `wcnf_test::riskmap`: the solution check of a nogood over unfixed variables (the MaxSAT fix
-  the CI commit mentions is not on the branch).
+- `wcnf_test::riskmap`: the solver reports a solution in which the domain `x44` is not fixed
+  (the MaxSAT fix the CI commit mentions is not on the branch).
 - `process_scaffolds::ttp_n10_k3`: the retention checker of `binary_equals` on scaled views
   (`10 * x9 = x973 + 9`). The processor now compiles the model with the solver's compiler, so
   it posts this propagator; the solver of the checkers branch fails the same way on this model.
+
+After the merge of the two steps on top of the checkers stack, the same command was run on
+Windows without `CROC_CHECK`, so the croc proofs were written but not checked. Besides the two
+tests above, it failed on:
+
+- `proof_with_reified_literals` and `proof_with_equality_unit_nogood_step`, which write to
+  `/tmp` and fail on Windows only.
+- `mzn_constraint_test::table_reif`, which exceeds its 60 seconds on that machine; it does so
+  on this branch before the merge too.
+- Tests of `cnf_test` (`add32`, `prime*`) that exceed their 60 seconds when run in parallel.
+  Run alone they pass, except `prime2209`, which took 53 seconds before the merge and over 60
+  after it, the second time with the processor fully loaded by other work; the instance has no
+  solution, so the merge does not change the code it runs.
 
 `cargo +nightly fmt --check`, `cargo +nightly clippy --all-targets` and `cargo doc --no-deps`
 are clean. The fuzzer campaign of its README finds 50 failure groups, none of a kind that the
