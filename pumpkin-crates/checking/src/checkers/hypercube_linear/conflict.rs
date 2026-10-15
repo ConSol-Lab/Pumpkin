@@ -5,7 +5,7 @@ use crate::AtomicConstraint;
 use crate::CheckerVariable;
 use crate::ConflictCheck;
 use crate::ConflictChecker;
-use crate::DomainView;
+use crate::DomainContext;
 use crate::IntExt;
 use crate::VariableState;
 

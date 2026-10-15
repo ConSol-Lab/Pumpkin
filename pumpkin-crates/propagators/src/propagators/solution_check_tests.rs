@@ -1,8 +1,7 @@
 //! Tests of [`ConstraintDescription::check_solution`] for the descriptions of this crate.
 
-use pumpkin_checking::VariableState;
+use pumpkin_core::checkers::CompleteSolution;
 use pumpkin_core::predicate;
-use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::state::State;
@@ -23,29 +22,29 @@ use super::disjunctive::DisjunctiveDescription;
 use super::element::ElementDescription;
 use super::lexicographic::LexLessOrEqualDescription;
 
-/// Creates a variable for each value, and the domains in which each variable is fixed to its
-/// value.
-fn fixed(values: &[i32]) -> (Vec<DomainId>, VariableState<Predicate>) {
+/// Creates a variable for each value, in a state in which each variable is fixed to its value.
+fn fixed(values: &[i32]) -> (Vec<DomainId>, State) {
     let mut state = State::default();
     let variables = values
         .iter()
         .map(|_| state.new_interval_variable(-100, 100, None))
         .collect::<Vec<_>>();
-    let domains = VariableState::prepare_for_conflict_check(
-        variables
-            .iter()
-            .zip(values)
-            .map(|(&variable, &value)| predicate![variable == value]),
-        None,
-    )
-    .expect("the values are consistent");
+    for (&variable, &value) in variables.iter().zip(values) {
+        let _ = state
+            .post(predicate![variable == value])
+            .expect("the value is in the domain");
+    }
 
-    (variables, domains)
+    (variables, state)
+}
+
+fn solution(state: &State) -> CompleteSolution<'_> {
+    state.complete_solution().expect("every variable is fixed")
 }
 
 #[test]
 fn division_truncates_towards_zero() {
-    let (variables, domains) = fixed(&[-7, 2, -3]);
+    let (variables, state) = fixed(&[-7, 2, -3]);
     let description = DivisionDescription {
         numerator: variables[0],
         denominator: variables[1],
@@ -53,14 +52,14 @@ fn division_truncates_towards_zero() {
     };
 
     assert_eq!(
-        description.check_solution(&domains),
+        description.check_solution(&solution(&state)),
         SolutionCheck::ConstraintSatisfied
     );
 }
 
 #[test]
 fn division_by_zero_is_a_violation() {
-    let (variables, domains) = fixed(&[0, 0, 0]);
+    let (variables, state) = fixed(&[0, 0, 0]);
     let description = DivisionDescription {
         numerator: variables[0],
         denominator: variables[1],
@@ -68,14 +67,14 @@ fn division_by_zero_is_a_violation() {
     };
 
     assert_eq!(
-        description.check_solution(&domains),
+        description.check_solution(&solution(&state)),
         SolutionCheck::ConstraintViolated
     );
 }
 
 #[test]
 fn element_with_an_index_outside_the_array_is_a_violation() {
-    let (variables, domains) = fixed(&[1, 2, 2, 2]);
+    let (variables, state) = fixed(&[1, 2, 2, 2]);
     let description = ElementDescription {
         array: Box::from([variables[0], variables[1]]),
         index: variables[2],
@@ -83,14 +82,14 @@ fn element_with_an_index_outside_the_array_is_a_violation() {
     };
 
     assert_eq!(
-        description.check_solution(&domains),
+        description.check_solution(&solution(&state)),
         SolutionCheck::ConstraintViolated
     );
 }
 
 #[test]
 fn element_selects_by_an_index_starting_at_zero() {
-    let (variables, domains) = fixed(&[5, 7, 1, 7]);
+    let (variables, state) = fixed(&[5, 7, 1, 7]);
     let description = ElementDescription {
         array: Box::from([variables[0], variables[1]]),
         index: variables[2],
@@ -98,14 +97,14 @@ fn element_selects_by_an_index_starting_at_zero() {
     };
 
     assert_eq!(
-        description.check_solution(&domains),
+        description.check_solution(&solution(&state)),
         SolutionCheck::ConstraintSatisfied
     );
 }
 
 #[test]
 fn cumulative_is_violated_by_an_overload_at_a_start_time() {
-    let (variables, domains) = fixed(&[0, 2]);
+    let (variables, state) = fixed(&[0, 2]);
     let description = CumulativeDescription {
         tasks: Box::from([
             ArgTask {
@@ -123,14 +122,14 @@ fn cumulative_is_violated_by_an_overload_at_a_start_time() {
     };
 
     assert_eq!(
-        description.check_solution(&domains),
+        description.check_solution(&solution(&state)),
         SolutionCheck::ConstraintViolated
     );
 }
 
 #[test]
 fn cumulative_allows_a_task_to_start_when_another_ends() {
-    let (variables, domains) = fixed(&[0, 3]);
+    let (variables, state) = fixed(&[0, 3]);
     let description = CumulativeDescription {
         tasks: Box::from([
             ArgTask {
@@ -148,14 +147,14 @@ fn cumulative_allows_a_task_to_start_when_another_ends() {
     };
 
     assert_eq!(
-        description.check_solution(&domains),
+        description.check_solution(&solution(&state)),
         SolutionCheck::ConstraintSatisfied
     );
 }
 
 #[test]
 fn disjunctive_is_violated_by_overlapping_tasks() {
-    let (variables, domains) = fixed(&[0, 2]);
+    let (variables, state) = fixed(&[0, 2]);
     let description = DisjunctiveDescription {
         tasks: vec![
             ArgDisjunctiveTask {
@@ -170,14 +169,14 @@ fn disjunctive_is_violated_by_overlapping_tasks() {
     };
 
     assert_eq!(
-        description.check_solution(&domains),
+        description.check_solution(&solution(&state)),
         SolutionCheck::ConstraintViolated
     );
 }
 
 #[test]
 fn disjunctive_allows_a_task_to_start_when_another_ends() {
-    let (variables, domains) = fixed(&[0, 3]);
+    let (variables, state) = fixed(&[0, 3]);
     let description = DisjunctiveDescription {
         tasks: vec![
             ArgDisjunctiveTask {
@@ -192,73 +191,47 @@ fn disjunctive_allows_a_task_to_start_when_another_ends() {
     };
 
     assert_eq!(
-        description.check_solution(&domains),
+        description.check_solution(&solution(&state)),
         SolutionCheck::ConstraintSatisfied
     );
 }
 
 #[test]
-fn maximum_has_to_equal_an_element() {
-    let (variables, domains) = fixed(&[1, 3, 2]);
-    let description = MaximumDescription {
+fn maximum_has_to_equal_the_largest_element() {
+    let (variables, state) = fixed(&[1, 3, 2, 3]);
+    let maximum = |rhs| MaximumDescription {
         array: Box::from([variables[0], variables[1]]),
-        rhs: variables[2],
+        rhs,
     };
 
     assert_eq!(
-        description.check_solution(&domains),
+        maximum(variables[2]).check_solution(&solution(&state)),
         SolutionCheck::ConstraintViolated
+    );
+    assert_eq!(
+        maximum(variables[3]).check_solution(&solution(&state)),
+        SolutionCheck::ConstraintSatisfied
     );
 }
 
 #[test]
-fn a_disequality_over_an_unfixed_variable_is_unknown() {
-    let mut state = State::default();
-    let fixed_variable = state.new_interval_variable(-100, 100, None);
-    let unfixed_variable = state.new_interval_variable(-100, 100, None);
-    let domains =
-        VariableState::prepare_for_conflict_check([predicate![fixed_variable == 1]], None)
-            .expect("the predicate is consistent");
-    let description = LinearNotEqualDescription {
-        terms: [fixed_variable, unfixed_variable].into(),
-        rhs: 0,
-    };
-
-    assert_eq!(description.check_solution(&domains), SolutionCheck::Unknown);
-}
-
-#[test]
-fn a_linear_inequality_is_decided_by_the_bounds() {
-    let mut state = State::default();
-    let x = state.new_interval_variable(-100, 100, None);
-    let y = state.new_interval_variable(-100, 100, None);
-    let domains = VariableState::prepare_for_conflict_check(
-        [
-            predicate![x >= 0],
-            predicate![x <= 3],
-            predicate![y >= 1],
-            predicate![y <= 2],
-        ],
-        None,
-    )
-    .expect("the predicates are consistent");
-
+fn a_linear_inequality_compares_the_sum_with_the_bound() {
+    let (variables, state) = fixed(&[3, 2]);
     let check = |bound| {
         LinearLessOrEqualDescription {
-            terms: Box::from([x, y]),
+            terms: Box::from([variables[0], variables[1]]),
             bound,
         }
-        .check_solution(&domains)
+        .check_solution(&solution(&state))
     };
 
     assert_eq!(check(5), SolutionCheck::ConstraintSatisfied);
-    assert_eq!(check(0), SolutionCheck::ConstraintViolated);
-    assert_eq!(check(3), SolutionCheck::Unknown);
+    assert_eq!(check(4), SolutionCheck::ConstraintViolated);
 }
 
 #[test]
 fn absolute_value_compares_the_magnitude() {
-    let (variables, domains) = fixed(&[-4, 4, 3]);
+    let (variables, state) = fixed(&[-4, 4, 3]);
 
     let satisfied = AbsoluteValueDescription {
         signed: variables[0],
@@ -270,25 +243,25 @@ fn absolute_value_compares_the_magnitude() {
     };
 
     assert_eq!(
-        satisfied.check_solution(&domains),
+        satisfied.check_solution(&solution(&state)),
         SolutionCheck::ConstraintSatisfied
     );
     assert_eq!(
-        violated.check_solution(&domains),
+        violated.check_solution(&solution(&state)),
         SolutionCheck::ConstraintViolated
     );
 }
 
 #[test]
 fn binary_equality_and_disequality_compare_the_values() {
-    let (variables, domains) = fixed(&[2, 2, 3]);
+    let (variables, state) = fixed(&[2, 2, 3]);
 
     assert_eq!(
         BinaryEqualsDescription {
             a: variables[0],
             b: variables[1],
         }
-        .check_solution(&domains),
+        .check_solution(&solution(&state)),
         SolutionCheck::ConstraintSatisfied
     );
     assert_eq!(
@@ -296,7 +269,7 @@ fn binary_equality_and_disequality_compare_the_values() {
             a: variables[0],
             b: variables[2],
         }
-        .check_solution(&domains),
+        .check_solution(&solution(&state)),
         SolutionCheck::ConstraintViolated
     );
     assert_eq!(
@@ -304,7 +277,7 @@ fn binary_equality_and_disequality_compare_the_values() {
             a: variables[0],
             b: variables[2],
         }
-        .check_solution(&domains),
+        .check_solution(&solution(&state)),
         SolutionCheck::ConstraintSatisfied
     );
     assert_eq!(
@@ -312,14 +285,14 @@ fn binary_equality_and_disequality_compare_the_values() {
             a: variables[0],
             b: variables[1],
         }
-        .check_solution(&domains),
+        .check_solution(&solution(&state)),
         SolutionCheck::ConstraintViolated
     );
 }
 
 #[test]
 fn multiplication_compares_the_product() {
-    let (variables, domains) = fixed(&[-3, 4, -12, 12]);
+    let (variables, state) = fixed(&[-3, 4, -12, 12]);
 
     let satisfied = IntegerMultiplicationDescription {
         a: variables[0],
@@ -333,24 +306,24 @@ fn multiplication_compares_the_product() {
     };
 
     assert_eq!(
-        satisfied.check_solution(&domains),
+        satisfied.check_solution(&solution(&state)),
         SolutionCheck::ConstraintSatisfied
     );
     assert_eq!(
-        violated.check_solution(&domains),
+        violated.check_solution(&solution(&state)),
         SolutionCheck::ConstraintViolated
     );
 }
 
 #[test]
 fn a_linear_disequality_over_fixed_variables_is_decided() {
-    let (variables, domains) = fixed(&[1, 2]);
+    let (variables, state) = fixed(&[1, 2]);
     let check = |rhs| {
         LinearNotEqualDescription {
             terms: [variables[0], variables[1]].into(),
             rhs,
         }
-        .check_solution(&domains)
+        .check_solution(&solution(&state))
     };
 
     assert_eq!(check(4), SolutionCheck::ConstraintSatisfied);

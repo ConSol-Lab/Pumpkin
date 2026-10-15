@@ -1,5 +1,8 @@
 #[cfg(doc)]
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
+// Lets the paths that `pumpkin-core-derive` generates, `::pumpkin_core::...`, resolve here too.
+extern crate self as pumpkin_core;
+
 pub(crate) mod basic_types;
 pub mod containers;
 pub(crate) mod engine;

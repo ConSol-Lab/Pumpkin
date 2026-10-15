@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use enumset::EnumSet;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::DomainView;
+use pumpkin_checking::DomainContext;
 use pumpkin_checking::IntExt;
 
 use super::TransformableVariable;
@@ -123,7 +123,7 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
 
     fn induced_lower_bound<View>(&self, variable_state: &View) -> IntExt
     where
-        View: DomainView<Predicate> + ?Sized,
+        View: DomainContext<Predicate> + ?Sized,
     {
         if self.scale.is_positive() {
             match self.inner.induced_lower_bound(variable_state) {
@@ -141,7 +141,7 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
 
     fn induced_upper_bound<View>(&self, variable_state: &View) -> IntExt
     where
-        View: DomainView<Predicate> + ?Sized,
+        View: DomainContext<Predicate> + ?Sized,
     {
         if self.scale.is_positive() {
             match self.inner.induced_upper_bound(variable_state) {
@@ -159,7 +159,7 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
 
     fn induced_fixed_value<View>(&self, variable_state: &View) -> Option<i32>
     where
-        View: DomainView<Predicate> + ?Sized,
+        View: DomainContext<Predicate> + ?Sized,
     {
         self.inner
             .induced_fixed_value(variable_state)
@@ -168,7 +168,7 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
 
     fn induced_domain_contains<View>(&self, variable_state: &View, value: i32) -> bool
     where
-        View: DomainView<Predicate> + ?Sized,
+        View: DomainContext<Predicate> + ?Sized,
     {
         let translated_value = value - self.offset;
 
@@ -190,7 +190,7 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
     ) -> impl Iterator<Item = i32> + 'state
     where
         'this: 'state,
-        View: DomainView<Predicate> + ?Sized,
+        View: DomainContext<Predicate> + ?Sized,
     {
         if self.scale == 1 || self.scale == -1 {
             return self
@@ -222,7 +222,7 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
     ) -> Option<impl Iterator<Item = i32> + 'state>
     where
         'this: 'state,
-        View: DomainView<Predicate> + ?Sized,
+        View: DomainContext<Predicate> + ?Sized,
     {
         self.inner
             .iter_induced_domain(variable_state)

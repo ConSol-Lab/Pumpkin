@@ -1516,10 +1516,12 @@ mod tests {
     use drcp_format::reader::ReadStep;
     use pumpkin_checking::ConflictCheck;
     use pumpkin_checking::ConflictChecker;
-    use pumpkin_checking::DomainView;
+    use pumpkin_checking::DomainContext;
     use pumpkin_checking::RetentionCheck;
     use pumpkin_checking::RetentionChecker;
     use pumpkin_checking::VariableState;
+    use pumpkin_core::checkers::CompleteSolution;
+    use pumpkin_core::checkers::ScopeItem;
     use pumpkin_core::propagation::ConflictRule;
     use pumpkin_core::propagation::ConstraintDescription;
     use pumpkin_core::propagation::EventsToRegister;
@@ -1788,23 +1790,19 @@ mod tests {
         }
     }
 
-    pumpkin_core::scoped_struct! {
     /// The constraint of [`AlwaysConflictPropagator`]: `watched` and `other` are not both true.
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, ScopeItem)]
     struct AlwaysConflictDescription {
         watched: Predicate,
         other: Predicate,
     }
-    }
 
     impl ConstraintDescription for AlwaysConflictDescription {
-        fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck {
-            if domains.is_true(&!self.watched) || domains.is_true(&!self.other) {
-                SolutionCheck::ConstraintSatisfied
-            } else if domains.is_true(&self.watched) && domains.is_true(&self.other) {
+        fn check_solution(&self, solution: &CompleteSolution<'_>) -> SolutionCheck {
+            if solution.predicate_holds(self.watched) && solution.predicate_holds(self.other) {
                 SolutionCheck::ConstraintViolated
             } else {
-                SolutionCheck::Unknown
+                SolutionCheck::ConstraintSatisfied
             }
         }
     }
@@ -1841,7 +1839,7 @@ mod tests {
     struct AcceptEverything;
 
     impl RetentionChecker<Predicate> for AcceptEverything {
-        fn check_retention(&self, _: &dyn DomainView<Predicate>) -> RetentionCheck {
+        fn check_retention(&self, _: &dyn DomainContext<Predicate>) -> RetentionCheck {
             RetentionCheck::NothingToPropagate
         }
     }

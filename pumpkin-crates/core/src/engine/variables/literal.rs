@@ -2,7 +2,7 @@ use std::ops::Not;
 
 use enumset::EnumSet;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::DomainView;
+use pumpkin_checking::DomainContext;
 use pumpkin_checking::IntExt;
 
 use super::DomainId;
@@ -105,28 +105,28 @@ impl CheckerVariable<Predicate> for Literal {
 
     fn induced_lower_bound<View>(&self, domains: &View) -> IntExt
     where
-        View: DomainView<Predicate> + ?Sized,
+        View: DomainContext<Predicate> + ?Sized,
     {
         self.integer_variable.induced_lower_bound(domains)
     }
 
     fn induced_upper_bound<View>(&self, domains: &View) -> IntExt
     where
-        View: DomainView<Predicate> + ?Sized,
+        View: DomainContext<Predicate> + ?Sized,
     {
         self.integer_variable.induced_upper_bound(domains)
     }
 
     fn induced_fixed_value<View>(&self, domains: &View) -> Option<i32>
     where
-        View: DomainView<Predicate> + ?Sized,
+        View: DomainContext<Predicate> + ?Sized,
     {
         self.integer_variable.induced_fixed_value(domains)
     }
 
     fn induced_domain_contains<View>(&self, domains: &View, value: i32) -> bool
     where
-        View: DomainView<Predicate> + ?Sized,
+        View: DomainContext<Predicate> + ?Sized,
     {
         self.integer_variable
             .induced_domain_contains(domains, value)
@@ -138,7 +138,7 @@ impl CheckerVariable<Predicate> for Literal {
     ) -> impl Iterator<Item = i32> + 'state
     where
         'this: 'state,
-        View: DomainView<Predicate> + ?Sized,
+        View: DomainContext<Predicate> + ?Sized,
     {
         self.integer_variable.induced_holes(domains)
     }
@@ -149,7 +149,7 @@ impl CheckerVariable<Predicate> for Literal {
     ) -> Option<impl Iterator<Item = i32> + 'state>
     where
         'this: 'state,
-        View: DomainView<Predicate> + ?Sized,
+        View: DomainContext<Predicate> + ?Sized,
     {
         self.integer_variable.iter_induced_domain(domains)
     }

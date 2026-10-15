@@ -52,6 +52,7 @@ changelog_update = false
 name = "pumpkin-solver"
 changelog_include = [
     "pumpkin-core",    
+    "pumpkin-core-derive",
     "pumpkin-checking", 
     "pumpkin-conflict-resolvers", 
     "pumpkin-propagators", 
@@ -61,6 +62,12 @@ changelog_include = [
 
 [[package]]
 name = "pumpkin-core"
+git_release_enable = false
+git_tag_enable = false
+changelog_update = false
+
+[[package]]
+name = "pumpkin-core-derive"
 git_release_enable = false
 git_tag_enable = false
 changelog_update = false

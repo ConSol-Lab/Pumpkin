@@ -1,16 +1,15 @@
 use std::fmt::Debug;
 
+use pumpkin_core::checkers::ScopeItem;
 use pumpkin_core::propagation::LocalId;
 
-pumpkin_core::scoped_struct! {
 /// Defines the input of the Disjunctive constraint.
 ///
 /// Each task has a variable starting time and a constant processing time.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, ScopeItem)]
 pub struct ArgDisjunctiveTask<Var> {
     pub start_time: Var,
     pub processing_time: i32,
-}
 }
 
 #[derive(Clone, Debug)]

@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::rc::Rc;
 
+use pumpkin_core::checkers::ScopeItem;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -39,9 +40,8 @@ impl<Var: IntegerVariable + 'static> PartialEq for Task<Var> {
 
 impl<Var: IntegerVariable + 'static> Eq for Task<Var> {}
 
-pumpkin_core::scoped_struct! {
 /// The task which is passed as argument
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ScopeItem)]
 pub struct ArgTask<Var> {
     /// The [`IntegerVariable`] representing the start time of a task
     pub start_time: Var,
@@ -50,5 +50,4 @@ pub struct ArgTask<Var> {
     pub processing_time: i32,
     /// How much of the resource the given task uses during its non-preemptive execution
     pub resource_usage: i32,
-}
 }

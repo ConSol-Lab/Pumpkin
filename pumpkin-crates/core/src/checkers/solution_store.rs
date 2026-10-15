@@ -2,11 +2,9 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::rc::Rc;
 
-use pumpkin_checking::DomainView;
-
+use crate::checkers::CompleteSolution;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
-use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
 use crate::propagation::ConstraintDescription;
 use crate::propagation::PropagatorId;
@@ -34,8 +32,6 @@ pub struct SolutionFailure {
     /// The propagator that propagates the constraint.
     pub propagator: PropagatorId,
     pub inference_code: InferenceCode,
-    /// Either [`SolutionCheck::ConstraintViolated`] or [`SolutionCheck::Unknown`].
-    pub outcome: SolutionCheck,
 }
 
 impl SolutionCheckerStore {
@@ -60,17 +56,15 @@ impl SolutionCheckerStore {
         self.entries[constraint] = None;
     }
 
-    /// Check that `domains` satisfy every constraint, stopping at the first that they do not:
-    /// either violate it, or leave it depending on variables that are not fixed.
-    pub fn check(&self, domains: &dyn DomainView<Predicate>) -> Result<(), SolutionFailure> {
+    /// Check that `solution` satisfies every constraint, stopping at the first that it violates.
+    pub fn check(&self, solution: &CompleteSolution<'_>) -> Result<(), SolutionFailure> {
         for entry in self.entries.iter().flatten() {
-            match entry.constraint_description.check_solution(domains) {
+            match entry.constraint_description.check_solution(solution) {
                 SolutionCheck::ConstraintSatisfied => {}
-                outcome @ (SolutionCheck::ConstraintViolated | SolutionCheck::Unknown) => {
+                SolutionCheck::ConstraintViolated => {
                     return Err(SolutionFailure {
                         propagator: entry.propagator,
                         inference_code: entry.inference_code,
-                        outcome,
                     });
                 }
             }
@@ -99,5 +93,49 @@ impl StorageKey for SolutionCheckerId {
 
     fn create_from_index(index: usize) -> Self {
         SolutionCheckerId(index as u32)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::predicate;
+    use crate::proof::ConstraintTag;
+    use crate::propagators::nogoods::NogoodDescription;
+    use crate::state::State;
+
+    #[test]
+    fn the_first_violated_constraint_is_reported() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, None);
+        let _ = state
+            .post(predicate![x == 3])
+            .expect("the value is in the domain");
+        let solution = state.complete_solution().expect("every variable is fixed");
+
+        let inference_code = InferenceCode::new(
+            ConstraintTag::create_from_index(0),
+            crate::proof::InferenceRules::default().id("test_rule"),
+        );
+        let violated_by = PropagatorId::create_from_index(1);
+        let mut store = SolutionCheckerStore::default();
+        let _ = store.add(
+            Rc::new(NogoodDescription {
+                nogood: Box::from([predicate![x == 4]]),
+            }),
+            PropagatorId::create_from_index(0),
+            inference_code,
+        );
+        assert!(store.check(&solution).is_ok());
+
+        let _ = store.add(
+            Rc::new(NogoodDescription {
+                nogood: Box::from([predicate![x == 3]]),
+            }),
+            violated_by,
+            inference_code,
+        );
+        let failure = store.check(&solution).expect_err("x == 3 is excluded");
+        assert_eq!(failure.propagator, violated_by);
     }
 }

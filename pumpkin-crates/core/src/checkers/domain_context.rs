@@ -1,4 +1,4 @@
-use pumpkin_checking::DomainView;
+use pumpkin_checking::DomainContext;
 use pumpkin_checking::IntExt;
 
 use crate::engine::Assignments;
@@ -6,7 +6,7 @@ use crate::predicates::Predicate;
 use crate::variables::DomainId;
 
 /// The retention checkers read the domains of the solver directly.
-impl DomainView<Predicate> for Assignments {
+impl DomainContext<Predicate> for Assignments {
     fn lower_bound(&self, domain: &DomainId) -> IntExt {
         IntExt::Int(self.get_lower_bound(*domain))
     }

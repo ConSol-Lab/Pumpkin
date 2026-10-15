@@ -1,7 +1,7 @@
 use super::AbsoluteValueChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
-use crate::DomainView;
+use crate::DomainContext;
 use crate::IntExt;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
@@ -12,7 +12,7 @@ where
     VB: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
-    fn check_retention(&self, state: &dyn DomainView<Atomic>) -> RetentionCheck {
+    fn check_retention(&self, state: &dyn DomainContext<Atomic>) -> RetentionCheck {
         // The bounds are widened to i64 so that negating i32::MIN does not overflow.
         let signed_lower = IntExt::<i64>::from(self.signed.induced_lower_bound(state));
         let signed_upper = IntExt::<i64>::from(self.signed.induced_upper_bound(state));
