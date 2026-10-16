@@ -5,6 +5,7 @@ use pumpkin_core::Solver;
 use pumpkin_core::branching::Brancher;
 use pumpkin_core::branching::BrancherEvent;
 use pumpkin_core::branching::SelectionContext;
+use pumpkin_core::containers::HashSet;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::results::SolutionReference;
 #[cfg(doc)]
@@ -39,6 +40,24 @@ impl<Strategy: AlternatingStrategy, OtherBrancher: Brancher>
 {
     pub fn new(solver: &Solver, other_brancher: OtherBrancher, strategy: Strategy) -> Self {
         Self::new_from_domains(solver.get_domains(), other_brancher, strategy)
+    }
+
+    /// Creates a new instance whose [`DefaultBrancher`] never makes a decision over one of the
+    /// `forbidden_variables` (see [`DefaultBrancher::default_over_all_variables_except`]).
+    pub fn new_with_forbidden_variables(
+        solver: &Solver,
+        other_brancher: OtherBrancher,
+        strategy: Strategy,
+        forbidden_variables: HashSet<DomainId>,
+    ) -> Self {
+        Self {
+            other_brancher,
+            default_brancher: DefaultBrancher::default_over_all_variables_except(
+                solver,
+                forbidden_variables,
+            ),
+            strategy,
+        }
     }
 
     /// Creates a new instance considering all of the provided `domains`.

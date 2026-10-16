@@ -4,6 +4,7 @@ use itertools::Itertools;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::containers::HashMap;
+use pumpkin_core::containers::HashSet;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateIdGenerator;
 use pumpkin_core::predicates::PredicateType;
@@ -68,7 +69,49 @@ impl AnalysisMode {
     }
 
     /// Returns whether to continue resolving.
+    ///
+    /// Resolving also continues while a predicate from the current decision level is over one of
+    /// the `forbidden_variables`; this terminates since decisions are never over them.
     pub(crate) fn should_continue_resolving(
+        &self,
+        predicate_id_generator: &PredicateIdGenerator,
+        working_nogood: &WorkingNogood,
+        forbidden_variables: &HashSet<DomainId>,
+    ) -> bool {
+        self.should_continue_resolving_for_mode(predicate_id_generator, working_nogood)
+            || self.current_checkpoint_contains_forbidden_variable(
+                predicate_id_generator,
+                working_nogood,
+                forbidden_variables,
+            )
+    }
+
+    /// Returns whether a predicate from the current decision level is over one of the
+    /// `forbidden_variables`.
+    fn current_checkpoint_contains_forbidden_variable(
+        &self,
+        predicate_id_generator: &PredicateIdGenerator,
+        working_nogood: &WorkingNogood,
+        forbidden_variables: &HashSet<DomainId>,
+    ) -> bool {
+        // All-decision learning resolves every non-decision predicate.
+        if forbidden_variables.is_empty() || matches!(self, AnalysisMode::AllDecision) {
+            return false;
+        }
+
+        working_nogood
+            .predicate_ids_current_checkpoint()
+            .any(|predicate_id| {
+                forbidden_variables.contains(
+                    &predicate_id_generator
+                        .get_predicate(predicate_id)
+                        .get_domain(),
+                )
+            })
+    }
+
+    /// Returns whether to continue resolving, without taking forbidden variables into account.
+    pub(crate) fn should_continue_resolving_for_mode(
         &self,
         predicate_id_generator: &PredicateIdGenerator,
         working_nogood: &WorkingNogood,

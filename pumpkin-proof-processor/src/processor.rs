@@ -1,6 +1,5 @@
 //! The proof processing facilities to turn a proof scaffold into a full DRCP proof.
 
-use std::collections::HashMap;
 use std::io::BufRead;
 use std::io::Write;
 use std::num::NonZero;
@@ -19,6 +18,7 @@ use drcp_format::writer::ProofWriter;
 use log::debug;
 use log::info;
 use log::trace;
+use pumpkin_core::containers::HashMap;
 use pumpkin_core::containers::HashSet;
 use pumpkin_core::containers::KeyedVec;
 use pumpkin_core::predicate;
@@ -33,6 +33,7 @@ use pumpkin_core::state::CurrentNogood;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::state::PropagatorHandle;
 use pumpkin_core::state::State;
+use pumpkin_core::variables::DomainId;
 
 use crate::deduction_propagator::DeductionPropagationMode;
 use crate::deduction_propagator::DeductionPropagator;
@@ -40,6 +41,8 @@ use crate::deduction_propagator::DeductionPropagatorConstructor;
 use crate::deduction_propagator::MARKED_PROPAGATION_PRIORITY;
 use crate::deduction_propagator::UNMARKED_CONFLICT_PRIORITY;
 use crate::deduction_propagator::UNMARKED_UNIT_PROPAGATION_PRIORITY;
+use crate::explanation_graph::EmptyDomainConflict;
+use crate::explanation_graph::ExplanationGraph;
 use crate::predicate_heap::PredicateHeap;
 use crate::variables::Variables;
 
@@ -57,7 +60,20 @@ pub(crate) struct ProofProcessor {
     /// This is a re-usable heap, but its contents is specific to the processing of an
     /// individual conflict.
     to_process_heap: PredicateHeap,
+
+    /// Predicates over these variables are eliminated from the inferences of every proof stage
+    /// (see [`ProofProcessor::eliminate_auxiliary_variables`]).
+    auxiliary_variables: HashSet<DomainId>,
+    /// The predicate-level form of the inferences of the proof stage that is being explained.
+    explanation_graph: ExplanationGraph,
+    /// The IDs of the linking nogoods, by their sorted predicates.
+    linking_nogood_ids: HashMap<Vec<Predicate>, ConstraintId>,
+    /// The proof stages that derive the linking nogoods, by their IDs.
+    linking_stages: HashMap<ConstraintId, ProofStage>,
 }
+
+/// An inference as it is written to the output proof.
+type OutputInference = Inference<String, i32, Arc<str>>;
 
 /// A single proof stage for the proof.
 #[derive(Debug)]
@@ -69,6 +85,9 @@ struct ProofStage {
     /// The atomic constraints to assume `true` such that a conflict is derived throught the
     /// inferences.
     premises: Vec<IntAtomic<String, i32>>,
+    /// The linking nogoods that the inferences cite; each is written before the first proof
+    /// stage that cites it.
+    linking_nogoods: Vec<ConstraintId>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -93,6 +112,9 @@ pub(crate) enum ProofProcessError {
 
     #[error("conclusion is not supported by any deduction")]
     InvalidConclusion,
+
+    #[error("the deduction {0} contains the auxiliary variable '{1}'")]
+    AuxiliaryVariableInDeduction(ConstraintId, String),
 }
 
 /// A deduction that was posted to the solver.
@@ -143,7 +165,17 @@ impl ProofProcessor {
             variables,
             output_proof: vec![],
             to_process_heap: PredicateHeap::default(),
+            auxiliary_variables: HashSet::default(),
+            explanation_graph: ExplanationGraph::default(),
+            linking_nogood_ids: HashMap::default(),
+            linking_stages: HashMap::default(),
         }
+    }
+
+    /// Sets the variables to eliminate from the inferences of every proof stage. The deductions in
+    /// the scaffold must not contain them.
+    pub(crate) fn set_auxiliary_variables(&mut self, auxiliary_variables: HashSet<DomainId>) {
+        self.auxiliary_variables = auxiliary_variables;
     }
 
     /// Process the given proof and write the result to the proof writer.
@@ -210,15 +242,11 @@ impl ProofProcessor {
             };
 
             let inferences = self.explain_current_conflict(&mut nogood_stack, conflict);
-            num_inferences += inferences.len();
-            self.output_proof.push(ProofStage {
-                inferences,
-                constraint_id: tag.into(),
-                premises: convert_predicates_to_proof_atomic(
-                    &self.variables,
-                    &posted_deduction.predicates,
-                ),
-            });
+            let premises =
+                convert_predicates_to_proof_atomic(&self.variables, &posted_deduction.predicates);
+            let stage = self.create_proof_stage(tag.into(), premises, inferences);
+            num_inferences += stage.inferences.len();
+            self.output_proof.push(stage);
         }
 
         info!(
@@ -227,21 +255,24 @@ impl ProofProcessor {
             num_inferences,
         );
 
+        if !self.auxiliary_variables.is_empty() {
+            info!(
+                "Eliminated auxiliary variables with {} linking nogoods",
+                self.linking_stages.len()
+            );
+        }
+
         // Finally, we write the output proof to the file. Since the proof stages are in
         // reverse order, we iterate from the end to the beginning.
-        for stage in self.output_proof.drain(..).rev() {
-            let mut sequence = Vec::with_capacity(stage.inferences.len());
-
-            for inference in stage.inferences.into_iter() {
-                sequence.push(inference.constraint_id);
-                proof_writer.log_inference(inference)?;
+        for stage in std::mem::take(&mut self.output_proof).into_iter().rev() {
+            for linking_nogood_id in stage.linking_nogoods.iter() {
+                // A linking nogood that was written before is no longer in the map.
+                if let Some(linking_stage) = self.linking_stages.remove(linking_nogood_id) {
+                    write_proof_stage(&mut proof_writer, linking_stage)?;
+                }
             }
 
-            proof_writer.log_deduction(Deduction {
-                constraint_id: stage.constraint_id,
-                premises: stage.premises,
-                sequence,
-            })?;
+            write_proof_stage(&mut proof_writer, stage)?;
         }
 
         let conclusion = match conclusion {
@@ -286,11 +317,8 @@ impl ProofProcessor {
             let inferences = self.explain_current_conflict(&mut nogood_stack, conflict);
 
             // Log the empty clause to the proof.
-            self.output_proof.push(ProofStage {
-                inferences,
-                constraint_id: empty_nogood_tag.into(),
-                premises: vec![],
-            });
+            let stage = self.create_proof_stage(empty_nogood_tag.into(), vec![], inferences);
+            self.output_proof.push(stage);
 
             return Ok((Conclusion::Unsat, nogood_stack));
         }
@@ -343,6 +371,16 @@ impl ProofProcessor {
                     .map(|premise| convert_proof_atomic_to_predicate(&self.variables, premise))
                     .collect::<Result<Vec<_>, ProofProcessError>>()?,
             );
+
+            if let Some(auxiliary_predicate) = nogood
+                .iter()
+                .find(|predicate| self.is_auxiliary(**predicate))
+            {
+                return Err(ProofProcessError::AuxiliaryVariableInDeduction(
+                    deduction.constraint_id,
+                    convert_predicate_to_proof_atomic(&self.variables, *auxiliary_predicate).name,
+                ));
+            }
 
             debug!("Adding deduction {}", deduction.constraint_id);
             trace!("    {nogood:?}");
@@ -403,14 +441,12 @@ impl ProofProcessor {
             let inferences = self.explain_predicates(&mut nogood_stack, vec![]);
             let deduction_id = self.state.new_constraint_tag();
 
-            self.output_proof.push(ProofStage {
-                inferences,
-                constraint_id: deduction_id.into(),
-                premises: vec![convert_predicate_to_proof_atomic(
-                    &self.variables,
-                    !concluded_predicate,
-                )],
-            });
+            let premises = vec![convert_predicate_to_proof_atomic(
+                &self.variables,
+                !concluded_predicate,
+            )];
+            let stage = self.create_proof_stage(deduction_id.into(), premises, inferences);
+            self.output_proof.push(stage);
 
             return Ok((Conclusion::DualBound(bound), nogood_stack));
         }
@@ -444,14 +480,12 @@ impl ProofProcessor {
         let inferences = self.explain_predicates(&mut nogood_stack, vec![]);
         let deduction_id = self.state.new_constraint_tag();
 
-        self.output_proof.push(ProofStage {
-            inferences,
-            constraint_id: deduction_id.into(),
-            premises: vec![convert_predicate_to_proof_atomic(
-                &self.variables,
-                !concluded_predicate,
-            )],
-        });
+        let premises = vec![convert_predicate_to_proof_atomic(
+            &self.variables,
+            !concluded_predicate,
+        )];
+        let stage = self.create_proof_stage(deduction_id.into(), premises, inferences);
+        self.output_proof.push(stage);
 
         Ok((Conclusion::DualBound(bound), nogood_stack))
     }
@@ -476,11 +510,9 @@ impl ProofProcessor {
         let inferences = self.explain_current_conflict(&mut nogood_stack, conflict);
 
         // Log the empty clause to the proof.
-        self.output_proof.push(ProofStage {
-            inferences,
-            constraint_id: self.state.new_constraint_tag().into(),
-            premises: vec![],
-        });
+        let empty_nogood_id = self.state.new_constraint_tag().into();
+        let stage = self.create_proof_stage(empty_nogood_id, vec![], inferences);
+        self.output_proof.push(stage);
 
         Ok((Conclusion::Unsat, nogood_stack))
     }
@@ -509,8 +541,11 @@ impl ProofProcessor {
                 let generated_by = inference_code.tag();
                 let label = inference_code.label();
 
+                let constraint_id = self.state.new_constraint_tag().into();
+                self.explanation_graph
+                    .add_inference(constraint_id, &conjunction, None);
                 inferences.push(Some(Inference {
-                    constraint_id: self.state.new_constraint_tag().into(),
+                    constraint_id,
                     premises: convert_predicates_to_proof_atomic(&self.variables, &conjunction),
                     consequent: None,
                     generated_by: Some(generated_by.into()),
@@ -529,12 +564,20 @@ impl ProofProcessor {
                     CurrentNogood::empty(),
                 );
 
+                let mut trigger_inference = None;
                 if let Some(inference_code) = maybe_trigger_inference {
                     let generated_by = inference_code.tag();
                     let label = inference_code.label();
 
+                    let constraint_id = self.state.new_constraint_tag().into();
+                    self.explanation_graph.add_inference(
+                        constraint_id,
+                        &predicates_to_explain,
+                        Some(empty_domain_confict.trigger_predicate),
+                    );
+                    trigger_inference = Some(constraint_id);
                     inferences.push(Some(Inference {
-                        constraint_id: self.state.new_constraint_tag().into(),
+                        constraint_id,
                         premises: convert_predicates_to_proof_atomic(
                             &self.variables,
                             &predicates_to_explain,
@@ -549,6 +592,13 @@ impl ProofProcessor {
 
                     self.mark_stack_entry(nogood_stack, inference_code);
                 }
+
+                self.explanation_graph
+                    .set_empty_domain_conflict(EmptyDomainConflict {
+                        trigger_predicate: empty_domain_confict.trigger_predicate,
+                        trigger_inference,
+                        reason: predicates_to_explain.clone(),
+                    });
 
                 predicates_to_explain.push(!empty_domain_confict.trigger_predicate);
 
@@ -595,6 +645,10 @@ impl ProofProcessor {
                     // inference.
                     None => {
                         let constraint_id = self.state.new_constraint_tag().into();
+                        self.explanation_graph
+                            .add_inference(constraint_id, &[], Some(predicate));
+                        self.explanation_graph
+                            .add_derivation(predicate, Some(constraint_id), &[]);
                         Some(Inference {
                             constraint_id,
                             premises: vec![],
@@ -630,9 +684,21 @@ impl ProofProcessor {
             if let Some(inference_code) = inference_code {
                 self.mark_stack_entry(nogood_stack, inference_code.clone());
 
+                let constraint_id = self.state.new_constraint_tag().into();
+                self.explanation_graph.add_inference(
+                    constraint_id,
+                    &reason_buffer,
+                    Some(predicate),
+                );
+                self.explanation_graph.add_derivation(
+                    predicate,
+                    Some(constraint_id),
+                    &reason_buffer,
+                );
+
                 let label = inference_code.label();
                 inferences.push(Some(Inference {
-                    constraint_id: self.state.new_constraint_tag().into(),
+                    constraint_id,
                     premises: convert_predicates_to_proof_atomic(&self.variables, &reason_buffer),
                     consequent: Some(convert_predicate_to_proof_atomic(
                         &self.variables,
@@ -641,6 +707,9 @@ impl ProofProcessor {
                     generated_by: Some(inference_code.tag().into()),
                     label: Some(label),
                 }));
+            } else {
+                self.explanation_graph
+                    .add_derivation(predicate, None, &reason_buffer);
             }
 
             for predicate in reason_buffer.drain(..) {
@@ -674,6 +743,214 @@ impl ProofProcessor {
                 .update_propagators_priority(&mut self.state, MARKED_PROPAGATION_PRIORITY);
         }
     }
+
+    /// Creates the proof stage for the given inferences, eliminating the auxiliary variables from
+    /// them if there are any.
+    fn create_proof_stage(
+        &mut self,
+        constraint_id: ConstraintId,
+        premises: Vec<IntAtomic<String, i32>>,
+        inferences: Vec<OutputInference>,
+    ) -> ProofStage {
+        let (inferences, linking_nogoods) = if self.auxiliary_variables.is_empty() {
+            (inferences, vec![])
+        } else {
+            self.eliminate_auxiliary_variables(inferences)
+        };
+        self.explanation_graph.clear();
+
+        ProofStage {
+            constraint_id,
+            inferences,
+            premises,
+            linking_nogoods,
+        }
+    }
+
+    /// Removes the auxiliary variables from the inferences of a proof stage, given in proof order.
+    ///
+    /// Inferences with a consequent over an auxiliary variable are removed. An inference with
+    /// premises over auxiliary variables is replaced by an inference over the premises from which
+    /// those were derived, which cites a linking nogood. The linking nogood is derived by the
+    /// replaced inferences, so the auxiliary variables only occur in its derivation.
+    ///
+    /// Returns the new inferences and the IDs of the linking nogoods they cite.
+    fn eliminate_auxiliary_variables(
+        &mut self,
+        inferences: Vec<OutputInference>,
+    ) -> (Vec<OutputInference>, Vec<ConstraintId>) {
+        let empty_domain_conflict = self.explanation_graph.empty_domain_conflict().cloned();
+        let is_auxiliary_trigger = empty_domain_conflict.as_ref().is_some_and(|conflict| {
+            self.auxiliary_variables
+                .contains(&conflict.trigger_predicate.get_domain())
+        });
+
+        let mut new_inferences = vec![];
+        let mut linking_nogoods = vec![];
+
+        for inference in inferences.iter() {
+            let (premises, consequent) = self
+                .explanation_graph
+                .get_inference(inference.constraint_id)
+                .cloned()
+                .expect("every inference is in the explanation graph");
+
+            // The conflict is an empty domain of an auxiliary variable, so the inference that
+            // emptied it is replaced by one which derives the conflict from its premises.
+            let is_trigger_inference = is_auxiliary_trigger
+                && empty_domain_conflict
+                    .as_ref()
+                    .and_then(|conflict| conflict.trigger_inference)
+                    == Some(inference.constraint_id);
+
+            if is_trigger_inference {
+                let conflict = empty_domain_conflict.as_ref().unwrap();
+                let mut conflict_premises = conflict.reason.clone();
+                conflict_premises.push(!conflict.trigger_predicate);
+
+                let replacement = self.replace_by_linking_nogood(
+                    &inferences,
+                    Some(inference.constraint_id),
+                    &conflict_premises,
+                    None,
+                );
+                linking_nogoods.push(replacement.generated_by.unwrap());
+                new_inferences.push(replacement);
+                continue;
+            }
+
+            if consequent.is_some_and(|consequent| self.is_auxiliary(consequent)) {
+                continue;
+            }
+
+            if premises.iter().any(|&premise| self.is_auxiliary(premise)) {
+                let replacement = self.replace_by_linking_nogood(
+                    &inferences,
+                    Some(inference.constraint_id),
+                    &premises,
+                    consequent,
+                );
+                linking_nogoods.push(replacement.generated_by.unwrap());
+                new_inferences.push(replacement);
+                continue;
+            }
+
+            new_inferences.push(inference.clone());
+        }
+
+        // The domain of an auxiliary variable became empty without an inference, so no inference
+        // above derives the conflict.
+        if let Some(conflict) = empty_domain_conflict
+            .filter(|conflict| is_auxiliary_trigger && conflict.trigger_inference.is_none())
+        {
+            let mut conflict_premises = conflict.reason.clone();
+            conflict_premises.push(!conflict.trigger_predicate);
+
+            let replacement =
+                self.replace_by_linking_nogood(&inferences, None, &conflict_premises, None);
+            linking_nogoods.push(replacement.generated_by.unwrap());
+            new_inferences.push(replacement);
+        }
+
+        (new_inferences, linking_nogoods)
+    }
+
+    /// Creates an inference from `premises` to `consequent` in which every premise over an
+    /// auxiliary variable is replaced by the premises from which it was derived. The inference
+    /// cites a linking nogood, which is created if it does not exist yet.
+    ///
+    /// The `replaced_inference` is the inference among `inferences` that derives `consequent` from
+    /// `premises`, if there is one.
+    fn replace_by_linking_nogood(
+        &mut self,
+        inferences: &[OutputInference],
+        replaced_inference: Option<ConstraintId>,
+        premises: &[Predicate],
+        consequent: Option<Predicate>,
+    ) -> OutputInference {
+        let (resolved_premises, used_inferences) = self
+            .explanation_graph
+            .resolve_auxiliary_premises(premises, |predicate| self.is_auxiliary(predicate));
+
+        let mut linking_nogood = resolved_premises.clone();
+        if let Some(consequent) = consequent {
+            linking_nogood.push(!consequent);
+        }
+        linking_nogood.sort();
+        linking_nogood.dedup();
+
+        let linking_nogood_id = match self.linking_nogood_ids.get(&linking_nogood) {
+            Some(&linking_nogood_id) => linking_nogood_id,
+            None => {
+                // Every inference is only valid within the proof stage that precedes it, so the
+                // derivation gets copies with new IDs.
+                let derivation = inferences
+                    .iter()
+                    .filter(|inference| {
+                        used_inferences.contains(&inference.constraint_id)
+                            || replaced_inference == Some(inference.constraint_id)
+                    })
+                    .map(|inference| Inference {
+                        constraint_id: self.state.new_constraint_tag().into(),
+                        ..inference.clone()
+                    })
+                    .collect::<Vec<_>>();
+
+                let linking_nogood_id: ConstraintId = self.state.new_constraint_tag().into();
+                let _ = self.linking_stages.insert(
+                    linking_nogood_id,
+                    ProofStage {
+                        constraint_id: linking_nogood_id,
+                        inferences: derivation,
+                        premises: convert_predicates_to_proof_atomic(
+                            &self.variables,
+                            &linking_nogood,
+                        ),
+                        linking_nogoods: vec![],
+                    },
+                );
+                let _ = self
+                    .linking_nogood_ids
+                    .insert(linking_nogood, linking_nogood_id);
+
+                linking_nogood_id
+            }
+        };
+
+        Inference {
+            constraint_id: self.state.new_constraint_tag().into(),
+            premises: convert_predicates_to_proof_atomic(&self.variables, &resolved_premises),
+            consequent: consequent
+                .map(|consequent| convert_predicate_to_proof_atomic(&self.variables, consequent)),
+            generated_by: Some(linking_nogood_id),
+            label: Some(Arc::from("nogood")),
+        }
+    }
+
+    fn is_auxiliary(&self, predicate: Predicate) -> bool {
+        self.auxiliary_variables.contains(&predicate.get_domain())
+    }
+}
+
+/// Writes the inferences of the proof stage followed by its deduction.
+fn write_proof_stage<W: Write>(
+    proof_writer: &mut ProofWriter<W, i32>,
+    stage: ProofStage,
+) -> Result<(), ProofProcessError> {
+    let mut sequence = Vec::with_capacity(stage.inferences.len());
+
+    for inference in stage.inferences.into_iter() {
+        sequence.push(inference.constraint_id);
+        proof_writer.log_inference(inference)?;
+    }
+
+    proof_writer.log_deduction(Deduction {
+        constraint_id: stage.constraint_id,
+        premises: stage.premises,
+        sequence,
+    })?;
+
+    Ok(())
 }
 
 /// Converts a slice of predicates to atomic constraints for the proof log.

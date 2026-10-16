@@ -91,6 +91,14 @@ struct Args {
     #[arg(long, value_enum, default_value_t)]
     proof_type: ProofType,
 
+    /// Never branch on the variables annotated with `is_defined_var` in a FlatZinc model, and
+    /// resolve them away from every learned nogood.
+    ///
+    /// The objective variable is excluded, and a variable equated to one without the annotation
+    /// is also excluded. Requires `--proof-path` with `--proof-type scaffold`.
+    #[arg(long, verbatim_doc_comment)]
+    eliminate_defined_variables: bool,
+
     /// The number of high-lbd learned nogoods that are kept in the database.
     ///
     /// Learned nogoods are kept based on the tiered system introduced in "Improving
@@ -538,6 +546,14 @@ fn run() -> PumpkinResult<()> {
         args.omit_call_site,
     )?;
 
+    if args.eliminate_defined_variables
+        && (file_format != FileFormat::FlatZinc
+            || args.proof_path.is_none()
+            || args.proof_type != ProofType::Scaffold)
+    {
+        return Err(PumpkinError::EliminateDefinedVariablesRequiresScaffoldProof);
+    }
+
     if pumpkin_solver::core::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION
         >= pumpkin_solver::core::asserts::PUMPKIN_ASSERT_MODERATE
     {
@@ -626,6 +642,7 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
+                    eliminate_defined_variables: args.eliminate_defined_variables,
                 },
                 NoLearningResolver,
             )?,
@@ -646,6 +663,7 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
+                    eliminate_defined_variables: args.eliminate_defined_variables,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::OneUIP,
@@ -670,6 +688,7 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
+                    eliminate_defined_variables: args.eliminate_defined_variables,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::CPIP,
@@ -694,6 +713,7 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
+                    eliminate_defined_variables: args.eliminate_defined_variables,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::BoundsCPIP,
@@ -718,6 +738,7 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
+                    eliminate_defined_variables: args.eliminate_defined_variables,
                 },
                 ResolutionResolver::new(
                     AnalysisMode::AllDecision,

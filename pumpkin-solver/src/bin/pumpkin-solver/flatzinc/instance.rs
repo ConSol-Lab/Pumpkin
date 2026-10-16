@@ -3,6 +3,7 @@ use std::fmt::Write;
 use std::rc::Rc;
 
 use pumpkin_branching::branching::dynamic_brancher::DynamicBrancher;
+use pumpkin_solver::core::containers::HashSet;
 use pumpkin_solver::core::optimisation::OptimisationDirection;
 use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::core::variables::Literal;
@@ -30,6 +31,7 @@ pub(crate) struct FlatZincInstance {
     pub(super) outputs: Vec<Output>,
     pub(super) objective_function: Option<FlatzincObjective>,
     pub(super) search: Option<DynamicBrancher>,
+    pub(super) forbidden_variables: HashSet<DomainId>,
 }
 
 impl FlatZincInstance {

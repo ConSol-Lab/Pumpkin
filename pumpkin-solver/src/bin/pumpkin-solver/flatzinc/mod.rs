@@ -11,11 +11,16 @@ use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
 
+use log::info;
 use pumpkin_branching::branching::alternating::AlternatingBrancher;
 use pumpkin_branching::branching::alternating::every_x_restarts::EveryXRestarts;
 use pumpkin_branching::branching::alternating::until_solution::UntilSolution;
 use pumpkin_branching::branching::dynamic_brancher::DynamicBrancher;
+use pumpkin_branching::branching::forbidden_variables_brancher::ForbiddenVariablesBrancher;
+use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
+use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_core::conflict_resolving::ConflictResolver;
+use pumpkin_core::containers::HashSet;
 use pumpkin_core::statistics::log_statistic;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_solver::Solver;
@@ -76,6 +81,27 @@ pub(crate) struct FlatZincOptions {
 
     /// Indicates that the solver should perform verbose logging
     pub(crate) verbose: bool,
+
+    /// The solver never branches on the variables annotated with `is_defined_var`, and no learned
+    /// nogood contains them.
+    pub(crate) eliminate_defined_variables: bool,
+}
+
+/// A [`ConflictResolver`] that can be instructed to learn no nogood over the given variables.
+pub(crate) trait ForbidVariablesInNogoods {
+    fn forbid_variables_in_nogoods(&mut self, forbidden_variables: HashSet<DomainId>);
+}
+
+impl ForbidVariablesInNogoods for ResolutionResolver {
+    fn forbid_variables_in_nogoods(&mut self, forbidden_variables: HashSet<DomainId>) {
+        self.set_forbidden_variables(forbidden_variables);
+    }
+}
+
+impl ForbidVariablesInNogoods for NoLearningResolver {
+    /// This resolver learns no nogoods; it only negates decisions, which are never over forbidden
+    /// variables.
+    fn forbid_variables_in_nogoods(&mut self, _: HashSet<DomainId>) {}
 }
 
 fn log_statistics(
@@ -122,7 +148,7 @@ fn solution_callback(
     }
 }
 
-pub(crate) fn solve<R: ConflictResolver>(
+pub(crate) fn solve<R: ConflictResolver + ForbidVariablesInNogoods>(
     mut solver: Solver,
     instance: impl AsRef<Path>,
     time_limit: Option<Duration>,
@@ -143,28 +169,48 @@ pub(crate) fn solve<R: ConflictResolver>(
 
     let init_time = init_start_time.elapsed();
 
+    let forbidden_variables = instance.forbidden_variables.clone();
+
     let mut brancher = if options.free_search {
         // The free search flag is active
         if instance.objective_function.is_some() {
             // If there is an objective, then we use the provided search until the first solution,
             // and then we switch to default search
-            DynamicBrancher::new(vec![Box::new(AlternatingBrancher::new(
-                &solver,
-                instance.search.expect("Expected a search to be defined"),
-                UntilSolution::new(EveryXRestarts::new(1)),
-            ))])
+            DynamicBrancher::new(vec![Box::new(
+                AlternatingBrancher::new_with_forbidden_variables(
+                    &solver,
+                    instance.search.expect("Expected a search to be defined"),
+                    UntilSolution::new(EveryXRestarts::new(1)),
+                    forbidden_variables.clone(),
+                ),
+            )])
         } else {
             // If there is no objective, then we alternate between the provided strategy and the
             // default search every restart
-            DynamicBrancher::new(vec![Box::new(AlternatingBrancher::new(
-                &solver,
-                instance.search.expect("Expected a search to be defined"),
-                EveryXRestarts::new(1),
-            ))])
+            DynamicBrancher::new(vec![Box::new(
+                AlternatingBrancher::new_with_forbidden_variables(
+                    &solver,
+                    instance.search.expect("Expected a search to be defined"),
+                    EveryXRestarts::new(1),
+                    forbidden_variables.clone(),
+                ),
+            )])
         }
     } else {
         instance.search.expect("Expected a search to be defined")
     };
+
+    if !forbidden_variables.is_empty() {
+        info!(
+            "Forbidding {} defined variables in decisions and learned nogoods",
+            forbidden_variables.len()
+        );
+        brancher = DynamicBrancher::new(vec![Box::new(ForbiddenVariablesBrancher::new(
+            brancher,
+            forbidden_variables.clone(),
+        ))]);
+        resolver.forbid_variables_in_nogoods(forbidden_variables);
+    }
 
     let (direction, objective): (OptimisationDirection, DomainId) =
         match instance.objective_function {

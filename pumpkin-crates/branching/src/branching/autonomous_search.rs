@@ -2,6 +2,7 @@ use pumpkin_core::Solver;
 use pumpkin_core::branching::Brancher;
 use pumpkin_core::branching::BrancherEvent;
 use pumpkin_core::branching::SelectionContext;
+use pumpkin_core::containers::HashSet;
 use pumpkin_core::containers::KeyValueHeap;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::create_statistics_struct;
@@ -97,6 +98,9 @@ pub struct AutonomousSearch<BackupBrancher> {
     /// This is used to prevent unnecessary work when [`AutonomousSearch::synchronise`] is called
     /// multiple times in a row without a call to [`AutonomousSearch::next_decision`].
     should_synchronise: bool,
+    /// These variables are never selected: predicates over them are ignored when they appear in
+    /// a conflict, and the backup brancher is not notified when they are unassigned.
+    forbidden_variables: HashSet<DomainId>,
 }
 
 create_statistics_struct!(AutonomousSearchStatistics {
@@ -127,6 +131,21 @@ impl DefaultBrancher {
         Self::new_from_domains(solver.get_domains())
     }
 
+    /// Creates a new instance as [`DefaultBrancher::default_over_all_variables`] does, but which
+    /// never makes a decision over one of the `forbidden_variables`.
+    pub fn default_over_all_variables_except(
+        solver: &Solver,
+        forbidden_variables: HashSet<DomainId>,
+    ) -> DefaultBrancher {
+        let mut brancher = Self::new_from_domains(
+            solver
+                .get_domains()
+                .filter(|domain_id| !forbidden_variables.contains(domain_id)),
+        );
+        brancher.forbidden_variables = forbidden_variables;
+        brancher
+    }
+
     pub(crate) fn new_from_domains(domains: impl IntoIterator<Item = DomainId>) -> DefaultBrancher {
         AutonomousSearch {
             predicate_id_info: DeletablePredicateIdGenerator::default(),
@@ -142,6 +161,7 @@ impl DefaultBrancher {
                 RandomSplitter,
             ),
             statistics: Default::default(),
+            forbidden_variables: HashSet::default(),
         }
     }
 
@@ -168,6 +188,7 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
             should_synchronise: false,
             backup_brancher,
             statistics: Default::default(),
+            forbidden_variables: HashSet::default(),
         }
     }
 
@@ -329,6 +350,10 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
     }
 
     fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
+        if self.forbidden_variables.contains(&predicate.get_domain()) {
+            return;
+        }
+
         self.bump_activity(predicate);
         self.backup_brancher
             .on_appearance_in_conflict_predicate(predicate);
@@ -339,6 +364,12 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
     }
 
     fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {
+        // A backup brancher such as `RandomSelector` starts considering every unassigned
+        // variable.
+        if self.forbidden_variables.contains(&variable) {
+            return;
+        }
+
         self.backup_brancher.on_unassign_integer(variable, value)
     }
 

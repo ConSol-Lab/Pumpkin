@@ -1,4 +1,5 @@
 mod deduction_propagator;
+mod explanation_graph;
 mod model;
 mod predicate_heap;
 mod processor;
@@ -47,6 +48,14 @@ struct Cli {
 
     /// Path to the full proof (output).
     full_proof_path: PathBuf,
+
+    /// Eliminate the variables annotated with `is_defined_var` (except the objective variable)
+    /// from the inferences of every deduction, by introducing linking nogoods.
+    ///
+    /// The scaffold must have been produced with `--eliminate-defined-variables`, so that no
+    /// deduction contains these variables.
+    #[arg(long)]
+    eliminate_defined_variables: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -59,7 +68,8 @@ fn main() -> anyhow::Result<()> {
         .target(env_logger::Target::Stdout)
         .init();
 
-    let proof_processor = parse_model(&cli.model_path).with_context(|| "Failed to parse model")?;
+    let proof_processor = parse_model(&cli.model_path, cli.eliminate_defined_variables)
+        .with_context(|| "Failed to parse model")?;
     let proof_reader =
         create_proof_reader(&cli.scaffold_path).with_context(|| "Failed to read proof")?;
     let proof_writer = create_proof_writer(&cli.full_proof_path)
@@ -70,13 +80,23 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<ProofProcessor> {
+fn parse_model(
+    path: impl AsRef<Path>,
+    eliminate_defined_variables: bool,
+) -> anyhow::Result<ProofProcessor> {
     let model_source = std::fs::read_to_string(path)?;
 
     // TODO: For now the error handling shortcuts here. Ideally the `FznError` type returns
     // something that can be converted to an owned type, but for now we have to work around the
     // error holding a reference to the source.
     let fzn_ast = fzn_rs::fzn::parse(&model_source).map_err(|err| anyhow::anyhow!("{err}"))?;
+
+    // The typed model does not keep the variable annotations.
+    let auxiliary_variable_names = if eliminate_defined_variables {
+        collect_auxiliary_variable_names(&fzn_ast)
+    } else {
+        vec![]
+    };
 
     let fzn_model = FlatZincModel::from_ast(fzn_ast)?;
 
@@ -110,7 +130,44 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<ProofProcessor> {
         )?;
     }
 
-    Ok(ProofProcessor::new(state, variable_map))
+    let auxiliary_variables = auxiliary_variable_names
+        .iter()
+        .map(|name| {
+            variable_map
+                .get_domain_by_name(name)
+                .expect("every variable of the model has a domain")
+        })
+        .collect();
+
+    let mut proof_processor = ProofProcessor::new(state, variable_map);
+    proof_processor.set_auxiliary_variables(auxiliary_variables);
+    Ok(proof_processor)
+}
+
+/// Returns the names of the variables annotated with `is_defined_var`, except the objective
+/// variable; the solver never forbids the objective variable.
+fn collect_auxiliary_variable_names(fzn_ast: &fzn_rs::ast::Ast) -> Vec<Rc<str>> {
+    let objective_name = match &fzn_ast.solve.method.node {
+        fzn_rs::ast::Method::Optimize {
+            objective: fzn_rs::ast::Literal::Identifier(name),
+            ..
+        } => Some(Rc::clone(name)),
+        _ => None,
+    };
+
+    fzn_ast
+        .variables
+        .iter()
+        .filter(|(name, variable)| {
+            Some(*name) != objective_name.as_ref()
+                && variable
+                    .node
+                    .annotations
+                    .iter()
+                    .any(|annotation| annotation.node.name() == "is_defined_var")
+        })
+        .map(|(name, _)| Rc::clone(name))
+        .collect()
 }
 
 /// Post the constraint to the state.

@@ -62,6 +62,9 @@ pub(crate) struct CompilationContext<'a> {
 
     /// All the constraints with their constraint tags.
     pub(crate) constraints: Vec<(ConstraintTag, flatzinc::ConstraintItem)>,
+
+    /// The variables that the search never branches on and that no learned nogood contains.
+    pub(crate) forbidden_variables: HashSet<DomainId>,
 }
 
 /// A set parameter.
@@ -99,6 +102,8 @@ impl CompilationContext<'_> {
             set_constants: Default::default(),
 
             constraints: Default::default(),
+
+            forbidden_variables: Default::default(),
         }
     }
 

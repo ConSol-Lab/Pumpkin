@@ -20,6 +20,10 @@ pub(crate) enum PumpkinError {
     FlatZinc(#[from] FlatZincError),
     #[error("Proof generation for {0} is not supported.")]
     ProofGenerationNotSupported(String),
+    #[error(
+        "--eliminate-defined-variables requires a FlatZinc instance, --proof-path and --proof-type scaffold."
+    )]
+    EliminateDefinedVariablesRequiresScaffoldProof,
 }
 
 impl PumpkinError {

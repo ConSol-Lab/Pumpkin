@@ -1,4 +1,5 @@
 mod collect_domains;
+mod collect_forbidden_variables;
 mod context;
 mod create_objective;
 mod create_search_strategy;
@@ -36,11 +37,13 @@ pub(crate) fn compile(
     define_variable_arrays::run(&ast, &mut context)?;
     post_constraints::run(&ast, &mut context, &options)?;
     let objective_function = create_objective::run(&ast, &mut context)?;
+    collect_forbidden_variables::run(&ast, &mut context, objective_function, &options)?;
     let search = create_search_strategy::run(&ast, &mut context, objective_function)?;
 
     Ok(FlatZincInstance {
         outputs: context.outputs,
         objective_function,
         search: Some(search),
+        forbidden_variables: context.forbidden_variables,
     })
 }

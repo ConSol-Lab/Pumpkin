@@ -29,31 +29,50 @@ pub(crate) fn run(
     create_from_search_strategy(&ast.search, context, true, objective)
 }
 
+/// Returns the search variables, without the forbidden variables.
 fn get_bool_variables(
     context: &mut CompilationContext,
     variables: &AnnExpr,
 ) -> Result<Vec<Literal>, FlatZincError> {
-    Ok(match variables {
+    let literals = match variables {
         AnnExpr::String(identifier) => {
             vec![context.resolve_bool_variable_from_identifier(identifier)?]
         }
         AnnExpr::Expr(expr) => context.resolve_bool_variable_array(expr)?.as_ref().to_vec(),
         other => panic!("Expected string or expression but got {other:?}"),
-    })
+    };
+
+    Ok(literals
+        .into_iter()
+        .filter(|literal| !is_forbidden_literal(context, *literal))
+        .collect())
 }
 
+/// Returns the search variables, without the forbidden variables.
 fn get_int_variables(
     context: &mut CompilationContext,
     variables: &AnnExpr,
 ) -> Result<Rc<[DomainId]>, FlatZincError> {
-    Ok(match variables {
+    let domains = match variables {
         AnnExpr::String(identifier) => {
             // TODO: unnecessary to create Rc here, for now it's just for the return type
             Rc::new([context.resolve_integer_variable_from_identifier(identifier)?])
         }
         AnnExpr::Expr(expr) => context.resolve_integer_variable_array(expr)?,
         other => panic!("Expected string or expression but got {other:?}"),
-    })
+    };
+
+    Ok(domains
+        .iter()
+        .copied()
+        .filter(|domain_id| !context.forbidden_variables.contains(domain_id))
+        .collect())
+}
+
+fn is_forbidden_literal(context: &CompilationContext, literal: Literal) -> bool {
+    context
+        .forbidden_variables
+        .contains(&literal.get_true_predicate().get_domain())
 }
 
 fn create_from_search_strategy(
@@ -129,6 +148,11 @@ fn create_from_search_strategy(
                             match values {
                                 AnnExpr::Expr(expr) => {
                                     let int_values_array = context.resolve_array_integer_constants(expr)?;
+                                    let (int_variable_array, int_values_array): (Vec<DomainId>, Vec<i32>) = int_variable_array
+                                        .iter()
+                                        .zip(int_values_array.iter())
+                                        .filter(|(domain_id, _)| !context.forbidden_variables.contains(domain_id))
+                                        .unzip();
                                     DynamicBrancher::new(vec![Box::new(WarmStart::new(
                                         &int_variable_array,
                                         &int_values_array,
@@ -146,19 +170,18 @@ fn create_from_search_strategy(
                         panic!("Expected either an array of integers or an array of booleans; not an identifier {identifier}")
                     }
                     AnnExpr::Expr(expr) => {
-                            let bool_variable_array = context
-                                .resolve_bool_variable_array(expr)?
-                                .iter()
-                                .map(|literal| literal.get_integer_variable())
-                                .collect::<Vec<_>>();
+                            let literals = context.resolve_bool_variable_array(expr)?;
 
                             match values {
                                     AnnExpr::Expr(expr) => {
-                                        let bool_values_array = context
-                                            .resolve_bool_constants(expr)?
+                                        let (bool_variable_array, bool_values_array): (Vec<_>, Vec<_>) = literals
                                             .iter()
-                                            .map(|&bool_value| if bool_value { 1 } else { 0 })
-                                            .collect::<Vec<_>>();
+                                            .zip(context.resolve_bool_constants(expr)?.iter())
+                                            .filter(|(literal, _)| !is_forbidden_literal(context, **literal))
+                                            .map(|(literal, &bool_value)| {
+                                                (literal.get_integer_variable(), if bool_value { 1 } else { 0 })
+                                            })
+                                            .unzip();
                                         DynamicBrancher::new(vec![Box::new(WarmStart::new(
                                             &bool_variable_array,
                                             &bool_values_array,
@@ -211,9 +234,12 @@ fn create_from_search_strategy(
             )),
             None => {}
         }
-        brancher.add_brancher(Box::new(DefaultBrancher::default_over_all_variables(
-            context.solver,
-        )));
+        brancher.add_brancher(Box::new(
+            DefaultBrancher::default_over_all_variables_except(
+                context.solver,
+                context.forbidden_variables.clone(),
+            ),
+        ));
     }
 
     Ok(brancher)
