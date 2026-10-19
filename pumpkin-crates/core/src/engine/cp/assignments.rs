@@ -665,7 +665,11 @@ impl Assignments {
 
     /// Returns whether the predicate is assigned (either true or false) at the end of the given
     /// checkpoint.
-    pub(crate) fn is_fixed_at_checkpoint(&self, predicate: Predicate, checkpoint: usize) -> bool {
+    pub(crate) fn is_assigned_at_checkpoint(
+        &self,
+        predicate: Predicate,
+        checkpoint: usize,
+    ) -> bool {
         self.trail
             .last_position_at_checkpoint(checkpoint)
             .is_some_and(|position| {
@@ -1610,7 +1614,7 @@ mod tests {
     }
 
     #[test]
-    fn predicates_are_fixed_at_the_checkpoint_where_they_are_assigned() {
+    fn predicates_are_assigned_from_the_checkpoint_where_they_are_posted() {
         let mut notification_engine = NotificationEngine::default();
         let mut assignment = Assignments::default();
         let d = assignment.grow(1, 5);
@@ -1625,14 +1629,14 @@ mod tests {
             .expect("non-empty domain");
 
         // True and false, respectively, at the root.
-        assert!(assignment.is_fixed_at_checkpoint(predicate!(d >= 2), 0));
-        assert!(assignment.is_fixed_at_checkpoint(predicate!(d <= 1), 0));
+        assert!(assignment.is_assigned_at_checkpoint(predicate!(d >= 2), 0));
+        assert!(assignment.is_assigned_at_checkpoint(predicate!(d <= 1), 0));
 
-        assert!(!assignment.is_fixed_at_checkpoint(predicate!(d >= 3), 0));
-        assert!(assignment.is_fixed_at_checkpoint(predicate!(d >= 3), 1));
+        assert!(!assignment.is_assigned_at_checkpoint(predicate!(d >= 3), 0));
+        assert!(assignment.is_assigned_at_checkpoint(predicate!(d >= 3), 1));
 
-        assert!(!assignment.is_fixed_at_checkpoint(predicate!(d >= 4), 0));
-        assert!(!assignment.is_fixed_at_checkpoint(predicate!(d >= 4), 1));
+        assert!(!assignment.is_assigned_at_checkpoint(predicate!(d >= 4), 0));
+        assert!(!assignment.is_assigned_at_checkpoint(predicate!(d >= 4), 1));
     }
 
     #[test]

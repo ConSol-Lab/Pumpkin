@@ -233,7 +233,7 @@ impl NotificationEngine {
         // watched. Watching it would also be incorrect: the `PredicateNotifier` does not know
         // whether a predicate is already true when it starts tracking it, so it may report the
         // predicate as becoming true later on.
-        if assignments.is_fixed_at_checkpoint(predicate, 0) {
+        if assignments.is_assigned_at_checkpoint(predicate, 0) {
             return;
         }
 
@@ -276,7 +276,7 @@ impl NotificationEngine {
         assignments: &Assignments,
     ) {
         // See `NotificationEngine::watch_predicate_events`.
-        if assignments.is_fixed_at_checkpoint(predicate, 0) {
+        if assignments.is_assigned_at_checkpoint(predicate, 0) {
             return;
         }
 
