@@ -2046,10 +2046,17 @@ mod tests {
     use super::NogoodPropagator;
     use crate::conjunction;
     use crate::containers::StorageKey;
+    use crate::engine::constraint_satisfaction_solver::NogoodLabel;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
     use crate::proof::ConstraintTag;
     use crate::proof::InferenceCode;
+    use crate::propagation::Priority;
+    use crate::propagators::nogoods::LearningOptions;
+    use crate::propagators::nogoods::NogoodChecker;
+    use crate::propagators::nogoods::NogoodPropagatorConstructor;
+    use crate::propagators::nogoods::PropagationMode;
+    use crate::state::State;
 
     #[test]
     fn ternary_nogood_propagate() {
@@ -2115,5 +2122,78 @@ mod tests {
 
         let result = solver.propagate_until_fixed_point(id);
         assert!(result.is_err());
+    }
+    /// The first two predicates of the nogood hold at the root. Without `check-propagations` the
+    /// nogood is preprocessed and such predicates are removed, so this only fails with
+    /// `check-propagations`, under which the input nogood is stored: a watcher on a predicate that
+    /// is already true is never notified.
+    #[test]
+    fn nogood_with_root_satisfied_predicates_propagates() {
+        assert_root_satisfied_predicates_do_not_prevent_propagation(
+            PropagationMode::UnitPropagation,
+        );
+    }
+
+    /// As [`nogood_with_root_satisfied_predicates_propagates`], under extended nogood propagation.
+    #[test]
+    fn nogood_with_root_satisfied_predicates_propagates_under_extended_propagation() {
+        assert_root_satisfied_predicates_do_not_prevent_propagation(
+            PropagationMode::ExtendedNogoodPropagation,
+        );
+    }
+
+    fn assert_root_satisfied_predicates_do_not_prevent_propagation(
+        propagation_mode: PropagationMode,
+    ) {
+        let mut state = State::default();
+        let nogood_handle = state.add_propagator(NogoodPropagatorConstructor::new(
+            0,
+            LearningOptions::default(),
+            propagation_mode,
+            Priority::High,
+        ));
+        let x1 = state.new_interval_variable(1, 4, None);
+        let x2 = state.new_interval_variable(1, 4, None);
+        let x3 = state.new_interval_variable(1, 4, None);
+        let x4 = state.new_interval_variable(1, 4, None);
+
+        let _ = state
+            .post(predicate!(x1 == 4))
+            .expect("the value is in the domain");
+        let _ = state
+            .post(predicate!(x2 == 3))
+            .expect("the value is in the domain");
+        state
+            .propagate_to_fixed_point()
+            .expect("no conflict at the root");
+
+        // The predicates that hold at the root come first.
+        let nogood = vec![
+            predicate!(x1 == 4),
+            predicate!(x2 == 3),
+            predicate!(x3 == 1),
+            predicate!(x4 == 2),
+        ];
+        let constraint_tag = state.new_constraint_tag();
+        let inference_code = state.add_inference_checker(
+            constraint_tag,
+            NogoodLabel,
+            NogoodChecker {
+                nogood: nogood.clone().into(),
+            },
+        );
+        let (nogood_propagator, mut context) = state.get_propagator_mut_with_context(nogood_handle);
+        nogood_propagator
+            .expect("the handle refers to the nogood propagator")
+            .add_nogood(nogood, inference_code, &mut context);
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.new_checkpoint();
+        let _ = state
+            .post(predicate!(x3 == 1))
+            .expect("the value is in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        assert!(!state.contains(x4, 2));
     }
 }
