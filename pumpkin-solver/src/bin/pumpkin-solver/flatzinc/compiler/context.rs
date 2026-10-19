@@ -38,15 +38,15 @@ pub(crate) struct CompilationContext<'a> {
     /// constraint is posted or an array is created).
     pub(crate) variable_map: HashMap<Rc<str>, DomainId>,
     /// The boolean variables (by the representative of their equivalence class) which are
-    /// defined as the literal over a comparison, e.g. `r` in `int_le_reif(x, 5, r)`. These do not
-    /// get a domain of their own.
-    pub(crate) boolean_literals: HashMap<Rc<str>, Predicate>,
+    /// defined as the predicate over a comparison, e.g. `r` in `int_le_reif(x, 5, r)`. These do
+    /// not get a domain of their own.
+    pub(crate) boolean_predicates: HashMap<Rc<str>, Predicate>,
 
     /// All boolean parameters.
     pub(crate) boolean_parameters: HashMap<Rc<str>, bool>,
     /// All boolean array parameters.
     pub(crate) boolean_array_parameters: HashMap<Rc<str>, Rc<[bool]>>,
-    /// A mapping from boolean variable array identifiers to slices of literals.
+    /// A mapping from boolean variable array identifiers to slices of predicates.
     pub(crate) boolean_variable_arrays: HashMap<Rc<str>, Rc<[Predicate]>>,
     /// All integer parameters.
     pub(crate) integer_parameters: HashMap<Rc<str>, i32>,
@@ -89,7 +89,7 @@ impl CompilationContext<'_> {
             integer_parameters: Default::default(),
             integer_array_parameters: Default::default(),
             variable_map: Default::default(),
-            boolean_literals: Default::default(),
+            boolean_predicates: Default::default(),
             constant_domain_ids: Default::default(),
             integer_variable_arrays: Default::default(),
 
@@ -133,8 +133,8 @@ impl CompilationContext<'_> {
         identifier: &str,
     ) -> Result<Predicate, FlatZincError> {
         let representative = self.equivalences.representative(identifier);
-        if let Some(literal) = self.boolean_literals.get(&representative) {
-            Ok(*literal)
+        if let Some(predicate) = self.boolean_predicates.get(&representative) {
+            Ok(*predicate)
         } else if let Some(domain_id) = self.variable_map.get(&representative) {
             Ok(predicate![domain_id >= 1])
         } else {
@@ -160,8 +160,8 @@ impl CompilationContext<'_> {
     ) -> Result<Rc<[Predicate]>, FlatZincError> {
         match expr {
             flatzinc::Expr::VarParIdentifier(id) => {
-                if let Some(literal) = self.boolean_variable_arrays.get(id.as_str()) {
-                    Ok(Rc::clone(literal))
+                if let Some(predicates) = self.boolean_variable_arrays.get(id.as_str()) {
+                    Ok(Rc::clone(predicates))
                 } else {
                     self.boolean_array_parameters
                         .get(id.as_str())

@@ -25,10 +25,10 @@ pub(crate) fn run(
             SingleVarDecl::Bool { id, annos, .. } => {
                 let id = context.identifiers.get_interned(id);
 
-                let literal = get_or_create_literal(context, &id);
+                let predicate = get_or_create_predicate(context, &id);
 
                 if is_output_variable(annos) {
-                    context.outputs.push(Output::bool(id, literal));
+                    context.outputs.push(Output::bool(id, predicate));
                 }
             }
 
@@ -50,13 +50,13 @@ pub(crate) fn run(
     Ok(())
 }
 
-/// Returns the literal for the given boolean variable, which is either defined over a comparison
-/// (see [`CompilationContext::boolean_literals`]) or over the domain of the boolean.
-fn get_or_create_literal(context: &mut CompilationContext, id: &str) -> Predicate {
+/// Returns the predicate for the given boolean variable, which is either defined over a comparison
+/// (see [`CompilationContext::boolean_predicates`]) or over the domain of the boolean.
+fn get_or_create_predicate(context: &mut CompilationContext, id: &str) -> Predicate {
     let representative = context.equivalences.representative(id);
 
-    if let Some(literal) = context.boolean_literals.get(&representative) {
-        return *literal;
+    if let Some(predicate) = context.boolean_predicates.get(&representative) {
+        return *predicate;
     }
 
     let domain_id = get_or_create_domain(context, id);

@@ -1,5 +1,5 @@
 //! Comparisons between an integer variable and a constant, e.g. the `x <= 5` in
-//! `int_le_reif(x, 5, r)`, which can be represented by a single literal.
+//! `int_le_reif(x, 5, r)`, which can be represented by a single predicate.
 
 use pumpkin_solver::core::predicate;
 use pumpkin_solver::core::predicates::Predicate;

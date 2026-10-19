@@ -1,4 +1,4 @@
-//! Compilation phase that processes the array variable declarations into literals/variables.
+//! Compilation phase that processes the array variable declarations into predicates/variables.
 
 use std::rc::Rc;
 
@@ -31,39 +31,39 @@ pub(crate) fn run(
                 array_expr,
             } => {
                 let id = context.identifiers.get_interned(id);
-                let contents: Rc<[_]> = match array_expr
-                    .as_ref()
-                    .expect("array did not have expression")
-                {
-                    ArrayOfBoolExpr::Array(array) => array
-                        .iter()
-                        .map(|expr| match expr {
-                            BoolExpr::Bool(true) => context.solver.get_true_predicate(),
-                            BoolExpr::Bool(false) => context.solver.get_false_predicate(),
-                            BoolExpr::VarParIdentifier(identifier) => {
-                                let other_id = context.identifiers.get_interned(identifier);
-                                let representative = context.equivalences.representative(&other_id);
+                let contents: Rc<[_]> =
+                    match array_expr.as_ref().expect("array did not have expression") {
+                        ArrayOfBoolExpr::Array(array) => array
+                            .iter()
+                            .map(|expr| match expr {
+                                BoolExpr::Bool(true) => context.solver.get_true_predicate(),
+                                BoolExpr::Bool(false) => context.solver.get_false_predicate(),
+                                BoolExpr::VarParIdentifier(identifier) => {
+                                    let other_id = context.identifiers.get_interned(identifier);
+                                    let representative =
+                                        context.equivalences.representative(&other_id);
 
-                                if let Some(literal) = context.boolean_literals.get(&representative)
-                                {
-                                    return *literal;
+                                    if let Some(predicate) =
+                                        context.boolean_predicates.get(&representative)
+                                    {
+                                        return *predicate;
+                                    }
+
+                                    let domain_id = context
+                                        .variable_map
+                                        .get(&representative)
+                                        .copied()
+                                        .expect("referencing undefined boolean variable");
+
+                                    predicate![domain_id >= 1]
                                 }
+                            })
+                            .collect(),
 
-                                let domain_id = context
-                                    .variable_map
-                                    .get(&representative)
-                                    .copied()
-                                    .expect("referencing undefined boolean variable");
-
-                                predicate![domain_id >= 1]
-                            }
-                        })
-                        .collect(),
-
-                    ArrayOfBoolExpr::VarParIdentifier(_) => {
-                        todo!("array of boolean variable expression is identifier")
-                    }
-                };
+                        ArrayOfBoolExpr::VarParIdentifier(_) => {
+                            todo!("array of boolean variable expression is identifier")
+                        }
+                    };
 
                 if let Some(shape) = is_output_array(annos) {
                     context.outputs.push(Output::array_of_bool(

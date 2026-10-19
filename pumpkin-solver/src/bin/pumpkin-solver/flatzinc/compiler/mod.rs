@@ -4,7 +4,7 @@ mod context;
 mod create_objective;
 mod create_search_strategy;
 mod define_constants;
-mod define_reified_literals;
+mod define_reified_predicates;
 mod define_variable_arrays;
 mod handle_set_in;
 mod merge_equivalences;
@@ -34,7 +34,7 @@ pub(crate) fn compile(
     prepare_variables::run(&ast, &mut context)?;
     merge_equivalences::run(&ast, &mut context, &options)?;
     handle_set_in::run(&mut context)?;
-    define_reified_literals::run(&mut context, &options)?;
+    define_reified_predicates::run(&mut context, &options)?;
     collect_domains::run(&ast, &mut context)?;
     define_variable_arrays::run(&ast, &mut context)?;
     post_constraints::run(&ast, &mut context, &options)?;

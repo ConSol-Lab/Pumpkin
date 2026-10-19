@@ -773,13 +773,12 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
     if let Some(predicate) =
         constant_comparison_predicate(comparison, &exprs[0], &exprs[1], context)
     {
-        // `r <-> [x op c]`; the boolean could not be defined as the literal of the comparison
-        // itself (see `define_reified_literals`), so they are linked with clauses.
-        let literal = predicate;
+        // `r <-> [x op c]`; the boolean could not be defined as the predicate of the comparison
+        // itself (see `define_reified_predicates`), so they are linked with clauses.
         let reif = context.resolve_bool_variable(&exprs[2])?;
 
-        pumpkin_constraints::clause([!reif, literal], constraint_tag).post(context.solver);
-        pumpkin_constraints::clause([reif, !literal], constraint_tag).post(context.solver);
+        pumpkin_constraints::clause([!reif, predicate], constraint_tag).post(context.solver);
+        pumpkin_constraints::clause([reif, !predicate], constraint_tag).post(context.solver);
         return Ok(());
     }
 
