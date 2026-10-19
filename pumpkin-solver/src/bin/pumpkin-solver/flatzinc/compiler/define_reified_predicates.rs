@@ -35,6 +35,7 @@ fn define_reified_predicate(
     constraint: &flatzinc::ConstraintItem,
     context: &mut CompilationContext,
 ) -> bool {
+    // First, we check whether it is a constraint that we know can define reification.
     let comparison = match constraint.id.as_str() {
         "int_eq_reif" => IntComparison::Equal,
         "int_ne_reif" => IntComparison::NotEqual,
@@ -43,26 +44,55 @@ fn define_reified_predicate(
         _ => return false,
     };
 
-    // The boolean can only be defined as the predicate of the comparison if:
-    // - it is a variable; parameters do not have an equivalence class;
-    // - it is not merged with an integer variable (e.g. through `bool2int`), which needs a domain
-    //   to represent it;
-    // - its domain is not fixed, as the predicate would not enforce that value;
-    // - it is not already defined by another constraint; that constraint will instead be posted as
-    //   clauses linking the two predicates.
-    if let [lhs, rhs, flatzinc::Expr::VarParIdentifier(boolean)] = constraint.exprs.as_slice()
-        && context.equivalences.is_defined(boolean)
-        && !context.equivalences.contains_integer(boolean)
-        && context.equivalences.domain(boolean) == (Domain::IntervalDomain { lb: 0, ub: 1 })
-        && let representative = context.equivalences.representative(boolean)
-        && !context.boolean_predicates.contains_key(&representative)
-        && let Some(predicate) = constant_comparison_predicate(comparison, lhs, rhs, context)
-    {
-        let _ = context.boolean_predicates.insert(representative, predicate);
-        true
-    } else {
-        false
+    // First, we retrieve the expressions in the constraint, where it should be a
+    // `VarParIdentifier` representing a variable.
+    let [lhs, rhs, flatzinc::Expr::VarParIdentifier(boolean)] = constraint.exprs.as_slice() else {
+        return false;
+    };
+
+    let equivalences = &context.equivalences;
+
+    // Parameters (i.e., constants) do not have an equivalence class, only variables can be defined.
+    if !equivalences.is_defined(boolean) {
+        return false;
     }
+
+    // A boolean which is merged with an integer variable cannot be defined, since the integer
+    // still needs a domain.
+    //
+    // For example, consider `int_le_reif(x, 5, r)` and `bool2int(r, i)`. The `bool2int` constraint
+    // is removed by merging `r` and `i` into one equivalence class, which is normally represented
+    // by a single 0-1 domain `d`, where `r` is `[d >= 1]` and `i` is `d`. If `r` were defined as
+    // `[x <= 5]`, then the `int_le_reif` constraint would be removed as well. However, `i` is an
+    // integer, so it would still be represented by `d`. Since no constraint is left which links
+    // `d` to `[x <= 5]`, `i` could take any value, regardless of whether `x <= 5` holds.
+    if equivalences.contains_integer(boolean) {
+        return false;
+    }
+
+    // The predicate would not enforce the value of a fixed boolean.
+    if equivalences.domain(boolean) != Domain::from_lower_bound_and_upper_bound(0, 1) {
+        return false;
+    }
+
+    // A boolean already defined by another constraint keeps that definition; this constraint is
+    // instead posted as clauses linking the two predicates.
+    //
+    // For example, consider `int_le_reif(x, 5, r)` followed by `int_ne_reif(y, 1, r)`. The first
+    // constraint defines `r` as `[x <= 5]` and is removed. The boolean cannot also be defined as
+    // `[y != 1]`, as a boolean is represented by a single predicate. Instead, the second constraint
+    // is kept and posted as the clauses `[x <= 5] -> [y != 1]` and `[y != 1] -> [x <= 5]`.
+    let representative = equivalences.representative(boolean);
+    if context.boolean_predicates.contains_key(&representative) {
+        return false;
+    }
+
+    let Some(predicate) = constant_comparison_predicate(comparison, lhs, rhs, context) else {
+        return false;
+    };
+    let _ = context.boolean_predicates.insert(representative, predicate);
+
+    true
 }
 
 #[cfg(test)]
