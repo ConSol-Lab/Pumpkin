@@ -10,12 +10,12 @@
 </p>
 
 
-<p align="center">
-    <img align="left" width="50%" src="https://github.com/ConSol-Lab/Pumpkin/raw/main/pumpkin.svg" alt="ASCII art pumpkin logo">
-</p>
-
-<p align="left">
-<br>
+<table>
+<tr>
+<td width="40%">
+<img width="100%" src="https://github.com/ConSol-Lab/Pumpkin/raw/main/pumpkin.svg" alt="ASCII art pumpkin logo">
+</td>
+<td width="60%">
 
 Pumpkin is a combinatorial optimisation solver developed within the [ConSol Lab](https://github.com/ConSol-Lab) at TU Delft. It is based on the (lazy clause generation) constraint programming paradigm.
 
@@ -23,12 +23,12 @@ Our goal is to keep the solver efficient, easy to use, and well-documented. The 
 
 A unique feature of Pumpkin is that it can produce certificates of infeasibility and optimality, which can be checked independently of the solver using our formally verified checker. See our [CP'24](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2024.11) and [CP'26](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2026.24) papers for details.
 
-</p>
+</td>
+</tr>
+</table>
 
 <p align="center"><strong>🥈🥉 Silver (fixed search) and bronze (free search) at the <a href="https://www.minizinc.org/challenge/2026/results/">2026 MiniZinc Challenge</a></strong></p>
 <p align="center"><strong>🥉 Bronze (fixed search) at the <a href="https://www.minizinc.org/challenge/2025/results/">2025 MiniZinc Challenge</a></strong></p>
-
-<br clear="left"/>
 
 ## Table of Contents
 
