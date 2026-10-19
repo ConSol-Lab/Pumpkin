@@ -7,7 +7,6 @@
 mod dimacs;
 mod finalizer;
 mod inference_code;
-mod proof_atomics;
 
 use std::fs::File;
 use std::io::Write;
@@ -16,10 +15,11 @@ use std::path::Path;
 use dimacs::DimacsProof;
 use drcp_format::Deduction;
 use drcp_format::Inference;
+use drcp_format::IntAtomic;
+use drcp_format::IntComparison;
 use drcp_format::writer::ProofWriter;
 pub(crate) use finalizer::*;
 pub use inference_code::*;
-use proof_atomics::map_predicate_to_proof_atomic;
 use pumpkin_checking::InvalidDeduction;
 use pumpkin_checking::SupportingInference;
 use pumpkin_checking::verify_deduction;
@@ -29,6 +29,7 @@ use crate::Solver;
 use crate::containers::HashMap;
 use crate::containers::KeyGenerator;
 use crate::engine::Assignments;
+use crate::engine::predicates::predicate::PredicateType;
 use crate::engine::variable_names::VariableNames;
 use crate::predicates::Predicate;
 
@@ -351,6 +352,25 @@ fn is_likely_a_constant(
     let is_unnamed = variable_names.get_int_name(domain).is_none();
 
     is_fixed || is_unnamed
+}
+
+/// Convert a predicate to the [`IntAtomic`] that is used in the proof.
+fn map_predicate_to_proof_atomic(
+    predicate: Predicate,
+    variable_names: &VariableNames,
+) -> IntAtomic<&str, i32> {
+    let name = variable_names
+        .get_int_name(predicate.get_domain())
+        .expect("integer domain is unnamed");
+    let value = predicate.get_right_hand_side();
+    let comparison = match predicate.get_predicate_type() {
+        PredicateType::UpperBound => IntComparison::LessEqual,
+        PredicateType::Equal => IntComparison::Equal,
+        PredicateType::LowerBound => IntComparison::GreaterEqual,
+        PredicateType::NotEqual => IntComparison::NotEqual,
+    };
+
+    IntAtomic::new(name, comparison, value)
 }
 
 /// A wrapper around either a file or a gzipped file.
