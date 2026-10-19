@@ -35,6 +35,10 @@ const CONFIGURATIONS: [(&str, &str, &str, &str); 2] = [
     ),
 ];
 
+/// The standard flags of MiniZinc which have a short form (see
+/// <https://docs.minizinc.dev/en/stable/fzn-spec.html#solver-configuration-files>).
+const MINIZINC_STD_FLAGS: [char; 9] = ['a', 'f', 'i', 'n', 'p', 'r', 's', 't', 'v'];
+
 fn generate_msc(name: &str, id: &str, mznlib: &str) -> String {
     let command = Args::command();
     let arguments = command
@@ -42,9 +46,12 @@ fn generate_msc(name: &str, id: &str, mznlib: &str) -> String {
         .filter(|arg| !arg.is_positional() && !arg.is_hide_set())
         .filter(|arg| !matches!(arg.get_action(), ArgAction::Help | ArgAction::Version));
 
-    // Arguments with a short flag correspond to the standard flags of MiniZinc (e.g. `-a`).
-    let (std_flags, extra_flags): (Vec<&Arg>, Vec<&Arg>) =
-        arguments.partition(|arg| arg.get_short().is_some());
+    // Arguments whose short flag is a standard flag of MiniZinc (e.g. `-a`) are exposed as such;
+    // all other arguments are exposed as extra flags.
+    let (std_flags, extra_flags): (Vec<&Arg>, Vec<&Arg>) = arguments.partition(|arg| {
+        arg.get_short()
+            .is_some_and(|short| MINIZINC_STD_FLAGS.contains(&short))
+    });
 
     let std_flags = std_flags
         .iter()
@@ -70,11 +77,11 @@ fn generate_msc(name: &str, id: &str, mznlib: &str) -> String {
 
 /// Converts an argument to a MiniZinc extra flag of the form `[flag, description, type, default]`.
 fn extra_flag(arg: &Arg) -> Value {
-    let flag = format!(
-        "--{}",
-        arg.get_long()
-            .expect("non-positional arguments have a long flag")
-    );
+    let flag = match (arg.get_long(), arg.get_short()) {
+        (Some(long), _) => format!("--{long}"),
+        (None, Some(short)) => format!("-{short}"),
+        (None, None) => unreachable!("non-positional arguments have a long or short flag"),
+    };
     let description = arg
         .get_long_help()
         .or(arg.get_help())
