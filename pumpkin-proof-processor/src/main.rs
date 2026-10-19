@@ -68,10 +68,10 @@ struct Cli {
     #[arg(long, value_enum, default_value_t = ProofFormat::Drcp)]
     format: ProofFormat,
 
-    /// How a proof in the block format derives each nogood: `resolution` writes a resolution
-    /// chain, `refutation` the nogood and the inferences that refute it in the order they
-    /// propagate.
-    #[arg(long, value_enum, default_value_t = NogoodDerivation::Resolution)]
+    /// How a proof in the block format derives each nogood: `refutation` (the default) writes
+    /// the nogood and the inferences that refute it in the order they propagate, `resolution` a
+    /// resolution chain.
+    #[arg(long, value_enum, default_value_t = NogoodDerivation::Refutation)]
     nogood_derivation: NogoodDerivation,
 
     /// How a proof in the block format is written: in the binary form the checker recognises in
