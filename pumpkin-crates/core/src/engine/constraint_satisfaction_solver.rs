@@ -759,6 +759,20 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
+    /// Log the deletion of the nogoods the nogood propagator deleted while propagating.
+    fn log_deleted_nogoods(&mut self) {
+        let nogood_propagator = self
+            .state
+            .get_propagator_mut(self.nogood_propagator_handle)
+            .expect("Provided propagator should be the nogood propagator");
+        for constraint_tag in nogood_propagator.take_deleted_nogood_tags() {
+            let _ = self
+                .internal_parameters
+                .proof_log
+                .log_deletion(constraint_tag);
+        }
+    }
+
     fn decay_nogood_activities(&mut self) {
         match self.state.get_propagator_mut(self.nogood_propagator_handle) {
             Some(nogood_propagator) => {
@@ -930,6 +944,8 @@ impl ConstraintSatisfactionSolver {
         let num_trail_entries_prev = self.state.trail_len();
 
         let result = self.state.propagate_to_fixed_point();
+
+        self.log_deleted_nogoods();
 
         if self.state.get_checkpoint() == 0 {
             self.handle_root_propagation(num_trail_entries_prev);

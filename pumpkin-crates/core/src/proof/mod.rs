@@ -220,6 +220,8 @@ impl ProofLog {
             proof_atomics: ProofAtomics::default(),
             derived_identifiers: ProofHashMap::default(),
             next_identifier: 1,
+            first_nogood_identifier: None,
+            single_variable_nogoods: ProofHashSet::default(),
             last_nogood: None,
             rule_of_constraint: HashMap::default(),
             rule_by_indicator_side: HashMap::default(),
@@ -632,6 +634,16 @@ impl ProofLog {
             root_explanations: ProofHashSet::default(),
             leaves_out_root_explanations: false,
         })
+    }
+
+    /// Log that the solver deleted the learned nogood with the tag: a proof in the block format
+    /// deletes it too, unless the proof did not derive it, or the proof is written for the
+    /// lenient reading and the nogood is over one variable, whose deletion that reading rejects.
+    pub(crate) fn log_deletion(&mut self, constraint_tag: ConstraintTag) -> std::io::Result<()> {
+        match self.internal_proof.as_mut() {
+            Some(ProofImpl::BlockProof(proof)) => proof.log_deletion(constraint_tag),
+            _ => Ok(()),
+        }
     }
 
     /// Whether the explanation of a root fact over the domain is left out of the proof, which is
@@ -1288,6 +1300,12 @@ struct BlockProof {
     /// on from the model's and the head's.
     derived_identifiers: ProofHashMap<ConstraintTag, NonZero<u32>>,
     next_identifier: u32,
+    /// The identifier of the first nogood written: the nogoods from it on are the ones the
+    /// search derived, which the proof may delete.
+    first_nogood_identifier: Option<NonZero<u32>>,
+    /// In a proof for the lenient reading, the identifiers of the nogoods written over one
+    /// variable, which are never deleted.
+    single_variable_nogoods: ProofHashSet<u32>,
     /// The identifier and the atomic constraints of the last nogood written.
     last_nogood: Option<(NonZero<u32>, Vec<Predicate>)>,
     /// The rule for the inferences from a model constraint, where it is not the label.
@@ -1357,8 +1375,9 @@ const DEFAULT_BOUND_MAGNITUDE: i32 = 500_000_000;
 
 /// The part of the root domains of fzn-croc-check that the writer knows the checker holds: the
 /// declared domain of every variable whose initial domain in the solver is its declared domain,
-/// and the fact of every nogood over one atomic constraint written so far. A writer emits no
-/// deletion, so a fact holds from the nogood that states it to the end of the proof.
+/// and the fact of every nogood over one atomic constraint written so far. A writer never deletes
+/// a nogood over one variable in a proof for this reading, so a fact holds from the nogood that
+/// states it to the end of the proof.
 #[derive(Debug, Default)]
 struct RootDomains {
     /// The facts on every variable they are applied to.
@@ -1956,6 +1975,9 @@ impl BlockProof {
                 }
                 if let Some(root_domains) = self.root_domains.as_mut() {
                     root_domains.record_nogood(&derived);
+                    if over_one_variable(&derived) {
+                        let _ = self.single_variable_nogoods.insert(identifier.get());
+                    }
                 }
                 let mut derived_nogood = Vec::with_capacity(derived.len());
                 for predicate in derived {
@@ -1967,6 +1989,9 @@ impl BlockProof {
             None => {
                 if let Some(root_domains) = self.root_domains.as_mut() {
                     root_domains.record_nogood(&nogood);
+                    if over_one_variable(&nogood) {
+                        let _ = self.single_variable_nogoods.insert(identifier.get());
+                    }
                 }
                 let mut written = Vec::with_capacity(nogood.len());
                 for &predicate in nogood.iter() {
@@ -1978,12 +2003,31 @@ impl BlockProof {
         }
 
         let _ = self.derived_identifiers.insert(constraint_tag, identifier);
+        let _ = self.first_nogood_identifier.get_or_insert(identifier);
         self.last_nogood = Some((identifier, nogood));
         self.inferences.clear();
         self.propagation_order.clear();
         self.logged_domain_inferences.clear();
 
         Ok(())
+    }
+
+    /// Write the deletion of the nogood derived under the tag, unless no learned nogood was
+    /// derived under it, or it is over one variable in a proof for the lenient reading.
+    fn log_deletion(&mut self, constraint_tag: ConstraintTag) -> std::io::Result<()> {
+        let Some(&identifier) = self.derived_identifiers.get(&constraint_tag) else {
+            return Ok(());
+        };
+        let derived_by_search = self
+            .first_nogood_identifier
+            .is_some_and(|first| identifier >= first);
+        if !derived_by_search
+            || (self.root_domains.is_some()
+                && self.single_variable_nogoods.contains(&identifier.get()))
+        {
+            return Ok(());
+        }
+        self.writer.log_deletion(identifier)
     }
 
     /// Whether [`is_unnamed`] holds of the predicate.
@@ -2706,6 +2750,15 @@ fn resolution_chain(
             .collect()
     };
     Some((steps, derived))
+}
+
+/// Whether the atomic constraints are all over one variable, which an empty nogood is not.
+fn over_one_variable(nogood: &[Predicate]) -> bool {
+    nogood.first().is_some_and(|first| {
+        nogood
+            .iter()
+            .all(|atom| atom.get_domain() == first.get_domain())
+    })
 }
 
 /// Remove every predicate that occurs earlier in the list, keeping the order; `seen` is a set to

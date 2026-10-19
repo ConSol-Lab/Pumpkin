@@ -22,6 +22,7 @@ use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::predicate;
 use crate::predicates::PredicateType;
+use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::EventsToRegister;
@@ -104,6 +105,9 @@ pub struct NogoodPropagator {
     /// The priority of the nogood propagator.
     priority: Priority,
     propagation_buffer: PropagationBuffer,
+    /// The nogoods deleted since the solver last took them with
+    /// [`NogoodPropagator::take_deleted_nogood_tags`], for the proof to delete them too.
+    deleted_nogoods: Vec<NogoodIndex>,
 }
 
 create_statistics_struct!(NogoodPropagatorStatistics {
@@ -203,6 +207,7 @@ impl NogoodPropagatorConstructor {
             semantic_minimiser: Default::default(),
             priority: self.priority,
             propagation_buffer: Default::default(),
+            deleted_nogoods: Default::default(),
         };
 
         PropagatorWithEvents {
@@ -1070,6 +1075,13 @@ impl NogoodPropagator {
     }
 
     /// The form of propagation the propagator performs, which determines the rule of its nogoods.
+    /// The tags of the nogoods deleted since the last call, in the order they were deleted.
+    pub(crate) fn take_deleted_nogood_tags(&mut self) -> impl Iterator<Item = ConstraintTag> + '_ {
+        self.deleted_nogoods
+            .drain(..)
+            .map(|index| self.inference_codes[index].tag())
+    }
+
     pub(crate) fn propagation_mode(&self) -> PropagationMode {
         self.propagation_mode
     }
@@ -1508,6 +1520,7 @@ impl NogoodPropagator {
                 self.handle,
                 &mut self.learned_nogood_ids.high_lbd,
                 &mut self.nogood_info,
+                &mut self.deleted_nogoods,
                 &self.nogood_predicates,
                 assignments,
                 reason_store,
@@ -1532,6 +1545,7 @@ impl NogoodPropagator {
                 self.handle,
                 &mut self.learned_nogood_ids.mid_lbd,
                 &mut self.nogood_info,
+                &mut self.deleted_nogoods,
                 &self.nogood_predicates,
                 assignments,
                 reason_store,
@@ -1554,6 +1568,7 @@ impl NogoodPropagator {
                 self.handle,
                 &mut self.learned_nogood_ids.low_lbd,
                 &mut self.nogood_info,
+                &mut self.deleted_nogoods,
                 &self.nogood_predicates,
                 assignments,
                 reason_store,
@@ -1643,6 +1658,7 @@ impl NogoodPropagator {
                     // If the nogood is falsified at the root level, mark the nogood
                     // for deletion, and do not keep this watcher.
                     self.nogood_info[info_index].is_deleted = true;
+                    self.deleted_nogoods.push(info_index);
                     trivial_nogood_deleted = true;
                     false
                 }
@@ -1660,6 +1676,7 @@ impl NogoodPropagator {
                     another_pass_needed = true;
                     trivial_nogood_deleted = true;
                     self.nogood_info[info_index].is_deleted = true;
+                    self.deleted_nogoods.push(info_index);
                     false
                 } else {
                     true
@@ -1714,6 +1731,7 @@ impl NogoodPropagator {
         handle: PropagatorHandle<NogoodPropagator>,
         nogood_ids: &mut Vec<NogoodId>,
         nogood_info: &mut KeyedVec<NogoodIndex, NogoodInfo>,
+        deleted_nogoods: &mut Vec<NogoodIndex>,
         nogoods: &ArenaAllocator,
         assignments: &Assignments,
         reason_store: &ReasonStore,
@@ -1764,6 +1782,7 @@ impl NogoodPropagator {
             // It will be kept in the database for now but it will not be used for propagation
             // since its watchers will be removed in the next step.
             nogood_info[nogoods.get_nogood_index(&id)].is_deleted = true;
+            deleted_nogoods.push(nogoods.get_nogood_index(&id));
 
             num_nogoods_to_remove -= 1;
         }
