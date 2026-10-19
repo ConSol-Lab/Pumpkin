@@ -105,6 +105,10 @@ pub struct ProofLog {
     /// inference that uses the predicate, when conflict analysis or a minimiser asks for it late,
     /// and it needs no premise that is not itself explained at the root.
     root_explanations: ProofHashSet<ConstraintTag>,
+    /// Whether the explanations of root facts are left out, where
+    /// [`ProofLog::leaves_out_root_explanation_of`] says: the proof is written for the lenient
+    /// reading of the checker.
+    leaves_out_root_explanations: bool,
 }
 
 impl ProofLog {
@@ -167,6 +171,7 @@ impl ProofLog {
             supporting_inferences_at_root: vec![],
             explaining_root: false,
             root_explanations: ProofHashSet::default(),
+            leaves_out_root_explanations: false,
         })
     }
 
@@ -256,6 +261,7 @@ impl ProofLog {
             supporting_inferences_at_root: vec![],
             explaining_root: false,
             root_explanations: ProofHashSet::default(),
+            leaves_out_root_explanations: root_domains,
         })
     }
 
@@ -624,7 +630,27 @@ impl ProofLog {
             supporting_inferences_at_root: vec![],
             explaining_root: false,
             root_explanations: ProofHashSet::default(),
+            leaves_out_root_explanations: false,
         })
+    }
+
+    /// Whether the explanation of a root fact over the domain is left out of the proof, which is
+    /// written for the lenient reading of the checker: its root domains hold the declared domains
+    /// and the root facts the solver logs as nogoods over one atomic constraint, but not the
+    /// domain of a variable a `set_in` constraint or the bounds constraint of a decomposition
+    /// restricts, whose facts are still explained. Under the feature `check-deductions` every
+    /// fact is explained, since the deductions are checked without the root domains.
+    pub(crate) fn leaves_out_root_explanation_of(&self, domain: DomainId) -> bool {
+        if !self.leaves_out_root_explanations || cfg!(feature = "check-deductions") {
+            return false;
+        }
+        match &self.internal_proof {
+            Some(ProofImpl::BlockProof(proof)) => {
+                !proof.set_in_domains.contains_key(&domain)
+                    && !proof.selector_bounds.contains_key(&domain)
+            }
+            _ => false,
+        }
     }
 
     /// Mark the inferences logged from now on as explanations of predicates at the root, or stop

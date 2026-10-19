@@ -158,6 +158,14 @@ pub(crate) fn explain_root_assignment(
     if !context.proof_log.is_logging_inferences() && !cfg!(feature = "check-deductions") {
         return;
     }
+    // A proof for the lenient reading leaves out the explanations of most root facts: the root
+    // domains of the checker hold them.
+    if context
+        .proof_log
+        .leaves_out_root_explanation_of(predicate.get_domain())
+    {
+        return;
+    }
 
     assert_eq!(
         context.state.get_checkpoint_for_predicate(predicate),
