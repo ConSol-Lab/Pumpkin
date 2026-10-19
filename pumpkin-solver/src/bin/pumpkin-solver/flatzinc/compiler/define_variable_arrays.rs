@@ -13,6 +13,7 @@ use flatzinc::SetExpr;
 use flatzinc::SetLiteralExpr;
 
 use super::context::CompilationContext;
+use super::context::bool_constant;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::ast::VarArrayDecl;
@@ -35,8 +36,7 @@ pub(crate) fn run(
                         ArrayOfBoolExpr::Array(array) => array
                             .iter()
                             .map(|expr| match expr {
-                                BoolExpr::Bool(true) => context.solver.get_true_predicate(),
-                                BoolExpr::Bool(false) => context.solver.get_false_predicate(),
+                                BoolExpr::Bool(value) => bool_constant(*value),
                                 BoolExpr::VarParIdentifier(identifier) => context
                                     .resolve_bool_variable_from_identifier(identifier)
                                     .expect("referencing undefined boolean variable"),

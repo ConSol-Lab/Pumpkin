@@ -92,8 +92,7 @@ impl TestSolver {
     }
 
     pub fn new_literal(&mut self) -> Predicate {
-        let domain_id = self.new_variable(0, 1);
-        predicate![domain_id >= 1]
+        self.state.new_literal(None)
     }
 
     pub fn new_propagator<Constructor>(
@@ -226,18 +225,12 @@ impl TestSolver {
         predicate: Predicate,
         truth_value: bool,
     ) -> Result<(), EmptyDomain> {
-        let _ = match truth_value {
-            true => self.state.assignments.post_predicate(
-                predicate,
-                None,
-                &mut self.state.notification_engine,
-            )?,
-            false => self.state.assignments.post_predicate(
-                !predicate,
-                None,
-                &mut self.state.notification_engine,
-            )?,
-        };
+        let predicate = if truth_value { predicate } else { !predicate };
+        let _ = self.state.assignments.post_predicate(
+            predicate,
+            None,
+            &mut self.state.notification_engine,
+        )?;
 
         Ok(())
     }

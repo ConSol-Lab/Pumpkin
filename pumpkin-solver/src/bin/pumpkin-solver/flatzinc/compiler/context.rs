@@ -117,13 +117,7 @@ impl CompilationContext<'_> {
     ) -> Result<Predicate, FlatZincError> {
         match expr {
             flatzinc::Expr::VarParIdentifier(id) => self.resolve_bool_variable_from_identifier(id),
-            flatzinc::Expr::Bool(value) => {
-                if *value {
-                    Ok(self.solver.get_true_predicate())
-                } else {
-                    Ok(self.solver.get_false_predicate())
-                }
-            }
+            flatzinc::Expr::Bool(value) => Ok(bool_constant(*value)),
             _ => Err(FlatZincError::UnexpectedExpr),
         }
     }
@@ -139,14 +133,8 @@ impl CompilationContext<'_> {
             Ok(predicate![domain_id >= 1])
         } else {
             self.boolean_parameters
-                .get(&self.equivalences.representative(identifier))
-                .map(|value| {
-                    if *value {
-                        self.solver.get_true_predicate()
-                    } else {
-                        self.solver.get_false_predicate()
-                    }
-                })
+                .get(&representative)
+                .map(|value| bool_constant(*value))
                 .ok_or_else(|| FlatZincError::InvalidIdentifier {
                     identifier: identifier.into(),
                     expected_type: "bool variable".into(),
@@ -165,18 +153,7 @@ impl CompilationContext<'_> {
                 } else {
                     self.boolean_array_parameters
                         .get(id.as_str())
-                        .map(|array| {
-                            array
-                                .iter()
-                                .map(|value| {
-                                    if *value {
-                                        self.solver.get_true_predicate()
-                                    } else {
-                                        self.solver.get_false_predicate()
-                                    }
-                                })
-                                .collect()
-                        })
+                        .map(|array| array.iter().map(|value| bool_constant(*value)).collect())
                         .ok_or_else(|| FlatZincError::InvalidIdentifier {
                             identifier: id.as_str().into(),
                             expected_type: "boolean variable array".into(),
@@ -189,8 +166,7 @@ impl CompilationContext<'_> {
                     flatzinc::BoolExpr::VarParIdentifier(id) => {
                         self.resolve_bool_variable_from_identifier(id)
                     }
-                    flatzinc::BoolExpr::Bool(true) => Ok(self.solver.get_true_predicate()),
-                    flatzinc::BoolExpr::Bool(false) => Ok(self.solver.get_false_predicate()),
+                    flatzinc::BoolExpr::Bool(value) => Ok(bool_constant(*value)),
                 })
                 .collect(),
             flatzinc::Expr::ArrayOfInt(array) => array
@@ -717,6 +693,15 @@ impl Domain {
             Domain::IntervalDomain { lb, ub } => solver.new_named_bounded_integer(lb, ub, name),
             Domain::SparseDomain { values } => solver.new_named_sparse_integer(values, name),
         }
+    }
+}
+
+/// Returns the trivially true or trivially false [`Predicate`] corresponding to `value`.
+pub(crate) fn bool_constant(value: bool) -> Predicate {
+    if value {
+        Predicate::trivially_true()
+    } else {
+        Predicate::trivially_false()
     }
 }
 

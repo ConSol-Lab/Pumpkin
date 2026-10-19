@@ -500,7 +500,7 @@ impl IntegerVariable for Predicate {
             as i32
     }
 
-    /// Returns the lower bound represented as a 0-1 value.
+    /// Returns the upper bound represented as a 0-1 value.
     ///
     /// Predicates which are true have a lower bound of 1.
     /// Predicates which are false have an upper bound of 0.

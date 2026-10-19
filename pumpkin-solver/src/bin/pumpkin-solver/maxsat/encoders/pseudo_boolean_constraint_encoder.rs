@@ -322,7 +322,7 @@ impl PseudoBooleanConstraintEncoder {
                 {
                     has_assigned = true;
 
-                    solver.add_clause([(!term.literal)], constraint_tag);
+                    solver.add_clause([!term.literal], constraint_tag);
                 } else if solver.get_predicate_value(term.literal) == Some(true) {
                     self.constant_term += term.weight;
                 }

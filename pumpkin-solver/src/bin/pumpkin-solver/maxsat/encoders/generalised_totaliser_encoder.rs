@@ -69,7 +69,7 @@ impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
                 self.num_clauses_added += 1;
                 self.index_last_added_weighted_literal = i;
 
-                solver.add_clause([(!weighted_literals[i].literal)], self.constraint_tag)
+                solver.add_clause([!weighted_literals[i].literal], self.constraint_tag)
             } else {
                 // the first time a literal no longer exceeds k, we can stop
                 //  since other literals down the line have smaller weights
@@ -196,8 +196,8 @@ impl GeneralisedTotaliserEncoder {
                 for weighted_literal in &self.layers[index_current_layer].nodes[index_node1] {
                     solver.add_clause(
                         vec![
-                            (!weighted_literal.literal),
-                            (*value_to_literal_map.get(&weighted_literal.weight).unwrap()),
+                            !weighted_literal.literal,
+                            *value_to_literal_map.get(&weighted_literal.weight).unwrap(),
                         ],
                         self.constraint_tag,
                     );
@@ -208,8 +208,8 @@ impl GeneralisedTotaliserEncoder {
                 for weighted_literal in &self.layers[index_current_layer].nodes[index_node2] {
                     solver.add_clause(
                         vec![
-                            (!weighted_literal.literal),
-                            (*value_to_literal_map.get(&weighted_literal.weight).unwrap()),
+                            !weighted_literal.literal,
+                            *value_to_literal_map.get(&weighted_literal.weight).unwrap(),
                         ],
                         self.constraint_tag,
                     );
@@ -224,9 +224,9 @@ impl GeneralisedTotaliserEncoder {
                         if combined_weight <= k {
                             solver.add_clause(
                                 vec![
-                                    (!wl1.literal),
-                                    (!wl2.literal),
-                                    (*value_to_literal_map.get(&combined_weight).unwrap()),
+                                    !wl1.literal,
+                                    !wl2.literal,
+                                    *value_to_literal_map.get(&combined_weight).unwrap(),
                                 ],
                                 self.constraint_tag,
                             );
@@ -237,10 +237,8 @@ impl GeneralisedTotaliserEncoder {
                         //  todo check if these clauses are necessary, and see if the trade-off
                         // makes sense      I think it is necessary
                         } else {
-                            solver.add_clause(
-                                vec![(!wl1.literal), (!wl2.literal)],
-                                self.constraint_tag,
-                            );
+                            solver
+                                .add_clause(vec![!wl1.literal, !wl2.literal], self.constraint_tag);
                             self.num_clauses_added += 1;
                         }
                     }

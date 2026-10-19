@@ -147,7 +147,7 @@ enum ParseState {
     StartLine,
     Header,
     Comment,
-    Predicate,
+    Literal,
     NegativeLiteral,
     Clause,
 }
@@ -220,7 +220,7 @@ where
                     }
                 }
 
-                ParseState::Predicate => match byte {
+                ParseState::Literal => match byte {
                     b if b.is_ascii_whitespace() => {
                         self.finish_literal()?;
                     }
@@ -233,7 +233,7 @@ where
                 ParseState::NegativeLiteral => match byte {
                     b @ b'1'..=b'9' => {
                         self.buffer.push(*b as char);
-                        self.state = ParseState::Predicate;
+                        self.state = ParseState::Literal;
                     }
 
                     b => return Err(DimacsParseError::UnexpectedCharacter(*b as char)),
@@ -263,7 +263,7 @@ where
 
     fn start_literal(&mut self, b: &u8, is_positive: bool) {
         self.state = if is_positive {
-            ParseState::Predicate
+            ParseState::Literal
         } else {
             ParseState::NegativeLiteral
         };

@@ -77,7 +77,7 @@ impl PseudoBooleanConstraintEncoderInterface for CardinalityNetworkEncoder {
 
         println!("c CNE k = {k}");
 
-        solver.add_clause([(!self.output[k as usize])], self.constraint_tag);
+        solver.add_clause([!self.output[k as usize]], self.constraint_tag);
 
         Ok(())
     }
@@ -125,7 +125,7 @@ impl CardinalityNetworkEncoder {
         if result.is_err() {
             println!("c encoding detected conflict at the root!");
         } else if !self.output.is_empty() {
-            solver.add_clause([(!self.output[p as usize])], self.constraint_tag);
+            solver.add_clause([!self.output[p as usize]], self.constraint_tag);
         }
 
         result
@@ -146,7 +146,7 @@ impl CardinalityNetworkEncoder {
             .collect::<Vec<_>>();
 
         for &lit in padding_lits.iter() {
-            solver.add_clause([(!lit)], self.constraint_tag);
+            solver.add_clause([!lit], self.constraint_tag);
         }
 
         self.output = self
@@ -205,19 +205,19 @@ impl CardinalityNetworkEncoder {
             try_add_clause!(
                 self,
                 solver,
-                vec![(!d[i + 1]), (!e[i]), (c[2 * (i + 1)])],
+                vec![!d[i + 1], !e[i], c[2 * (i + 1)]],
                 self.constraint_tag
             );
             try_add_clause!(
                 self,
                 solver,
-                vec![(!d[i + 1]), (c[2 * (i + 1) - 1])],
+                vec![!d[i + 1], c[2 * (i + 1) - 1]],
                 self.constraint_tag
             );
             try_add_clause!(
                 self,
                 solver,
-                vec![(!e[i]), (c[2 * (i + 1) - 1])],
+                vec![!e[i], c[2 * (i + 1) - 1]],
                 self.constraint_tag
             );
         }
@@ -273,19 +273,19 @@ impl CardinalityNetworkEncoder {
             try_add_clause!(
                 self,
                 solver,
-                vec![(!d[i + 1]), (!e[i]), (c[2 * (i + 1)])],
+                vec![!d[i + 1], !e[i], c[2 * (i + 1)]],
                 self.constraint_tag
             );
             try_add_clause!(
                 self,
                 solver,
-                vec![(!d[i + 1]), (c[2 * (i + 1) - 1])],
+                vec![!d[i + 1], c[2 * (i + 1) - 1]],
                 self.constraint_tag
             );
             try_add_clause!(
                 self,
                 solver,
-                vec![(!e[i]), (c[2 * (i + 1) - 1])],
+                vec![!e[i], c[2 * (i + 1) - 1]],
                 self.constraint_tag
             );
         }

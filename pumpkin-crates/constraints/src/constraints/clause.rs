@@ -71,7 +71,7 @@ impl Constraint for Conjunction {
 
         conjunction
             .into_iter()
-            .for_each(|lit| solver.add_clause([(!(reification_predicate)), lit], constraint_tag))
+            .for_each(|lit| solver.add_clause([!reification_predicate, lit], constraint_tag))
     }
 }
 

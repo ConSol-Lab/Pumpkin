@@ -54,12 +54,10 @@ fn define_reified_predicate(
         && context.equivalences.is_defined(boolean)
         && !context.equivalences.contains_integer(boolean)
         && context.equivalences.domain(boolean) == (Domain::IntervalDomain { lb: 0, ub: 1 })
-        && !context
-            .boolean_predicates
-            .contains_key(&context.equivalences.representative(boolean))
+        && let representative = context.equivalences.representative(boolean)
+        && !context.boolean_predicates.contains_key(&representative)
         && let Some(predicate) = constant_comparison_predicate(comparison, lhs, rhs, context)
     {
-        let representative = context.equivalences.representative(boolean);
         let _ = context.boolean_predicates.insert(representative, predicate);
         true
     } else {

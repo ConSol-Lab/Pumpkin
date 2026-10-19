@@ -43,8 +43,8 @@ pub(crate) fn constant_comparison_predicate(
     context: &mut CompilationContext,
 ) -> Option<Predicate> {
     let (variable, comparison, value) = match (
-        resolve_constant(lhs, context),
-        resolve_constant(rhs, context),
+        context.resolve_integer_constant_from_expr(lhs).ok(),
+        context.resolve_integer_constant_from_expr(rhs).ok(),
     ) {
         // `x op c`
         (None, Some(value)) => (resolve_variable(lhs, context)?, comparison, value),
@@ -67,16 +67,6 @@ pub(crate) fn constant_comparison_predicate(
         IntComparison::GreaterThanOrEqual => predicate![variable >= value],
         IntComparison::GreaterThan => predicate![variable >= value.checked_add(1)?],
     })
-}
-
-fn resolve_constant(expr: &flatzinc::Expr, context: &CompilationContext) -> Option<i32> {
-    match expr {
-        flatzinc::Expr::Int(value) => i32::try_from(*value).ok(),
-        flatzinc::Expr::VarParIdentifier(id) => {
-            context.integer_parameters.get(id.as_str()).copied()
-        }
-        _ => None,
-    }
 }
 
 fn resolve_variable<'a>(expr: &'a flatzinc::Expr, context: &CompilationContext) -> Option<&'a str> {

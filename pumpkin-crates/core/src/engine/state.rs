@@ -265,14 +265,6 @@ impl State {
         self.assignments.get_checkpoint_for_predicate(&predicate)
     }
 
-    /// Returns the truth value of the provided [`Predicate`].
-    ///
-    /// If the [`Predicate`] is assigned in the current [`State`] then [`Some`] containing whether
-    /// the [`Predicate`] is satisfied or falsified is returned. Otherwise, [`None`] is returned.
-    pub fn get_predicate_value(&self, predicate: Predicate) -> Option<bool> {
-        self.truth_value(predicate)
-    }
-
     /// Returns the number of created checkpoints.
     pub fn get_checkpoint(&self) -> usize {
         self.assignments.get_checkpoint()

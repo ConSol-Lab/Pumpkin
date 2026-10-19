@@ -454,7 +454,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn get_predicate_value(&self, predicate: Predicate) -> Option<bool> {
-        self.state.get_predicate_value(predicate)
+        self.state.truth_value(predicate)
     }
 
     /// Get the lower bound for the given variable.
