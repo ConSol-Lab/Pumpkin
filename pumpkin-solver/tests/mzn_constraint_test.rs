@@ -45,6 +45,7 @@ mzn_test!(int_le_reif);
 mzn_test!(int_lt);
 mzn_test!(int_lt_reif);
 mzn_test!(reified_comparisons_with_constants);
+mzn_test!(reified_comparisons_merged_with_integers);
 
 mzn_test!(int_times);
 mzn_test!(int_plus);

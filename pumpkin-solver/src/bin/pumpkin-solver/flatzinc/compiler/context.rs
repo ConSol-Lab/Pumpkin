@@ -497,8 +497,6 @@ pub(super) struct EquivalenceClass {
     variables: BTreeSet<Rc<str>>,
     /// The domain to associate with these variables.
     domain: Domain,
-    /// Whether any of the variables is an integer variable (rather than a boolean variable).
-    contains_integer: bool,
 }
 
 impl VariableEquivalences {
@@ -513,8 +511,6 @@ impl VariableEquivalences {
         let equiv_2 = Rc::clone(&self.classes[&variable_2]);
 
         let merged_domain = equiv_1.borrow().domain.merge(&equiv_2.borrow().domain);
-        let contains_integer =
-            equiv_1.borrow().contains_integer || equiv_2.borrow().contains_integer;
         let merged_variables: BTreeSet<Rc<str>> = equiv_1
             .borrow()
             .variables
@@ -526,7 +522,6 @@ impl VariableEquivalences {
         let new_equivalence_class = Rc::new(RefCell::new(EquivalenceClass {
             variables: merged_variables.clone(),
             domain: merged_domain,
-            contains_integer,
         }));
 
         // Update the equivalence class for all the variables in the class.
@@ -537,45 +532,28 @@ impl VariableEquivalences {
         }
     }
 
-    /// Create a new equivalence class for the integer variable `representative`.
+    /// Create a new equivalence class with the given representative.
     pub(crate) fn create_equivalence_class(&mut self, representative: Rc<str>, lb: i32, ub: i32) {
-        self.insert_class(representative, Domain::IntervalDomain { lb, ub }, true);
-    }
-
-    /// Create a new equivalence class for the integer variable `representative`.
-    pub(crate) fn create_equivalence_class_sparse(
-        &mut self,
-        representative: Rc<str>,
-        values: Vec<i32>,
-    ) {
-        self.insert_class(representative, Domain::SparseDomain { values }, true);
-    }
-
-    /// Create a new equivalence class for the boolean variable `representative`.
-    pub(crate) fn create_boolean_equivalence_class(
-        &mut self,
-        representative: Rc<str>,
-        lb: i32,
-        ub: i32,
-    ) {
-        self.insert_class(representative, Domain::IntervalDomain { lb, ub }, false);
-    }
-
-    fn insert_class(&mut self, representative: Rc<str>, domain: Domain, contains_integer: bool) {
         let equivalence_class = Rc::new(RefCell::new(EquivalenceClass {
             variables: [Rc::clone(&representative)].into_iter().collect(),
-            domain,
-            contains_integer,
+            domain: Domain::IntervalDomain { lb, ub },
         }));
 
         let _ = self.classes.insert(representative, equivalence_class);
     }
 
-    /// Returns whether the equivalence class of the given variable contains an integer variable
-    /// (e.g. a boolean merged with an integer through `bool2int`).
-    /// If the variable doesn't belong to an equivalence class, this method panics.
-    pub(crate) fn contains_integer(&self, variable: &str) -> bool {
-        self.classes[variable].borrow().contains_integer
+    /// Create a new equivalence class with the given representative.
+    pub(crate) fn create_equivalence_class_sparse(
+        &mut self,
+        representative: Rc<str>,
+        values: Vec<i32>,
+    ) {
+        let equivalence_class = Rc::new(RefCell::new(EquivalenceClass {
+            variables: [Rc::clone(&representative)].into_iter().collect(),
+            domain: Domain::SparseDomain { values },
+        }));
+
+        let _ = self.classes.insert(representative, equivalence_class);
     }
 
     /// Get the name of the representative variable of the equivalence class the given variable

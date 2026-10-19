@@ -45,19 +45,24 @@ fn define_reified_predicate(
 
     // The boolean can only be defined as the predicate of the comparison if:
     // - it is a variable; parameters do not have an equivalence class;
-    // - it is not merged with an integer variable (e.g. through `bool2int`), which needs a domain
-    //   to represent it;
     // - its domain is not fixed, as the predicate would not enforce that value;
     // - it is not already defined by another constraint; that constraint will instead be posted as
-    //   clauses linking the two predicates.
+    //   clauses linking the two predicates;
+    // - it does not have a variable yet, which is the case when its equivalence class (e.g. through
+    //   `bool2int`) is the integer of this or an earlier comparison.
+    //
+    // If the boolean is merged with an integer (e.g. through `bool2int`), then that integer is the
+    // predicate as a 0-1 variable.
     if let [lhs, rhs, flatzinc::Expr::VarParIdentifier(boolean)] = constraint.exprs.as_slice()
         && context.equivalences.is_defined(boolean)
-        && !context.equivalences.contains_integer(boolean)
         && context.equivalences.domain(boolean) == (Domain::IntervalDomain { lb: 0, ub: 1 })
         && !context
             .boolean_predicates
             .contains_key(&context.equivalences.representative(boolean))
         && let Some(predicate) = constant_comparison_predicate(comparison, lhs, rhs, context)
+        && !context
+            .variable_map
+            .contains_key(&context.equivalences.representative(boolean))
     {
         let representative = context.equivalences.representative(boolean);
         let _ = context.boolean_predicates.insert(representative, predicate);
@@ -79,7 +84,7 @@ mod tests {
     use crate::flatzinc::ast::SingleVarDecl;
 
     #[test]
-    fn only_booleans_without_integer_view_or_earlier_definition_are_defined() {
+    fn only_booleans_without_variable_or_earlier_definition_are_defined() {
         let mut ast_builder = FlatZincAst::builder();
 
         ast_builder.add_variable_decl(SingleVarDecl::IntInRange {
@@ -89,14 +94,16 @@ mod tests {
             expr: None,
             annos: vec![],
         });
-        ast_builder.add_variable_decl(SingleVarDecl::IntInRange {
-            id: "i".into(),
-            lb: 0,
-            ub: 1,
-            expr: None,
-            annos: vec![],
-        });
-        for id in ["r", "s"] {
+        for id in ["i", "j"] {
+            ast_builder.add_variable_decl(SingleVarDecl::IntInRange {
+                id: id.into(),
+                lb: 0,
+                ub: 1,
+                expr: None,
+                annos: vec![],
+            });
+        }
+        for id in ["r", "s", "t"] {
             ast_builder.add_variable_decl(SingleVarDecl::Bool {
                 id: id.into(),
                 expr: None,
@@ -110,9 +117,12 @@ mod tests {
             ("int_le_reif", vec![var("x"), Expr::Int(5), var("r")]),
             // `r` is already defined.
             ("int_ne_reif", vec![var("x"), Expr::Int(1), var("r")]),
-            // `s` is merged with the integer `i`.
+            // Defines `s`, which is merged with the integer `i`.
             ("int_eq_reif", vec![Expr::Int(3), var("x"), var("s")]),
             ("bool2int", vec![var("s"), var("i")]),
+            // `t` is merged with the integer `j` which it compares, so `j` needs a domain.
+            ("int_le_reif", vec![var("j"), Expr::Int(0), var("t")]),
+            ("bool2int", vec![var("t"), var("j")]),
         ] {
             ast_builder.add_constraint(ConstraintItem {
                 id: id.into(),
@@ -137,18 +147,24 @@ mod tests {
             .expect("step should not fail");
         run(&mut context, &options).expect("step should not fail");
 
-        let defined = context
+        let mut defined = context
             .boolean_predicates
             .keys()
             .cloned()
             .collect::<Vec<_>>();
-        assert_eq!(defined, vec![context.equivalences.representative("r")]);
+        defined.sort();
+        let mut expected = vec![
+            context.equivalences.representative("r"),
+            context.equivalences.representative("s"),
+        ];
+        expected.sort();
+        assert_eq!(defined, expected);
 
         let remaining = context
             .constraints
             .iter()
             .map(|(_, constraint)| constraint.id.as_str())
             .collect::<Vec<_>>();
-        assert_eq!(remaining, vec!["int_ne_reif", "int_eq_reif"]);
+        assert_eq!(remaining, vec!["int_ne_reif", "int_le_reif"]);
     }
 }

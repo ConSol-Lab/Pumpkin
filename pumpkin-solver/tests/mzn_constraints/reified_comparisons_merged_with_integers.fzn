@@ -1,0 +1,18 @@
+var 0..3: x :: output_var;
+var 0..1: i :: output_var;
+var 0..1: j :: output_var;
+var bool: r :: output_var;
+var bool: t :: output_var;
+
+% `r <-> [x <= 1]`, where `r` is merged with the integer `i`, which becomes `[x <= 1]` as a 0-1
+% variable.
+constraint int_le_reif(x, 1, r);
+constraint bool2int(r, i);
+% The 0-1 variable `i` in a linear constraint: `2 * i + x >= 3`.
+constraint int_lin_le([-2, -1], [i, x], -3);
+% `t <-> [j != 0]`, where `t` is merged with the integer `j` of its own comparison, so `j` keeps a
+% domain.
+constraint int_ne_reif(j, 0, t);
+constraint bool2int(t, j);
+
+solve :: int_search([i, j, x], input_order, indomain_min, complete) satisfy;
