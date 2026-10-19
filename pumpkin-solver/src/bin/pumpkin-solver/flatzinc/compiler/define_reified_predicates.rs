@@ -43,33 +43,28 @@ fn define_reified_predicate(
         _ => return false,
     };
 
-    let [lhs, rhs, flatzinc::Expr::VarParIdentifier(boolean)] = constraint.exprs.as_slice() else {
-        return false;
-    };
-    // The reified boolean should be a variable; parameters do not have an equivalence class.
-    if !context.equivalences.is_defined(boolean) {
-        return false;
-    }
-
-    let representative = context.equivalences.representative(boolean);
     // The boolean can only be defined as the predicate of the comparison if:
+    // - it is a variable; parameters do not have an equivalence class;
     // - it is not merged with an integer variable (e.g. through `bool2int`), which needs a domain
     //   to represent it;
     // - its domain is not fixed, as the predicate would not enforce that value;
     // - it is not already defined by another constraint; that constraint will instead be posted as
     //   clauses linking the two predicates.
-    let can_be_defined = !context.equivalences.contains_integer(boolean)
-        && context.equivalences.domain(boolean) == Domain::IntervalDomain { lb: 0, ub: 1 }
-        && !context.boolean_predicates.contains_key(&representative);
-    if !can_be_defined {
-        return false;
+    if let [lhs, rhs, flatzinc::Expr::VarParIdentifier(boolean)] = constraint.exprs.as_slice()
+        && context.equivalences.is_defined(boolean)
+        && !context.equivalences.contains_integer(boolean)
+        && context.equivalences.domain(boolean) == (Domain::IntervalDomain { lb: 0, ub: 1 })
+        && !context
+            .boolean_predicates
+            .contains_key(&context.equivalences.representative(boolean))
+        && let Some(predicate) = constant_comparison_predicate(comparison, lhs, rhs, context)
+    {
+        let representative = context.equivalences.representative(boolean);
+        let _ = context.boolean_predicates.insert(representative, predicate);
+        true
+    } else {
+        false
     }
-
-    let Some(predicate) = constant_comparison_predicate(comparison, lhs, rhs, context) else {
-        return false;
-    };
-    let _ = context.boolean_predicates.insert(representative, predicate);
-    true
 }
 
 #[cfg(test)]
