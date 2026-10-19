@@ -22,6 +22,7 @@ use pumpkin_solver::core::results::SolutionReference;
 use pumpkin_solver::core::termination::Indefinite;
 use pumpkin_solver::core::termination::TerminationCondition;
 use pumpkin_solver::core::termination::TimeBudget;
+use pyo3::exceptions::PyDeprecationWarning;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -181,16 +182,25 @@ impl Model {
     /// Get the boolean expression which is true if and only if the predicate is true.
     ///
     /// No new variable is created for the boolean, so the `tag` and `name` are unused. They are
-    /// kept for backwards compatibility.
-    #[pyo3(signature = (predicate, tag, name=None))]
-    #[allow(unused_variables, reason = "kept for backwards compatibility")]
+    /// deprecated and only kept for backwards compatibility.
+    #[pyo3(signature = (predicate, tag=None, name=None))]
     fn predicate_as_boolean(
         &mut self,
+        py: Python<'_>,
         predicate: Predicate,
-        tag: Tag,
+        tag: Option<Tag>,
         name: Option<&str>,
-    ) -> BoolExpression {
-        BoolExpression(predicate.into_solver_predicate())
+    ) -> PyResult<BoolExpression> {
+        if tag.is_some() || name.is_some() {
+            PyErr::warn(
+                py,
+                &py.get_type::<PyDeprecationWarning>(),
+                c"the `tag` and `name` arguments of `predicate_as_boolean` are unused and deprecated",
+                1,
+            )?;
+        }
+
+        Ok(BoolExpression(predicate.into_solver_predicate()))
     }
 
     /// Add the given constraint to the model.
