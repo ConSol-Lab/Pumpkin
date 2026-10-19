@@ -4,7 +4,6 @@ use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::AffineView;
 use pumpkin_core::variables::AnyInteger;
-use pumpkin_core::variables::DomainId;
 use pumpkin_core::variables::TransformableVariable;
 
 use super::equals;
@@ -29,13 +28,13 @@ pub fn boolean_less_than_or_equals(
 pub fn boolean_equals(
     weights: impl Into<Box<[i32]>>,
     bools: impl Into<Box<[Predicate]>>,
-    rhs: DomainId,
+    rhs: impl Into<AnyInteger>,
     constraint_tag: ConstraintTag,
 ) -> impl Constraint {
     BooleanEqual {
         weights: weights.into(),
         bools: bools.into(),
-        rhs,
+        rhs: rhs.into(),
         constraint_tag,
     }
 }
@@ -75,7 +74,7 @@ impl BooleanLessThanOrEqual {
 struct BooleanEqual {
     weights: Box<[i32]>,
     bools: Box<[Predicate]>,
-    rhs: DomainId,
+    rhs: AnyInteger,
     constraint_tag: ConstraintTag,
 }
 
@@ -99,7 +98,7 @@ impl BooleanEqual {
             .iter()
             .enumerate()
             .map(|(index, &bool)| AnyInteger::from(bool).scaled(self.weights[index]))
-            .chain(std::iter::once(AnyInteger::from(self.rhs).scaled(-1)))
+            .chain(std::iter::once(self.rhs.scaled(-1)))
             .collect()
     }
 }
