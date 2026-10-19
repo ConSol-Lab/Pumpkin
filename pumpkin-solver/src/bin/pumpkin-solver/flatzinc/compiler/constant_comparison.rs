@@ -4,7 +4,7 @@
 use pumpkin_solver::core::predicate;
 use pumpkin_solver::core::predicates::Predicate;
 
-use super::collect_domains::get_or_create_domain;
+use super::collect_domains::get_or_create_variable;
 use super::context::CompilationContext;
 
 /// The comparison `a op b` of an integer comparison constraint such as `int_le_reif(a, b, r)`.
@@ -57,7 +57,7 @@ pub(crate) fn constant_comparison_predicate(
         _ => return None,
     };
 
-    let variable = get_or_create_domain(context, variable);
+    let variable = get_or_create_variable(context, variable);
 
     Some(match comparison {
         IntComparison::Equal => predicate![variable == value],
@@ -100,7 +100,7 @@ mod tests {
             .equivalences
             .create_equivalence_class("x".into(), 0, 10);
         let _ = context.integer_parameters.insert("c".into(), 7);
-        let domain = get_or_create_domain(&mut context, "x");
+        let variable = get_or_create_variable(&mut context, "x");
 
         let x = flatzinc::Expr::VarParIdentifier("x".into());
         let five = flatzinc::Expr::Int(5);
@@ -111,22 +111,27 @@ mod tests {
                 IntComparison::LessThanOrEqual,
                 &x,
                 &five,
-                predicate![domain <= 5],
+                predicate![variable <= 5],
             ),
-            (IntComparison::LessThan, &five, &x, predicate![domain >= 6]),
+            (
+                IntComparison::LessThan,
+                &five,
+                &x,
+                predicate![variable >= 6],
+            ),
             (
                 IntComparison::GreaterThan,
                 &x,
                 &five,
-                predicate![domain >= 6],
+                predicate![variable >= 6],
             ),
             (
                 IntComparison::GreaterThanOrEqual,
                 &five,
                 &x,
-                predicate![domain <= 5],
+                predicate![variable <= 5],
             ),
-            (IntComparison::NotEqual, &x, &c, predicate![domain != 7]),
+            (IntComparison::NotEqual, &x, &c, predicate![variable != 7]),
         ] {
             assert_eq!(
                 constant_comparison_predicate(comparison, lhs, rhs, &mut context),

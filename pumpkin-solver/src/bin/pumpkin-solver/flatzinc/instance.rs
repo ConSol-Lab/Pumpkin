@@ -5,18 +5,18 @@ use std::rc::Rc;
 use pumpkin_branching::branching::dynamic_brancher::DynamicBrancher;
 use pumpkin_solver::core::optimisation::OptimisationDirection;
 use pumpkin_solver::core::predicates::Predicate;
-use pumpkin_solver::core::variables::DomainId;
+use pumpkin_solver::core::variables::AnyInteger;
 
 /// The objective function of a FlatZinc model,
 /// consisting of the direction (e.g. maximization or minimization) and the integer variable which
 /// is being optimised
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum FlatzincObjective {
-    Maximize(DomainId),
-    Minimize(DomainId),
+    Maximize(AnyInteger),
+    Minimize(AnyInteger),
 }
 
-impl From<FlatzincObjective> for (OptimisationDirection, DomainId) {
+impl From<FlatzincObjective> for (OptimisationDirection, AnyInteger) {
     fn from(value: FlatzincObjective) -> Self {
         match value {
             FlatzincObjective::Maximize(domain_id) => (OptimisationDirection::Maximise, domain_id),
@@ -42,9 +42,9 @@ impl FlatZincInstance {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Output {
     Bool(VariableOutput<Predicate>),
-    Int(VariableOutput<DomainId>),
+    Int(VariableOutput<AnyInteger>),
     ArrayOfBool(ArrayOutput<Predicate>),
-    ArrayOfInt(ArrayOutput<DomainId>),
+    ArrayOfInt(ArrayOutput<AnyInteger>),
 }
 
 impl Output {
@@ -67,17 +67,14 @@ impl Output {
         })
     }
 
-    pub(crate) fn int(id: Rc<str>, domain_id: DomainId) -> Output {
-        Output::Int(VariableOutput {
-            id,
-            variable: domain_id,
-        })
+    pub(crate) fn int(id: Rc<str>, variable: AnyInteger) -> Output {
+        Output::Int(VariableOutput { id, variable })
     }
 
     pub(crate) fn array_of_int(
         id: Rc<str>,
         shape: Box<[(i32, i32)]>,
-        contents: Rc<[DomainId]>,
+        contents: Rc<[AnyInteger]>,
     ) -> Output {
         Output::ArrayOfInt(ArrayOutput {
             id,

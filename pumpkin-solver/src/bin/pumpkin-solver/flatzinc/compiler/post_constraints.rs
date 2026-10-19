@@ -9,7 +9,7 @@ use pumpkin_solver::core::predicate;
 use pumpkin_solver::core::predicates::Predicate;
 use pumpkin_solver::core::proof::ConstraintTag;
 use pumpkin_solver::core::variables::AffineView;
-use pumpkin_solver::core::variables::DomainId;
+use pumpkin_solver::core::variables::AnyInteger;
 use pumpkin_solver::core::variables::TransformableVariable;
 
 use super::constant_comparison::IntComparison;
@@ -726,7 +726,7 @@ fn compile_ternary_int_predicate<C: Constraint>(
     _: &[flatzinc::Annotation],
     predicate_name: &str,
     constraint_tag: ConstraintTag,
-    create_constraint: impl FnOnce(DomainId, DomainId, DomainId, ConstraintTag) -> C,
+    create_constraint: impl FnOnce(AnyInteger, AnyInteger, AnyInteger, ConstraintTag) -> C,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
@@ -746,7 +746,7 @@ fn compile_binary_int_predicate<C: Constraint>(
     _: &[flatzinc::Annotation],
     predicate_name: &str,
     constraint_tag: ConstraintTag,
-    create_constraint: impl FnOnce(DomainId, DomainId, ConstraintTag) -> C,
+    create_constraint: impl FnOnce(AnyInteger, AnyInteger, ConstraintTag) -> C,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 2, predicate_name);
 
@@ -766,7 +766,7 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
     predicate_name: &str,
     constraint_tag: ConstraintTag,
     comparison: IntComparison,
-    create_constraint: impl FnOnce(DomainId, DomainId, ConstraintTag) -> C,
+    create_constraint: impl FnOnce(AnyInteger, AnyInteger, ConstraintTag) -> C,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
@@ -792,7 +792,7 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
     Ok(())
 }
 
-fn weighted_vars(weights: Rc<[i32]>, vars: Rc<[DomainId]>) -> Box<[AffineView<DomainId>]> {
+fn weighted_vars(weights: Rc<[i32]>, vars: Rc<[AnyInteger]>) -> Box<[AffineView<AnyInteger>]> {
     vars.iter()
         .zip(weights.iter())
         .filter(|&(_, w)| *w != 0)
@@ -806,7 +806,7 @@ fn compile_int_lin_predicate<C: Constraint>(
     _: &[flatzinc::Annotation],
     predicate_name: &str,
     constraint_tag: ConstraintTag,
-    create_constraint: impl FnOnce(Box<[AffineView<DomainId>]>, i32, ConstraintTag) -> C,
+    create_constraint: impl FnOnce(Box<[AffineView<AnyInteger>]>, i32, ConstraintTag) -> C,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
@@ -828,7 +828,7 @@ fn compile_reified_int_lin_predicate<C: NegatableConstraint>(
     _: &[flatzinc::Annotation],
     predicate_name: &str,
     constraint_tag: ConstraintTag,
-    create_constraint: impl FnOnce(Box<[AffineView<DomainId>]>, i32, ConstraintTag) -> C,
+    create_constraint: impl FnOnce(Box<[AffineView<AnyInteger>]>, i32, ConstraintTag) -> C,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 4, predicate_name);
 
@@ -851,7 +851,7 @@ fn compile_int_lin_imp_predicate<C: Constraint>(
     _: &[flatzinc::Annotation],
     predicate_name: &str,
     constraint_tag: ConstraintTag,
-    create_constraint: impl FnOnce(Box<[AffineView<DomainId>]>, i32, ConstraintTag) -> C,
+    create_constraint: impl FnOnce(Box<[AffineView<AnyInteger>]>, i32, ConstraintTag) -> C,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 4, predicate_name);
 
@@ -875,7 +875,7 @@ fn compile_binary_int_imp<C: Constraint>(
     predicate_name: &str,
     constraint_tag: ConstraintTag,
     comparison: IntComparison,
-    create_constraint: impl FnOnce(DomainId, DomainId, ConstraintTag) -> C,
+    create_constraint: impl FnOnce(AnyInteger, AnyInteger, ConstraintTag) -> C,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 

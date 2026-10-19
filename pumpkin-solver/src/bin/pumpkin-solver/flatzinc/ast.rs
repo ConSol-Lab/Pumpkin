@@ -23,7 +23,7 @@ use pumpkin_branching::variable_selection::Smallest;
 use pumpkin_solver::core::predicates::Predicate;
 use pumpkin_solver::core::pumpkin_assert_eq_simple;
 use pumpkin_solver::core::pumpkin_assert_simple;
-use pumpkin_solver::core::variables::DomainId;
+use pumpkin_solver::core::variables::AnyInteger;
 
 use super::error::FlatZincError;
 #[derive(Debug)]
@@ -90,8 +90,8 @@ impl VariableSelectionStrategy {
 
     pub(crate) fn create_from_domains(
         &self,
-        variables: &[DomainId],
-    ) -> DynamicVariableSelector<DomainId> {
+        variables: &[AnyInteger],
+    ) -> DynamicVariableSelector<AnyInteger> {
         DynamicVariableSelector::new(match self {
             VariableSelectionStrategy::AntiFirstFail => Box::new(AntiFirstFail::new(variables)),
             VariableSelectionStrategy::DomWDeg => todo!("DomWDeg is not yet implemented"),
@@ -162,7 +162,7 @@ impl ValueSelectionStrategy {
         })
     }
 
-    pub(crate) fn create_for_domains(&self) -> DynamicValueSelector<DomainId> {
+    pub(crate) fn create_for_domains(&self) -> DynamicValueSelector<AnyInteger> {
         DynamicValueSelector::new(match self {
             ValueSelectionStrategy::InDomain => Box::new(InDomainMin),
             ValueSelectionStrategy::InDomainInterval => Box::new(InDomainInterval),

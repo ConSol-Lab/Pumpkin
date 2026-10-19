@@ -10,7 +10,7 @@ use pumpkin_branching::value_selection::InDomainMin;
 use pumpkin_branching::variable_selection::InputOrder;
 use pumpkin_solver::core::branching::Brancher;
 use pumpkin_solver::core::predicates::Predicate;
-use pumpkin_solver::core::variables::DomainId;
+use pumpkin_solver::core::variables::AnyInteger;
 
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;
@@ -45,7 +45,7 @@ fn get_bool_variables(
 fn get_int_variables(
     context: &mut CompilationContext,
     variables: &AnnExpr,
-) -> Result<Rc<[DomainId]>, FlatZincError> {
+) -> Result<Rc<[AnyInteger]>, FlatZincError> {
     Ok(match variables {
         AnnExpr::String(identifier) => {
             // TODO: unnecessary to create Rc here, for now it's just for the return type
@@ -201,11 +201,11 @@ fn create_from_search_strategy(
 
         // First we ensure that the objective is fixed to its extremum.
         match objective {
-            Some(FlatzincObjective::Maximize(domain_id)) => brancher.add_brancher(Box::new(
-                IndependentVariableValueBrancher::new(InputOrder::new(&[domain_id]), InDomainMax),
+            Some(FlatzincObjective::Maximize(objective)) => brancher.add_brancher(Box::new(
+                IndependentVariableValueBrancher::new(InputOrder::new(&[objective]), InDomainMax),
             )),
-            Some(FlatzincObjective::Minimize(domain_id)) => brancher.add_brancher(Box::new(
-                IndependentVariableValueBrancher::new(InputOrder::new(&[domain_id]), InDomainMin),
+            Some(FlatzincObjective::Minimize(objective)) => brancher.add_brancher(Box::new(
+                IndependentVariableValueBrancher::new(InputOrder::new(&[objective]), InDomainMin),
             )),
             None => {}
         }
@@ -218,7 +218,7 @@ fn create_from_search_strategy(
 }
 
 fn create_search_over_domains(
-    search_variables: &[DomainId],
+    search_variables: &[AnyInteger],
     variable_selection_strategy: &VariableSelectionStrategy,
     value_selection_strategy: &ValueSelectionStrategy,
 ) -> DynamicBrancher {

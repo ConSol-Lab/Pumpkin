@@ -11,6 +11,7 @@ use flatzinc::Expr;
 use flatzinc::IntExpr;
 use flatzinc::SetExpr;
 use flatzinc::SetLiteralExpr;
+use pumpkin_solver::core::variables::AnyInteger;
 
 use super::context::CompilationContext;
 use crate::flatzinc::FlatZincError;
@@ -72,11 +73,11 @@ pub(crate) fn run(
                             IntExpr::Int(int) => {
                                 let value = i32::try_from(*int)?;
 
-                                Ok(
+                                Ok(AnyInteger::from(
                                     *context.constant_domain_ids.entry(value).or_insert_with(
                                         || context.solver.new_bounded_integer(value, value),
                                     ),
-                                )
+                                ))
                             }
                             IntExpr::VarParIdentifier(identifier) => {
                                 let other_id = context.identifiers.get_interned(identifier);

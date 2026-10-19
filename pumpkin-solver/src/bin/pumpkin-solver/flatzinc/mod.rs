@@ -34,7 +34,7 @@ use pumpkin_solver::core::results::solution_iterator::IteratedSolution;
 use pumpkin_solver::core::termination::Combinator;
 use pumpkin_solver::core::termination::TerminationCondition;
 use pumpkin_solver::core::termination::TimeBudget;
-use pumpkin_solver::core::variables::DomainId;
+use pumpkin_solver::core::variables::AnyInteger;
 
 use self::instance::FlatZincInstance;
 use self::instance::Output;
@@ -98,7 +98,7 @@ fn log_statistics(
 fn solution_callback(
     brancher: &impl Brancher,
     resolver: &impl ConflictResolver,
-    instance_objective_function: Option<DomainId>,
+    instance_objective_function: Option<AnyInteger>,
     options_all_solutions: bool,
     outputs: &[Output],
     solver: &Solver,
@@ -166,7 +166,7 @@ pub(crate) fn solve<R: ConflictResolver>(
         instance.search.expect("Expected a search to be defined")
     };
 
-    let (direction, objective): (OptimisationDirection, DomainId) =
+    let (direction, objective): (OptimisationDirection, AnyInteger) =
         match instance.objective_function {
             Some(objective) => objective.into(),
             None => {
@@ -398,7 +398,7 @@ fn print_solution_from_solver(solution: SolutionReference, outputs: &[Output]) {
             }
 
             Output::Int(output) => {
-                output.print_value(|domain_id| solution.get_integer_value(*domain_id))
+                output.print_value(|variable| solution.get_integer_value(*variable))
             }
 
             Output::ArrayOfBool(output) => {
@@ -406,7 +406,7 @@ fn print_solution_from_solver(solution: SolutionReference, outputs: &[Output]) {
             }
 
             Output::ArrayOfInt(output) => {
-                output.print_value(|domain_id| solution.get_integer_value(*domain_id))
+                output.print_value(|variable| solution.get_integer_value(*variable))
             }
         }
     }

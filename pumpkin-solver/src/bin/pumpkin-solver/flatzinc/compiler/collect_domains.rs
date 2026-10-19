@@ -5,6 +5,7 @@ use std::rc::Rc;
 use flatzinc::Annotation;
 use pumpkin_core::Solver;
 use pumpkin_core::containers::HashMap;
+use pumpkin_core::variables::AnyInteger;
 use pumpkin_core::variables::DomainId;
 use pumpkin_solver::core::predicate;
 use pumpkin_solver::core::predicates::Predicate;
@@ -38,10 +39,10 @@ pub(crate) fn run(
             } => {
                 let id = context.identifiers.get_interned(id);
 
-                let domain_id = get_or_create_domain(context, &id);
+                let variable = get_or_create_variable(context, &id);
 
                 if is_output_variable(annos) {
-                    context.outputs.push(Output::int(id, domain_id));
+                    context.outputs.push(Output::int(id, variable));
                 }
             }
         }
@@ -50,33 +51,32 @@ pub(crate) fn run(
     Ok(())
 }
 
-/// Returns the predicate for the given boolean variable, which is either defined over a comparison
-/// (see [`CompilationContext::boolean_predicates`]) or over the domain of the boolean.
+/// Returns the predicate for the given boolean variable (see [`get_or_create_variable`]).
 fn get_or_create_predicate(context: &mut CompilationContext, id: &str) -> Predicate {
-    let representative = context.equivalences.representative(id);
-
-    if let Some(predicate) = context.boolean_predicates.get(&representative) {
-        return *predicate;
-    }
-
-    let domain_id = get_or_create_domain(context, id);
-    predicate![domain_id >= 1]
+    let variable = get_or_create_variable(context, id);
+    predicate![variable >= 1]
 }
 
-pub(crate) fn get_or_create_domain(context: &mut CompilationContext, id: &str) -> DomainId {
+/// Returns the variable for the given identifier. This is the predicate which defines the
+/// equivalence class of the identifier (see [`CompilationContext::boolean_predicates`]) if there is
+/// one; otherwise it is the domain of the equivalence class, which is created if it does not exist
+/// yet.
+pub(crate) fn get_or_create_variable(context: &mut CompilationContext, id: &str) -> AnyInteger {
     let representative = context.equivalences.representative(id);
     let domain = context.equivalences.domain(id);
 
     *context
         .variable_map
         .entry(Rc::clone(&representative))
-        .or_insert_with(|| {
-            create_integer_domain(
+        .or_insert_with(|| match context.boolean_predicates.get(&representative) {
+            Some(&predicate) => predicate.into(),
+            None => create_integer_domain(
                 context.solver,
                 &mut context.constant_domain_ids,
                 representative,
                 domain,
             )
+            .into(),
         })
 }
 

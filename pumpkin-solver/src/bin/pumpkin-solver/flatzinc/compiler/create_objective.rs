@@ -19,7 +19,7 @@ pub(crate) fn run(
             // it will find For now we assume that the objective function is a single
             // integer
 
-            let domain = match bool_expr {
+            let objective = match bool_expr {
                 BoolExpr::Bool(_) => unreachable!(
                     "We do not expect a constant to be present in the objective function!"
                 ),
@@ -33,8 +33,8 @@ pub(crate) fn run(
             };
 
             Ok(Some(match optimization_type {
-                flatzinc::OptimizationType::Minimize => FlatzincObjective::Minimize(domain),
-                flatzinc::OptimizationType::Maximize => FlatzincObjective::Maximize(domain),
+                flatzinc::OptimizationType::Minimize => FlatzincObjective::Minimize(objective),
+                flatzinc::OptimizationType::Maximize => FlatzincObjective::Maximize(objective),
             }))
         }
         _ => todo!(
