@@ -226,3 +226,22 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_hole_at_the_fixed_value_makes_the_reified_equality_false() {
+        let mut solver = Solver::default();
+        let constraint_tag = solver.new_constraint_tag();
+        let x = solver.new_sparse_integer(vec![1, 3]);
+        let c = solver.new_bounded_integer(2, 2);
+        let r = solver.new_literal();
+
+        binary_equals(x, c, constraint_tag).reify(&mut solver, r);
+
+        let _ = solver.propagate_to_fixpoint();
+        assert_eq!(solver.get_literal_value(r), Some(false));
+    }
+}

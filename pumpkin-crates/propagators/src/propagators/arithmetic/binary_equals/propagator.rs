@@ -125,6 +125,18 @@ where
                 conjunction: conjunction!([self.b <= a_lb - 1] & [self.a >= a_lb]),
                 inference_code: self.inference_code,
             })
+        } else if b_lb == b_ub && !domains.contains(&self.a, b_lb) {
+            // If `b` is fixed to a value that `a` no longer takes then we report a conflict
+            Some(PropagatorConflict {
+                conjunction: conjunction!([self.a != b_lb] & [self.b == b_lb]),
+                inference_code: self.inference_code,
+            })
+        } else if a_lb == a_ub && !domains.contains(&self.b, a_lb) {
+            // If `a` is fixed to a value that `b` no longer takes then we report a conflict
+            Some(PropagatorConflict {
+                conjunction: conjunction!([self.b != a_lb] & [self.a == a_lb]),
+                inference_code: self.inference_code,
+            })
         } else {
             None
         }
