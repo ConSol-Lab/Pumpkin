@@ -1,6 +1,7 @@
 mod file_format;
 mod flatzinc;
 mod maxsat;
+mod msc;
 mod os_signal_termination;
 mod parsers;
 mod result;
@@ -72,8 +73,12 @@ struct Args {
     ///  - '*.cnf' for SAT instances, given in the DIMACS format,
     ///  - '*.wcnf' for MaxSAT instances, given in the WDIMACS format.
     ///  - '*.fzn' for FlatZinc instances (see <https://docs.minizinc.dev/en/stable/flattening.html>).
-    #[clap(verbatim_doc_comment)]
-    instance_path: PathBuf,
+    #[clap(verbatim_doc_comment, required_unless_present = "generate_msc")]
+    instance_path: Option<PathBuf>,
+
+    /// Writes the MiniZinc solver configurations (`*.msc`) for this binary to the given directory.
+    #[arg(long, hide = true, exclusive = true)]
+    generate_msc: Option<PathBuf>,
 
     /// The output path for the proof file.
     ///
@@ -520,13 +525,21 @@ fn main() {
 fn run() -> PumpkinResult<()> {
     let args = Args::parse();
 
-    let file_format = match args.instance_path.extension().and_then(|ext| ext.to_str()) {
+    if let Some(directory) = args.generate_msc {
+        return msc::generate(&directory);
+    }
+
+    let instance_path = args
+        .instance_path
+        .expect("clap requires the instance path unless --generate-msc is given");
+
+    let file_format = match instance_path.extension().and_then(|ext| ext.to_str()) {
         Some("cnf") => FileFormat::CnfDimacsPLine,
         Some("wcnf") => FileFormat::WcnfDimacsPLine,
         Some("fzn") => FileFormat::FlatZinc,
         _ => {
             configure_logging_unknown()?;
-            return Err(PumpkinError::invalid_instance(args.instance_path.display()));
+            return Err(PumpkinError::invalid_instance(instance_path.display()));
         }
     };
 
@@ -592,10 +605,9 @@ fn run() -> PumpkinResult<()> {
     };
 
     let time_limit = args.time_limit.map(Duration::from_millis);
-    let instance_path = args
-        .instance_path
+    let instance_path = instance_path
         .to_str()
-        .ok_or(PumpkinError::invalid_instance(args.instance_path.display()))?;
+        .ok_or(PumpkinError::invalid_instance(instance_path.display()))?;
 
     let recursive_minimisation = args.recursive_minimisation;
     let iterative_minimisation = !args.no_iterative_minimisation;

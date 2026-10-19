@@ -118,3 +118,31 @@ jobs:
 
           json_pp -t null < minizinc/pumpkin.msc
           json_pp -t null < minizinc/pumpkin-for-proofs.msc
+
+  msc_up_to_date:
+    name: Check .msc files are up to date
+    runs-on: ubuntu-latest
+    env:
+      # Do not build the solution checkers, we don't need them in this job
+      NO_CHECKERS: true
+    steps:
+    - uses: actions/checkout@v7
+    - uses: actions/cache@v6
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - uses: dtolnay/rust-toolchain@stable
+    - name: Regenerate .msc files
+      run: cargo run -p pumpkin-solver -- --generate-msc minizinc/
+    - name: Check for differences
+      # The version follows the crate version, so it is ignored to avoid failing on release PRs
+      run: |
+        git diff --exit-code --ignore-matching-lines='^\s*"version": ' minizinc/ || {
+          echo "::error::The .msc files are out of date; regenerate them with 'cargo run -p pumpkin-solver -- --generate-msc minizinc/'"
+          exit 1
+        }
