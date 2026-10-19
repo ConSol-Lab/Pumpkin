@@ -184,12 +184,14 @@ impl ProofLog {
     /// `root_domains`, the proof is written for the reading of fzn-croc-check within the root
     /// domains (`--root-domains`): an atomic constraint that the declared domains and the
     /// nogoods over one atomic constraint written so far entail is left out where that reading
-    /// allows.
+    /// allows; with `explain_once` as well, each inference from a constraint is written once, as
+    /// a nogood of its own the first time it occurs, and cited by the rule `nogood` afterwards.
     pub fn blocks(
         file_path: &Path,
         resolution_chains: bool,
         binary: bool,
         root_domains: bool,
+        explain_once: bool,
     ) -> std::io::Result<ProofLog> {
         let file = File::create(file_path)?;
 
@@ -220,6 +222,8 @@ impl ProofLog {
             proof_atomics: ProofAtomics::default(),
             derived_identifiers: ProofHashMap::default(),
             next_identifier: 1,
+            explain_once: explain_once && root_domains,
+            explanations: ProofHashMap::default(),
             first_nogood_identifier: None,
             single_variable_nogoods: ProofHashSet::default(),
             last_nogood: None,
@@ -1300,6 +1304,12 @@ struct BlockProof {
     /// on from the model's and the head's.
     derived_identifiers: ProofHashMap<ConstraintTag, NonZero<u32>>,
     next_identifier: u32,
+    /// Whether an inference from a constraint is written once, as a nogood of its own, and cited
+    /// afterwards (only in a proof for the lenient reading).
+    explain_once: bool,
+    /// The identifier of each inference written as a nogood of its own, by a hash of its
+    /// constraint, rule and atomic constraints.
+    explanations: ProofHashMap<u64, NonZero<u32>>,
     /// The identifier of the first nogood written: the nogoods from it on are the ones the
     /// search derived, which the proof may delete.
     first_nogood_identifier: Option<NonZero<u32>>,
@@ -1792,9 +1802,6 @@ impl BlockProof {
     ) -> std::io::Result<()> {
         self.write_held_lines()?;
         self.record_unnamed_domains(variable_names, assignments);
-        let identifier =
-            NonZero::new(self.next_identifier).expect("derived identifiers start at one");
-        self.next_identifier += 1;
 
         let is_constant = |predicate: Predicate| self.is_constant(predicate);
         let nogood: Vec<Predicate> = premises
@@ -1837,22 +1844,14 @@ impl BlockProof {
         };
         self.seen_premises = seen;
 
-        if !reached_conflict {
-            eprintln!("warning: the inferences logged for nogood {identifier} reach no conflict");
-        }
-
+        let mut no_chain = false;
         let chain = if self.resolution_chains && reached_conflict && !kept.is_empty() {
             let chain = resolution_chain(
                 &nogood,
                 &kept,
                 root_domains.as_ref().filter(|_| within_root_domains),
             );
-            if chain.is_none() {
-                eprintln!(
-                    "warning: no resolution chain reaches nogood {identifier}; it is written as a \
-                     refutation"
-                );
-            }
+            no_chain = chain.is_none();
             chain
         } else {
             None
@@ -1864,6 +1863,7 @@ impl BlockProof {
         for ((inference_premises, consequent, constraint, label), premises_left_out) in
             kept.into_iter().zip(left_out)
         {
+            let stated_premises = inference_premises.len();
             let mut atoms = Vec::with_capacity(inference_premises.len() + 1);
             for &predicate in inference_premises.iter() {
                 atoms.push(self.atom_reference(predicate, variable_names)?);
@@ -1919,6 +1919,7 @@ impl BlockProof {
                 .and_then(|tag| self.reification.get(&tag))
                 .copied();
             let premise_free_label = self.labels[label as usize].premise_free;
+            let rule_label = label;
             let label = self.label_reference_of(label, reified)?;
             let constraint = constraint.map(|tag| {
                 self.derived_identifiers
@@ -1937,13 +1938,43 @@ impl BlockProof {
                 let consequent = consequent.expect("checked above");
                 atoms = vec![self.atom_reference(consequent, variable_names)?];
             }
-            inferences.push(ReferencedInference {
+            let inference = ReferencedInference {
                 nogood: atoms,
                 constraint,
                 label,
                 hint,
                 premise_free,
-            });
+            };
+            let explains = self.explain_once
+                && !premise_free
+                && constraint.is_some()
+                && rule_label != NOGOOD_LABEL
+                && rule_label != INITIAL_DOMAIN_LABEL;
+            let inference = if explains {
+                self.explain_once_and_cite(
+                    inference,
+                    &inference_premises,
+                    stated_premises,
+                    consequent,
+                    variable_names,
+                )?
+            } else {
+                inference
+            };
+            inferences.push(inference);
+        }
+
+        let identifier =
+            NonZero::new(self.next_identifier).expect("derived identifiers start at one");
+        self.next_identifier += 1;
+        if !reached_conflict {
+            eprintln!("warning: the inferences logged for nogood {identifier} reach no conflict");
+        }
+        if no_chain {
+            eprintln!(
+                "warning: no resolution chain reaches nogood {identifier}; it is written as a \
+                 refutation"
+            );
         }
 
         match chain {
@@ -2010,6 +2041,69 @@ impl BlockProof {
         self.logged_domain_inferences.clear();
 
         Ok(())
+    }
+
+    /// The line citing the nogood the inference is written as, the first time the same inference
+    /// occurs, by the rule `nogood`. The line states the first `stated` of the premises and leaves
+    /// out the others, which the root domains entail; the same inference is the same constraint,
+    /// rule and atomic constraints with all its premises. The nogood states the atoms the line
+    /// states: in the lenient reading the root domains only grow, so the premises they entail
+    /// stay entailed.
+    fn explain_once_and_cite(
+        &mut self,
+        inference: ReferencedInference,
+        premises: &[Predicate],
+        stated: usize,
+        consequent: Option<Predicate>,
+        variable_names: &VariableNames,
+    ) -> std::io::Result<ReferencedInference> {
+        let mut full = inference.nogood.clone();
+        let left_out = &premises[stated..];
+        if !left_out.is_empty() {
+            // The negated consequent stays last.
+            let negated_consequent = consequent.map(|_| full.pop().expect("the consequent"));
+            for &premise in left_out {
+                full.push(self.atom_reference(premise, variable_names)?);
+            }
+            full.extend(negated_consequent);
+        }
+        let key = {
+            use std::hash::BuildHasher;
+            use std::hash::Hasher;
+            let mut hasher = proof_hasher::ProofBuildHasher::default().build_hasher();
+            hasher.write_u32(inference.constraint.map_or(0, NonZero::get));
+            hasher.write_u32(inference.label.get());
+            for atom in &full {
+                hasher.write_i32(atom.get());
+            }
+            hasher.finish()
+        };
+        let identifier = match self.explanations.get(&key) {
+            Some(&identifier) => identifier,
+            None => {
+                let identifier =
+                    NonZero::new(self.next_identifier).expect("derived identifiers start at one");
+                self.next_identifier += 1;
+                let line = ReferencedInference {
+                    nogood: inference.nogood.clone(),
+                    ..inference
+                };
+                self.writer.log_referenced_refutation(
+                    identifier,
+                    &inference.nogood,
+                    std::slice::from_ref(&line),
+                )?;
+                let _ = self.explanations.insert(key, identifier);
+                identifier
+            }
+        };
+        Ok(ReferencedInference {
+            nogood: inference.nogood,
+            constraint: Some(identifier),
+            label: self.label_reference_of(NOGOOD_LABEL, None)?,
+            hint: vec![],
+            premise_free: false,
+        })
     }
 
     /// Write the deletion of the nogood derived under the tag, unless no learned nogood was

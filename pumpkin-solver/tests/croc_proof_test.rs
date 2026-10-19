@@ -107,6 +107,22 @@ croc_proofs!(
     "--proof-root-domains"
 );
 
+// The lenient reading with each inference from a constraint written once as a nogood and cited.
+croc_proofs!(
+    equalities_and_reifications_explained_once,
+    "equalities_and_reifications",
+    "c UPPER_BOUND 4",
+    "--proof-root-domains",
+    "--proof-explain-once"
+);
+croc_proofs!(
+    table_reified_element_explained_once,
+    "table_reified_element",
+    "c LOWER_BOUND 1",
+    "--proof-root-domains",
+    "--proof-explain-once"
+);
+
 #[test]
 fn a_proof_for_the_lenient_reading_starts_with_its_header() {
     let proof_path = output_path("lenient_header.croc");

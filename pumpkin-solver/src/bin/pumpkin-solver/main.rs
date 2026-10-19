@@ -121,6 +121,13 @@ struct Args {
     #[arg(long)]
     proof_root_domains: bool,
 
+    /// With `--proof-root-domains`, write each inference from a constraint once, as a nogood of
+    /// its own the first time it occurs, and cite that nogood afterwards (experimental). This
+    /// helps the checker on proofs whose inferences recur over long linear constraints, and costs
+    /// proof size and checker memory.
+    #[arg(long)]
+    proof_explain_once: bool,
+
     /// Compile the model, write the steps that state the views the compiler made to
     /// `proof_path`, report what the view pass did, and stop without solving (experimental).
     #[arg(long)]
@@ -660,6 +667,9 @@ fn run() -> PumpkinResult<()> {
     if args.proof_root_domains && args.proof_type != ProofType::Blocks {
         return Err(PumpkinError::RootDomainsNeedBlocks);
     }
+    if args.proof_explain_once && !args.proof_root_domains {
+        warn!("--proof-explain-once applies only with --proof-root-domains and is ignored");
+    }
 
     if pumpkin_solver::core::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION
         >= pumpkin_solver::core::asserts::PUMPKIN_ASSERT_MODERATE
@@ -696,6 +706,7 @@ fn run() -> PumpkinResult<()> {
                     args.nogood_derivation == NogoodDerivation::Resolution,
                     args.proof_encoding.unwrap_or(ProofEncoding::Binary) == ProofEncoding::Binary,
                     args.proof_root_domains,
+                    args.proof_explain_once,
                 )?,
             },
         }

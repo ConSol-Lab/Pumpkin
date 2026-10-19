@@ -167,6 +167,7 @@ fn main() -> anyhow::Result<()> {
             cli.nogood_derivation == NogoodDerivation::Resolution,
             cli.proof_encoding == ProofEncoding::Binary,
             cli.root_domains,
+            false,
         )
         .with_context(|| "Failed to create proof writer")?,
     };
