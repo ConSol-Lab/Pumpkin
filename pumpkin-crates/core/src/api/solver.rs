@@ -4,6 +4,7 @@ use super::results::OptimisationResult;
 use super::results::SatisfactionResult;
 use super::results::SatisfactionResultUnderAssumptions;
 use crate::basic_types::CSPSolverExecutionFlag;
+use crate::basic_types::time::Instant;
 use crate::branching::Brancher;
 use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
@@ -314,6 +315,16 @@ impl Solver {
             .internal_parameters
             .proof_log
             .hold_step(constraint_tag)
+    }
+
+    /// Stop the proof at the deadline, truncated and without a conclusion, so that a run that
+    /// reaches its time limit stops as it does without a proof; see
+    /// [`crate::proof::ProofLog::stop_at`]. Changes nothing in the search.
+    pub fn stop_proof_at(&mut self, deadline: Instant) {
+        self.satisfaction_solver
+            .internal_parameters
+            .proof_log
+            .stop_at(deadline);
     }
 
     /// Write the preamble of a croc scaffold before its nogoods; see

@@ -40,6 +40,7 @@ use pumpkin_checking::verify_deduction;
 
 #[cfg(doc)]
 use crate::Solver;
+use crate::basic_types::time::Instant;
 use crate::containers::HashMap;
 use crate::containers::HashSet;
 use crate::containers::KeyGenerator;
@@ -109,6 +110,10 @@ pub struct ProofLog {
     /// [`ProofLog::leaves_out_root_explanation_of`] says: the proof is written for the lenient
     /// reading of the checker.
     leaves_out_root_explanations: bool,
+    /// The time at which the proof stops, set by [`ProofLog::stop_at`].
+    deadline: Option<Instant>,
+    /// The inferences logged since the deadline was last compared with the clock.
+    inferences_since_clock: u32,
 }
 
 impl ProofLog {
@@ -172,6 +177,8 @@ impl ProofLog {
             explaining_root: false,
             root_explanations: ProofHashSet::default(),
             leaves_out_root_explanations: false,
+            deadline: None,
+            inferences_since_clock: 0,
         })
     }
 
@@ -268,6 +275,8 @@ impl ProofLog {
             explaining_root: false,
             root_explanations: ProofHashSet::default(),
             leaves_out_root_explanations: root_domains,
+            deadline: None,
+            inferences_since_clock: 0,
         })
     }
 
@@ -637,6 +646,8 @@ impl ProofLog {
             explaining_root: false,
             root_explanations: ProofHashSet::default(),
             leaves_out_root_explanations: false,
+            deadline: None,
+            inferences_since_clock: 0,
         })
     }
 
@@ -669,6 +680,33 @@ impl ProofLog {
         }
     }
 
+    /// Stop the proof at the deadline: from the first nogood or inference logged after it, the
+    /// proof is closed as it stands, without a conclusion, and nothing more is logged, as if no
+    /// proof were logged. A run that reaches its time limit then stops as it does without a
+    /// proof, rather than when the logging of the work done before the limit catches up.
+    pub fn stop_at(&mut self, deadline: Instant) {
+        self.deadline = Some(deadline);
+    }
+
+    /// Close the proof when its deadline has passed; returns whether it is closed.
+    fn stops_at_deadline(&mut self) -> bool {
+        let Some(deadline) = self.deadline else {
+            return false;
+        };
+        if Instant::now() < deadline {
+            return false;
+        }
+        if self.internal_proof.is_some() {
+            eprintln!(
+                "warning: the proof stops at the time limit; it is truncated and has no conclusion"
+            );
+        }
+        // Dropping the proof flushes what is written.
+        self.internal_proof = None;
+        self.deadline = None;
+        true
+    }
+
     /// Mark the inferences logged from now on as explanations of predicates at the root, or stop
     /// doing so; returns whether they were marked before.
     pub(crate) fn set_explaining_root(&mut self, explaining_root: bool) -> bool {
@@ -688,6 +726,13 @@ impl ProofLog {
         assignments: &Assignments,
     ) -> std::io::Result<ConstraintTag> {
         let inference_tag = constraint_tags.next_key();
+        if self.deadline.is_some() {
+            self.inferences_since_clock += 1;
+            if self.inferences_since_clock >= INFERENCES_PER_CLOCK_READING {
+                self.inferences_since_clock = 0;
+                let _ = self.stops_at_deadline();
+            }
+        }
         // A block proof marks the inferences it buffers instead.
         if self.explaining_root && !self.is_block_proof() {
             let _ = self.root_explanations.insert(inference_tag);
@@ -887,6 +932,9 @@ impl ProofLog {
         assignments: &Assignments,
     ) -> std::io::Result<ConstraintTag> {
         let constraint_tag = constraint_tags.next_key();
+        if self.stops_at_deadline() {
+            return Ok(constraint_tag);
+        }
 
         if cfg!(feature = "check-deductions") {
             self.verify_deduction_at_runtime(premises.clone());
@@ -1378,6 +1426,10 @@ struct BlockProof {
     /// constant's: not at all.
     constant_domains: HashSet<DomainId>,
 }
+
+/// How many inferences are logged between two readings of the clock for the deadline of a
+/// proof; a nogood reads it each time.
+const INFERENCES_PER_CLOCK_READING: u32 = 1024;
 
 /// The magnitude of the bounds the FlatZinc front end gives a variable declared without bounds;
 /// the declared domains do not state them.

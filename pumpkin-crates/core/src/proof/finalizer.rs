@@ -79,6 +79,10 @@ fn explain_at_root(
     let mut required_assumptions = vec![];
 
     while let Some((current_trail_pos, predicates)) = to_explain.pop_last() {
+        // A proof stopped at its deadline needs no more explanations.
+        if !context.proof_log.is_logging_proof() {
+            break;
+        }
         for predicate in predicates {
             // If the predicate is a root-level assignment, add the appropriate inference to the
             // proof. No extra predicates need to be assumed.

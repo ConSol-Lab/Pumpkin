@@ -107,6 +107,10 @@ pub(crate) fn solve<R: ConflictResolver>(
     mut resolver: R,
 ) -> Result<(), FlatZincError> {
     let init_start_time = Instant::now();
+    // The proof stops at the time limit, so that the run stops there as it does without one.
+    if let Some(deadline) = time_limit.and_then(|limit| init_start_time.checked_add(limit)) {
+        solver.stop_proof_at(deadline);
+    }
 
     let instance = File::open(instance)?;
 

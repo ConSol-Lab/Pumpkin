@@ -1150,9 +1150,22 @@ impl ConstraintSatisfactionSolver {
                 .preprocessed(&rest, &mut context)
         };
         let restated: Vec<DomainId> = {
+            // The predicates stated over each domain, found by its position in the sorted list:
+            // a predicate implies only predicates over its own domain, and a long nogood, such
+            // as a clause of a table decomposition, would otherwise compare every pair.
+            let mut stated = preprocessed.clone();
+            stated.sort_unstable_by_key(|predicate| predicate.get_domain());
+            let is_stated = |predicate: Predicate| {
+                let domain = predicate.get_domain();
+                let first = stated.partition_point(|stated| stated.get_domain() < domain);
+                stated[first..]
+                    .iter()
+                    .take_while(|stated| stated.get_domain() == domain)
+                    .any(|stated| stated.implies(predicate))
+            };
             let mut domains: Vec<DomainId> = rest
                 .iter()
-                .filter(|&&predicate| !preprocessed.iter().any(|stated| stated.implies(predicate)))
+                .filter(|&&predicate| !is_stated(predicate))
                 .map(|predicate| predicate.get_domain())
                 .collect();
             domains.sort_unstable();
