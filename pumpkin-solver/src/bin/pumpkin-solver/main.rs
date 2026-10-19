@@ -103,8 +103,8 @@ struct Args {
     #[arg(long, value_enum, default_value_t)]
     proof_format: ProofFormat,
 
-    /// How a croc proof of the block proof type derives each learned nogood: by a resolution
-    /// chain or by a refutation (experimental).
+    /// How a croc proof of the block proof type derives each learned nogood: by a refutation (the
+    /// default) or by a resolution chain.
     #[arg(long, value_enum, default_value_t)]
     nogood_derivation: NogoodDerivation,
 
@@ -988,8 +988,8 @@ enum ProofEncoding {
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 enum NogoodDerivation {
     /// A resolution chain from the conflict.
-    #[default]
     Resolution,
     /// A refutation of the nogood by the inferences in the order they propagated.
+    #[default]
     Refutation,
 }

@@ -8,6 +8,7 @@ mod dimacs;
 mod finalizer;
 mod inference_code;
 mod proof_atomics;
+mod proof_hasher;
 pub mod view_log;
 
 use std::fs::File;
@@ -28,6 +29,8 @@ use drcp_format::writer::blocks::ReferencedInference;
 pub(crate) use finalizer::*;
 pub use inference_code::*;
 use proof_atomics::ProofAtomics;
+use proof_hasher::ProofHashMap;
+use proof_hasher::ProofHashSet;
 use pumpkin_checking::DomainView;
 use pumpkin_checking::IntExt;
 use pumpkin_checking::InvalidDeduction;
@@ -101,7 +104,7 @@ pub struct ProofLog {
     /// placed before the others: an explanation of a root predicate can be logged after an
     /// inference that uses the predicate, when conflict analysis or a minimiser asks for it late,
     /// and it needs no premise that is not itself explained at the root.
-    root_explanations: HashSet<ConstraintTag>,
+    root_explanations: ProofHashSet<ConstraintTag>,
 }
 
 impl ProofLog {
@@ -163,7 +166,7 @@ impl ProofLog {
             supporting_inferences: vec![],
             supporting_inferences_at_root: vec![],
             explaining_root: false,
-            root_explanations: HashSet::default(),
+            root_explanations: ProofHashSet::default(),
         })
     }
 
@@ -204,42 +207,55 @@ impl ProofLog {
             writer.log_reading(Reading::Lenient)?;
         }
 
+        let mut proof = Box::new(BlockProof {
+            writer,
+            inferences: vec![],
+            propagation_order: vec![],
+            logged_domain_inferences: ProofHashMap::default(),
+            proof_atomics: ProofAtomics::default(),
+            derived_identifiers: ProofHashMap::default(),
+            next_identifier: 1,
+            last_nogood: None,
+            rule_of_constraint: HashMap::default(),
+            rule_by_indicator_side: HashMap::default(),
+            constant_domains: HashSet::default(),
+            positions_of_constraint: HashMap::default(),
+            set_in_domains: HashMap::default(),
+            selector_bounds: HashMap::default(),
+            selector_bound_tags: HashSet::default(),
+            objective_view: None,
+            reification: HashMap::default(),
+            fixing_bounds_when_true: HashSet::default(),
+            resolution_chains,
+            held_lines: vec![],
+            held_lines_written: false,
+            held_steps: vec![],
+            dropped_steps: HashSet::default(),
+            atom_references: ProofHashMap::default(),
+            label_references: HashMap::default(),
+            labels: vec![],
+            label_ids: HashMap::default(),
+            rule_labels: vec![],
+            unnamed_domains: vec![],
+            seen_premises: ProofHashSet::default(),
+            facts_from_unit_nogoods: vec![],
+            root_domains: root_domains.then(RootDomains::default),
+            premise_free_inferences: false,
+        });
+        for (label, name) in [
+            (INITIAL_DOMAIN_LABEL, "initial_domain"),
+            (SET_IN_LABEL, "set_in"),
+            (NOGOOD_LABEL, "nogood"),
+        ] {
+            assert_eq!(proof.intern_label(name), label);
+        }
+
         Ok(ProofLog {
-            internal_proof: Some(ProofImpl::BlockProof(Box::new(BlockProof {
-                writer,
-                inferences: HashMap::default(),
-                propagation_order: vec![],
-                logged_domain_inferences: HashMap::default(),
-                proof_atomics: ProofAtomics::default(),
-                derived_identifiers: HashMap::default(),
-                next_identifier: 1,
-                last_nogood: None,
-                rule_of_constraint: HashMap::default(),
-                rule_by_indicator_side: HashMap::default(),
-                constant_domains: HashSet::default(),
-                positions_of_constraint: HashMap::default(),
-                set_in_domains: HashMap::default(),
-                selector_bounds: HashMap::default(),
-                selector_bound_tags: HashSet::default(),
-                objective_view: None,
-                reification: HashMap::default(),
-                fixing_bounds_when_true: HashSet::default(),
-                resolution_chains,
-                held_lines: vec![],
-                held_lines_written: false,
-                held_steps: vec![],
-                dropped_steps: HashSet::default(),
-                atom_references: HashMap::default(),
-                label_references: HashMap::default(),
-                seen_premises: HashSet::default(),
-                facts_from_unit_nogoods: vec![],
-                root_domains: root_domains.then(RootDomains::default),
-                premise_free_inferences: false,
-            }))),
+            internal_proof: Some(ProofImpl::BlockProof(proof)),
             supporting_inferences: vec![],
             supporting_inferences_at_root: vec![],
             explaining_root: false,
-            root_explanations: HashSet::default(),
+            root_explanations: ProofHashSet::default(),
         })
     }
 
@@ -363,9 +379,8 @@ impl ProofLog {
     /// as itself.
     pub fn name_rule_of_constraint(&mut self, constraint_tag: ConstraintTag, rule: &str) {
         if let Some(ProofImpl::BlockProof(proof)) = self.internal_proof.as_mut() {
-            let _ = proof
-                .rule_of_constraint
-                .insert(constraint_tag, Arc::from(rule));
+            let label = proof.intern_label(rule);
+            let _ = proof.rule_of_constraint.insert(constraint_tag, label);
         }
     }
 
@@ -381,14 +396,11 @@ impl ProofLog {
         rule_when_false: &str,
     ) {
         if let Some(ProofImpl::BlockProof(proof)) = self.internal_proof.as_mut() {
-            let _ = proof.rule_by_indicator_side.insert(
-                constraint_tag,
-                (
-                    indicator,
-                    Arc::from(rule_when_true),
-                    Arc::from(rule_when_false),
-                ),
-            );
+            let rule_when_true = proof.intern_label(rule_when_true);
+            let rule_when_false = proof.intern_label(rule_when_false);
+            let _ = proof
+                .rule_by_indicator_side
+                .insert(constraint_tag, (indicator, rule_when_true, rule_when_false));
         }
     }
 
@@ -611,7 +623,7 @@ impl ProofLog {
             supporting_inferences: vec![],
             supporting_inferences_at_root: vec![],
             explaining_root: false,
-            root_explanations: HashSet::default(),
+            root_explanations: ProofHashSet::default(),
         })
     }
 
@@ -634,7 +646,8 @@ impl ProofLog {
         assignments: &Assignments,
     ) -> std::io::Result<ConstraintTag> {
         let inference_tag = constraint_tags.next_key();
-        if self.explaining_root {
+        // A block proof marks the inferences it buffers instead.
+        if self.explaining_root && !self.is_block_proof() {
             let _ = self.root_explanations.insert(inference_tag);
         }
 
@@ -648,16 +661,15 @@ impl ProofLog {
         }
 
         if let Some(ProofImpl::BlockProof(proof)) = self.internal_proof.as_mut() {
-            let _ = proof.inferences.insert(
-                inference_tag,
-                BufferedInference {
-                    premises: premises.into_iter().collect(),
-                    consequent: propagated,
-                    constraint: Some(inference_code.tag()),
-                    label: Arc::from(inference_rules.name(inference_code.rule())),
-                },
-            );
-            proof.propagation_order.push(Some(inference_tag));
+            let label = proof.rule_label(inference_rules, inference_code.rule());
+            proof.buffer_inference(BufferedInference {
+                tag: inference_tag,
+                premises: premises.into_iter().collect(),
+                consequent: propagated,
+                constraint: Some(inference_code.tag()),
+                label,
+                at_root: self.explaining_root,
+            });
             return Ok(inference_tag);
         }
 
@@ -723,6 +735,7 @@ impl ProofLog {
             assignments,
         )?;
         if self.explaining_root
+            && !self.is_block_proof()
             && let Some(tag) = tag
         {
             let _ = self.root_explanations.insert(tag);
@@ -746,9 +759,11 @@ impl ProofLog {
             });
         }
 
-        let is_constant = match self.internal_proof {
+        let is_constant = match self.internal_proof.as_mut() {
             // A block proof states what is known about every named variable, fixed or not.
-            Some(ProofImpl::BlockProof(_)) => is_unnamed(predicate, variable_names),
+            Some(ProofImpl::BlockProof(proof)) => {
+                proof.is_unnamed(predicate, variable_names, assignments)
+            }
             _ => is_likely_a_constant(predicate, variable_names, assignments, None),
         };
         if is_constant {
@@ -764,19 +779,15 @@ impl ProofLog {
             // The bounds an inference rests on are logged after it, so that they apply before
             // it: the propagation order is the reverse of the order of logging. They explain
             // the root when it does.
-            let (tag, premises) = proof.log_domain_inference(predicate, inference_tag);
+            let (tag, premises) =
+                proof.log_domain_inference(predicate, inference_tag, self.explaining_root);
             for premise in premises {
-                let premise_tag = self.log_domain_inference_unmarked(
+                let _ = self.log_domain_inference_unmarked(
                     premise,
                     variable_names,
                     constraint_tags,
                     assignments,
                 )?;
-                if self.explaining_root
-                    && let Some(premise_tag) = premise_tag
-                {
-                    let _ = self.root_explanations.insert(premise_tag);
-                }
             }
             return Ok(Some(tag));
         }
@@ -1189,11 +1200,15 @@ enum ProofImpl {
 /// An inference kept until the nogood it contributes to is logged.
 #[derive(Debug)]
 struct BufferedInference {
+    /// The tag the inference was logged under.
+    tag: ConstraintTag,
+    /// Whether the inference explains a predicate at the root; such inferences come first.
+    at_root: bool,
     premises: Vec<Predicate>,
     consequent: Option<Predicate>,
     /// The constraint the inference is from; [`None`] for the initial domains.
     constraint: Option<ConstraintTag>,
-    label: Arc<str>,
+    label: LabelId,
 }
 
 /// The objective variable of the model as `scale * representative + offset`, stated by the
@@ -1207,6 +1222,27 @@ struct ObjectiveView {
     evidence: NonZero<u32>,
 }
 
+/// The identifier of a label of the inferences of a block proof, an index into
+/// [`BlockProof::labels`].
+type LabelId = u32;
+
+/// The label of the initial domains.
+const INITIAL_DOMAIN_LABEL: LabelId = 0;
+/// The label of a `set_in` constraint.
+const SET_IN_LABEL: LabelId = 1;
+/// The label of a nogood.
+const NOGOOD_LABEL: LabelId = 2;
+
+/// A label of the inferences of a block proof: its name, whether the lenient reading takes the
+/// premises of an inference by its rule from the current domains, and the references of the
+/// rule it names, plain, half-reified and reified, once declared.
+#[derive(Debug)]
+struct ProofLabel {
+    name: Box<str>,
+    premise_free: bool,
+    references: [Option<NonZero<u32>>; 3],
+}
+
 /// A `set_in` constraint with its set, as ranges of values.
 type SetInRanges = (ConstraintTag, Vec<(i32, i32)>);
 
@@ -1214,24 +1250,25 @@ type SetInRanges = (ConstraintTag, Vec<(i32, i32)>);
 #[derive(Debug)]
 struct BlockProof {
     writer: BlockProofWriter<std::io::BufWriter<Sink>, i32>,
-    /// The inferences logged since the last nogood, by the tag they were logged under.
-    inferences: HashMap<ConstraintTag, BufferedInference>,
-    /// The tags of those inferences in the reverse of the order they apply in; an entry is
-    /// emptied when an initial-domain inference is logged again and moves to the end.
-    propagation_order: Vec<Option<ConstraintTag>>,
-    logged_domain_inferences: HashMap<Predicate, usize>,
+    /// The inferences logged since the last nogood, in the order they were logged.
+    inferences: Vec<BufferedInference>,
+    /// The positions of those inferences in [`BlockProof::inferences`], in the reverse of the
+    /// order they apply in; an entry is emptied when an initial-domain inference is logged again
+    /// and moves to the end.
+    propagation_order: Vec<Option<u32>>,
+    logged_domain_inferences: ProofHashMap<Predicate, usize>,
     proof_atomics: ProofAtomics,
     /// The identifier of every learned nogood in the proof, which numbers derived constraints
     /// on from the model's and the head's.
-    derived_identifiers: HashMap<ConstraintTag, NonZero<u32>>,
+    derived_identifiers: ProofHashMap<ConstraintTag, NonZero<u32>>,
     next_identifier: u32,
     /// The identifier and the atomic constraints of the last nogood written.
     last_nogood: Option<(NonZero<u32>, Vec<Predicate>)>,
     /// The rule for the inferences from a model constraint, where it is not the label.
-    rule_of_constraint: HashMap<ConstraintTag, Arc<str>>,
+    rule_of_constraint: HashMap<ConstraintTag, LabelId>,
     /// For a reified constraint Pumpkin decomposes, the indicator's true predicate and the rule
     /// that licenses an inference whose nogood contains it, or contains its negation.
-    rule_by_indicator_side: HashMap<ConstraintTag, (Predicate, Arc<str>, Arc<str>)>,
+    rule_by_indicator_side: HashMap<ConstraintTag, (Predicate, LabelId, LabelId)>,
     /// The elements of a model constraint whose inferences name positions in it.
     positions_of_constraint: HashMap<ConstraintTag, Vec<AffineView<DomainId>>>,
     /// The reified constraints whose inferences on the side of the indicator state the bounds
@@ -1248,11 +1285,21 @@ struct BlockProof {
     dropped_steps: HashSet<ConstraintTag>,
     /// The reference of every atom written so far, by the predicate it is written for, so that
     /// an atom written again costs one lookup rather than its name.
-    atom_references: HashMap<Predicate, NonZero<i32>>,
+    atom_references: ProofHashMap<Predicate, NonZero<i32>>,
     /// The reference of every rule written so far.
     label_references: HashMap<Box<str>, NonZero<u32>>,
+    /// The labels of the inferences, by their [`LabelId`]; the first three are
+    /// [`INITIAL_DOMAIN_LABEL`], [`SET_IN_LABEL`] and [`NOGOOD_LABEL`].
+    labels: Vec<ProofLabel>,
+    /// The identifier of each label by its name.
+    label_ids: HashMap<Box<str>, LabelId>,
+    /// The label of each rule of the solver an inference was logged by, by its position.
+    rule_labels: Vec<Option<LabelId>>,
+    /// Whether [`is_unnamed`] holds of the predicates over each domain, by its index, for the
+    /// domains recorded by [`BlockProof::record_unnamed_domains`].
+    unnamed_domains: Vec<bool>,
     /// The premises of an inference seen so far, reused from one inference to the next.
-    seen_premises: HashSet<Predicate>,
+    seen_premises: ProofHashSet<Predicate>,
     /// The facts the next nogood infers from unit nogoods before its other inferences.
     facts_from_unit_nogoods: Vec<(Predicate, ConstraintTag)>,
     /// The root domains the checker holds, when the proof is written for its reading within
@@ -1431,21 +1478,19 @@ impl BlockProof {
         &mut self,
         predicate: Predicate,
         inference_tag: ConstraintTag,
+        at_root: bool,
     ) -> (ConstraintTag, Vec<Predicate>) {
         if let Some(index) = self.logged_domain_inferences.get(&predicate).copied() {
-            let tag = self.propagation_order[index]
+            let position = self.propagation_order[index]
                 .take()
                 .expect("the logged_domain_inferences always points to some index");
-            self.propagation_order.push(Some(tag));
+            self.propagation_order.push(Some(position));
             let _ = self
                 .logged_domain_inferences
                 .insert(predicate, self.propagation_order.len() - 1);
-            let premises = self
-                .inferences
-                .get(&tag)
-                .map(|inference| inference.premises.clone())
-                .unwrap_or_default();
-            return (tag, premises);
+            let inference = &mut self.inferences[position as usize];
+            inference.at_root |= at_root;
+            return (inference.tag, inference.premises.clone());
         }
 
         let set_in = self
@@ -1482,24 +1527,29 @@ impl BlockProof {
         };
         let selector_bounds = self.selector_bounds.get(&predicate.get_domain()).copied();
         let (constraint, label) = match (set_in, selector_bounds) {
-            (Some(tag), _) => (Some(tag), Arc::from("set_in")),
-            (None, Some(tag)) => (Some(tag), Arc::from("initial_domain")),
-            (None, None) => (None, Arc::from("initial_domain")),
+            (Some(tag), _) => (Some(tag), SET_IN_LABEL),
+            (None, Some(tag)) => (Some(tag), INITIAL_DOMAIN_LABEL),
+            (None, None) => (None, INITIAL_DOMAIN_LABEL),
         };
-        let _ = self.inferences.insert(
-            inference_tag,
-            BufferedInference {
-                premises: premises.clone(),
-                consequent: Some(predicate),
-                constraint,
-                label,
-            },
-        );
-        self.propagation_order.push(Some(inference_tag));
+        self.buffer_inference(BufferedInference {
+            tag: inference_tag,
+            premises: premises.clone(),
+            consequent: Some(predicate),
+            constraint,
+            label,
+            at_root,
+        });
         let _ = self
             .logged_domain_inferences
             .insert(predicate, self.propagation_order.len() - 1);
         (inference_tag, premises)
+    }
+
+    /// Keep the inference for the next nogood, applying before those kept so far.
+    fn buffer_inference(&mut self, inference: BufferedInference) {
+        let position = u32::try_from(self.inferences.len()).expect("fewer than 2^32 inferences");
+        self.inferences.push(inference);
+        self.propagation_order.push(Some(position));
     }
 
     /// The line of the fields, with each atom, label and variable written as the proof refers
@@ -1567,6 +1617,76 @@ impl BlockProof {
         Ok(reference)
     }
 
+    /// The identifier of the label with the name, interned if it is new.
+    fn intern_label(&mut self, name: &str) -> LabelId {
+        if let Some(&label) = self.label_ids.get(name) {
+            return label;
+        }
+        let label = LabelId::try_from(self.labels.len()).expect("fewer than 2^32 labels");
+        self.labels.push(ProofLabel {
+            name: Box::from(name),
+            premise_free: premise_free_rule(rule_name(name)),
+            references: [None; 3],
+        });
+        let _ = self.label_ids.insert(Box::from(name), label);
+        label
+    }
+
+    /// The reference of the rule the label names, in its reified form when `reified` holds
+    /// `true` and in its half-reified form when it holds `false`, declared first if it is new.
+    fn label_reference_of(
+        &mut self,
+        label: LabelId,
+        reified: Option<bool>,
+    ) -> std::io::Result<NonZero<u32>> {
+        let form = match reified {
+            None => 0,
+            Some(false) => 1,
+            Some(true) => 2,
+        };
+        if let Some(reference) = self.labels[label as usize].references[form] {
+            return Ok(reference);
+        }
+        let name = self.labels[label as usize].name.clone();
+        let rule = rule_name(&name);
+        let reference = match reified {
+            None => self.label_reference(rule)?,
+            Some(false) => self.label_reference(&format!("half_reified({rule})"))?,
+            Some(true) => self.label_reference(&format!("reified({rule})"))?,
+        };
+        self.labels[label as usize].references[form] = Some(reference);
+        Ok(reference)
+    }
+
+    /// The label of the rule of the solver.
+    fn rule_label(&mut self, inference_rules: &InferenceRules, rule: RuleId) -> LabelId {
+        let index = rule.index();
+        if index >= self.rule_labels.len() {
+            self.rule_labels.resize(index + 1, None);
+        }
+        if let Some(label) = self.rule_labels[index] {
+            return label;
+        }
+        let label = self.intern_label(inference_rules.name(rule));
+        self.rule_labels[index] = Some(label);
+        label
+    }
+
+    /// Record, for every domain created since the last call, whether [`is_unnamed`] holds of
+    /// its predicates. A domain is named when it is created, or never.
+    fn record_unnamed_domains(
+        &mut self,
+        variable_names: &VariableNames,
+        assignments: &Assignments,
+    ) {
+        let num_domains = assignments.num_domains() as usize;
+        for index in self.unnamed_domains.len()..num_domains {
+            let domain = DomainId::new(index as u32);
+            self.unnamed_domains
+                .push(is_unnamed(predicate![domain >= 0], variable_names));
+        }
+    }
+
     /// The text of a held line, with the identifier of each step it names.
     fn held_line_text(&self, pieces: &[HeldPiece]) -> std::io::Result<String> {
         let mut line = String::new();
@@ -1621,20 +1741,17 @@ impl BlockProof {
         &mut self,
         constraint_tag: ConstraintTag,
         premises: impl IntoIterator<Item = Predicate>,
-        root_explanations: &HashSet<ConstraintTag>,
+        root_explanations: &ProofHashSet<ConstraintTag>,
         variable_names: &VariableNames,
         assignments: &Assignments,
     ) -> std::io::Result<()> {
         self.write_held_lines()?;
+        self.record_unnamed_domains(variable_names, assignments);
         let identifier =
             NonZero::new(self.next_identifier).expect("derived identifiers start at one");
         self.next_identifier += 1;
 
-        let constant_domains = &self.constant_domains;
-        let is_constant = |predicate: Predicate| {
-            is_unnamed(predicate, variable_names)
-                || constant_domains.contains(&predicate.get_domain())
-        };
+        let is_constant = |predicate: Predicate| self.is_constant(predicate);
         let nogood: Vec<Predicate> = premises
             .into_iter()
             .map(|predicate| self.proof_atomics.canonical(predicate))
@@ -1730,7 +1847,7 @@ impl BlockProof {
                 })
                 .unwrap_or_default();
             let label = constraint
-                .and_then(|tag| self.rule_of_constraint.get(&tag).cloned())
+                .and_then(|tag| self.rule_of_constraint.get(&tag).copied())
                 .unwrap_or(label);
             let label = match constraint.and_then(|tag| self.rule_by_indicator_side.get(&tag)) {
                 Some((indicator, rule_when_true, rule_when_false)) => {
@@ -1739,9 +1856,9 @@ impl BlockProof {
                         inference_premises.contains(&predicate) || consequent == Some(!predicate)
                     };
                     if in_nogood(indicator) {
-                        Arc::clone(rule_when_true)
+                        *rule_when_true
                     } else if in_nogood(!indicator) {
-                        Arc::clone(rule_when_false)
+                        *rule_when_false
                     } else {
                         label
                     }
@@ -1751,17 +1868,13 @@ impl BlockProof {
             // The initial domains are constraint 0, whichever constraint the solver's inference
             // came from, except for the bounds a decomposition states for its fresh variables.
             let constraint = constraint.filter(|tag| {
-                label.as_ref() != "initial_domain" || self.selector_bound_tags.contains(tag)
+                label != INITIAL_DOMAIN_LABEL || self.selector_bound_tags.contains(tag)
             });
-            let rule = rule_name(&label);
             let reified = constraint
                 .and_then(|tag| self.reification.get(&tag))
                 .copied();
-            let label = match reified {
-                Some(true) => self.label_reference(&format!("reified({rule})"))?,
-                Some(false) => self.label_reference(&format!("half_reified({rule})"))?,
-                None => self.label_reference(rule)?,
-            };
+            let premise_free_label = self.labels[label as usize].premise_free;
+            let label = self.label_reference_of(label, reified)?;
             let constraint = constraint.map(|tag| {
                 self.derived_identifiers
                     .get(&tag)
@@ -1774,7 +1887,7 @@ impl BlockProof {
                 && self.root_domains.is_some()
                 && chain.is_none()
                 && consequent.is_some()
-                && premise_free_rule(rule);
+                && premise_free_label;
             if premise_free {
                 let consequent = consequent.expect("checked above");
                 atoms = vec![self.atom_reference(consequent, variable_names)?];
@@ -1847,6 +1960,28 @@ impl BlockProof {
         Ok(())
     }
 
+    /// Whether [`is_unnamed`] holds of the predicate.
+    fn is_unnamed(
+        &mut self,
+        predicate: Predicate,
+        variable_names: &VariableNames,
+        assignments: &Assignments,
+    ) -> bool {
+        let index = predicate.get_domain().id() as usize;
+        if index >= self.unnamed_domains.len() {
+            self.record_unnamed_domains(variable_names, assignments);
+        }
+        self.unnamed_domains[index]
+    }
+
+    /// Whether the proof leaves the predicate out: it is over a variable without a name, over the
+    /// domain of the trivially true predicate, or over a variable the proof replaces by its
+    /// value. The domain must be recorded by [`BlockProof::record_unnamed_domains`].
+    fn is_constant(&self, predicate: Predicate) -> bool {
+        let domain = predicate.get_domain();
+        self.unnamed_domains[domain.id() as usize] || self.constant_domains.contains(&domain)
+    }
+
     /// Whether the initial domain of the variable in the solver is the domain the declared
     /// domains give it: not for a variable the proof leaves out, one a `set_in` constraint
     /// restricts, or a fresh variable of a decomposition whose bounds a constraint states.
@@ -1872,17 +2007,13 @@ impl BlockProof {
         &self,
         nogood: &[Predicate],
         facts: &[(Predicate, ConstraintTag)],
-        root_explanations: &HashSet<ConstraintTag>,
+        root_explanations: &ProofHashSet<ConstraintTag>,
         variable_names: &VariableNames,
         assignments: &Assignments,
-        seen: &mut HashSet<Predicate>,
+        seen: &mut ProofHashSet<Predicate>,
         mut root_domains: Option<&mut RootDomains>,
     ) -> Option<(Vec<KeptInference>, Vec<Vec<Predicate>>, bool)> {
-        let constant_domains = &self.constant_domains;
-        let is_constant = |predicate: Predicate| {
-            is_unnamed(predicate, variable_names)
-                || constant_domains.contains(&predicate.get_domain())
-        };
+        let is_constant = |predicate: Predicate| self.is_constant(predicate);
         let declares_domain = |domain: DomainId| self.declares_domain(domain, variable_names);
         let mut kept: Vec<KeptInference> = vec![];
         let mut left_out: Vec<Vec<Predicate>> = vec![];
@@ -1907,7 +2038,6 @@ impl BlockProof {
             return None;
         }
 
-        let nogood_label: Arc<str> = Arc::from("nogood");
         for &(fact, tag) in facts.iter() {
             let fact = self.proof_atomics.canonical(fact);
             if is_constant(fact) {
@@ -1929,34 +2059,35 @@ impl BlockProof {
                 continue;
             }
             let consistent = state.apply(&fact);
-            kept.push((vec![], Some(fact), Some(tag), Arc::clone(&nogood_label)));
+            kept.push((vec![], Some(fact), Some(tag), NOGOOD_LABEL));
             left_out.push(vec![]);
             if !consistent {
                 return Some((kept, left_out, true));
             }
         }
 
-        let order = roots_first(
+        // The order they apply in, with the explanations of root predicates first.
+        let in_order = || {
             self.propagation_order
                 .iter()
                 .rev()
                 .flatten()
-                .copied()
-                .collect(),
-            root_explanations,
-        );
-        for tag in order {
-            let Some(inference) = self.inferences.get(&tag) else {
-                continue;
-            };
-            // An explanation can repeat a premise, which a nogood states once.
-            seen.clear();
+                .map(|&position| &self.inferences[position as usize])
+        };
+        let order = in_order()
+            .filter(|inference| inference.at_root || root_explanations.contains(&inference.tag))
+            .chain(in_order().filter(|inference| {
+                !inference.at_root && !root_explanations.contains(&inference.tag)
+            }));
+        for inference in order {
             let mut inference_premises: Vec<Predicate> = inference
                 .premises
                 .iter()
                 .map(|&predicate| self.proof_atomics.canonical(predicate))
-                .filter(|&predicate| !is_constant(predicate) && seen.insert(predicate))
+                .filter(|&predicate| !is_constant(predicate))
                 .collect();
+            // An explanation can repeat a premise, which a nogood states once.
+            remove_repeats(&mut inference_premises, seen);
             let consequent = inference
                 .consequent
                 .map(|predicate| self.proof_atomics.canonical(predicate));
@@ -2006,7 +2137,7 @@ impl BlockProof {
                 for bound in bounds {
                     if !state.is_true(&bound) {
                         let _ = state.apply(&bound);
-                        kept.push((vec![], Some(bound), None, Arc::from("initial_domain")));
+                        kept.push((vec![], Some(bound), None, INITIAL_DOMAIN_LABEL));
                         left_out.push(vec![]);
                     }
                     inference_premises.push(bound);
@@ -2031,7 +2162,7 @@ impl BlockProof {
                         inference_premises,
                         Some(consequent),
                         inference.constraint,
-                        Arc::clone(&inference.label),
+                        inference.label,
                     ));
                     left_out.push(premises_left_out);
                     if !consistent {
@@ -2048,7 +2179,7 @@ impl BlockProof {
                             inference_premises,
                             None,
                             inference.constraint,
-                            Arc::clone(&inference.label),
+                            inference.label,
                         ));
                         left_out.push(premises_left_out);
                         reached_conflict = true;
@@ -2060,7 +2191,7 @@ impl BlockProof {
                         inference_premises,
                         None,
                         inference.constraint,
-                        Arc::clone(&inference.label),
+                        inference.label,
                     ));
                     left_out.push(premises_left_out);
                     reached_conflict = true;
@@ -2089,7 +2220,7 @@ impl BlockProof {
     ) -> Vec<Predicate> {
         let is_set_in = constraint
             .and_then(|tag| self.rule_of_constraint.get(&tag))
-            .is_some_and(|rule| rule.as_ref() == "set_in");
+            .is_some_and(|&label| label == SET_IN_LABEL);
         if !is_set_in {
             return vec![];
         }
@@ -2360,7 +2491,7 @@ fn hint_positions(
 /// rest; each group keeps its order.
 fn roots_first(
     order: Vec<ConstraintTag>,
-    root_explanations: &HashSet<ConstraintTag>,
+    root_explanations: &ProofHashSet<ConstraintTag>,
 ) -> Vec<ConstraintTag> {
     let (mut roots, rest): (Vec<_>, Vec<_>) = order
         .into_iter()
@@ -2375,7 +2506,7 @@ type KeptInference = (
     Vec<Predicate>,
     Option<Predicate>,
     Option<ConstraintTag>,
-    Arc<str>,
+    LabelId,
 );
 
 /// One inference of a resolution chain.
@@ -2549,6 +2680,25 @@ fn resolution_chain(
             .collect()
     };
     Some((steps, derived))
+}
+
+/// Remove every predicate that occurs earlier in the list, keeping the order; `seen` is a set to
+/// use for a long list.
+fn remove_repeats(predicates: &mut Vec<Predicate>, seen: &mut ProofHashSet<Predicate>) {
+    if predicates.len() <= 16 {
+        let mut kept = 0;
+        for position in 0..predicates.len() {
+            let predicate = predicates[position];
+            if !predicates[..kept].contains(&predicate) {
+                predicates[kept] = predicate;
+                kept += 1;
+            }
+        }
+        predicates.truncate(kept);
+    } else {
+        seen.clear();
+        predicates.retain(|&predicate| seen.insert(predicate));
+    }
 }
 
 /// Whether the predicate holds for every value from `lower` to `upper`.

@@ -164,6 +164,40 @@ pub(crate) fn explain_root_assignment(
         Some(0)
     );
 
+    // A predicate of the initial domains, or one a unit nogood states, is explained by one
+    // inference, as `explain_at_root` would explain it, without its bookkeeping.
+    let is_initial_bound = context.state.assignments.is_initial_bound(predicate);
+    let unit_nogood = (!is_initial_bound
+        && !context.state.assignments.is_decision_predicate(&predicate))
+    .then(|| context.unit_nogood_inference_codes.get(&predicate).copied())
+    .flatten();
+    if is_initial_bound || unit_nogood.is_some() {
+        let was_explaining_root = context.proof_log.set_explaining_root(true);
+        match unit_nogood {
+            Some(inference_code) => {
+                let _ = context.proof_log.log_inference(
+                    &mut context.state.constraint_tags,
+                    &context.state.inference_rules,
+                    inference_code,
+                    [],
+                    Some(predicate),
+                    &context.state.variable_names,
+                    &context.state.assignments,
+                );
+            }
+            None => {
+                let _ = context.proof_log.log_domain_inference(
+                    predicate,
+                    &context.state.variable_names,
+                    &mut context.state.constraint_tags,
+                    &context.state.assignments,
+                );
+            }
+        }
+        let _ = context.proof_log.set_explaining_root(was_explaining_root);
+        return;
+    }
+
     let to_explain = BTreeMap::from([(
         context
             .state

@@ -71,6 +71,13 @@ impl InferenceCode {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct RuleId(u32);
 
+impl RuleId {
+    /// The position of the rule among the rules of its solver, numbered from zero.
+    pub(crate) fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
 /// The names of the inference rules used by a solver, each with the [`RuleId`] that the solver
 /// assigned to it. A name is assigned an identifier when it is first used.
 #[derive(Clone, Debug, Default)]
