@@ -30,6 +30,9 @@ pub enum AnyInteger {
 }
 
 /// Calls `$body` with `$var` bound to the variable inside the [`AnyInteger`].
+///
+/// Bodies returning an iterator are prefixed with `iter`, so that both variants return the same
+/// type.
 macro_rules! dispatch {
     ($self:expr, $var:ident => $body:expr) => {
         match $self {
@@ -37,11 +40,7 @@ macro_rules! dispatch {
             AnyInteger::Predicate($var) => $body,
         }
     };
-}
-
-/// Like [`dispatch`], but for bodies returning an iterator.
-macro_rules! dispatch_iter {
-    ($self:expr, $var:ident => $body:expr) => {
+    (iter $self:expr, $var:ident => $body:expr) => {
         match $self {
             AnyInteger::DomainId($var) => Either::Left($body),
             AnyInteger::Predicate($var) => Either::Right($body),
@@ -116,7 +115,7 @@ impl CheckerVariable<Predicate> for AnyInteger {
     where
         'this: 'state,
     {
-        dispatch_iter!(self, var => var.induced_holes(domains))
+        dispatch!(iter self, var => var.induced_holes(domains))
     }
 
     fn iter_induced_domain<'this, 'state>(
@@ -174,7 +173,7 @@ impl IntegerVariable for AnyInteger {
     }
 
     fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32> {
-        dispatch_iter!(self, var => var.iterate_domain(assignment))
+        dispatch!(iter self, var => var.iterate_domain(assignment))
     }
 
     fn unwatch_all(&self, watchers: &mut Watchers<'_>) {
@@ -193,11 +192,11 @@ impl IntegerVariable for AnyInteger {
         &self,
         assignments: &Assignments,
     ) -> impl Iterator<Item = i32> {
-        dispatch_iter!(self, var => var.get_holes_at_current_checkpoint(assignments))
+        dispatch!(iter self, var => var.get_holes_at_current_checkpoint(assignments))
     }
 
     fn get_holes(&self, assignments: &Assignments) -> impl Iterator<Item = i32> {
-        dispatch_iter!(self, var => var.get_holes(assignments))
+        dispatch!(iter self, var => var.get_holes(assignments))
     }
 }
 
