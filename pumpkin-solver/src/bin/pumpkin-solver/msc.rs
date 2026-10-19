@@ -127,10 +127,7 @@ fn value_type(arg: &Arg) -> String {
     } else if type_id == TypeId::of::<String>() || type_id == TypeId::of::<PathBuf>() {
         "string".to_owned()
     } else {
-        panic!(
-            "unsupported type for MiniZinc flag '--{}'",
-            arg.get_long().unwrap()
-        )
+        panic!("unsupported type for MiniZinc flag '{}'", arg.get_id())
     }
 }
 
