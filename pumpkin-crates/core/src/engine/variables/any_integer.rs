@@ -18,11 +18,11 @@ use crate::propagation::EventDispatcher;
 use crate::propagation::EventTarget;
 use crate::propagation::LocalId;
 
-/// An [`IntegerVariable`] which is either an integer variable or a [`Predicate`] (interpreted as a
-/// 0-1 variable).
+/// An [`IntegerVariable`] which is either a [`DomainId`] or a [`Predicate`] (interpreted as a 0-1
+/// variable).
 ///
-/// This allows posting constraints, such as linear constraints, over a mix of integer variables
-/// and predicates.
+/// This allows posting constraints, such as linear constraints, over a mix of [`DomainId`]s and
+/// [`Predicate`]s.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AnyInteger {
     DomainId(DomainId),

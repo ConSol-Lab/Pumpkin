@@ -56,6 +56,9 @@ pub(crate) struct NotificationEngine {
     /// predicate is no longer true after backtracking, together with the event to notify them of.
     backtrack_watch_list_predicate_id: KeyedVec<PredicateId, Vec<(PropagatorVarId, DomainEvent)>>,
     /// The predicates with backtrack watchers which have become true, per checkpoint.
+    ///
+    /// Used when backtracking: the predicates which became true at the checkpoints that are
+    /// backtracked over are no longer true, so their backtrack watchers are notified.
     satisfied_backtrack_watched_predicates: Trail<PredicateId>,
     /// Events which have occurred since the last round of notifications have taken place
     events: EventSink,
