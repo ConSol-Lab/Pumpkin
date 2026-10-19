@@ -229,8 +229,8 @@ impl NotificationEngine {
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
-        // A literal which is fixed at the root never triggers an event, so it does not need to be
-        // watched. Watching it would also be incorrect: the `PredicateNotifier` does not know
+        // A predicate which is assigned at the root never triggers an event, so it does not need
+        // to be watched. Watching it would also be incorrect: the `PredicateNotifier` does not know
         // whether a predicate is already true when it starts tracking it, so it may report the
         // predicate as becoming true later on.
         if assignments.is_assigned_at_checkpoint(predicate, 0) {
