@@ -86,6 +86,23 @@ pub(crate) struct CompilationContext<'a> {
     pub(crate) next_preamble_identifier: Option<u32>,
     /// The position in the preamble's breaking items of the identifier each tag took.
     pub(crate) preamble_identifiers: HashMap<ConstraintTag, usize>,
+    /// Whether every FlatZinc variable is collected with its value in a solution.
+    pub(crate) full_solution: bool,
+    /// The variables removed as unused, when every variable is collected.
+    pub(crate) unused_variables: Vec<UnusedVariable>,
+    /// The literal of each boolean that stands for a comparison with a constant.
+    pub(crate) literal_booleans: HashMap<Rc<str>, Literal>,
+}
+
+/// A FlatZinc variable the compiler removed because no constraint mentions it.
+#[derive(Clone, Debug)]
+pub(crate) struct UnusedVariable {
+    pub(crate) name: Rc<str>,
+    /// Its value in a solution: its declared lower bound, or the value it is assigned.
+    pub(crate) value: String,
+    /// The variable it is assigned, if any, whose value it takes instead.
+    pub(crate) alias: Option<Rc<str>>,
+    pub(crate) is_bool: bool,
 }
 
 /// `coefficient * variable <= bound`, which the constraint `tag` states.
@@ -196,6 +213,9 @@ impl CompilationContext<'_> {
             preamble: Default::default(),
             next_preamble_identifier: None,
             preamble_identifiers: Default::default(),
+            full_solution: false,
+            unused_variables: vec![],
+            literal_booleans: Default::default(),
         }
     }
 

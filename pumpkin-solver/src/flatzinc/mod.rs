@@ -14,7 +14,9 @@ pub use error::FlatZincError;
 pub use instance::ArrayOutput;
 pub use instance::FlatZincInstance;
 pub use instance::FlatzincObjective;
+pub use instance::FullSolution;
 pub use instance::Output;
+pub use instance::SolutionValue;
 pub use instance::VariableOutput;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 
@@ -77,6 +79,11 @@ pub struct CompilationOptions {
     /// than a croc block proof or croc scaffold, where the exchanges are stated as value symmetry
     /// steps and nothing is posted.
     pub value_symmetry_breaking: bool,
+
+    /// Collect every FlatZinc variable of the model with its value in a solution
+    /// ([`FlatZincInstance::full_solution`]), including those the compiler removes as unused,
+    /// which take their declared lower bound. Changes nothing in the compiled model.
+    pub full_solution: bool,
 }
 
 impl CompilationOptions {

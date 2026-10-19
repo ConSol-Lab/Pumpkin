@@ -9,7 +9,9 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use super::context::CompilationContext;
+use super::context::UnusedVariable;
 use crate::flatzinc::ast::FlatZincAst;
+use crate::flatzinc::ast::SingleVarDecl;
 use crate::flatzinc::ast::VarArrayDecl;
 use crate::flatzinc::error::FlatZincError;
 
@@ -33,20 +35,63 @@ pub(crate) fn run(
         _ => {}
     }
 
+    let mut removed = vec![];
     ast.single_variables.retain(|decl| match decl {
-        crate::flatzinc::ast::SingleVarDecl::Bool { id, annos, .. }
-        | crate::flatzinc::ast::SingleVarDecl::IntInRange { id, annos, .. }
-        | crate::flatzinc::ast::SingleVarDecl::IntInSet { id, annos, .. } => {
+        SingleVarDecl::Bool { id, annos, .. }
+        | SingleVarDecl::IntInRange { id, annos, .. }
+        | SingleVarDecl::IntInSet { id, annos, .. } => {
             // If the variable is an output variable, then always keep it.
             if annos.iter().any(|annotation| annotation.id == "output_var") {
                 return true;
             }
 
-            marked_identifiers.contains(id.as_str())
+            let keep = marked_identifiers.contains(id.as_str());
+            if !keep && context.full_solution {
+                removed.push(unused_variable(decl));
+            }
+            keep
         }
     });
+    for (name, value, alias, is_bool) in removed {
+        let name = context.identifiers.get_interned(&name);
+        let alias = alias.map(|alias| context.identifiers.get_interned(&alias));
+        context.unused_variables.push(UnusedVariable {
+            name,
+            value,
+            alias,
+            is_bool,
+        });
+    }
 
     Ok(())
+}
+
+/// The name of a removed variable, its value in a solution, the variable it is assigned, if any,
+/// and whether it is a boolean: its value is the value it is assigned, or else its declared lower
+/// bound.
+fn unused_variable(decl: &SingleVarDecl) -> (String, String, Option<String>, bool) {
+    match decl {
+        SingleVarDecl::Bool { id, expr, .. } => match expr {
+            Some(flatzinc::BoolExpr::Bool(value)) => (id.clone(), value.to_string(), None, true),
+            Some(flatzinc::BoolExpr::VarParIdentifier(alias)) => {
+                (id.clone(), "false".to_owned(), Some(alias.clone()), true)
+            }
+            None => (id.clone(), "false".to_owned(), None, true),
+        },
+        SingleVarDecl::IntInRange { id, lb, expr, .. } => match expr {
+            Some(flatzinc::IntExpr::Int(value)) => (id.clone(), value.to_string(), None, false),
+            Some(flatzinc::IntExpr::VarParIdentifier(alias)) => {
+                (id.clone(), lb.to_string(), Some(alias.clone()), false)
+            }
+            None => (id.clone(), lb.to_string(), None, false),
+        },
+        SingleVarDecl::IntInSet { id, set, .. } => (
+            id.clone(),
+            set.iter().min().copied().unwrap_or(0).to_string(),
+            None,
+            false,
+        ),
+    }
 }
 
 macro_rules! mark_literal_exprs {

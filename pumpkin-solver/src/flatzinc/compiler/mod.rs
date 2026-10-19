@@ -9,6 +9,7 @@ mod create_search_strategy;
 mod define_constants;
 mod define_variable_arrays;
 mod dominance_breaking;
+mod full_solution;
 mod handle_set_in;
 mod name_rules;
 mod post_constraints;
@@ -36,6 +37,7 @@ pub(crate) fn compile(
 ) -> Result<FlatZincInstance, FlatZincError> {
     let mut context = CompilationContext::new(solver);
     context.proof_logging = &options.proof_logging;
+    context.full_solution = options.full_solution;
 
     if context.solver.is_logging_proof()
         && matches!(options.proof_logging, ProofLogging::Croc { .. })
@@ -85,6 +87,9 @@ pub(crate) fn compile(
     dominance_breaking::run(&ast, &mut context, &options)?;
     let objective_function = create_objective::run(&ast, &mut context)?;
     let search = create_search_strategy::run(&ast, &mut context, objective_function)?;
+    let full_solution = options
+        .full_solution
+        .then(|| full_solution::run(&ast, &mut context));
 
     if let ProofLogging::Croc {
         proof_type: CrocProofType::Scaffold,
@@ -106,5 +111,6 @@ pub(crate) fn compile(
         objective_function,
         search: Some(search),
         view_statistics: context.view_statistics,
+        full_solution,
     })
 }

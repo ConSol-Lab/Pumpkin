@@ -1,8 +1,11 @@
 //! Solving a FlatZinc model with the solver, after the library compiled it.
 
 use std::fs::File;
+use std::io::BufWriter;
+use std::io::Write;
 use std::ops::ControlFlow;
 use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -30,6 +33,7 @@ use pumpkin_solver::core::variables::AffineView;
 use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::flatzinc::CompilationOptions;
 use pumpkin_solver::flatzinc::FlatZincError;
+use pumpkin_solver::flatzinc::FullSolution;
 use pumpkin_solver::flatzinc::Output;
 use pumpkin_solver::flatzinc::parse_and_compile;
 
@@ -53,6 +57,9 @@ pub(crate) struct FlatZincOptions {
     /// satisfaction problems, print all solutions; for optimisation problems, print intermediate
     /// solutions.
     pub(crate) compilation: CompilationOptions,
+
+    /// The file the final solution is written to with the value of every FlatZinc variable.
+    pub(crate) full_solution_path: Option<PathBuf>,
 }
 
 fn log_statistics(
@@ -122,6 +129,10 @@ pub(crate) fn solve<R: ConflictResolver>(
     let instance = parse_and_compile(&mut solver, instance, options.compilation.clone())?;
     let view_statistics = instance.view_statistics;
     let outputs = instance.outputs.clone();
+    let full_solution = options
+        .full_solution_path
+        .as_deref()
+        .zip(instance.full_solution.as_ref());
 
     let init_time = init_start_time.elapsed();
 
@@ -216,13 +227,14 @@ pub(crate) fn solve<R: ConflictResolver>(
             Some(objective) => objective.into(),
             None => {
                 satisfy(
-                    options,
+                    options.clone(),
                     &mut solver,
                     brancher,
                     termination,
                     outputs,
                     init_time,
                     resolver,
+                    full_solution,
                 );
                 return Ok(());
             }
@@ -269,6 +281,7 @@ pub(crate) fn solve<R: ConflictResolver>(
         }
         OptimisationResult::Optimal(optimal_solution) => {
             let objective_value = optimal_solution.get_integer_value(objective) as i64;
+            write_full_solution(full_solution, optimal_solution.as_reference());
             if !options.compilation.all_solutions {
                 log_statistics(
                     &solver,
@@ -293,6 +306,7 @@ pub(crate) fn solve<R: ConflictResolver>(
         OptimisationResult::Satisfiable(solution) => {
             // Solutions are printed in the callback.
             let objective_value = solution.get_integer_value(objective) as i64;
+            write_full_solution(full_solution, solution.as_reference());
             log_statistics(
                 &solver,
                 &brancher,
@@ -329,6 +343,7 @@ pub(crate) fn solve<R: ConflictResolver>(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments, reason = "Should be refactored")]
 fn satisfy(
     options: FlatZincOptions,
     solver: &mut Solver,
@@ -337,6 +352,7 @@ fn satisfy(
     outputs: Vec<Output>,
     init_time: Duration,
     mut resolver: impl ConflictResolver,
+    full_solution: Option<(&Path, &FullSolution)>,
 ) {
     if options.compilation.all_solutions {
         let mut solution_iterator =
@@ -346,6 +362,7 @@ fn satisfy(
             match solution_iterator.next_solution() {
                 IteratedSolution::Solution(solution, solver, brancher, resolver) => {
                     has_found_solution = true;
+                    write_full_solution(full_solution, solution.as_reference());
                     solution_callback(
                         brancher,
                         resolver,
@@ -402,17 +419,20 @@ fn satisfy(
         }
     } else {
         match solver.satisfy(&mut brancher, &mut termination, &mut resolver) {
-            SatisfactionResult::Satisfiable(satisfiable) => solution_callback(
-                satisfiable.brancher(),
-                satisfiable.conflict_resolver(),
-                None,
-                options.compilation.all_solutions,
-                &outputs,
-                satisfiable.solver(),
-                satisfiable.solution(),
-                options.verbose,
-                init_time,
-            ),
+            SatisfactionResult::Satisfiable(satisfiable) => {
+                write_full_solution(full_solution, satisfiable.solution());
+                solution_callback(
+                    satisfiable.brancher(),
+                    satisfiable.conflict_resolver(),
+                    None,
+                    options.compilation.all_solutions,
+                    &outputs,
+                    satisfiable.solver(),
+                    satisfiable.solution(),
+                    options.verbose,
+                    init_time,
+                )
+            }
             SatisfactionResult::Unsatisfiable(solver, brancher, resolver) => {
                 println!("{MSG_UNSATISFIABLE}");
                 log_statistics(solver, brancher, resolver, options.verbose, init_time, None);
@@ -422,6 +442,25 @@ fn satisfy(
                 log_statistics(solver, brancher, resolver, options.verbose, init_time, None);
             }
         }
+    }
+}
+
+/// Write the solution with the value of every FlatZinc variable to the file, when one is given;
+/// a later solution replaces an earlier one.
+fn write_full_solution(full_solution: Option<(&Path, &FullSolution)>, solution: SolutionReference) {
+    let Some((path, full_solution)) = full_solution else {
+        return;
+    };
+    let written = File::create(path).and_then(|file| {
+        let mut writer = BufWriter::new(file);
+        full_solution.write(solution, &mut writer)?;
+        writer.flush()
+    });
+    if let Err(error) = written {
+        eprintln!(
+            "warning: the full solution could not be written to {}: {error}",
+            path.display()
+        );
     }
 }
 

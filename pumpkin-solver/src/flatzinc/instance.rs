@@ -5,6 +5,8 @@ use std::rc::Rc;
 use pumpkin_branching::branching::dynamic_brancher::DynamicBrancher;
 
 use crate::core::optimisation::OptimisationDirection;
+use crate::core::results::ProblemSolution;
+use crate::core::results::SolutionReference;
 use crate::core::variables::AffineView;
 use crate::core::variables::DomainId;
 use crate::core::variables::Literal;
@@ -36,6 +38,9 @@ pub struct FlatZincInstance {
     pub objective_function: Option<FlatzincObjective>,
     pub search: Option<DynamicBrancher>,
     pub view_statistics: ViewStatistics,
+    /// Every FlatZinc variable with its value in a solution, when the compilation options ask
+    /// for it.
+    pub full_solution: Option<FullSolution>,
 }
 
 impl FlatZincInstance {
@@ -138,5 +143,61 @@ impl<T> ArrayOutput<T> {
             "{} = array{num_dimensions}d({shape_buf}[{array_buf}]);",
             self.id
         );
+    }
+}
+
+/// The value of a FlatZinc variable in a solution of the compiled model.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SolutionValue {
+    /// A boolean the solver holds as a literal.
+    Bool(Literal),
+    /// An integer the solver holds as a view of one of its variables.
+    Int(AffineView<DomainId>),
+    /// A variable whose value is the same in every solution: one the compiler made a
+    /// parameter, or one it removed as unused, which takes its declared lower bound.
+    Fixed(String),
+}
+
+/// Every FlatZinc variable of a model with its value in a solution, so that a solution can be
+/// checked against the whole model rather than against the variables it outputs.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FullSolution {
+    variables: Vec<(Rc<str>, SolutionValue)>,
+}
+
+impl FullSolution {
+    pub(crate) fn push(&mut self, name: Rc<str>, value: SolutionValue) {
+        self.variables.push((name, value));
+    }
+
+    /// The number of variables.
+    pub fn len(&self) -> usize {
+        self.variables.len()
+    }
+
+    /// Whether the model has no variables.
+    pub fn is_empty(&self) -> bool {
+        self.variables.is_empty()
+    }
+
+    /// Write the value of every variable in the solution as a FlatZinc solution: one
+    /// assignment per line, booleans as `true` or `false`, ended by a line of dashes.
+    pub fn write(
+        &self,
+        solution: SolutionReference<'_>,
+        writer: &mut impl std::io::Write,
+    ) -> std::io::Result<()> {
+        for (name, value) in &self.variables {
+            match value {
+                SolutionValue::Bool(literal) => {
+                    writeln!(writer, "{name} = {};", solution.get_literal_value(*literal))?
+                }
+                SolutionValue::Int(view) => {
+                    writeln!(writer, "{name} = {};", solution.get_integer_value(*view))?
+                }
+                SolutionValue::Fixed(value) => writeln!(writer, "{name} = {value};")?,
+            }
+        }
+        writeln!(writer, "----------")
     }
 }

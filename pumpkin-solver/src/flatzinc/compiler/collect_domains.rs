@@ -102,6 +102,9 @@ pub(crate) fn run(
             Rc::clone(&literal.boolean),
             boolean.get_true_predicate().get_domain(),
         );
+        let _ = context
+            .literal_booleans
+            .insert(Rc::clone(&literal.boolean), boolean);
         if literal_outputs.contains(&literal.boolean) {
             context
                 .outputs

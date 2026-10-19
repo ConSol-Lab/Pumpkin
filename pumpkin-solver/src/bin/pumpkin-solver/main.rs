@@ -424,6 +424,14 @@ struct Args {
     #[arg(long = "value-symmetry-breaking", verbatim_doc_comment)]
     value_symmetry_breaking: bool,
 
+    /// Write the final solution of a FlatZinc model, for an optimisation problem the best one
+    /// found, to this file with the value of every FlatZinc variable, not only of the output
+    /// variables, in the form `croc_check --solution` reads. A variable the compiler removes as
+    /// unused gets its declared lower bound. The file is written after solving, so the search is
+    /// the same with and without it.
+    #[arg(long, verbatim_doc_comment)]
+    full_solution_path: Option<PathBuf>,
+
     /// If `--verbose` is enabled then this option removes the timestamp information from the log
     /// messages. Note that this option will only take affect in the case of a (W)CNF instance.
     ///
@@ -778,7 +786,9 @@ fn run() -> PumpkinResult<()> {
             dominance_breaking: args.dominance_breaking,
             dual_fixing: args.dual_fixing,
             value_symmetry_breaking: args.value_symmetry_breaking,
+            full_solution: args.full_solution_path.is_some(),
         },
+        full_solution_path: args.full_solution_path.clone(),
     };
 
     let recursive_minimisation = args.recursive_minimisation;

@@ -1,0 +1,11 @@
+var 1..5: x :: output_var;
+var 2..7: y;
+var 3..9: unused;
+var {4,6,8}: unused_sparse;
+var bool: b;
+var bool: unused_b;
+var 0..10: alias = y;
+constraint int_lin_le([1,1],[x,y],8);
+constraint int_le_reif(x,3,b);
+constraint bool_clause([b],[]);
+solve maximize x;
