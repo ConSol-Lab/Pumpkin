@@ -1485,6 +1485,7 @@ impl Iterator for IntegerDomainIterator<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::State;
     use crate::engine::notifications::DomainEvent;
 
     #[test]
@@ -1615,18 +1616,14 @@ mod tests {
 
     #[test]
     fn predicates_are_assigned_from_the_checkpoint_where_they_are_posted() {
-        let mut notification_engine = NotificationEngine::default();
-        let mut assignment = Assignments::default();
-        let d = assignment.grow(1, 5);
-        notification_engine.grow();
+        let mut state = State::default();
+        let d = state.new_interval_variable(1, 5, None);
 
-        let _ = assignment
-            .post_predicate(predicate!(d >= 2), None, &mut notification_engine)
-            .expect("non-empty domain");
-        assignment.new_checkpoint();
-        let _ = assignment
-            .post_predicate(predicate!(d >= 3), None, &mut notification_engine)
-            .expect("non-empty domain");
+        let _ = state.post(predicate!(d >= 2)).expect("non-empty domain");
+        state.new_checkpoint();
+        let _ = state.post(predicate!(d >= 3)).expect("non-empty domain");
+
+        let assignment = &state.assignments;
 
         // True and false, respectively, at the root.
         assert!(assignment.is_assigned_at_checkpoint(predicate!(d >= 2), 0));
