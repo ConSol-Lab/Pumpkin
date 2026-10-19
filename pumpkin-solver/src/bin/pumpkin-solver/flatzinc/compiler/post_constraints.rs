@@ -10,7 +10,6 @@ use pumpkin_solver::core::predicates::Predicate;
 use pumpkin_solver::core::proof::ConstraintTag;
 use pumpkin_solver::core::variables::AffineView;
 use pumpkin_solver::core::variables::DomainId;
-use pumpkin_solver::core::variables::Literal;
 use pumpkin_solver::core::variables::TransformableVariable;
 
 use super::constant_comparison::IntComparison;
@@ -479,18 +478,11 @@ fn compile_set_in_reif(
         } => {
             // `reif -> x \in S`
             // Decomposed to `reif -> x >= lb /\ reif -> x <= ub`
+            context
+                .solver
+                .add_clause([!reif, predicate![variable >= lower_bound]], constraint_tag);
             context.solver.add_clause(
-                [
-                    !reif.get_true_predicate(),
-                    predicate![variable >= lower_bound],
-                ],
-                constraint_tag,
-            );
-            context.solver.add_clause(
-                [
-                    !reif.get_true_predicate(),
-                    !predicate![variable >= upper_bound + 1],
-                ],
+                [!reif, !predicate![variable >= upper_bound + 1]],
                 constraint_tag,
             );
 
@@ -498,7 +490,7 @@ fn compile_set_in_reif(
             // Decomposed to `!reif -> (x < lb \/ x > ub)`
             context.solver.add_clause(
                 [
-                    reif.get_true_predicate(),
+                    reif,
                     !predicate![variable >= lower_bound],
                     predicate![variable >= upper_bound + 1],
                 ],
@@ -509,11 +501,7 @@ fn compile_set_in_reif(
         Set::Sparse { values } => {
             let clause = values
                 .iter()
-                .map(|&value| {
-                    context
-                        .solver
-                        .new_literal_for_predicate(predicate![variable == value])
-                })
+                .map(|&value| predicate![variable == value])
                 .collect::<Vec<_>>();
 
             pumpkin_constraints::clause(clause, constraint_tag).reify(context.solver, reif)
@@ -605,7 +593,6 @@ fn compile_bool_clause(
         .iter()
         .cloned()
         .chain(clause_2.iter().map(|literal| !*literal))
-        .map(|literal| literal.get_true_predicate())
         .collect();
 
     context.solver.add_clause(clause, constraint_tag);
@@ -644,10 +631,8 @@ fn compile_bool2int(
     let b = context.resolve_integer_variable(&exprs[1])?;
 
     // a <-> [b == 1] and !a <-> [b == 0]; together these also restrict b to {0, 1}.
-    pumpkin_constraints::clause([!a, Literal::new(predicate![b == 1])], constraint_tag)
-        .post(context.solver);
-    pumpkin_constraints::clause([a, Literal::new(predicate![b == 0])], constraint_tag)
-        .post(context.solver);
+    pumpkin_constraints::clause([!a, predicate![b == 1]], constraint_tag).post(context.solver);
+    pumpkin_constraints::clause([a, predicate![b == 0]], constraint_tag).post(context.solver);
 
     Ok(())
 }
@@ -674,12 +659,8 @@ fn compile_bool_xor(
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 2, "pumpkin_bool_xor");
 
-    let a = context
-        .resolve_bool_variable(&exprs[0])?
-        .get_true_predicate();
-    let b = context
-        .resolve_bool_variable(&exprs[1])?
-        .get_true_predicate();
+    let a = context.resolve_bool_variable(&exprs[0])?;
+    let b = context.resolve_bool_variable(&exprs[1])?;
 
     context.solver.add_clause([!a, !b], constraint_tag);
     context.solver.add_clause([b, a], constraint_tag);
@@ -794,7 +775,7 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
     {
         // `r <-> [x op c]`; the boolean could not be defined as the literal of the comparison
         // itself (see `define_reified_literals`), so they are linked with clauses.
-        let literal = Literal::new(predicate);
+        let literal = predicate;
         let reif = context.resolve_bool_variable(&exprs[2])?;
 
         pumpkin_constraints::clause([!reif, literal], constraint_tag).post(context.solver);
@@ -903,7 +884,7 @@ fn compile_binary_int_imp<C: Constraint>(
         constant_comparison_predicate(comparison, &exprs[0], &exprs[1], context)
     {
         // `r -> [x op c]` is a clause over the literal of the comparison.
-        let literal = Literal::new(predicate);
+        let literal = predicate;
         let reif = context.resolve_bool_variable(&exprs[2])?;
 
         pumpkin_constraints::clause([!reif, literal], constraint_tag).post(context.solver);

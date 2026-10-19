@@ -122,19 +122,19 @@ impl<'a> Watchers<'a> {
     }
 
     /// Stop watching the events of a literal over the given predicate.
-    pub(crate) fn unwatch_literal(&mut self, predicate: Predicate) {
+    pub(crate) fn unwatch_predicate_events(&mut self, predicate: Predicate) {
         self.notification_engine
-            .unwatch_literal(predicate, self.propagator_var);
+            .unwatch_predicate_events(predicate, self.propagator_var);
     }
 
     /// Watch the given events of a literal over the given predicate being undone when
     /// backtracking.
-    pub(crate) fn watch_literal_backtrack(
+    pub(crate) fn watch_predicate_events_backtrack(
         &mut self,
         predicate: Predicate,
         events: EnumSet<DomainEvent>,
     ) {
-        self.notification_engine.watch_literal_backtrack(
+        self.notification_engine.watch_predicate_events_backtrack(
             predicate,
             events,
             self.propagator_var,

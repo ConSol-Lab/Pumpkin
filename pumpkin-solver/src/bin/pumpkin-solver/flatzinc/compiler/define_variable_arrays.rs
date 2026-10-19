@@ -12,7 +12,6 @@ use flatzinc::IntExpr;
 use flatzinc::SetExpr;
 use flatzinc::SetLiteralExpr;
 use pumpkin_core::predicate;
-use pumpkin_core::variables::Literal;
 
 use super::context::CompilationContext;
 use crate::flatzinc::FlatZincError;
@@ -39,8 +38,8 @@ pub(crate) fn run(
                     ArrayOfBoolExpr::Array(array) => array
                         .iter()
                         .map(|expr| match expr {
-                            BoolExpr::Bool(true) => context.true_literal,
-                            BoolExpr::Bool(false) => context.false_literal,
+                            BoolExpr::Bool(true) => context.true_predicate,
+                            BoolExpr::Bool(false) => context.false_predicate,
                             BoolExpr::VarParIdentifier(identifier) => {
                                 let other_id = context.identifiers.get_interned(identifier);
                                 let representative = context.equivalences.representative(&other_id);
@@ -56,7 +55,7 @@ pub(crate) fn run(
                                     .copied()
                                     .expect("referencing undefined boolean variable");
 
-                                Literal::new(predicate![domain_id >= 1])
+                                predicate![domain_id >= 1]
                             }
                         })
                         .collect(),

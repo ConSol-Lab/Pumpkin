@@ -135,8 +135,7 @@ impl Model {
             self.solver.new_literal()
         };
 
-        self.brancher
-            .add_domain(literal.get_true_predicate().get_domain());
+        self.brancher.add_domain(literal.get_domain());
 
         Ok(literal.into())
     }
@@ -158,7 +157,7 @@ impl Model {
 
     /// Get the value of the given Boolean expression
     fn evaluate(&self, expression: BoolExpression) -> Option<bool> {
-        self.solver.get_literal_value(expression.0)
+        self.solver.get_predicate_value(expression.0)
     }
 
     /// Create a new constraint tag.
@@ -191,9 +190,7 @@ impl Model {
         tag: Tag,
         name: Option<&str>,
     ) -> BoolExpression {
-        self.solver
-            .new_literal_for_predicate(predicate.into_solver_predicate())
-            .into()
+        BoolExpression(predicate.into_solver_predicate())
     }
 
     /// Add the given constraint to the model.

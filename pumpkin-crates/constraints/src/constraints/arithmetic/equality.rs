@@ -2,9 +2,9 @@ use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_core::options::ReifiedPropagatorArgs;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
-use pumpkin_core::variables::Literal;
 use pumpkin_core::variables::TransformableVariable;
 use pumpkin_propagators::arithmetic::BinaryEqualsPropagatorArgs;
 use pumpkin_propagators::arithmetic::BinaryNotEqualsPropagatorArgs;
@@ -103,7 +103,7 @@ where
         }
     }
 
-    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
+    fn implied_by(self, solver: &mut Solver, reification_predicate: Predicate) {
         if self.terms.len() == 2 && !solver.is_logging_proof() {
             let _ = solver.add_propagator(ReifiedPropagatorArgs {
                 propagator: BinaryEqualsPropagatorArgs {
@@ -111,11 +111,11 @@ where
                     b: self.terms[1].scaled(-1).offset(self.rhs),
                     constraint_tag: self.constraint_tag,
                 },
-                reification_literal,
+                reification_predicate,
             });
         } else {
             less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag)
-                .implied_by(solver, reification_literal);
+                .implied_by(solver, reification_predicate);
 
             let negated = self
                 .terms
@@ -123,7 +123,7 @@ where
                 .map(|var| var.scaled(-1))
                 .collect::<Box<[_]>>();
             less_than_or_equals(negated, -self.rhs, self.constraint_tag)
-                .implied_by(solver, reification_literal);
+                .implied_by(solver, reification_predicate);
         }
     }
 }
@@ -170,7 +170,7 @@ where
         }
     }
 
-    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
+    fn implied_by(self, solver: &mut Solver, reification_predicate: Predicate) {
         let NotEqualConstraint {
             terms,
             rhs,
@@ -184,7 +184,7 @@ where
                     b: terms[1].scaled(-1).offset(self.rhs),
                     constraint_tag: self.constraint_tag,
                 },
-                reification_literal,
+                reification_predicate,
             });
         } else {
             LinearNotEqualPropagatorArgs {
@@ -192,7 +192,7 @@ where
                 rhs,
                 constraint_tag,
             }
-            .implied_by(solver, reification_literal)
+            .implied_by(solver, reification_predicate)
         }
     }
 }

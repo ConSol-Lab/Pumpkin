@@ -1,14 +1,14 @@
 use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
-use pumpkin_core::variables::Literal;
 
 /// Creates the [`NegatableConstraint`] `\/ literal`
 ///
 /// Its negation is `/\ !literal`
 pub fn clause(
-    literals: impl Into<Vec<Literal>>,
+    literals: impl Into<Vec<Predicate>>,
     constraint_tag: ConstraintTag,
 ) -> impl NegatableConstraint {
     Clause(literals.into(), constraint_tag)
@@ -18,32 +18,28 @@ pub fn clause(
 ///
 /// Its negation is `\/ !literal`
 pub fn conjunction(
-    literals: impl Into<Vec<Literal>>,
+    literals: impl Into<Vec<Predicate>>,
     constraint_tag: ConstraintTag,
 ) -> impl NegatableConstraint {
     Conjunction(literals.into(), constraint_tag)
 }
 
-struct Clause(Vec<Literal>, ConstraintTag);
+struct Clause(Vec<Predicate>, ConstraintTag);
 
 impl Constraint for Clause {
     fn post(self, solver: &mut Solver) {
         let Clause(clause, constraint_tag) = self;
 
-        solver.add_clause(
-            clause.iter().map(|literal| literal.get_true_predicate()),
-            constraint_tag,
-        )
+        solver.add_clause(clause.iter().copied(), constraint_tag)
     }
 
-    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
+    fn implied_by(self, solver: &mut Solver, reification_predicate: Predicate) {
         let Clause(clause, constraint_tag) = self;
 
         solver.add_clause(
             clause
                 .into_iter()
-                .chain(std::iter::once(!reification_literal))
-                .map(|literal| literal.get_true_predicate()),
+                .chain(std::iter::once(!reification_predicate)),
             constraint_tag,
         )
     }
@@ -59,7 +55,7 @@ impl NegatableConstraint for Clause {
     }
 }
 
-struct Conjunction(Vec<Literal>, ConstraintTag);
+struct Conjunction(Vec<Predicate>, ConstraintTag);
 
 impl Constraint for Conjunction {
     fn post(self, solver: &mut Solver) {
@@ -67,21 +63,15 @@ impl Constraint for Conjunction {
 
         conjunction
             .into_iter()
-            .for_each(|lit| solver.add_clause([lit.get_true_predicate()], constraint_tag))
+            .for_each(|lit| solver.add_clause([lit], constraint_tag))
     }
 
-    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
+    fn implied_by(self, solver: &mut Solver, reification_predicate: Predicate) {
         let Conjunction(conjunction, constraint_tag) = self;
 
-        conjunction.into_iter().for_each(|lit| {
-            solver.add_clause(
-                [
-                    (!(reification_literal)).get_true_predicate(),
-                    lit.get_true_predicate(),
-                ],
-                constraint_tag,
-            )
-        })
+        conjunction
+            .into_iter()
+            .for_each(|lit| solver.add_clause([(!(reification_predicate)), lit], constraint_tag))
     }
 }
 

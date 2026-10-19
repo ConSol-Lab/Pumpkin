@@ -4,8 +4,6 @@
 //! For example, `int_le_reif(x, 5, r)` defines `r` as the literal `[x <= 5]`. The boolean then
 //! does not need a domain of its own, and the defining constraint is removed.
 
-use pumpkin_solver::core::variables::Literal;
-
 use super::constant_comparison::IntComparison;
 use super::constant_comparison::constant_comparison_predicate;
 use super::context::CompilationContext;
@@ -70,9 +68,7 @@ fn define_reified_literal(
     let Some(predicate) = constant_comparison_predicate(comparison, lhs, rhs, context) else {
         return false;
     };
-    let _ = context
-        .boolean_literals
-        .insert(representative, Literal::new(predicate));
+    let _ = context.boolean_literals.insert(representative, predicate);
     true
 }
 

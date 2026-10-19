@@ -23,13 +23,12 @@ use crate::propagation::ReadDomains;
 use crate::propagation::RuntimeCheckers;
 use crate::pumpkin_assert_simple;
 use crate::state::Conflict;
-use crate::variables::Literal;
 
 /// A [`PropagatorConstructor`] for the reified propagator.
 #[derive(Clone, Debug)]
 pub struct ReifiedPropagatorArgs<WrappedArgs> {
     pub propagator: WrappedArgs,
-    pub reification_literal: Literal,
+    pub reification_predicate: Predicate,
 }
 
 impl<WrappedArgs, WrappedPropagator> PropagatorConstructor for ReifiedPropagatorArgs<WrappedArgs>
@@ -45,7 +44,7 @@ where
     ) -> PropagatorSpec<Self::PropagatorImpl> {
         let ReifiedPropagatorArgs {
             propagator,
-            reification_literal,
+            reification_predicate,
         } = self;
 
         let PropagatorSpec {
@@ -54,20 +53,20 @@ where
             checkers,
         } = propagator.create(context.reborrow());
 
-        // The local ID for the reification literal will be one larger than the largest ID
+        // The local ID for the reification predicate will be one larger than the largest ID
         // registered by the wrapped propagator.
-        let reification_literal_id = registration
+        let reification_predicate_id = registration
             .iter()
             .map(|(_, _, lid)| lid)
-            .chain(registration.iter_literals().map(|(_, _, lid)| lid))
+            .chain(registration.iter_predicate_events().map(|(_, _, lid)| lid))
             .max()
             .expect("cannot reify propagators that do not register all variables immediately")
             .successor();
 
         registration.add(
-            &self.reification_literal,
+            &self.reification_predicate,
             DomainEvents::BOUNDS,
-            reification_literal_id,
+            reification_predicate_id,
         );
 
         let mut wrapped_checkers = RuntimeCheckers::empty();
@@ -77,7 +76,7 @@ where
                 inference_code.label(),
                 ReifiedChecker {
                     inner: checker,
-                    reification_literal,
+                    reification_predicate,
                 },
             );
         }
@@ -86,8 +85,8 @@ where
 
         let propagator = ReifiedPropagator {
             propagator,
-            reification_literal,
-            reification_literal_id,
+            reification_predicate,
+            reification_predicate_id,
             name,
             reason_buffer: vec![],
         };
@@ -110,12 +109,12 @@ where
 #[derive(Clone, Debug)]
 pub struct ReifiedPropagator<WrappedPropagator> {
     propagator: WrappedPropagator,
-    reification_literal: Literal,
+    reification_predicate: Predicate,
     /// The formatted name of the propagator.
     name: String,
-    /// The `LocalId` of the reification literal. Is guaranteed to be a larger ID than any of the
+    /// The `LocalId` of the reification predicate. Is guaranteed to be a larger ID than any of the
     /// registered ids of the wrapped propagator.
-    reification_literal_id: LocalId,
+    reification_predicate_id: LocalId,
 
     /// Holds the lazy explanations.
     reason_buffer: Vec<Predicate>,
@@ -128,20 +127,20 @@ impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<Wra
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
-        if local_id < self.reification_literal_id {
+        if local_id < self.reification_predicate_id {
             let decision = self.propagator.notify(context.reborrow(), local_id, event);
             self.filter_enqueue_decision(context, decision)
         } else {
-            pumpkin_assert_simple!(local_id == self.reification_literal_id);
+            pumpkin_assert_simple!(local_id == self.reification_predicate_id);
             EnqueueDecision::Enqueue
         }
     }
 
     fn notify_backtrack(&mut self, context: Domains, local_id: LocalId, event: OpaqueDomainEvent) {
-        if local_id < self.reification_literal_id {
+        if local_id < self.reification_predicate_id {
             self.propagator.notify_backtrack(context, local_id, event)
         } else {
-            pumpkin_assert_simple!(local_id == self.reification_literal_id);
+            pumpkin_assert_simple!(local_id == self.reification_predicate_id);
         }
     }
 
@@ -156,8 +155,8 @@ impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<Wra
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         self.propagate_reification(&mut context)?;
 
-        if context.evaluate_literal(self.reification_literal) == Some(true) {
-            context.with_reification(self.reification_literal);
+        if context.evaluate_predicate(self.reification_predicate) == Some(true) {
+            context.with_reification(self.reification_predicate);
 
             let result = self.propagator.propagate(context);
 
@@ -174,8 +173,8 @@ impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<Wra
     fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         self.propagate_reification(&mut context)?;
 
-        if context.evaluate_literal(self.reification_literal) == Some(true) {
-            context.with_reification(self.reification_literal);
+        if context.evaluate_predicate(self.reification_predicate) == Some(true) {
+            context.with_reification(self.reification_predicate);
 
             let result = self.propagator.propagate_from_scratch(context);
 
@@ -190,8 +189,7 @@ impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<Wra
         let inference_code = inner.inference_code;
 
         self.reason_buffer.clear();
-        self.reason_buffer
-            .push(self.reification_literal.get_true_predicate());
+        self.reason_buffer.push(self.reification_predicate);
         self.reason_buffer.extend(inner.predicates);
 
         LazyExplanation {
@@ -204,9 +202,7 @@ impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<Wra
 impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
     fn map_propagation_status(&self, mut status: PropagationStatusCP) -> PropagationStatusCP {
         if let Err(Conflict::Propagator(ref mut conflict)) = status {
-            conflict
-                .conjunction
-                .push(self.reification_literal.get_true_predicate());
+            conflict.conjunction.push(self.reification_predicate);
         }
         status
     }
@@ -215,13 +211,13 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
     where
         Prop: Propagator,
     {
-        if context.evaluate_literal(self.reification_literal) == Some(true) {
+        if context.evaluate_predicate(self.reification_predicate) == Some(true) {
             return Ok(());
         }
 
         if let Some(conflict) = self.propagator.detect_inconsistency(context.domains()) {
             context.post(
-                self.reification_literal.get_false_predicate(),
+                !self.reification_predicate,
                 (conflict.conjunction, &conflict.inference_code),
             )?;
         }
@@ -239,13 +235,13 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
             return EnqueueDecision::Skip;
         }
 
-        if context.evaluate_literal(self.reification_literal) == Some(true) {
+        if context.evaluate_predicate(self.reification_predicate) == Some(true) {
             // If the propagator would have enqueued and the literal is true then the reified
             // propagator is also enqueued
             return EnqueueDecision::Enqueue;
         }
 
-        if context.evaluate_literal(self.reification_literal) != Some(false)
+        if context.evaluate_predicate(self.reification_predicate) != Some(false)
             && self
                 .propagator
                 .detect_inconsistency(context.domains())
@@ -263,7 +259,7 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
 #[derive(Debug, Clone)]
 pub struct ReifiedChecker<Atomic: AtomicConstraint, Var> {
     pub inner: BoxedChecker<Atomic>,
-    pub reification_literal: Var,
+    pub reification_predicate: Var,
 }
 
 impl<Atomic: AtomicConstraint + Clone, Var: CheckerVariable<Atomic>> InferenceChecker<Atomic>
@@ -275,13 +271,16 @@ impl<Atomic: AtomicConstraint + Clone, Var: CheckerVariable<Atomic>> InferenceCh
         premises: &[Atomic],
         consequent: Option<&Atomic>,
     ) -> bool {
-        if self.reification_literal.induced_domain_contains(&state, 0) {
+        if self
+            .reification_predicate
+            .induced_domain_contains(&state, 0)
+        {
             return false;
         }
 
         if let Some(consequent) = consequent
             && self
-                .reification_literal
+                .reification_predicate
                 .does_atomic_constrain_self(consequent)
         {
             self.inner.check(state, premises, None)
@@ -308,10 +307,11 @@ mod tests {
     use crate::variables::IntegerVariable;
 
     #[test]
-    fn a_detected_inconsistency_is_given_as_reason_for_propagating_reification_literal_to_false() {
+    fn a_detected_inconsistency_is_given_as_reason_for_propagating_reification_predicate_to_false()
+    {
         let mut solver = TestSolver::default();
 
-        let reification_literal = solver.new_literal();
+        let reification_predicate = solver.new_literal();
         let a = solver.new_variable(1, 1);
         let b = solver.new_variable(2, 2);
 
@@ -342,21 +342,21 @@ mod tests {
                         })
                     },
                 ),
-                reification_literal,
+                reification_predicate,
             })
             .expect("no conflict");
 
-        assert!(solver.is_literal_false(reification_literal));
+        assert!(solver.is_literal_false(reification_predicate));
 
-        let reason = solver.get_reason_bool(reification_literal, false);
+        let reason = solver.get_reason_bool(reification_predicate, false);
         assert_eq!(reason, triggered_conflict);
     }
 
     #[test]
-    fn a_true_literal_is_added_to_reason_for_propagation() {
+    fn a_true_predicate_is_added_to_reason_for_propagation() {
         let mut solver = TestSolver::default();
 
-        let reification_literal = solver.new_literal();
+        let reification_predicate = solver.new_literal();
         let var = solver.new_variable(1, 5);
 
         let propagator = solver
@@ -375,29 +375,29 @@ mod tests {
                     },
                     |_: Domains| None,
                 ),
-                reification_literal,
+                reification_predicate,
             })
             .expect("no conflict");
 
         solver.assert_bounds(var, 1, 5);
 
-        let _ = solver.set_literal(reification_literal, true);
+        let _ = solver.set_literal(reification_predicate, true);
         solver.propagate(propagator).expect("no conflict");
 
         solver.assert_bounds(var, 3, 5);
         let reason = solver.get_reason_int(predicate![var >= 3]);
         assert_eq!(
             reason,
-            PropositionalConjunction::from(reification_literal.get_true_predicate())
+            PropositionalConjunction::from(reification_predicate)
         );
     }
 
     #[test]
-    fn a_true_literal_is_added_to_a_conflict_conjunction() {
+    fn a_true_predicate_is_added_to_a_conflict_conjunction() {
         let mut solver = TestSolver::default();
 
-        let reification_literal = solver.new_literal();
-        let _ = solver.set_literal(reification_literal, true);
+        let reification_predicate = solver.new_literal();
+        let _ = solver.set_literal(reification_predicate, true);
 
         let var = solver.new_variable(1, 1);
         let inference_code =
@@ -416,7 +416,7 @@ mod tests {
                     },
                     |_: Domains| None,
                 ),
-                reification_literal,
+                reification_predicate,
             })
             .expect_err("eagerly triggered the conflict");
 
@@ -425,7 +425,7 @@ mod tests {
                 assert_eq!(
                     conflict_nogood.conjunction,
                     PropositionalConjunction::from(vec![
-                        reification_literal.get_true_predicate(),
+                        reification_predicate,
                         predicate![var >= 1]
                     ])
                 )
@@ -439,7 +439,7 @@ mod tests {
     fn notify_propagator_is_enqueued_if_inconsistency_can_be_detected() {
         let mut solver = TestSolver::default();
 
-        let reification_literal = solver.new_literal();
+        let reification_predicate = solver.new_literal();
         let var = solver.new_variable(1, 5);
 
         let inference_code =
@@ -462,7 +462,7 @@ mod tests {
                     },
                 )
                 .with_variables(&[var]),
-                reification_literal,
+                reification_predicate,
             })
             .expect("No conflict expected");
 
@@ -474,16 +474,16 @@ mod tests {
     fn a_propagator_over_only_literals_can_be_reified() {
         let mut solver = TestSolver::default();
 
-        let reification_literal = solver.new_literal();
-        let literal = solver.new_literal();
+        let reification_predicate = solver.new_literal();
+        let predicate = solver.new_literal();
 
         let propagator = solver
             .new_propagator(ReifiedPropagatorArgs {
                 propagator: GenericPropagator::new(
-                    vec![literal],
+                    vec![predicate],
                     move |mut ctx: PropagationContext| {
                         ctx.post(
-                            literal.get_true_predicate(),
+                            predicate,
                             (
                                 conjunction!(),
                                 &InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
@@ -493,17 +493,17 @@ mod tests {
                     },
                     |_: Domains| None,
                 ),
-                reification_literal,
+                reification_predicate,
             })
             .expect("no conflict");
-        assert!(!solver.is_literal_false(!literal));
+        assert!(!solver.is_literal_false(!predicate));
 
         solver
-            .set_literal(reification_literal, true)
+            .set_literal(reification_predicate, true)
             .expect("no empty domain");
         solver.propagate(propagator).expect("no conflict");
 
-        assert!(solver.is_literal_false(!literal));
+        assert!(solver.is_literal_false(!predicate));
     }
 
     #[derive(Clone)]

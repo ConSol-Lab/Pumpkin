@@ -29,16 +29,14 @@ use crate::propagation::store::PropagatorStore;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
-#[cfg(doc)]
-use crate::variables::Literal;
 
 /// A watcher which is notified when a predicate becomes true.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PredicateWatcher {
     /// The propagator is notified through [`Propagator::notify_predicate_id_satisfied`].
     Propagator(PropagatorId),
-    /// The propagator is notified through [`Propagator::notify`] for a variable over the
-    /// predicate, i.e., a [`Literal`], with the given event.
+    /// The propagator is notified through [`Propagator::notify`] for the predicate used as a 0-1
+    /// variable with the given event.
     Variable(PropagatorVarId, DomainEvent),
 }
 
@@ -222,8 +220,8 @@ impl NotificationEngine {
         // TODO: Can we remove the predicate from being tracked if it does not have watchers?
     }
 
-    /// Watch the events of a [`Literal`] over the given predicate.
-    pub(crate) fn watch_literal(
+    /// Watch the events of the given [`Predicate`] used as a 0-1 variable.
+    pub(crate) fn watch_predicate_events(
         &mut self,
         predicate: Predicate,
         events: EnumSet<DomainEvent>,
@@ -239,7 +237,7 @@ impl NotificationEngine {
             return;
         }
 
-        for (predicate, event) in literal_watches(predicate, events) {
+        for (predicate, event) in predicate_event_watches(predicate, events) {
             let predicate_id = self.get_id(predicate);
             self.watch_list_predicate_id
                 .accomodate(predicate_id, vec![]);
@@ -251,8 +249,8 @@ impl NotificationEngine {
         }
     }
 
-    /// Stop watching the events of a [`Literal`] over the given predicate.
-    pub(crate) fn unwatch_literal(
+    /// Stop watching the events of the given [`Predicate`] used as a 0-1 variable.
+    pub(crate) fn unwatch_predicate_events(
         &mut self,
         predicate: Predicate,
         propagator_var: PropagatorVarId,
@@ -267,8 +265,9 @@ impl NotificationEngine {
         }
     }
 
-    /// Watch the events of a [`Literal`] over the given predicate being undone when backtracking.
-    pub(crate) fn watch_literal_backtrack(
+    /// Watch the events of the given [`Predicate`] used as a 0-1 variable being undone when
+    /// backtracking.
+    pub(crate) fn watch_predicate_events_backtrack(
         &mut self,
         predicate: Predicate,
         events: EnumSet<DomainEvent>,
@@ -276,12 +275,12 @@ impl NotificationEngine {
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
-        // See `NotificationEngine::watch_literal`.
+        // See `NotificationEngine::watch_predicate_events`.
         if assignments.is_fixed_at_checkpoint(predicate, 0) {
             return;
         }
 
-        for (predicate, event) in literal_watches(predicate, events) {
+        for (predicate, event) in predicate_event_watches(predicate, events) {
             let predicate_id = self.get_id(predicate);
             self.backtrack_watch_list_predicate_id
                 .accomodate(predicate_id, vec![]);
@@ -728,15 +727,15 @@ impl NotificationEngine {
     }
 }
 
-/// For a [`Literal`] over `predicate` registered for the given events, returns the predicates
-/// whose satisfaction triggers an event, together with the event which is triggered.
+/// For `predicate` used as a 0-1 variable and registered for the given events, returns the
+/// predicates whose satisfaction triggers an event, together with the event which is triggered.
 ///
-/// As for a 0-1 domain, the literal becoming true (i.e., `predicate` becoming true) triggers the
-/// lower-bound and assign events, and the literal becoming false (i.e., `!predicate` becoming
-/// true) triggers the upper-bound and assign events. The assign event is thus watched on both
+/// As for a 0-1 domain, `predicate` becoming true triggers the lower-bound and assign events, and
+/// `predicate` becoming false (i.e., `!predicate` becoming true) triggers the upper-bound and
+/// assign events. The assign event is thus watched on both
 /// predicates, but only one of them can become true. The removal event is never triggered, since
-/// the domain of a literal has no values between its bounds.
-fn literal_watches(
+/// a 0-1 domain has no values between its bounds.
+fn predicate_event_watches(
     predicate: Predicate,
     events: EnumSet<DomainEvent>,
 ) -> impl Iterator<Item = (Predicate, DomainEvent)> {

@@ -5,8 +5,6 @@ use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
 use crate::propagation::LocalId;
 use crate::variables::DomainId;
-#[cfg(doc)]
-use crate::variables::Literal;
 
 /// Anything that can subscribe to domain events.
 ///
@@ -34,12 +32,11 @@ pub trait EventDispatcher {
     /// variable. Or when different views over the same domain are used in a propagator.
     fn register(&mut self, domain_id: DomainId, events: EnumSet<DomainEvent>, local_id: LocalId);
 
-    /// Register a [`Literal`] over the given [`Predicate`] with the given [`LocalId`] on the given
-    /// [`DomainEvents`].
+    /// Register the given [`Predicate`] with the given [`LocalId`] on the given [`DomainEvents`].
     ///
-    /// The literal is treated as a 0-1 variable, which is 1 when the predicate is true and 0 when
+    /// The predicate is treated as a 0-1 variable, which is 1 when the predicate is true and 0 when
     /// the predicate is false.
-    fn register_literal(
+    fn register_predicate_events(
         &mut self,
         predicate: Predicate,
         events: EnumSet<DomainEvent>,
@@ -51,8 +48,8 @@ pub trait EventDispatcher {
 #[derive(Clone, Debug, Default)]
 pub struct EventsToRegister {
     domains: Vec<(DomainId, EnumSet<DomainEvent>, LocalId)>,
-    /// The literals, identified by their predicate.
-    literals: Vec<(Predicate, EnumSet<DomainEvent>, LocalId)>,
+    /// The predicates, used as 0-1 variables.
+    predicate_events: Vec<(Predicate, EnumSet<DomainEvent>, LocalId)>,
 }
 
 impl EventsToRegister {
@@ -110,11 +107,11 @@ impl EventsToRegister {
         self.domains.iter().copied()
     }
 
-    /// Iterate the registrations of [`Literal`]s (identified by their predicate) already made.
-    pub fn iter_literals(
+    /// Iterate the registrations of [`Predicate`]s (used as 0-1 variables) already made.
+    pub fn iter_predicate_events(
         &self,
     ) -> impl ExactSizeIterator<Item = (Predicate, EnumSet<DomainEvent>, LocalId)> {
-        self.literals.iter().copied()
+        self.predicate_events.iter().copied()
     }
 }
 
@@ -123,13 +120,13 @@ impl EventDispatcher for EventsToRegister {
         self.domains.push((domain_id, events, local_id));
     }
 
-    fn register_literal(
+    fn register_predicate_events(
         &mut self,
         predicate: Predicate,
         events: EnumSet<DomainEvent>,
         local_id: LocalId,
     ) {
-        self.literals.push((predicate, events, local_id));
+        self.predicate_events.push((predicate, events, local_id));
     }
 }
 
@@ -175,7 +172,8 @@ impl EventsToRegisterBuilder {
     /// construction, use [`EventsToRegister::empty`].
     pub fn build(self) -> EventsToRegister {
         assert!(
-            !self.registrations.domains.is_empty() || !self.registrations.literals.is_empty(),
+            !self.registrations.domains.is_empty()
+                || !self.registrations.predicate_events.is_empty(),
             "did not register for any events"
         );
 

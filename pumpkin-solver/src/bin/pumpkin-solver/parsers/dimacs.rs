@@ -22,8 +22,8 @@ use std::str::FromStr;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::Function;
 use pumpkin_solver::core::options::SolverOptions;
+use pumpkin_solver::core::predicates::Predicate;
 use pumpkin_solver::core::proof::ConstraintTag;
-use pumpkin_solver::core::variables::Literal;
 use thiserror::Error;
 
 /// A dimacs sink stores a set of clauses and allows for new variables to be created.
@@ -147,7 +147,7 @@ enum ParseState {
     StartLine,
     Header,
     Comment,
-    Literal,
+    Predicate,
     NegativeLiteral,
     Clause,
 }
@@ -220,7 +220,7 @@ where
                     }
                 }
 
-                ParseState::Literal => match byte {
+                ParseState::Predicate => match byte {
                     b if b.is_ascii_whitespace() => {
                         self.finish_literal()?;
                     }
@@ -233,7 +233,7 @@ where
                 ParseState::NegativeLiteral => match byte {
                     b @ b'1'..=b'9' => {
                         self.buffer.push(*b as char);
-                        self.state = ParseState::Literal;
+                        self.state = ParseState::Predicate;
                     }
 
                     b => return Err(DimacsParseError::UnexpectedCharacter(*b as char)),
@@ -263,7 +263,7 @@ where
 
     fn start_literal(&mut self, b: &u8, is_positive: bool) {
         self.state = if is_positive {
-            ParseState::Literal
+            ParseState::Predicate
         } else {
             ParseState::NegativeLiteral
         };
@@ -434,7 +434,7 @@ fn next_header_component<'a, Num: FromStr>(
 pub(crate) struct SolverDimacsSink {
     pub(crate) solver: Solver,
     pub(crate) objective: Function,
-    pub(crate) variables: Vec<Literal>,
+    pub(crate) variables: Vec<Predicate>,
     constraint_tag: ConstraintTag,
 }
 
@@ -452,7 +452,7 @@ impl SolverArgs {
 }
 
 impl SolverDimacsSink {
-    fn mapped_clause(&self, clause: &[NonZeroI32]) -> Vec<Literal> {
+    fn mapped_clause(&self, clause: &[NonZeroI32]) -> Vec<Predicate> {
         clause
             .iter()
             .map(|dimacs_code| {
@@ -488,10 +488,7 @@ impl DimacsSink for SolverDimacsSink {
     }
 
     fn add_hard_clause(&mut self, clause: &[NonZeroI32]) {
-        let mapped = self
-            .mapped_clause(clause)
-            .into_iter()
-            .map(|literal| literal.get_true_predicate());
+        let mapped = self.mapped_clause(clause).into_iter();
         self.solver.add_clause(mapped, self.constraint_tag);
     }
 
@@ -500,7 +497,7 @@ impl DimacsSink for SolverDimacsSink {
 
         let is_clause_satisfied = clause
             .iter()
-            .any(|literal| self.solver.get_literal_value(*literal).unwrap_or(false));
+            .any(|literal| self.solver.get_predicate_value(*literal).unwrap_or(false));
 
         if clause.is_empty() {
             // The soft clause is violated at the root level.
@@ -514,12 +511,7 @@ impl DimacsSink for SolverDimacsSink {
             // General case, a soft clause with more than one literal.
             let soft_literal = self.solver.new_literal();
             clause.push(soft_literal);
-            self.solver.add_clause(
-                clause
-                    .into_iter()
-                    .map(|literal| literal.get_true_predicate()),
-                self.constraint_tag,
-            );
+            self.solver.add_clause(clause, self.constraint_tag);
 
             self.objective
                 .add_weighted_literal(!soft_literal, weight.get().into());

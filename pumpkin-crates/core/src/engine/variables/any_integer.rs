@@ -7,7 +7,6 @@ use pumpkin_checking::VariableState;
 use super::AffineView;
 use super::DomainId;
 use super::IntegerVariable;
-use super::Literal;
 use super::TransformableVariable;
 use crate::engine::Assignments;
 use crate::engine::notifications::DomainEvent;
@@ -19,23 +18,23 @@ use crate::propagation::EventDispatcher;
 use crate::propagation::EventTarget;
 use crate::propagation::LocalId;
 
-/// An [`IntegerVariable`] which is either an integer variable or a [`Literal`] (interpreted as a
+/// An [`IntegerVariable`] which is either an integer variable or a [`Predicate`] (interpreted as a
 /// 0-1 variable).
 ///
 /// This allows posting constraints, such as linear constraints, over a mix of integer variables
-/// and literals.
+/// and predicates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AnyInteger {
-    Int(DomainId),
-    Literal(Literal),
+    DomainId(DomainId),
+    Predicate(Predicate),
 }
 
 /// Calls `$body` with `$var` bound to the variable inside the [`AnyInteger`].
 macro_rules! dispatch {
     ($self:expr, $var:ident => $body:expr) => {
         match $self {
-            AnyInteger::Int($var) => $body,
-            AnyInteger::Literal($var) => $body,
+            AnyInteger::DomainId($var) => $body,
+            AnyInteger::Predicate($var) => $body,
         }
     };
 }
@@ -44,21 +43,21 @@ macro_rules! dispatch {
 macro_rules! dispatch_iter {
     ($self:expr, $var:ident => $body:expr) => {
         match $self {
-            AnyInteger::Int($var) => Either::Left($body),
-            AnyInteger::Literal($var) => Either::Right($body),
+            AnyInteger::DomainId($var) => Either::Left($body),
+            AnyInteger::Predicate($var) => Either::Right($body),
         }
     };
 }
 
 impl From<DomainId> for AnyInteger {
     fn from(domain_id: DomainId) -> Self {
-        AnyInteger::Int(domain_id)
+        AnyInteger::DomainId(domain_id)
     }
 }
 
-impl From<Literal> for AnyInteger {
-    fn from(literal: Literal) -> Self {
-        AnyInteger::Literal(literal)
+impl From<Predicate> for AnyInteger {
+    fn from(predicate: Predicate) -> Self {
+        AnyInteger::Predicate(predicate)
     }
 }
 
@@ -128,8 +127,8 @@ impl CheckerVariable<Predicate> for AnyInteger {
         'this: 'state,
     {
         match self {
-            AnyInteger::Int(var) => var.iter_induced_domain(domains).map(Either::Left),
-            AnyInteger::Literal(var) => var.iter_induced_domain(domains).map(Either::Right),
+            AnyInteger::DomainId(var) => var.iter_induced_domain(domains).map(Either::Left),
+            AnyInteger::Predicate(var) => var.iter_induced_domain(domains).map(Either::Right),
         }
     }
 }

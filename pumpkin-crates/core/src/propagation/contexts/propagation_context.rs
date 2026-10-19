@@ -11,7 +11,6 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::reason::StoredReason;
-use crate::engine::variables::Literal;
 use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
@@ -88,7 +87,7 @@ pub struct PropagationContext<'a> {
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) propagator_id: PropagatorId,
     pub(crate) notification_engine: &'a mut NotificationEngine,
-    reification_literal: Option<Literal>,
+    reification_predicate: Option<Predicate>,
 }
 
 impl<'a> HasAssignments for PropagationContext<'a> {
@@ -119,7 +118,7 @@ impl<'a> PropagationContext<'a> {
             reason_store,
             propagator_id,
             notification_engine,
-            reification_literal: None,
+            reification_predicate: None,
         }
     }
 
@@ -189,14 +188,14 @@ impl<'a> PropagationContext<'a> {
         self.notification_engine.get_id(predicate)
     }
 
-    /// Apply a reification literal to all the explanations that are passed to the context.
-    pub(crate) fn with_reification(&mut self, reification_literal: Literal) {
+    /// Apply a reification predicate to all the explanations that are passed to the context.
+    pub(crate) fn with_reification(&mut self, reification_predicate: Predicate) {
         pumpkin_assert_simple!(
-            self.reification_literal.is_none(),
+            self.reification_predicate.is_none(),
             "cannot reify an already reified propagation context"
         );
 
-        self.reification_literal = Some(reification_literal);
+        self.reification_predicate = Some(reification_predicate);
     }
 
     /// Get the current domain information.
@@ -239,7 +238,7 @@ impl<'a> PropagationContext<'a> {
             reason_store: self.reason_store,
             propagator_id: self.propagator_id,
             notification_engine: self.notification_engine,
-            reification_literal: self.reification_literal,
+            reification_predicate: self.reification_predicate,
         }
     }
 }
@@ -269,14 +268,14 @@ impl PropagationContext<'_> {
             Ok(true) => {
                 let _ = slot.populate(
                     self.propagator_id,
-                    build_reason(reason, self.reification_literal),
+                    build_reason(reason, self.reification_predicate),
                 );
                 Ok(())
             }
             Err(EmptyDomain) => {
                 let _ = slot.populate(
                     self.propagator_id,
-                    build_reason(reason, self.reification_literal),
+                    build_reason(reason, self.reification_predicate),
                 );
                 let (trigger_predicate, trigger_reason) =
                     self.assignments.remove_last_trail_element();
@@ -292,15 +291,11 @@ impl PropagationContext<'_> {
 
 pub(crate) fn build_reason(
     reason: impl Into<Reason>,
-    reification_literal: Option<Literal>,
+    reification_predicate: Option<Predicate>,
 ) -> StoredReason {
     match reason.into() {
         Reason::Eager(mut conjunction, inference_code) => {
-            conjunction.extend(
-                reification_literal
-                    .iter()
-                    .map(|lit| lit.get_true_predicate()),
-            );
+            conjunction.extend(reification_predicate);
             StoredReason::Eager(conjunction, inference_code)
         }
         Reason::DynamicLazy(code) => StoredReason::DynamicLazy(code),
@@ -329,13 +324,13 @@ impl EventDispatcher for NotificationEngineWatchers<'_> {
         );
     }
 
-    fn register_literal(
+    fn register_predicate_events(
         &mut self,
         predicate: Predicate,
         events: EnumSet<DomainEvent>,
         local_id: LocalId,
     ) {
-        self.notificaton_engine.watch_literal(
+        self.notificaton_engine.watch_predicate_events(
             predicate,
             events,
             PropagatorVarId {

@@ -7,7 +7,7 @@ use pumpkin_core::Solver;
 use pumpkin_core::containers::HashMap;
 use pumpkin_core::variables::DomainId;
 use pumpkin_solver::core::predicate;
-use pumpkin_solver::core::variables::Literal;
+use pumpkin_solver::core::predicates::Predicate;
 
 use super::context::CompilationContext;
 use super::context::Domain;
@@ -52,7 +52,7 @@ pub(crate) fn run(
 
 /// Returns the literal for the given boolean variable, which is either defined over a comparison
 /// (see [`CompilationContext::boolean_literals`]) or over the domain of the boolean.
-fn get_or_create_literal(context: &mut CompilationContext, id: &str) -> Literal {
+fn get_or_create_literal(context: &mut CompilationContext, id: &str) -> Predicate {
     let representative = context.equivalences.representative(id);
 
     if let Some(literal) = context.boolean_literals.get(&representative) {
@@ -60,7 +60,7 @@ fn get_or_create_literal(context: &mut CompilationContext, id: &str) -> Literal 
     }
 
     let domain_id = get_or_create_domain(context, id);
-    Literal::new(predicate![domain_id >= 1])
+    predicate![domain_id >= 1]
 }
 
 pub(crate) fn get_or_create_domain(context: &mut CompilationContext, id: &str) -> DomainId {
