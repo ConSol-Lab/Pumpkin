@@ -42,10 +42,6 @@ pub(crate) struct CompilationContext<'a> {
     /// get a domain of their own.
     pub(crate) boolean_literals: HashMap<Rc<str>, Predicate>,
 
-    /// Predicate which is always true
-    pub(crate) true_predicate: Predicate,
-    /// Predicate which is always false
-    pub(crate) false_predicate: Predicate,
     /// All boolean parameters.
     pub(crate) boolean_parameters: HashMap<Rc<str>, bool>,
     /// All boolean array parameters.
@@ -80,9 +76,6 @@ pub(crate) enum Set {
 
 impl CompilationContext<'_> {
     pub(crate) fn new(solver: &mut Solver) -> CompilationContext<'_> {
-        let true_predicate = solver.get_true_predicate();
-        let false_predicate = solver.get_false_predicate();
-
         CompilationContext {
             solver,
             identifiers: Default::default(),
@@ -90,8 +83,6 @@ impl CompilationContext<'_> {
             outputs: Default::default(),
             equivalences: Default::default(),
 
-            true_predicate,
-            false_predicate,
             boolean_parameters: Default::default(),
             boolean_array_parameters: Default::default(),
             boolean_variable_arrays: Default::default(),

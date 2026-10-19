@@ -38,8 +38,8 @@ pub(crate) fn run(
                     ArrayOfBoolExpr::Array(array) => array
                         .iter()
                         .map(|expr| match expr {
-                            BoolExpr::Bool(true) => context.true_predicate,
-                            BoolExpr::Bool(false) => context.false_predicate,
+                            BoolExpr::Bool(true) => context.solver.get_true_predicate(),
+                            BoolExpr::Bool(false) => context.solver.get_false_predicate(),
                             BoolExpr::VarParIdentifier(identifier) => {
                                 let other_id = context.identifiers.get_interned(identifier);
                                 let representative = context.equivalences.representative(&other_id);
