@@ -2,7 +2,7 @@ use log::warn;
 use pumpkin_core::asserts::pumpkin_assert_eq_simple;
 use pumpkin_core::branching::BrancherEvent;
 use pumpkin_core::branching::SelectionContext;
-use pumpkin_core::variables::DomainId;
+use pumpkin_core::variables::IntegerVariable;
 
 use crate::tie_breaking::Direction;
 use crate::tie_breaking::InOrderTieBreaker;
@@ -42,11 +42,12 @@ impl<Var: Copy> Occurrence<Var, InOrderTieBreaker<Var, u32>> {
     }
 }
 
-impl<TieBreaking> VariableSelector<DomainId> for Occurrence<DomainId, TieBreaking>
+impl<Var, TieBreaking> VariableSelector<Var> for Occurrence<Var, TieBreaking>
 where
-    TieBreaking: TieBreaker<DomainId, u32>,
+    Var: IntegerVariable + Copy,
+    TieBreaking: TieBreaker<Var, u32>,
 {
-    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<DomainId> {
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<Var> {
         self.variables
             .iter()
             .enumerate()

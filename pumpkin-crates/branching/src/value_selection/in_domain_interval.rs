@@ -2,7 +2,7 @@ use pumpkin_core::branching::BrancherEvent;
 use pumpkin_core::branching::SelectionContext;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
-use pumpkin_core::variables::DomainId;
+use pumpkin_core::variables::IntegerVariable;
 
 use super::InDomainSplit;
 use crate::value_selection::ValueSelector;
@@ -18,11 +18,11 @@ use crate::value_selection::ValueSelector;
 #[derive(Debug, Copy, Clone)]
 pub struct InDomainInterval;
 
-impl ValueSelector<DomainId> for InDomainInterval {
+impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainInterval {
     fn select_value(
         &mut self,
         context: &mut SelectionContext,
-        decision_variable: DomainId,
+        decision_variable: Var,
     ) -> Predicate {
         // We attempt to find the first hole in the domain (i.e. the value is not in the domain of
         // `decision_variable`) Note that the lower-bound and upper-bound are guaranteed to

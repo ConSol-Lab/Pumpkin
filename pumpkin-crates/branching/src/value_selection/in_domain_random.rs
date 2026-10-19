@@ -2,7 +2,7 @@ use pumpkin_core::branching::BrancherEvent;
 use pumpkin_core::branching::SelectionContext;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
-use pumpkin_core::variables::DomainId;
+use pumpkin_core::variables::IntegerVariable;
 
 use crate::value_selection::ValueSelector;
 
@@ -10,11 +10,11 @@ use crate::value_selection::ValueSelector;
 #[derive(Debug, Clone, Copy)]
 pub struct InDomainRandom;
 
-impl ValueSelector<DomainId> for InDomainRandom {
+impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainRandom {
     fn select_value(
         &mut self,
         context: &mut SelectionContext,
-        decision_variable: DomainId,
+        decision_variable: Var,
     ) -> Predicate {
         let values_in_domain = (context.lower_bound(decision_variable)
             ..=context.upper_bound(decision_variable))
@@ -24,28 +24,6 @@ impl ValueSelector<DomainId> for InDomainRandom {
             .random()
             .generate_usize_in_range(0..values_in_domain.len());
         predicate!(decision_variable == values_in_domain[random_index])
-    }
-
-    fn is_restart_pointless(&mut self) -> bool {
-        false
-    }
-
-    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
-        vec![]
-    }
-}
-
-impl ValueSelector<Predicate> for InDomainRandom {
-    fn select_value(
-        &mut self,
-        context: &mut SelectionContext,
-        decision_variable: Predicate,
-    ) -> Predicate {
-        if context.random().generate_bool(0.5) {
-            decision_variable
-        } else {
-            !decision_variable
-        }
     }
 
     fn is_restart_pointless(&mut self) -> bool {
