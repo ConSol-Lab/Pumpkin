@@ -882,11 +882,10 @@ fn compile_binary_int_imp<C: Constraint>(
     if let Some(predicate) =
         constant_comparison_predicate(comparison, &exprs[0], &exprs[1], context)
     {
-        // `r -> [x op c]` is a clause over the literal of the comparison.
-        let literal = predicate;
+        // `r -> [x op c]` is a clause over the predicate of the comparison.
         let reif = context.resolve_bool_variable(&exprs[2])?;
 
-        pumpkin_constraints::clause([!reif, literal], constraint_tag).post(context.solver);
+        pumpkin_constraints::clause([!reif, predicate], constraint_tag).post(context.solver);
         return Ok(());
     }
 
