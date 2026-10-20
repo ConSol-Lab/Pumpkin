@@ -605,7 +605,9 @@ fn find_profiles_which_propagate_lower_bound<'a, Var: IntegerVariable + 'static>
     while current_index < time_table.len() {
         let next_profile = time_table[current_index];
 
-        if next_profile.start - time_table[last_propagating_index].end >= task.processing_time {
+        // There are `next_profile.start - end - 1` free time-points between the profiles; the task
+        // can only be scheduled in between if this is at least its processing time
+        if next_profile.start - time_table[last_propagating_index].end > task.processing_time {
             break;
         }
 
@@ -645,7 +647,9 @@ fn find_profiles_which_propagate_upper_bound<'a, Var: IntegerVariable + 'static>
     let mut current_index = profile_index - 1;
     loop {
         let previous_profile = time_table[current_index];
-        if time_table[last_propagating].start - previous_profile.end >= task.processing_time {
+        // There are `start - previous_profile.end - 1` free time-points between the profiles; the
+        // task can only be scheduled in between if this is at least its processing time
+        if time_table[last_propagating].start - previous_profile.end > task.processing_time {
             break;
         }
 
@@ -896,6 +900,71 @@ mod tests {
                 resource_usage: 1,
                 id: LocalId::from(0),
             }),
+            1,
+            &mut profile_buffer,
+        );
+        assert_eq!(profile_buffer.len(), 2);
+    }
+
+    #[test]
+    fn test_finding_profiles_with_gap_equal_to_processing_time() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(4, 8, None);
+        let y = state.new_interval_variable(5, 5, None);
+        let z = state.new_interval_variable(8, 8, None);
+
+        // Starting `x` at its lower-bound (4) overlaps with the first profile and starting it at
+        // its upper-bound (8) overlaps with the second profile. There is a single free
+        // time-point between the profiles, so `x` (with processing time 2) cannot be
+        // scheduled in between them; both profiles should thus be used to propagate its
+        // bounds
+        let time_table = [
+            &ResourceProfile {
+                start: 5,
+                end: 6,
+                profile_tasks: vec![Rc::new(Task {
+                    start_variable: y,
+                    processing_time: 2,
+                    resource_usage: 1,
+                    id: LocalId::from(1),
+                })],
+                height: 1,
+            },
+            &ResourceProfile {
+                start: 8,
+                end: 8,
+                profile_tasks: vec![Rc::new(Task {
+                    start_variable: z,
+                    processing_time: 1,
+                    resource_usage: 1,
+                    id: LocalId::from(2),
+                })],
+                height: 1,
+            },
+        ];
+        let task = Rc::new(Task {
+            start_variable: x,
+            processing_time: 2,
+            resource_usage: 1,
+            id: LocalId::from(0),
+        });
+
+        let mut profile_buffer = vec![];
+        find_profiles_which_propagate_lower_bound(
+            0,
+            &time_table,
+            state.get_domains(),
+            &task,
+            1,
+            &mut profile_buffer,
+        );
+        assert_eq!(profile_buffer.len(), 2);
+
+        find_profiles_which_propagate_upper_bound(
+            1,
+            &time_table,
+            state.get_domains(),
+            &task,
             1,
             &mut profile_buffer,
         );
