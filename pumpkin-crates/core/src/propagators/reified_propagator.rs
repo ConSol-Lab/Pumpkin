@@ -214,7 +214,9 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
     where
         Prop: Propagator,
     {
-        if context.evaluate_literal(self.reification_literal) == Some(true) {
+        if context.evaluate_literal(self.reification_literal).is_some() {
+            // If the literal is true, then the wrapped propagator takes over; if it is false, then
+            // there is nothing left to propagate
             return Ok(());
         }
 
