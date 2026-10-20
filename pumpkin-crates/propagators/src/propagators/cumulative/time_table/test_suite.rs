@@ -3,6 +3,7 @@
 //! Every test is written once as a function which is generic over the propagator under test; the
 //! [`time_table_tests`] and [`synchronisation_tests`] macros instantiate them for each propagator.
 use pumpkin_core::conjunction;
+use pumpkin_core::options::ReifiedPropagatorArgs;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
@@ -213,6 +214,63 @@ fn propagator_propagates_after_assignment<P: TimeTableTestCase>() {
     state.propagate_to_fixed_point().expect("No conflict");
     state.assert_bounds(s1, 5, 6);
     state.assert_bounds(s2, 7, 10);
+}
+
+/// Regression test: the incremental propagators would lose updates which were not yet processed
+/// (because the reification literal was not true) when backtracking with an empty time-table.
+fn reified_propagator_propagates_after_backtracking<P: TimeTableTestCase>()
+where
+    P::PropagatorImpl: Clone,
+{
+    let mut state = State::default();
+    let s1 = state.new_interval_variable(0, 10, None);
+    let s2 = state.new_interval_variable(0, 9, None);
+    let reification_literal = state.new_literal(None);
+
+    let tasks = [
+        ArgTask {
+            start_time: s1,
+            processing_time: 4,
+            resource_usage: 1,
+        },
+        ArgTask {
+            start_time: s2,
+            processing_time: 4,
+            resource_usage: 1,
+        },
+    ];
+    let constraint_tag = state.new_constraint_tag();
+    let _ = state.add_propagator(ReifiedPropagatorArgs {
+        propagator: P::construct(&tasks, 1, Default::default(), constraint_tag),
+        reification_literal,
+    });
+    state.propagate_to_fixed_point().expect("No conflict");
+
+    // Create the (empty) time-table by propagating while the reification literal is true
+    state.new_checkpoint();
+    let _ = state
+        .post(reification_literal.get_true_predicate())
+        .expect("No empty domain");
+    state.propagate_to_fixed_point().expect("No conflict");
+    let _ = state.restore_to(0);
+
+    // Create the mandatory part [8, 10) for s1 while the reification literal is unassigned
+    state.new_checkpoint();
+    let _ = state.post(predicate!(s1 >= 6)).expect("No empty domain");
+    let _ = state.post(predicate!(s1 <= 8)).expect("No empty domain");
+    state.propagate_to_fixed_point().expect("No conflict");
+
+    // Backtrack to a checkpoint at which the mandatory part still exists
+    state.new_checkpoint();
+    let _ = state.post(predicate!(s2 <= 8)).expect("No empty domain");
+    state.propagate_to_fixed_point().expect("No conflict");
+    let _ = state.restore_to(1);
+
+    let _ = state
+        .post(reification_literal.get_true_predicate())
+        .expect("No empty domain");
+    state.propagate_to_fixed_point().expect("No conflict");
+    state.assert_bounds(s2, 0, 4);
 }
 
 fn propagator_propagates_end_time<P: TimeTableTestCase>() {
@@ -489,6 +547,11 @@ macro_rules! time_table_tests {
                 #[test]
                 fn propagator_propagates_after_assignment() {
                     super::propagator_propagates_after_assignment::<$propagator>()
+                }
+
+                #[test]
+                fn reified_propagator_propagates_after_backtracking() {
+                    super::reified_propagator_propagates_after_backtracking::<$propagator>()
                 }
 
                 #[test]
