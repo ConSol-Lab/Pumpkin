@@ -369,6 +369,40 @@ fn propagator_propagates_with_holes<P: TimeTableTestCase>() {
     }
 }
 
+fn propagator_propagates_sequence_with_gap_equal_to_processing_time<P: TimeTableTestCase>() {
+    let mut state = State::default();
+    let s1 = state.new_interval_variable(5, 5, None);
+    let s2 = state.new_interval_variable(8, 8, None);
+    let s3 = state.new_interval_variable(4, 20, None);
+    let s4 = state.new_interval_variable(0, 8, None);
+
+    // There is a single free time-point (7) between the profiles, so neither s3 nor s4 can be
+    // scheduled in between them
+    let options = CumulativePropagatorOptions {
+        generate_sequence: true,
+        ..naive_options()
+    };
+    add_propagator::<P>(
+        &mut state,
+        &[(s1, 2, 1), (s2, 1, 1), (s3, 2, 1), (s4, 2, 1)],
+        1,
+        options,
+    )
+    .expect("No conflict");
+    state.assert_bounds(s3, 9, 20);
+    state.assert_bounds(s4, 0, 3);
+
+    // Both bounds should be propagated in a single step using the sequence of both profiles
+    assert_eq!(
+        conjunction!([s1 <= 5] & [s1 >= 5] & [s2 <= 8] & [s2 >= 8] & [s3 >= 4]),
+        reason_for(&mut state, predicate!(s3 >= 9))
+    );
+    assert_eq!(
+        conjunction!([s1 <= 5] & [s1 >= 5] & [s2 <= 8] & [s2 >= 8] & [s4 <= 8]),
+        reason_for(&mut state, predicate!(s4 <= 3))
+    );
+}
+
 // The scenarios below return the explanations as a `Vec` rather than a `PropositionalConjunction`
 // since the order of the predicates matters; without synchronisation, the explanations of the
 // incremental propagators only differ in the order of the predicates.
@@ -519,6 +553,11 @@ macro_rules! time_table_tests {
                 #[test]
                 fn propagator_propagates_with_holes() {
                     super::propagator_propagates_with_holes::<$propagator>()
+                }
+
+                #[test]
+                fn propagator_propagates_sequence_with_gap_equal_to_processing_time() {
+                    super::propagator_propagates_sequence_with_gap_equal_to_processing_time::<$propagator>()
                 }
             }
         )*
