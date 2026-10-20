@@ -369,6 +369,46 @@ fn propagator_propagates_with_holes<P: TimeTableTestCase>() {
     }
 }
 
+fn propagator_explains_each_task_with_its_own_resource_usage<P: TimeTableTestCase>() {
+    for explanation_type in [
+        CumulativeExplanationType::Naive,
+        CumulativeExplanationType::BigStep,
+    ] {
+        let mut state = State::default();
+        let a = state.new_interval_variable(10, 10, None);
+        let b = state.new_interval_variable(10, 10, None);
+        let c = state.new_interval_variable(10, 10, None);
+        let x = state.new_interval_variable(9, 20, None);
+        let y = state.new_interval_variable(9, 20, None);
+
+        let options = CumulativePropagatorOptions {
+            explanation_type,
+            ..Default::default()
+        };
+        add_propagator::<P>(
+            &mut state,
+            &[(a, 5, 3), (b, 5, 3), (c, 5, 3), (x, 2, 5), (y, 2, 2)],
+            10,
+            options,
+        )
+        .expect("No conflict");
+        state.assert_bounds(x, 15, 20);
+        state.assert_bounds(y, 15, 20);
+
+        // The profile has height 9, so the propagation of `x` (usage 5) can be explained by two of
+        // the tasks in the profile, but the propagation of `y` (usage 2) requires all three
+        let reason = reason_for(&mut state, predicate!(y >= 15));
+        for task in [a, b, c] {
+            assert!(
+                reason
+                    .iter()
+                    .any(|predicate| predicate.get_domain() == task),
+                "{explanation_type:?}: the reason {reason:?} should contain {task:?}"
+            );
+        }
+    }
+}
+
 // The scenarios below return the explanations as a `Vec` rather than a `PropositionalConjunction`
 // since the order of the predicates matters; without synchronisation, the explanations of the
 // incremental propagators only differ in the order of the predicates.
@@ -519,6 +559,11 @@ macro_rules! time_table_tests {
                 #[test]
                 fn propagator_propagates_with_holes() {
                     super::propagator_propagates_with_holes::<$propagator>()
+                }
+
+                #[test]
+                fn propagator_explains_each_task_with_its_own_resource_usage() {
+                    super::propagator_explains_each_task_with_its_own_resource_usage::<$propagator>()
                 }
             }
         )*
