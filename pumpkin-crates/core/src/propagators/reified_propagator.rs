@@ -63,9 +63,11 @@ where
             .expect("cannot reify propagators that do not register all variables immediately")
             .successor();
 
+        // We only register for the reification literal becoming true; if it becomes false, then
+        // there is nothing left to propagate
         registration.add(
             &self.reification_literal,
-            DomainEvents::BOUNDS,
+            DomainEvents::LOWER_BOUND,
             reification_literal_id,
         );
 
@@ -240,24 +242,23 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
             return EnqueueDecision::Skip;
         }
 
-        if context.evaluate_literal(self.reification_literal) == Some(true) {
-            // If the propagator would have enqueued and the literal is true then the reified
-            // propagator is also enqueued
-            return EnqueueDecision::Enqueue;
-        }
-
-        if context.evaluate_literal(self.reification_literal) != Some(false)
-            && self
+        match context.evaluate_literal(self.reification_literal) {
+            Some(true) => {
+                // If the propagator would have enqueued and the literal is true then the reified
+                // propagator is also enqueued
+                EnqueueDecision::Enqueue
+            }
+            None if self
                 .propagator
                 .detect_inconsistency(context.domains())
-                .is_some()
-        {
-            // Or the literal is not false already and there the propagator has found an
-            // inconsistency (i.e. we should and can propagate the reification variable)
-            return EnqueueDecision::Enqueue;
+                .is_some() =>
+            {
+                // Or the literal is unassigned and the propagator has found an inconsistency (i.e.
+                // we should and can propagate the reification variable)
+                EnqueueDecision::Enqueue
+            }
+            _ => EnqueueDecision::Skip,
         }
-
-        EnqueueDecision::Skip
     }
 }
 
