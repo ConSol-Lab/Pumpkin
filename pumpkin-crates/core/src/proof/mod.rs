@@ -160,7 +160,7 @@ impl ProofLog {
         };
 
         let writer = ProofWriter::new(CpSink {
-            sink,
+            sink: std::io::BufWriter::new(sink),
             held: croc_scaffold.then(Vec::new),
         });
 
@@ -171,6 +171,7 @@ impl ProofLog {
                 logged_domain_inferences: HashMap::default(),
                 proof_atomics: ProofAtomics::default(),
                 keeps_fixed_variables: croc_scaffold,
+                atom_codes: ProofHashMap::default(),
             }),
             supporting_inferences: vec![],
             supporting_inferences_at_root: vec![],
@@ -947,43 +948,73 @@ impl ProofLog {
                 proof_atomics,
                 logged_domain_inferences,
                 keeps_fixed_variables,
+                atom_codes,
             }) => {
                 // Reset the logged domain inferences.
                 logged_domain_inferences.clear();
 
                 let keeps_fixed_variables = *keeps_fixed_variables;
+                let sequence = roots_first(
+                    propagation_order_hint
+                        .as_ref()
+                        .iter()
+                        .flat_map(|vec| vec.iter().rev().copied())
+                        .flatten()
+                        .collect(),
+                    &self.root_explanations,
+                );
+                if keeps_fixed_variables {
+                    // The atoms are defined in the order of the premises, as `log_deduction`
+                    // defines them, so the proof is the same.
+                    let mut codes = Vec::new();
+                    for predicate in premises {
+                        let code = match atom_codes.get(&predicate) {
+                            Some(&code) => code,
+                            None => {
+                                let code = if is_unnamed(predicate, variable_names) {
+                                    None
+                                } else {
+                                    Some(writer.atomic_code(
+                                        proof_atomics.map_predicate_to_proof_atomic(
+                                            predicate,
+                                            variable_names,
+                                        ),
+                                    )?)
+                                };
+                                let _ = atom_codes.insert(predicate, code);
+                                code
+                            }
+                        };
+                        codes.extend(code);
+                    }
+                    writer.log_deduction_by_codes(
+                        constraint_tag.into(),
+                        &codes,
+                        sequence.into_iter().map(|tag| tag.into()),
+                    )?;
+                    if let Some(hints) = propagation_order_hint.as_mut() {
+                        hints.clear();
+                    }
+                    self.root_explanations.clear();
+                    return Ok(constraint_tag);
+                }
                 let deduction = Deduction {
                     constraint_id: constraint_tag.into(),
                     premises: premises
                         .into_iter()
                         .filter(|&predicate| {
-                            if keeps_fixed_variables {
-                                !is_unnamed(predicate, variable_names)
-                            } else {
-                                !is_likely_a_constant(
-                                    predicate,
-                                    variable_names,
-                                    assignments,
-                                    Some(proof_atomics),
-                                )
-                            }
+                            !is_likely_a_constant(
+                                predicate,
+                                variable_names,
+                                assignments,
+                                Some(proof_atomics),
+                            )
                         })
                         .map(|premise| {
                             proof_atomics.map_predicate_to_proof_atomic(premise, variable_names)
                         })
                         .collect(),
-                    sequence: roots_first(
-                        propagation_order_hint
-                            .as_ref()
-                            .iter()
-                            .flat_map(|vec| vec.iter().rev().copied())
-                            .flatten()
-                            .collect(),
-                        &self.root_explanations,
-                    )
-                    .into_iter()
-                    .map(|tag| tag.into())
-                    .collect(),
+                    sequence: sequence.into_iter().map(|tag| tag.into()).collect(),
                 };
 
                 writer.log_deduction(deduction)?;
@@ -1080,8 +1111,12 @@ impl ProofLog {
         match self.internal_proof {
             Some(ProofImpl::CpProof {
                 ref mut proof_atomics,
+                ref mut atom_codes,
                 ..
-            }) => proof_atomics.reify_predicate(literal, predicate),
+            }) => {
+                proof_atomics.reify_predicate(literal, predicate);
+                atom_codes.clear();
+            }
             Some(ProofImpl::BlockProof(ref mut proof)) => {
                 proof.proof_atomics.reify_predicate(literal, predicate)
             }
@@ -1199,10 +1234,12 @@ impl Write for Sink {
 }
 
 /// The sink of a CP proof. A croc scaffold starts with its preamble, which the solver knows only
-/// once the model is compiled, so what is logged before it is held until then.
+/// once the model is compiled, so what is logged before it is held until then. The writer
+/// writes each atomic constraint of a nogood with its own call, so the sink is buffered: one
+/// system call per atomic constraint made the time to write a scaffold a large part of solving.
 #[derive(Debug)]
 struct CpSink {
-    sink: Sink,
+    sink: std::io::BufWriter<Sink>,
     /// What was logged before the preamble of a croc scaffold; `None` once the preamble is
     /// written, and for other proofs.
     held: Option<Vec<u8>>,
@@ -1282,6 +1319,12 @@ enum ProofImpl {
         /// scaffold does: its reader holds them as variables. Otherwise they are left out, as
         /// for the DRCP checker.
         keeps_fixed_variables: bool,
+        /// When the nogoods keep their atoms over fixed variables, the code each predicate of a
+        /// nogood is written with, or `None` for a predicate over an unnamed variable, which is
+        /// left out: the writer finds the code of an atom by the name of its variable, which costs
+        /// more than this lookup on every atom of every nogood. Emptied when a literal is made the
+        /// reification of a predicate, which changes how predicates over it are written.
+        atom_codes: ProofHashMap<Predicate, Option<NonZero<i32>>>,
     },
     DimacsProof(DimacsProof<File>),
     BlockProof(Box<BlockProof>),

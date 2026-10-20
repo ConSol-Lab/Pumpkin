@@ -56,6 +56,7 @@
 pub mod blocks;
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::io::Write;
 use std::num::NonZero;
@@ -64,10 +65,14 @@ use crate::Conclusion;
 use crate::Deduction;
 use crate::Inference;
 use crate::IntAtomic;
+use crate::IntComparison;
 use crate::IntValue;
 
 /// Write a DRCP proof to some sink.
 ///
+/// The codes of the atomic constraints over one variable, by their comparison and value.
+type AtomicCodes<Int> = BTreeMap<(IntComparison, Int), NonZero<i32>>;
+
 /// See the module documentation of [`crate::writer`] for examples on how to use the
 /// [`ProofWriter`].
 #[derive(Debug)]
@@ -75,9 +80,11 @@ pub struct ProofWriter<W, Int> {
     /// The writer to the underlying sink.
     writer: W,
 
-    /// A container for all the literals which are seen in the proof. Unseen literals need not be
-    /// defined in the literal definition file.
-    defined_atomics: BTreeMap<IntAtomic<Box<str>, Int>, NonZero<i32>>,
+    /// A container for all the literals which are seen in the proof, by the name of their
+    /// variable and then by their comparison and value, so that an atomic constraint that is
+    /// defined already is found from the borrowed name without allocating a copy of it. Unseen
+    /// literals need not be defined in the literal definition file.
+    defined_atomics: HashMap<Box<str>, AtomicCodes<Int>>,
 
     /// The next ID to use when a new atomic needs to be defined.
     next_atomic_id: i32,
@@ -89,7 +96,7 @@ impl<W: Write, Int> ProofWriter<W, Int> {
     pub fn new(writer: W) -> Self {
         Self {
             writer,
-            defined_atomics: BTreeMap::default(),
+            defined_atomics: HashMap::default(),
             next_atomic_id: 0,
         }
     }
@@ -107,7 +114,7 @@ impl<W: Write, Int: IntValue> ProofWriter<W, Int> {
     /// should be applied to derive the conflict.
     ///
     /// This function wraps an IO operation, which is why it can fail with an IO error.
-    pub fn log_deduction<Identifier: Into<Box<str>>>(
+    pub fn log_deduction<Identifier: AsRef<str> + Into<Box<str>>>(
         &mut self,
         deduction: Deduction<Identifier, Int>,
     ) -> std::io::Result<()> {
@@ -149,7 +156,7 @@ impl<W: Write, Int: IntValue> ProofWriter<W, Int> {
     /// the premises form a nogood.
     ///
     /// This function wraps an IO operation, which is why it can fail with an IO error.
-    pub fn log_inference<Identifier: Into<Box<str>>, Label: Display>(
+    pub fn log_inference<Identifier: AsRef<str> + Into<Box<str>>, Label: Display>(
         &mut self,
         inference: Inference<Identifier, Int, Label>,
     ) -> std::io::Result<()> {
@@ -195,8 +202,37 @@ impl<W: Write, Int: IntValue> ProofWriter<W, Int> {
         Ok(())
     }
 
+    /// Write a deduction step whose premises are given by their codes, as
+    /// [`ProofWriter::atomic_code`] returned them; the step is written as
+    /// [`ProofWriter::log_deduction`] writes it.
+    pub fn log_deduction_by_codes(
+        &mut self,
+        constraint_id: crate::ConstraintId,
+        premises: &[NonZero<i32>],
+        sequence: impl IntoIterator<Item = crate::ConstraintId>,
+    ) -> std::io::Result<()> {
+        write!(&mut self.writer, "n {constraint_id}")?;
+        for code in premises {
+            write!(&mut self.writer, " {code}")?;
+        }
+        write!(&mut self.writer, " 0")?;
+        for constraint_id in sequence {
+            write!(&mut self.writer, " {constraint_id}")?;
+        }
+        writeln!(&mut self.writer)
+    }
+
+    /// The code of the atomic constraint in the proof, defining it first when it is new; the
+    /// code of its negation is the negated code.
+    pub fn atomic_code<Identifier: AsRef<str> + Into<Box<str>>>(
+        &mut self,
+        atomic: IntAtomic<Identifier, Int>,
+    ) -> std::io::Result<NonZero<i32>> {
+        self.get_atomic_code(atomic)
+    }
+
     /// Conclude the proof with a conclusion.
-    pub fn log_conclusion<Identifier: Into<Box<str>>>(
+    pub fn log_conclusion<Identifier: AsRef<str> + Into<Box<str>>>(
         &mut self,
         conclusion: Conclusion<Identifier, Int>,
     ) -> std::io::Result<()> {
@@ -209,29 +245,35 @@ impl<W: Write, Int: IntValue> ProofWriter<W, Int> {
         }
     }
 
-    fn get_atomic_code<Identifier: Into<Box<str>>>(
+    fn get_atomic_code<Identifier: AsRef<str> + Into<Box<str>>>(
         &mut self,
         atomic: IntAtomic<Identifier, Int>,
     ) -> std::io::Result<NonZero<i32>> {
+        if let Some(&code) = self
+            .defined_atomics
+            .get(atomic.name.as_ref())
+            .and_then(|codes| codes.get(&(atomic.comparison, atomic.value.clone())))
+        {
+            return Ok(code);
+        }
+
+        self.next_atomic_id += 1;
+        let id = NonZero::new(self.next_atomic_id)
+            .expect("next_atomic_id starts at 0, and is incremented, so it can never be 0");
+
         let key = IntAtomic {
             name: atomic.name.into(),
             comparison: atomic.comparison,
             value: atomic.value,
         };
+        let negation = !key.clone();
+        let codes = self.defined_atomics.entry(key.name.clone()).or_default();
+        let _ = codes.insert((key.comparison, key.value.clone()), id);
+        let _ = codes.insert((negation.comparison, negation.value), -id);
 
-        if !self.defined_atomics.contains_key(&key) {
-            self.next_atomic_id += 1;
+        writeln!(&mut self.writer, "a {id} {key}")?;
 
-            let id = NonZero::new(self.next_atomic_id)
-                .expect("next_atomic_id starts at 0, and is incremented, so it can never be 0");
-
-            let _ = self.defined_atomics.insert(key.clone(), id);
-            let _ = self.defined_atomics.insert(!key.clone(), -id);
-
-            writeln!(&mut self.writer, "a {id} {key}")?;
-        }
-
-        Ok(self.defined_atomics[&key])
+        Ok(id)
     }
 }
 
