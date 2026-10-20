@@ -199,6 +199,16 @@ where
                 conjunction: conjunction!([self.b <= a_lb - 1] & [self.a >= a_lb]),
                 inference_code: self.inference_code.clone(),
             })
+        } else if a_lb == a_ub && !domains.contains(&self.b, a_lb) {
+            Some(PropagatorConflict {
+                conjunction: conjunction!([self.a == a_lb] & [self.b != a_lb]),
+                inference_code: self.inference_code.clone(),
+            })
+        } else if b_lb == b_ub && !domains.contains(&self.a, b_lb) {
+            Some(PropagatorConflict {
+                conjunction: conjunction!([self.b == b_lb] & [self.a != b_lb]),
+                inference_code: self.inference_code.clone(),
+            })
         } else {
             None
         }
