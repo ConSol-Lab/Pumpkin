@@ -1,4 +1,3 @@
-use std::cell::OnceCell;
 use std::cmp::max;
 use std::cmp::min;
 use std::rc::Rc;
@@ -34,10 +33,6 @@ use crate::propagators::cumulative::time_table::explanations::pointwise;
 pub(crate) struct CumulativePropagationHandler {
     /// The type of explanation which is used
     explanation_type: CumulativeExplanationType,
-    /// If the same profile propagates multiple tasks then it is beneficial to cache that
-    /// explanation and re-use it. Note that this will only be used for
-    /// [`CumulativeExplanationType::Naive`] and [`CumulativeExplanationType::BigStep`].
-    stored_profile_explanation: OnceCell<Rc<PropositionalConjunction>>,
     inference_code: InferenceCode,
 }
 
@@ -80,7 +75,6 @@ impl CumulativePropagationHandler {
     ) -> Self {
         Self {
             explanation_type,
-            stored_profile_explanation: OnceCell::new(),
             inference_code,
         }
     }
@@ -258,15 +252,11 @@ impl CumulativePropagationHandler {
         match self.explanation_type {
             CumulativeExplanationType::Naive | CumulativeExplanationType::BigStep => {
                 // We use the same procedure for the explanation using naive and bigstep, note that
-                // `get_stored_profile_explanation_or_init` and
+                // `create_profile_explanation` and
                 // `create_predicate_propagating_task_lower_bound_propagation` both use the
                 // explanation type to create the explanations.
-                let explanation = self.get_stored_profile_explanation_or_init(
-                    context,
-                    profile,
-                    capacity,
-                    propagating_task,
-                );
+                let explanation =
+                    self.create_profile_explanation(context, profile, capacity, propagating_task);
                 let lower_bound_predicate_propagating_task =
                     create_predicate_propagating_task_lower_bound_propagation(
                         self.explanation_type,
@@ -276,7 +266,7 @@ impl CumulativePropagationHandler {
                         None,
                     );
                 let predicate = predicate![propagating_task.start_variable >= profile.end + 1];
-                let mut reason = (*explanation).clone();
+                let mut reason = explanation;
                 reason.push(lower_bound_predicate_propagating_task);
 
                 pumpkin_assert_extreme!(check_explanation(predicate, &reason, context.domains()));
@@ -314,15 +304,11 @@ impl CumulativePropagationHandler {
         match self.explanation_type {
             CumulativeExplanationType::Naive | CumulativeExplanationType::BigStep => {
                 // We use the same procedure for the explanation using naive and bigstep, note that
-                // `get_stored_profile_explanation_or_init` and
+                // `create_profile_explanation` and
                 // `create_predicate_propagating_task_upper_bound_propagation` both use the
                 // explanation type to create the explanations.
-                let explanation = self.get_stored_profile_explanation_or_init(
-                    context,
-                    profile,
-                    capacity,
-                    propagating_task,
-                );
+                let explanation =
+                    self.create_profile_explanation(context, profile, capacity, propagating_task);
                 let upper_bound_predicate_propagating_task =
                     create_predicate_propagating_task_upper_bound_propagation(
                         self.explanation_type,
@@ -335,7 +321,7 @@ impl CumulativePropagationHandler {
                     propagating_task.start_variable
                         <= profile.start - propagating_task.processing_time
                 ];
-                let mut reason = (*explanation).clone();
+                let mut reason = explanation;
                 reason.push(upper_bound_predicate_propagating_task);
 
                 pumpkin_assert_extreme!(check_explanation(predicate, &reason, context.domains()));
@@ -399,9 +385,9 @@ impl CumulativePropagationHandler {
             match self.explanation_type {
                 CumulativeExplanationType::Naive | CumulativeExplanationType::BigStep => {
                     // We use the same procedure for the explanation using naive and bigstep, note
-                    // that `get_stored_profile_explanation_or_init` uses the
+                    // that `create_profile_explanation` uses the
                     // explanation type to create the explanations.
-                    let explanation = self.get_stored_profile_explanation_or_init(
+                    let explanation = self.create_profile_explanation(
                         context,
                         profile,
                         capacity,
@@ -413,7 +399,7 @@ impl CumulativePropagationHandler {
                         &explanation,
                         context.domains()
                     ));
-                    context.post(predicate, ((*explanation).clone(), &self.inference_code))?;
+                    context.post(predicate, (explanation, &self.inference_code))?;
                 }
                 CumulativeExplanationType::Pointwise => {
                     // We split into two cases when determining the explanation of the profile
@@ -457,38 +443,39 @@ impl CumulativePropagationHandler {
         Ok(())
     }
 
-    /// Signifies that we are moving to another profile and we cannot re-use the cached explanation
-    /// of [`CumulativePropagationHandler::stored_profile_explanation`].
-    pub(crate) fn next_profile(&mut self) {
-        let _ = self.stored_profile_explanation.take();
-    }
-
-    /// Either we get the stored stored profile explanation or we initialize it.
-    fn get_stored_profile_explanation_or_init<Var>(
+    /// Creates the explanation of why `profile` propagates `propagating_task`; note that this
+    /// explanation depends on the resource usage of `propagating_task` and thus cannot be re-used
+    /// for other tasks.
+    fn create_profile_explanation<Var>(
         &self,
         context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
         capacity: i32,
         propagating_task: &Rc<Task<Var>>,
-    ) -> Rc<PropositionalConjunction>
+    ) -> PropositionalConjunction
     where
         Var: IntegerVariable + 'static,
     {
-        Rc::clone(self.stored_profile_explanation.get_or_init(|| {
-            Rc::new(
-                match self.explanation_type {
-                    CumulativeExplanationType::Naive => {
-                        create_naive_propagation_explanation(profile, context.domains(), capacity, propagating_task.resource_usage).collect()
-                    },
-                    CumulativeExplanationType::BigStep => {
-                        create_big_step_propagation_explanation(profile, capacity, propagating_task.resource_usage).collect()
-                    },
-                    CumulativeExplanationType::Pointwise => {
-                        unreachable!("At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations")
-                    },
-                }
+        match self.explanation_type {
+            CumulativeExplanationType::Naive => create_naive_propagation_explanation(
+                profile,
+                context.domains(),
+                capacity,
+                propagating_task.resource_usage,
             )
-        }))
+            .collect(),
+            CumulativeExplanationType::BigStep => create_big_step_propagation_explanation(
+                profile,
+                capacity,
+                propagating_task.resource_usage,
+            )
+            .collect(),
+            CumulativeExplanationType::Pointwise => {
+                unreachable!(
+                    "The pointwise explanation consists of multiple explanations and is created separately"
+                )
+            }
+        }
     }
 }
 

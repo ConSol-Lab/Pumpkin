@@ -3,6 +3,7 @@
 //! Every test is written once as a function which is generic over the propagator under test; the
 //! [`time_table_tests`] and [`synchronisation_tests`] macros instantiate them for each propagator.
 use pumpkin_core::conjunction;
+use pumpkin_core::options::ReifiedPropagatorArgs;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
@@ -215,6 +216,63 @@ fn propagator_propagates_after_assignment<P: TimeTableTestCase>() {
     state.assert_bounds(s2, 7, 10);
 }
 
+/// Regression test: the incremental propagators would lose updates which were not yet processed
+/// (because the reification literal was not true) when backtracking with an empty time-table.
+fn reified_propagator_propagates_after_backtracking<P: TimeTableTestCase>()
+where
+    P::PropagatorImpl: Clone,
+{
+    let mut state = State::default();
+    let s1 = state.new_interval_variable(0, 10, None);
+    let s2 = state.new_interval_variable(0, 9, None);
+    let reification_literal = state.new_literal(None);
+
+    let tasks = [
+        ArgTask {
+            start_time: s1,
+            processing_time: 4,
+            resource_usage: 1,
+        },
+        ArgTask {
+            start_time: s2,
+            processing_time: 4,
+            resource_usage: 1,
+        },
+    ];
+    let constraint_tag = state.new_constraint_tag();
+    let _ = state.add_propagator(ReifiedPropagatorArgs {
+        propagator: P::construct(&tasks, 1, Default::default(), constraint_tag),
+        reification_literal,
+    });
+    state.propagate_to_fixed_point().expect("No conflict");
+
+    // Create the (empty) time-table by propagating while the reification literal is true
+    state.new_checkpoint();
+    let _ = state
+        .post(reification_literal.get_true_predicate())
+        .expect("No empty domain");
+    state.propagate_to_fixed_point().expect("No conflict");
+    let _ = state.restore_to(0);
+
+    // Create the mandatory part [8, 10) for s1 while the reification literal is unassigned
+    state.new_checkpoint();
+    let _ = state.post(predicate!(s1 >= 6)).expect("No empty domain");
+    let _ = state.post(predicate!(s1 <= 8)).expect("No empty domain");
+    state.propagate_to_fixed_point().expect("No conflict");
+
+    // Backtrack to a checkpoint at which the mandatory part still exists
+    state.new_checkpoint();
+    let _ = state.post(predicate!(s2 <= 8)).expect("No empty domain");
+    state.propagate_to_fixed_point().expect("No conflict");
+    let _ = state.restore_to(1);
+
+    let _ = state
+        .post(reification_literal.get_true_predicate())
+        .expect("No empty domain");
+    state.propagate_to_fixed_point().expect("No conflict");
+    state.assert_bounds(s2, 0, 4);
+}
+
 fn propagator_propagates_end_time<P: TimeTableTestCase>() {
     let mut state = State::default();
     let s1 = state.new_interval_variable(6, 6, None);
@@ -403,6 +461,46 @@ fn propagator_propagates_sequence_with_gap_equal_to_processing_time<P: TimeTable
     );
 }
 
+fn propagator_explains_each_task_with_its_own_resource_usage<P: TimeTableTestCase>() {
+    for explanation_type in [
+        CumulativeExplanationType::Naive,
+        CumulativeExplanationType::BigStep,
+    ] {
+        let mut state = State::default();
+        let a = state.new_interval_variable(10, 10, None);
+        let b = state.new_interval_variable(10, 10, None);
+        let c = state.new_interval_variable(10, 10, None);
+        let x = state.new_interval_variable(9, 20, None);
+        let y = state.new_interval_variable(9, 20, None);
+
+        let options = CumulativePropagatorOptions {
+            explanation_type,
+            ..Default::default()
+        };
+        add_propagator::<P>(
+            &mut state,
+            &[(a, 5, 3), (b, 5, 3), (c, 5, 3), (x, 2, 5), (y, 2, 2)],
+            10,
+            options,
+        )
+        .expect("No conflict");
+        state.assert_bounds(x, 15, 20);
+        state.assert_bounds(y, 15, 20);
+
+        // The profile has height 9, so the propagation of `x` (usage 5) can be explained by two of
+        // the tasks in the profile, but the propagation of `y` (usage 2) requires all three
+        let reason = reason_for(&mut state, predicate!(y >= 15));
+        for task in [a, b, c] {
+            assert!(
+                reason
+                    .iter()
+                    .any(|predicate| predicate.get_domain() == task),
+                "{explanation_type:?}: the reason {reason:?} should contain {task:?}"
+            );
+        }
+    }
+}
+
 // The scenarios below return the explanations as a `Vec` rather than a `PropositionalConjunction`
 // since the order of the predicates matters; without synchronisation, the explanations of the
 // incremental propagators only differ in the order of the predicates.
@@ -526,6 +624,11 @@ macro_rules! time_table_tests {
                 }
 
                 #[test]
+                fn reified_propagator_propagates_after_backtracking() {
+                    super::reified_propagator_propagates_after_backtracking::<$propagator>()
+                }
+
+                #[test]
                 fn propagator_propagates_end_time() {
                     super::propagator_propagates_end_time::<$propagator>()
                 }
@@ -558,6 +661,11 @@ macro_rules! time_table_tests {
                 #[test]
                 fn propagator_propagates_sequence_with_gap_equal_to_processing_time() {
                     super::propagator_propagates_sequence_with_gap_equal_to_processing_time::<$propagator>()
+                }
+
+                #[test]
+                fn propagator_explains_each_task_with_its_own_resource_usage() {
+                    super::propagator_explains_each_task_with_its_own_resource_usage::<$propagator>()
                 }
             }
         )*

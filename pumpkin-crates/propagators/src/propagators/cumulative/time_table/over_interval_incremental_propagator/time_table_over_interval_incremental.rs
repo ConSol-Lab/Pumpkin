@@ -512,9 +512,13 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         if !self.parameters.options.incremental_backtracking {
             self.updatable_structures
                 .reset_all_bounds_and_remove_fixed(context.domains(), &self.parameters);
-            // If the time-table is already empty then backtracking will not cause it to become
-            // outdated
-            if !self.time_table.is_empty() {
+            // If the time-table is already empty and there are no unprocessed updates then
+            // backtracking will not cause it to become outdated.
+            //
+            // Note that there can be unprocessed updates if `propagate` was not called since the
+            // last notification (e.g., when the propagator is reified and the reification literal
+            // is not true); resetting the bounds above discards these updates.
+            if !self.time_table.is_empty() || self.updatable_structures.has_updated_tasks() {
                 self.is_time_table_outdated = true;
             }
         } else if SYNCHRONISE {
