@@ -10,12 +10,12 @@ var bool: g :: output_var;
 var bool: h :: output_var = true;
 var bool: k :: output_var;
 
+% A chain of negations, given before the predicate it starts from: `c` is `!b`, which is `a`.
+constraint bool_not(b, c);
 % `a <-> [x <= 1]`, so `bool_not(a, b)` defines `b` as `[x >= 2]`, which is also the integer `i`.
 constraint int_le_reif(x, 1, a);
 constraint bool_not(a, b);
 constraint bool2int(b, i);
-% A chain of negations: `c` is `!b`, which is `a`.
-constraint bool_not(b, c);
 % `e` is defined as `!d`; the second constraint would form a cycle and is posted instead.
 constraint bool_not(d, e);
 constraint bool_not(e, d);
