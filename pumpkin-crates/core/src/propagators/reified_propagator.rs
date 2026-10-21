@@ -23,6 +23,7 @@ use crate::propagation::ReadDomains;
 use crate::propagation::RuntimeCheckers;
 use crate::pumpkin_assert_simple;
 use crate::state::Conflict;
+use crate::variables::DomainId;
 use crate::variables::Literal;
 
 /// A [`PropagatorConstructor`] for the reified propagator.
@@ -63,6 +64,11 @@ where
             .expect("cannot reify propagators that do not register all variables immediately")
             .successor();
 
+        let wrapped_registration = registration
+            .iter()
+            .map(|(domain_id, _, local_id)| (domain_id, local_id))
+            .collect();
+
         // We only register for the reification literal becoming true; if it becomes false, then
         // there is nothing left to propagate
         registration.add(
@@ -89,6 +95,7 @@ where
             propagator,
             reification_literal,
             reification_literal_id,
+            wrapped_registration,
             name,
             reason_buffer: vec![],
         };
@@ -117,6 +124,9 @@ pub struct ReifiedPropagator<WrappedPropagator> {
     /// The `LocalId` of the reification literal. Is guaranteed to be a larger ID than any of the
     /// registered ids of the wrapped propagator.
     reification_literal_id: LocalId,
+    /// The domains and corresponding [`LocalId`]s registered by the wrapped propagator; used to
+    /// unregister the wrapped propagator when the reification literal is false at the root.
+    wrapped_registration: Vec<(DomainId, LocalId)>,
 
     /// Holds the lazy explanations.
     reason_buffer: Vec<Predicate>,
@@ -216,10 +226,15 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
     where
         Prop: Propagator,
     {
-        if context.evaluate_literal(self.reification_literal).is_some() {
-            // If the literal is true, then the wrapped propagator takes over; if it is false, then
-            // there is nothing left to propagate
-            return Ok(());
+        match context.evaluate_literal(self.reification_literal) {
+            // If the literal is true, then the wrapped propagator takes over
+            Some(true) => return Ok(()),
+            // If the literal is false, then there is nothing left to propagate
+            Some(false) => {
+                self.unregister_if_at_root(context);
+                return Ok(());
+            }
+            None => {}
         }
 
         if let Some(conflict) = self.propagator.detect_inconsistency(context.domains()) {
@@ -227,9 +242,22 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
                 self.reification_literal.get_false_predicate(),
                 (conflict.conjunction, &conflict.inference_code),
             )?;
+            self.unregister_if_at_root(context);
         }
 
         Ok(())
+    }
+
+    /// If the reification literal is false at the root, then the wrapped propagator can never
+    /// propagate again; we thus stop being notified of the events on its variables.
+    fn unregister_if_at_root(&self, context: &mut PropagationContext<'_>) {
+        if context.get_checkpoint() != 0 {
+            return;
+        }
+
+        for &(domain_id, local_id) in &self.wrapped_registration {
+            context.unregister_domain_event(domain_id, local_id);
+        }
     }
 
     fn filter_enqueue_decision(
