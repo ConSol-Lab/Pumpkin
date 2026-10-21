@@ -52,7 +52,7 @@ pub(crate) fn run(
 }
 
 /// Returns the predicate for the given boolean variable (see [`get_or_create_variable`]).
-fn get_or_create_predicate(context: &mut CompilationContext, id: &str) -> Predicate {
+pub(crate) fn get_or_create_predicate(context: &mut CompilationContext, id: &str) -> Predicate {
     let variable = get_or_create_variable(context, id);
     predicate![variable >= 1]
 }

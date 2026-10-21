@@ -66,6 +66,7 @@ mzn_test!(set_in_reif_sparse);
 mzn_test!(bool_xor_reif);
 mzn_test!(bool_xor);
 mzn_test!(bool_not);
+mzn_test!(negated_booleans);
 
 mzn_test!(bool_lin_eq);
 mzn_test!(bool_lin_le);

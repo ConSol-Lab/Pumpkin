@@ -1,0 +1,28 @@
+var 0..3: x :: output_var;
+var 0..1: i :: output_var;
+var bool: a :: output_var;
+var bool: b :: output_var;
+var bool: c :: output_var;
+var bool: d :: output_var;
+var bool: e :: output_var;
+var bool: f :: output_var;
+var bool: g :: output_var;
+var bool: h :: output_var = true;
+var bool: k :: output_var;
+
+% `a <-> [x <= 1]`, so `bool_not(a, b)` defines `b` as `[x >= 2]`, which is also the integer `i`.
+constraint int_le_reif(x, 1, a);
+constraint bool_not(a, b);
+constraint bool2int(b, i);
+% A chain of negations: `c` is `!b`, which is `a`.
+constraint bool_not(b, c);
+% `e` is defined as `!d`; the second constraint would form a cycle and is posted instead.
+constraint bool_not(d, e);
+constraint bool_not(e, d);
+% `g` is already defined as `[x <= 2]`, so `f` is defined as its negation instead.
+constraint bool_not(f, g);
+constraint int_le_reif(x, 2, g);
+% The negation of a fixed boolean.
+constraint bool_not(h, k);
+
+solve satisfy;
