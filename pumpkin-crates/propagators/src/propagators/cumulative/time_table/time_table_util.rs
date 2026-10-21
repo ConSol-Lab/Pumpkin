@@ -252,17 +252,13 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     // We create the structure responsible for propagations and explanations
-    let mut propagation_handler = CumulativePropagationHandler::new(
+    let propagation_handler = CumulativePropagationHandler::new(
         parameters.options.explanation_type,
         inference_code.clone(),
     );
 
     // Then we go over all of the profiles in the time-table
     'profile_loop: for profile in time_table {
-        // We indicate to the propagation handler that we cannot re-use an existing profile
-        // explanation
-        propagation_handler.next_profile();
-
         // Then we go over all the different tasks
         let mut task_index = 0;
         while task_index < updatable_structures.number_of_unfixed_tasks() {
@@ -379,7 +375,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
     }
 
     // We create the structure responsible for propagations and explanations
-    let mut propagation_handler = CumulativePropagationHandler::new(
+    let propagation_handler = CumulativePropagationHandler::new(
         parameters.options.explanation_type,
         inference_code.clone(),
     );
@@ -394,7 +390,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
         // First we perform lower-bound propagation
         sweep_forward(
             task,
-            &mut propagation_handler,
+            &propagation_handler,
             context,
             &time_table,
             parameters,
@@ -403,7 +399,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
         // Then we perform upper-bound propagation
         sweep_backward(
             task,
-            &mut propagation_handler,
+            &propagation_handler,
             context,
             &time_table,
             parameters,
@@ -425,7 +421,6 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                 profile.start < context.upper_bound(&task.start_variable) + task.processing_time
             });
             for profile in &time_table[lower_bound_index..upper_bound_index] {
-                propagation_handler.next_profile();
                 // Check whether this profile can cause an update
                 if can_be_updated_by_profile(context.domains(), task, profile, parameters.capacity)
                 {
@@ -449,7 +444,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
 /// This method makes use of the fact that the provided `time_table` is sorted chronologically.
 fn sweep_forward<'a, Var: IntegerVariable + 'static>(
     task: &Rc<Task<Var>>,
-    propagation_handler: &mut CumulativePropagationHandler,
+    propagation_handler: &CumulativePropagationHandler,
     context: &mut PropagationContext,
     time_table: &[&'a ResourceProfile<Var>],
     parameters: &CumulativeParameters<Var>,
@@ -470,8 +465,6 @@ fn sweep_forward<'a, Var: IntegerVariable + 'static>(
             // profiles.
             break 'lower_bound_profile_loop;
         }
-
-        propagation_handler.next_profile();
 
         // We check whether a lower-bound propagation can be performed using this profile
         if lower_bound_can_be_propagated_by_profile(
@@ -514,7 +507,7 @@ fn sweep_forward<'a, Var: IntegerVariable + 'static>(
 
 fn sweep_backward<'a, Var: IntegerVariable + 'static>(
     task: &Rc<Task<Var>>,
-    propagation_handler: &mut CumulativePropagationHandler,
+    propagation_handler: &CumulativePropagationHandler,
     context: &mut PropagationContext,
     time_table: &[&'a ResourceProfile<Var>],
     parameters: &CumulativeParameters<Var>,
@@ -539,8 +532,6 @@ fn sweep_backward<'a, Var: IntegerVariable + 'static>(
             // profiles.
             break 'upper_bound_profile_loop;
         }
-
-        propagation_handler.next_profile();
 
         // We check whether an upper-bound propagation can be performed using this profile
         if upper_bound_can_be_propagated_by_profile(
