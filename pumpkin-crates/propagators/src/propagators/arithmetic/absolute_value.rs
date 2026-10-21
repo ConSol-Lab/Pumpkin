@@ -205,11 +205,6 @@ where
         let absolute_lower = self.absolute.induced_lower_bound(&state);
         let absolute_upper = self.absolute.induced_upper_bound(&state);
 
-        if absolute_lower < 0 {
-            // The absolute value cannot have negative values.
-            return true;
-        }
-
         // Now we compute the interval for |signed| based on the domain of signed.
         let (computed_signed_lower, computed_signed_upper) = if signed_lower >= 0 {
             (signed_lower, signed_upper)
@@ -221,17 +216,199 @@ where
             unreachable!()
         };
 
-        // The intervals should not match, otherwise there is no conflict.
-        computed_signed_lower != absolute_lower || computed_signed_upper != absolute_upper
+        // A conflict is detected if the interval of the domains of |signed| `absolute` share no
+        // value, i.e., their intersection is empty.
+        // Note that a negative lower bound on `absolute` needs no special handling:
+        // the lower bound of |signed| is at least zero, so the check then reduces to comparing
+        // against the upper bound of `absolute`.
+        computed_signed_upper < absolute_lower || absolute_upper < computed_signed_lower
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_checking::Comparison;
+    use pumpkin_checking::TestAtomic;
+    use pumpkin_checking::VariableState;
     use pumpkin_core::state::State;
 
     use super::*;
     use crate::StateExt;
+
+    /// Helper function to build test cases.
+    /// Uses the checker [`AbsoluteValueChecker`] to establish whether the provided instance is
+    /// a conflict. The input contains the intervals of the domains of the variables.
+    /// Returns true if the instance is infeasible.
+    fn check_absolute_value_conflict(
+        signed_bounds: (i32, i32),
+        absolute_bounds: (i32, i32),
+    ) -> bool {
+        let (signed_lower, signed_upper) = signed_bounds;
+        let (absolute_lower, absolute_upper) = absolute_bounds;
+
+        let premises = [
+            TestAtomic {
+                name: "signed",
+                comparison: Comparison::GreaterEqual,
+                value: signed_lower,
+            },
+            TestAtomic {
+                name: "signed",
+                comparison: Comparison::LessEqual,
+                value: signed_upper,
+            },
+            TestAtomic {
+                name: "absolute",
+                comparison: Comparison::GreaterEqual,
+                value: absolute_lower,
+            },
+            TestAtomic {
+                name: "absolute",
+                comparison: Comparison::LessEqual,
+                value: absolute_upper,
+            },
+        ];
+
+        let state = VariableState::prepare_for_conflict_check(premises, None)
+            .expect("no conflicting atomics");
+
+        let checker = AbsoluteValueChecker {
+            signed: "signed",
+            absolute: "absolute",
+        };
+
+        checker.check(state, &premises, None)
+    }
+
+    #[test]
+    fn absolute_value_feasible1() {
+        assert!(!check_absolute_value_conflict((-5, 5), (2, 5)));
+    }
+
+    #[test]
+    fn absolute_value_feasible2() {
+        assert!(!check_absolute_value_conflict((5, 20), (10, 30)));
+    }
+
+    #[test]
+    fn absolute_value_feasible3() {
+        assert!(!check_absolute_value_conflict((-20, 20), (10, 30)));
+    }
+
+    #[test]
+    fn absolute_value_feasible4() {
+        assert!(!check_absolute_value_conflict((-10, 10), (0, 9)));
+    }
+
+    #[test]
+    fn absolute_value_feasible5() {
+        assert!(!check_absolute_value_conflict((-20, -5), (10, 30)));
+    }
+
+    #[test]
+    fn absolute_value_feasible6() {
+        assert!(!check_absolute_value_conflict((-5, 5), (5, 8)));
+    }
+
+    #[test]
+    fn absolute_value_feasible7() {
+        assert!(!check_absolute_value_conflict((5, 10), (0, 5)));
+    }
+
+    #[test]
+    fn absolute_value_feasible8() {
+        assert!(!check_absolute_value_conflict((2, 5), (2, 5)));
+    }
+
+    #[test]
+    fn absolute_value_feasible9() {
+        assert!(!check_absolute_value_conflict((0, 5), (-2, 10)));
+    }
+
+    #[test]
+    fn absolute_value_feasible10() {
+        assert!(!check_absolute_value_conflict((-3, 3), (0, 0)));
+    }
+
+    #[test]
+    fn absolute_value_feasible11() {
+        let premises = [
+            TestAtomic {
+                name: "signed",
+                comparison: Comparison::GreaterEqual,
+                value: 1,
+            },
+            TestAtomic {
+                name: "signed",
+                comparison: Comparison::LessEqual,
+                value: 2,
+            },
+            TestAtomic {
+                name: "absolute",
+                comparison: Comparison::LessEqual,
+                value: 5,
+            },
+        ];
+
+        let state = VariableState::prepare_for_conflict_check(premises, None)
+            .expect("no conflicting atomic constraints");
+
+        let checker = AbsoluteValueChecker {
+            signed: "signed",
+            absolute: "absolute",
+        };
+
+        assert!(!checker.check(state, &premises, None));
+    }
+
+    #[test]
+    fn absolute_value_infeasible1() {
+        assert!(check_absolute_value_conflict((-5, 5), (6, 10)));
+    }
+
+    #[test]
+    fn absolute_value_infeasible2() {
+        assert!(check_absolute_value_conflict((5, 10), (0, 3)));
+    }
+
+    #[test]
+    fn absolute_value_infeasible3() {
+        assert!(check_absolute_value_conflict((-10, -5), (0, 3)));
+    }
+
+    #[test]
+    fn absolute_value_infeasible4() {
+        assert!(check_absolute_value_conflict((3, 5), (-10, -1)));
+    }
+
+    #[test]
+    fn absolute_value_infeasible5() {
+        assert!(check_absolute_value_conflict((-5, 5), (6, 6)));
+    }
+
+    #[test]
+    fn absolute_value_infeasible6() {
+        assert!(check_absolute_value_conflict((1, 3), (0, 0)));
+    }
+
+    #[test]
+    fn absolute_value_infeasible7() {
+        let premises = [TestAtomic {
+            name: "absolute",
+            comparison: Comparison::LessEqual,
+            value: -1,
+        }];
+
+        let state = VariableState::prepare_for_conflict_check(premises, None)
+            .expect("no conflicting atomic constraints");
+
+        let checker = AbsoluteValueChecker {
+            signed: "signed",
+            absolute: "absolute",
+        };
+
+        assert!(checker.check(state, &premises, None));
+    }
 
     #[test]
     fn absolute_bounds_are_propagated_at_initialise() {
@@ -339,5 +516,113 @@ mod tests {
         state.propagate_to_fixed_point().expect("no empty domains");
 
         state.assert_bounds(signed, 3, 5);
+    }
+
+    #[test]
+    fn positive_signed_conflicts_with_small_absolute() {
+        let mut state = State::default();
+
+        let signed = state.new_interval_variable(5, 10, None);
+        let absolute = state.new_interval_variable(0, 3, None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(AbsoluteValueArgs {
+            signed,
+            absolute,
+            constraint_tag,
+        });
+
+        assert!(state.propagate_to_fixed_point().is_err());
+    }
+
+    #[test]
+    fn mixed_sign_signed_conflicts_with_large_absolute() {
+        let mut state = State::default();
+
+        let signed = state.new_interval_variable(-5, 5, None);
+        let absolute = state.new_interval_variable(6, 10, None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(AbsoluteValueArgs {
+            signed,
+            absolute,
+            constraint_tag,
+        });
+
+        assert!(state.propagate_to_fixed_point().is_err());
+    }
+
+    #[test]
+    fn negative_absolute_conflicts_at_root() {
+        let mut state = State::default();
+
+        let signed = state.new_interval_variable(0, 3, None);
+        let absolute = state.new_interval_variable(-5, -1, None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(AbsoluteValueArgs {
+            signed,
+            absolute,
+            constraint_tag,
+        });
+
+        assert!(state.propagate_to_fixed_point().is_err());
+    }
+
+    #[test]
+    fn mixed_sign_signed_does_not_propagate_lower_bound_of_absolute() {
+        // The propagator is only bounds consistent, so with `signed` in [-5, 5] it cannot tighten
+        // `signed` based on `[absolute >= 3]`, and nothing changes.
+        let mut state = State::default();
+
+        let signed = state.new_interval_variable(-5, 5, None);
+        let absolute = state.new_interval_variable(3, 5, None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(AbsoluteValueArgs {
+            signed,
+            absolute,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
+
+        state.assert_bounds(signed, -5, 5);
+        state.assert_bounds(absolute, 3, 5);
+    }
+
+    #[test]
+    fn signed_fixed_to_zero_fixes_absolute_to_zero() {
+        let mut state = State::default();
+
+        let signed = state.new_interval_variable(0, 0, None);
+        let absolute = state.new_interval_variable(0, 10, None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(AbsoluteValueArgs {
+            signed,
+            absolute,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
+
+        state.assert_bounds(absolute, 0, 0);
+    }
+
+    #[test]
+    fn absolute_fixed_to_zero_fixes_signed_to_zero() {
+        let mut state = State::default();
+
+        let signed = state.new_interval_variable(-5, 5, None);
+        let absolute = state.new_interval_variable(0, 0, None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(AbsoluteValueArgs {
+            signed,
+            absolute,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
+
+        state.assert_bounds(signed, 0, 0);
     }
 }
