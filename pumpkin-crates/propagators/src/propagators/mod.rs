@@ -5,6 +5,7 @@
 use pumpkin_core::propagation;
 
 pub mod arithmetic;
+pub mod circuit;
 pub mod cumulative;
 pub mod disjunctive;
 pub mod element;
