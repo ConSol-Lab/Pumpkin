@@ -45,7 +45,7 @@
     ],
     [
       "--no-iterative-minimisation",
-      "Disables semantic minimisation of learned nogoods.",
+      "Disables semantic minimisation of learned nogoods during conflict analysis.",
       "bool",
       "false"
     ],

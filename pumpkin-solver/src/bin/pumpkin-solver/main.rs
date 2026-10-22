@@ -159,14 +159,15 @@ struct Args {
 
     /// What type of proof to log.
     ///
-    /// If the `proof_path` option is not provided, this is ignored.
+    /// Requires "--proof-path" to be provided.
     #[arg(
         help_heading = "Proof Logging",
         long,
         value_enum,
         default_value_t,
         verbatim_doc_comment,
-        value_name = "TYPE"
+        value_name = "TYPE",
+        requires = "proof_path"
     )]
     proof_type: ProofType,
 
@@ -321,7 +322,20 @@ struct Args {
     nogood_propagator_priority: Priority,
 
     /// Determines that no restarts are allowed by the solver.
-    #[arg(help_heading = "Restarts", long = "no-restarts", verbatim_doc_comment)]
+    #[arg(
+        help_heading = "Restarts",
+        long = "no-restarts",
+        verbatim_doc_comment,
+        conflicts_with_all = [
+            "restart_sequence_generator_type",
+            "restart_base_interval",
+            "restart_geometric_coef",
+            "restart_min_num_conflicts_before_first_restart",
+            "restart_lbd_coef",
+            "restart_num_assigned_coef",
+            "restart_num_assigned_window",
+        ]
+    )]
     no_restarts: bool,
 
     /// Decides the sequence based on which the restarts are performed.
@@ -365,13 +379,14 @@ struct Args {
     /// The coefficient of the geometric restart sequence.
     ///
     /// The sequence is defined as `x_i = x_{i-1} * "--restart-geometric-coef"` where
-    /// `x_1 = "--restart-base-interval"`. Used only if "--restart-sequence-generator-type" is
+    /// `x_1 = "--restart-base-interval"`. Required if "--restart-sequence-generator-type" is
     /// assigned to "geometric".
     #[arg(
         help_heading = "Restarts",
         long = "restart-geometric-coef",
         verbatim_doc_comment,
-        value_name = "f64"
+        value_name = "f64",
+        required_if_eq("restart_sequence_generator_type", "geometric")
     )]
     restart_geometric_coef: Option<f64>,
 
