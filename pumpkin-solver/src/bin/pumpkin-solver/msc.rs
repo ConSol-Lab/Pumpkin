@@ -39,12 +39,20 @@ const CONFIGURATIONS: [(&str, &str, &str, &str); 2] = [
 /// <https://docs.minizinc.dev/en/stable/fzn-spec.html#solver-configuration-files>).
 const MINIZINC_STD_FLAGS: [char; 9] = ['a', 'f', 'i', 'n', 'p', 'r', 's', 't', 'v'];
 
+/// The help headings of arguments which are not applicable to MiniZinc models, and are therefore
+/// not exposed.
+const EXCLUDED_HEADINGS: [&str; 1] = ["Max(SAT)"];
+
 fn generate_msc(name: &str, id: &str, mznlib: &str) -> String {
     let command = Args::command();
     let arguments = command
         .get_arguments()
         .filter(|arg| !arg.is_positional() && !arg.is_hide_set())
-        .filter(|arg| !matches!(arg.get_action(), ArgAction::Help | ArgAction::Version));
+        .filter(|arg| !matches!(arg.get_action(), ArgAction::Help | ArgAction::Version))
+        .filter(|arg| {
+            arg.get_help_heading()
+                .is_none_or(|heading| !EXCLUDED_HEADINGS.contains(&heading))
+        });
 
     // Arguments whose short flag is a standard flag of MiniZinc (e.g. `-a`) are exposed as such;
     // all other arguments are exposed as extra flags.

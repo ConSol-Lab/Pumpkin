@@ -14,18 +14,6 @@
   ],
   "extraFlags": [
     [
-      "--omit-timestamp",
-      "If `--verbose` is enabled then this option removes the timestamp information from the log messages (only applicable for (W)CNF instances).",
-      "bool",
-      "false"
-    ],
-    [
-      "--omit-call-site",
-      "If `--verbose` is enabled then this option removes the call site information from the log messages (only applicable for (W)CNF instances).",
-      "bool",
-      "false"
-    ],
-    [
       "--proof-path",
       "The output path for the proof file. [possible values: string]",
       "string",
@@ -180,12 +168,6 @@
       "Determines whether incremental backtracking is applied or whether the cumulative propagators compute the time-table from scratch upon backtracking",
       "bool",
       "false"
-    ],
-    [
-      "--upper-bound-encoding",
-      "The encoding to use for the upper bound constraint in a MaxSAT optimisation problem. [default: generalized-totalizer] [possible values: generalized-totalizer, cardinality-network]",
-      "opt:generalized-totalizer:cardinality-network",
-      "generalized-totalizer"
     ]
   ],
   "tags": [

@@ -138,23 +138,6 @@ struct Args {
     )]
     log_statistics: bool,
 
-    /// If `--verbose` is enabled then this option removes the timestamp information from the log
-    /// messages (only applicable for (W)CNF instances).
-    #[arg(help_heading = "Output", long = "omit-timestamp", verbatim_doc_comment)]
-    omit_timestamp: bool,
-
-    /// If `--verbose` is enabled then this option removes the call site information from the log
-    /// messages (only applicable for (W)CNF instances).
-    ///
-    /// The call site is the file and line from which the message originated.
-    #[arg(
-        help_heading = "Output",
-        long = "omit-call-site",
-        default_value_t = false,
-        verbatim_doc_comment
-    )]
-    omit_call_site: bool,
-
     /// The output path for the proof file.
     ///
     /// When solving a DIMACS instance, a DRAT proof is logged. In case of a FlatZinc model, a DRCP
@@ -460,8 +443,29 @@ struct Args {
     /// - The "cardinality-network" value specifies that the solver should use the Cardinality
     ///   Network Encoding (see "Cardinality networks: a theoretical and empirical study - Asín et
     ///   al. (2011)").
-    #[arg(help_heading = "MaxSAT", long, value_enum, default_value_t)]
+    #[arg(help_heading = "Max(SAT)", long, value_enum, default_value_t)]
     upper_bound_encoding: PseudoBooleanEncoding,
+
+    /// If `--verbose` is enabled then this option removes the timestamp information from the log
+    /// messages (only applicable for (W)CNF instances).
+    #[arg(
+        help_heading = "Max(SAT)",
+        long = "omit-timestamp",
+        verbatim_doc_comment
+    )]
+    omit_timestamp: bool,
+
+    /// If `--verbose` is enabled then this option removes the call site information from the log
+    /// messages (only applicable for (W)CNF instances).
+    ///
+    /// The call site is the file and line from which the message originated.
+    #[arg(
+        help_heading = "Max(SAT)",
+        long = "omit-call-site",
+        default_value_t = false,
+        verbatim_doc_comment
+    )]
+    omit_call_site: bool,
 }
 
 fn configure_logging(
