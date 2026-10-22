@@ -27,25 +27,25 @@
     ],
     [
       "--optimisation-strategy",
-      "Determines what type of optimisation strategy is used by the solver [default: linear-sat-unsat] [possible values: linear-sat-unsat, linear-unsat-sat]",
+      "Determines what type of optimisation strategy is used by the solver. [default: linear-sat-unsat] [possible values: linear-sat-unsat, linear-unsat-sat]",
       "opt:linear-sat-unsat:linear-unsat-sat",
       "linear-sat-unsat"
     ],
     [
       "--conflict-resolver",
-      "Determines the conflict resolver [default: one-uip] [possible values: no-learning, one-uip, all-decision, extended-cpip, bounds-extended-cpip]",
+      "Determines the conflict resolver. [default: one-uip] [possible values: no-learning, one-uip, all-decision, extended-cpip, bounds-extended-cpip]",
       "opt:no-learning:one-uip:all-decision:extended-cpip:bounds-extended-cpip",
       "one-uip"
     ],
     [
       "--recursive-minimisation",
-      "Enables recursive minimisation of learned nogoods as a post-processing step after conflict analysis; according to the idea proposed in \"Generalized Conflict-Clause Strengthening for Satisfiability Solvers - Allen van Gelder (2011)\".",
+      "Enables recursive minimisation of learned nogoods.",
       "bool",
       "false"
     ],
     [
       "--no-iterative-minimisation",
-      "Disables semantic minimisation of learned nogoods during conflict analysis; according to the idea proposed in \"Semantic Learning for Lazy Clause Generation - Feydy et al. (2013)\".",
+      "Disables semantic minimisation of learned nogoods.",
       "bool",
       "false"
     ],
@@ -81,13 +81,13 @@
     ],
     [
       "--memory-preallocated",
-      "The amount of memory (in MB) that is preallocated for storing nogoods [default: 50] [possible values: int]",
+      "The amount of memory (in MB) that is preallocated for storing nogoods. [default: 50] [possible values: int]",
       "int:0:18446744073709551615",
       "50"
     ],
     [
       "--nogood-priority",
-      "The priority of the nogood propagator [default: very-low] [possible values: high, medium, low, very-low, ultra-low, lowest]",
+      "The priority of the nogood propagator. [default: very-low] [possible values: high, medium, low, very-low, ultra-low, lowest]",
       "opt:high:medium:low:very-low:ultra-low:lowest",
       "very-low"
     ],
@@ -105,13 +105,13 @@
     ],
     [
       "--restart-base-interval",
-      "The base interval length is used as a multiplier to the restart sequence. [default: 50] [possible values: int]",
+      "The base interval length which is used as a multiplier to the restart sequence. [default: 50] [possible values: int]",
       "int:0:18446744073709551615",
       "50"
     ],
     [
       "--restart-geometric-coef",
-      "The coefficient in the geometric sequence `x_i = x_{i-1} * \"--restart-geometric-coef\"` where `x_1 = \"--restart-base-interval\"`. Used only if \"--restart-sequence-generator-type\" is assigned to \"geometric\". [possible values: float]",
+      "The coefficient of the geometric restart sequence. [possible values: float]",
       "float",
       ""
     ],
@@ -123,31 +123,31 @@
     ],
     [
       "--restart-lbd-coef",
-      "Used to determine if a restart should be forced (see \"Refining Restarts Strategies for SAT and UNSAT - Audemard and Simon (2012)\"). [default: 1.25] [possible values: float]",
+      "The coefficient used to determine whether a restart should be forced. [default: 1.25] [possible values: float]",
       "float",
       "1.25"
     ],
     [
       "--restart-num-assigned-coef",
-      "Used to determine if a restart should be blocked (see \"Refining Restarts Strategies for SAT and UNSAT - Audemard and Simon (2012)\"). [default: 1.4] [possible values: float]",
+      "The coefficient used to determine whether a restart should be blocked. [default: 1.4] [possible values: float]",
       "float",
       "1.4"
     ],
     [
       "--restart-num-assigned-window",
-      "Used to determine the length of the recent past that should be considered when deciding on blocking restarts (see \"Refining Restarts Strategies for SAT and UNSAT - Audemard and Simon (2012)\"). [default: 5000] [possible values: int]",
+      "The length of the recent past that is considered when deciding whether to block a restart. [default: 5000] [possible values: int]",
       "int:0:18446744073709551615",
       "5000"
     ],
     [
       "--cumulative-propagation-method",
-      "Determines the type of propagator which is used by the cumulative propagator(s) to propagate the constraint. [default: time-table-over-interval-incremental] [possible values: time-table-per-point, time-table-per-point-incremental, time-table-per-point-incremental-synchronised, time-table-over-interval, time-table-over-interval-incremental, time-table-over-interval-incremental-synchronised]",
+      "Determines the type of propagator which is used for the cumulative constraint. [default: time-table-over-interval-incremental] [possible values: time-table-per-point, time-table-per-point-incremental, time-table-per-point-incremental-synchronised, time-table-over-interval, time-table-over-interval-incremental, time-table-over-interval-incremental-synchronised]",
       "opt:time-table-per-point:time-table-per-point-incremental:time-table-per-point-incremental-synchronised:time-table-over-interval:time-table-over-interval-incremental:time-table-over-interval-incremental-synchronised",
       "time-table-over-interval-incremental"
     ],
     [
       "--cumulative-explanation-type",
-      "Determines the type of explanation used by the cumulative propagator(s) to explain propagations/conflicts [default: pointwise] [possible values: naive, big-step, pointwise]",
+      "Determines the type of explanation used by the cumulative propagator(s). [default: pointwise] [possible values: naive, big-step, pointwise]",
       "opt:naive:big-step:pointwise",
       "pointwise"
     ],
@@ -159,13 +159,13 @@
     ],
     [
       "--cumulative-single-profiles",
-      "Determines whether single profiles are used when explaining a propagation of the cumulative constraint",
+      "Uses single profiles when explaining propagations of the cumulative constraint.",
       "bool",
       "false"
     ],
     [
       "--cumulative-incremental-backtracking",
-      "Determines whether incremental backtracking is applied or whether the cumulative propagators compute the time-table from scratch upon backtracking",
+      "Enables incremental backtracking for the cumulative propagator(s).",
       "bool",
       "false"
     ]

@@ -70,7 +70,9 @@ About: {about}
     next_line_help = true
 )]
 struct Args {
-    /// The instance to solve. The file should have one of the following extensions:
+    /// The instance to solve.
+    ///
+    /// The file should have one of the following extensions:
     ///  - '*.cnf' for SAT instances, given in the DIMACS format,
     ///  - '*.wcnf' for MaxSAT instances, given in the WDIMACS format.
     ///  - '*.fzn' for FlatZinc instances (see <https://docs.minizinc.dev/en/stable/flattening.html>).
@@ -103,9 +105,10 @@ struct Args {
     )]
     random_seed: u64,
 
-    /// Instructs the solver to report all solutions in the case of satisfaction problems,
-    /// or print intermediate solutions of increasing quality in the case of optimisation
-    /// problems.
+    /// Reports all solutions (satisfaction) or all intermediate solutions (optimisation).
+    ///
+    /// For satisfaction problems, every solution is reported. For optimisation problems, solutions
+    /// of increasing quality are reported as they are found.
     ///
     /// See the MiniZinc specification (<https://docs.minizinc.dev/en/stable/fzn-spec.html#cmdoption-a>)
     /// for more information.
@@ -162,6 +165,7 @@ struct Args {
         long,
         value_enum,
         default_value_t,
+        verbatim_doc_comment,
         value_name = "TYPE"
     )]
     proof_type: ProofType,
@@ -172,12 +176,12 @@ struct Args {
         long = "optimisation-strategy",
         value_enum,
         default_value_t,
+        verbatim_doc_comment,
         value_name = "STRATEGY"
     )]
     optimisation_strategy: OptimisationStrategy,
 
-    /// Instructs the solver to perform free search when solving a MiniZinc model; this flag
-    /// indicates that it is allowed to ignore the search annotations specified in the model.
+    /// Allows the solver to ignore the search annotations specified in a MiniZinc model.
     ///
     /// See the MiniZinc specification (<https://docs.minizinc.dev/en/stable/fzn-spec.html#cmdoption-f>)
     /// for more information.
@@ -195,13 +199,16 @@ struct Args {
         long,
         value_enum,
         default_value_t,
+        verbatim_doc_comment,
         value_name = "RESOLVER"
     )]
     conflict_resolver: ConflictResolverType,
 
-    /// Enables recursive minimisation of learned nogoods as a post-processing step after conflict
-    /// analysis; according to the idea proposed in "Generalized Conflict-Clause Strengthening for
-    /// Satisfiability Solvers - Allen van Gelder (2011)".
+    /// Enables recursive minimisation of learned nogoods.
+    ///
+    /// The minimisation is applied as a post-processing step after conflict analysis; according to
+    /// the idea proposed in "Generalized Conflict-Clause Strengthening for Satisfiability Solvers
+    /// - Allen van Gelder (2011)".
     #[arg(
         help_heading = "Conflict Analysis",
         long = "recursive-minimisation",
@@ -209,11 +216,10 @@ struct Args {
     )]
     recursive_minimisation: bool,
 
-    /// Disables semantic minimisation of learned nogoods during conflict analysis; according to
-    /// the idea proposed in "Semantic Learning for Lazy Clause Generation - Feydy et al.
-    /// (2013)".
+    /// Disables semantic minimisation of learned nogoods during conflict analysis.
     ///
-    /// By default, the minimisation is turned on.
+    /// By default, semantic minimisation is applied during conflict analysis; according to the
+    /// idea proposed in "Semantic Learning for Lazy Clause Generation - Feydy et al. (2013)".
     #[arg(
         help_heading = "Conflict Analysis",
         long = "no-iterative-minimisation",
@@ -298,6 +304,7 @@ struct Args {
         help_heading = "Nogood Database",
         long = "memory-preallocated",
         default_value_t = 50,
+        verbatim_doc_comment,
         value_name = "MB"
     )]
     memory_preallocated: usize,
@@ -308,6 +315,7 @@ struct Args {
         long = "nogood-priority",
         value_enum,
         default_value_t,
+        verbatim_doc_comment,
         value_name = "PRIORITY"
     )]
     nogood_propagator_priority: Priority,
@@ -336,7 +344,8 @@ struct Args {
     )]
     restart_sequence_generator_type: SequenceGeneratorType,
 
-    /// The base interval length is used as a multiplier to the restart sequence.
+    /// The base interval length which is used as a multiplier to the restart sequence.
+    ///
     /// - In the case of the "constant" restart sequence this argument indicates the constant which
     ///   is used to determine when a restart occurs
     /// - For the "geometric" approach this argument indicates the starting value of the sequence
@@ -353,9 +362,11 @@ struct Args {
     )]
     restart_base_interval: u64,
 
-    /// The coefficient in the geometric sequence `x_i = x_{i-1} * "--restart-geometric-coef"`
-    /// where `x_1 = "--restart-base-interval"`. Used only if "--restart-sequence-generator-type"
-    /// is assigned to "geometric".
+    /// The coefficient of the geometric restart sequence.
+    ///
+    /// The sequence is defined as `x_i = x_{i-1} * "--restart-geometric-coef"` where
+    /// `x_1 = "--restart-base-interval"`. Used only if "--restart-sequence-generator-type" is
+    /// assigned to "geometric".
     #[arg(
         help_heading = "Restarts",
         long = "restart-geometric-coef",
@@ -377,8 +388,9 @@ struct Args {
     )]
     restart_min_num_conflicts_before_first_restart: u64,
 
-    /// Used to determine if a restart should be forced (see "Refining Restarts Strategies for SAT
-    /// and UNSAT - Audemard and Simon (2012)").
+    /// The coefficient used to determine whether a restart should be forced.
+    ///
+    /// See "Refining Restarts Strategies for SAT and UNSAT - Audemard and Simon (2012)".
     ///
     /// The state is "bad" if the current LBD value is much greater than
     /// the global LBD average. A greater (lower) value for lbd-coef means a less (more) frequent
@@ -393,8 +405,9 @@ struct Args {
     )]
     restart_lbd_coef: f64,
 
-    /// Used to determine if a restart should be blocked (see "Refining Restarts Strategies for SAT
-    /// and UNSAT - Audemard and Simon (2012)").
+    /// The coefficient used to determine whether a restart should be blocked.
+    ///
+    /// See "Refining Restarts Strategies for SAT and UNSAT - Audemard and Simon (2012)".
     ///
     /// To be used in combination with "--restart-num-assigned-window".
     ///
@@ -410,9 +423,9 @@ struct Args {
     )]
     restart_num_assigned_coef: f64,
 
-    /// Used to determine the length of the recent past that should be considered when deciding on
-    /// blocking restarts (see "Refining Restarts Strategies for SAT
-    /// and UNSAT - Audemard and Simon (2012)").
+    /// The length of the recent past that is considered when deciding whether to block a restart.
+    ///
+    /// See "Refining Restarts Strategies for SAT and UNSAT - Audemard and Simon (2012)".
     ///
     /// The solver considers the last "--restart-num-assigned-window" conflicts as the reference
     /// point for the number of assigned variables.
@@ -425,8 +438,7 @@ struct Args {
     )]
     restart_num_assigned_window: u64,
 
-    /// Determines the type of propagator which is used by the cumulative propagator(s) to
-    /// propagate the constraint.
+    /// Determines the type of propagator which is used for the cumulative constraint.
     ///
     /// Currently, the solver only supports variations on time-tabling methods.
     #[arg(
@@ -434,17 +446,18 @@ struct Args {
         long,
         value_enum,
         default_value_t,
+        verbatim_doc_comment,
         value_name = "PROPAGATION"
     )]
     cumulative_propagation_method: CumulativePropagationMethod,
 
-    /// Determines the type of explanation used by the cumulative propagator(s) to explain
-    /// propagations/conflicts.
+    /// Determines the type of explanation used by the cumulative propagator(s).
     #[arg(
         help_heading = "Cumulative",
         long,
         value_enum,
         default_value_t,
+        verbatim_doc_comment,
         value_name = "EXPLANATION"
     )]
     cumulative_explanation_type: CumulativeExplanationType,
@@ -457,16 +470,22 @@ struct Args {
     )]
     cumulative_allow_holes: bool,
 
-    /// Determines whether single profiles are used when explaining a propagation of the cumulative
-    /// constraint.
-    #[arg(help_heading = "Cumulative", long = "cumulative-single-profiles")]
-    cumulative_single_profiles: bool,
-
-    /// Determines whether incremental backtracking is applied or whether the cumulative
-    /// propagators compute the time-table from scratch upon backtracking.
+    /// Uses single profiles when explaining propagations of the cumulative constraint.
     #[arg(
         help_heading = "Cumulative",
-        long = "cumulative-incremental-backtracking"
+        long = "cumulative-single-profiles",
+        verbatim_doc_comment
+    )]
+    cumulative_single_profiles: bool,
+
+    /// Enables incremental backtracking for the cumulative propagator(s).
+    ///
+    /// Otherwise, the cumulative propagator(s) compute the time-table from scratch upon
+    /// backtracking.
+    #[arg(
+        help_heading = "Cumulative",
+        long = "cumulative-incremental-backtracking",
+        verbatim_doc_comment
     )]
     cumulative_incremental_backtracking: bool,
 
@@ -488,8 +507,9 @@ struct Args {
     )]
     upper_bound_encoding: PseudoBooleanEncoding,
 
-    /// If `--verbose` is enabled then this option removes the timestamp information from the log
-    /// messages (only applicable for (W)CNF instances).
+    /// Removes the timestamp information from the log messages.
+    ///
+    /// Only applicable if `--verbose` is enabled, and only for (W)CNF instances.
     #[arg(
         help_heading = "Max(SAT)",
         long = "omit-timestamp",
@@ -497,8 +517,9 @@ struct Args {
     )]
     omit_timestamp: bool,
 
-    /// If `--verbose` is enabled then this option removes the call site information from the log
-    /// messages (only applicable for (W)CNF instances).
+    /// Removes the call site information from the log messages.
+    ///
+    /// Only applicable if `--verbose` is enabled, and only for (W)CNF instances.
     ///
     /// The call site is the file and line from which the message originated.
     #[arg(
