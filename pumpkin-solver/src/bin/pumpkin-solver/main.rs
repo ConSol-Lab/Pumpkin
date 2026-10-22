@@ -166,7 +166,7 @@ struct Args {
     )]
     proof_type: ProofType,
 
-    /// Determine what type of optimisation strategy is used by the solver
+    /// Determines what type of optimisation strategy is used by the solver.
     #[arg(
         help_heading = "Search",
         long = "optimisation-strategy",
@@ -199,9 +199,9 @@ struct Args {
     )]
     conflict_resolver: ConflictResolverType,
 
-    /// Decides whether learned clauses are minimised as a post-processing step after computing the
-    /// 1-UIP Minimisation is done; according to the idea proposed in "Generalized Conflict-Clause
-    /// Strengthening for Satisfiability Solvers - Allen van Gelder (2011)".
+    /// Enables recursive minimisation of learned nogoods as a post-processing step after conflict
+    /// analysis; according to the idea proposed in "Generalized Conflict-Clause Strengthening for
+    /// Satisfiability Solvers - Allen van Gelder (2011)".
     #[arg(
         help_heading = "Conflict Analysis",
         long = "recursive-minimisation",
@@ -209,10 +209,11 @@ struct Args {
     )]
     recursive_minimisation: bool,
 
-    /// Decides whether to apply semantic minimisation during conflict analysis; according to the
-    /// idea proposed in "Semantic Learning for Lazy Clause Generation - Feydy et al. (2013)".
+    /// Disables semantic minimisation of learned nogoods during conflict analysis; according to
+    /// the idea proposed in "Semantic Learning for Lazy Clause Generation - Feydy et al.
+    /// (2013)".
     ///
-    /// If this flag is present then the minimisation is turned on.
+    /// By default, the minimisation is turned on.
     #[arg(
         help_heading = "Conflict Analysis",
         long = "no-iterative-minimisation",
@@ -259,7 +260,7 @@ struct Args {
     )]
     learning_max_num_low_lbd_nogoods: usize,
 
-    /// The treshold determining whether a learned nogood is "low" LBD.
+    /// The threshold determining whether a learned nogood is "low" LBD.
     ///
     /// "Low" LBD nogood are kept around for longer since they are of better "quality".
     ///
@@ -275,7 +276,7 @@ struct Args {
     )]
     learning_low_lbd_threshold: u32,
 
-    /// The treshold determining whether a learned nogood is "high" LBD.
+    /// The threshold determining whether a learned nogood is "high" LBD.
     ///
     /// "High" LBD nogood are kept around for a shorter amount of time since they are of bad
     /// "quality".
@@ -324,12 +325,13 @@ struct Args {
     ///   1, 1, 2, 4, 8, 1, 1, 2.... (see "Optimal speedup of Las Vegas algorithms - Luby et al.
     ///   (1993)")
     ///
-    /// To be used in combination with "--restarts-base-interval".
+    /// To be used in combination with "--restart-base-interval".
     #[arg(
         help_heading = "Restarts",
         long,
         value_enum,
         default_value_t,
+        verbatim_doc_comment,
         value_name = "SEQUENCE_GENERATOR"
     )]
     restart_sequence_generator_type: SequenceGeneratorType,
@@ -352,7 +354,7 @@ struct Args {
     restart_base_interval: u64,
 
     /// The coefficient in the geometric sequence `x_i = x_{i-1} * "--restart-geometric-coef"`
-    /// where `x_1 = "--restarts-base-interval"`. Used only if "--restarts-sequence-generator"
+    /// where `x_1 = "--restart-base-interval"`. Used only if "--restart-sequence-generator-type"
     /// is assigned to "geometric".
     #[arg(
         help_heading = "Restarts",
@@ -394,7 +396,7 @@ struct Args {
     /// Used to determine if a restart should be blocked (see "Refining Restarts Strategies for SAT
     /// and UNSAT - Audemard and Simon (2012)").
     ///
-    /// To be used in combination with "--restarts-num-assigned-window".
+    /// To be used in combination with "--restart-num-assigned-window".
     ///
     /// A restart is blocked if the number of assigned propositional variables is much greater than
     /// the average number of assigned variables in the recent past. A greater (lower) value for
@@ -412,7 +414,7 @@ struct Args {
     /// blocking restarts (see "Refining Restarts Strategies for SAT
     /// and UNSAT - Audemard and Simon (2012)").
     ///
-    /// The solver considers the last "--restart_num_assigned_window" conflicts as the reference
+    /// The solver considers the last "--restart-num-assigned-window" conflicts as the reference
     /// point for the number of assigned variables.
     #[arg(
         help_heading = "Restarts",
@@ -455,13 +457,13 @@ struct Args {
     )]
     cumulative_allow_holes: bool,
 
-    /// Determines whether a single profiles are used generated when explaining a propagation for
-    /// the cumulative constraint.
+    /// Determines whether single profiles are used when explaining a propagation of the cumulative
+    /// constraint.
     #[arg(help_heading = "Cumulative", long = "cumulative-single-profiles")]
     cumulative_single_profiles: bool,
 
     /// Determines whether incremental backtracking is applied or whether the cumulative
-    /// propagators compute the time-table from scratch upon backtracking
+    /// propagators compute the time-table from scratch upon backtracking.
     #[arg(
         help_heading = "Cumulative",
         long = "cumulative-incremental-backtracking"
@@ -470,7 +472,7 @@ struct Args {
 
     /// The encoding to use for the upper bound constraint in a MaxSAT optimisation problem.
     ///
-    /// - The "generalised-totalizer" value specifies that the solver should use the Generalized
+    /// - The "generalized-totalizer" value specifies that the solver should use the Generalized
     ///   Totalizer Encoding (see "Generalized totalizer encoding for pseudo-boolean constraints -
     ///   Saurabh et al. (2015)")
     /// - The "cardinality-network" value specifies that the solver should use the Cardinality
@@ -481,6 +483,7 @@ struct Args {
         long,
         value_enum,
         default_value_t,
+        verbatim_doc_comment,
         value_name = "ENCODING"
     )]
     upper_bound_encoding: PseudoBooleanEncoding,
