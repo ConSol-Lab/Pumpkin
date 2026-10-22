@@ -8,6 +8,7 @@ use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorWithEvents;
 use pumpkin_core::variables::IntegerVariable;
 
+use super::AllDifferentPairRule;
 use super::BinaryNotEqualsDescription;
 use super::BinaryNotEqualsPropagator;
 use super::BinaryNotEqualsRule;
@@ -63,5 +64,43 @@ where
             events_to_register,
             propagator,
         }
+    }
+}
+
+/// The [`PropagatorConstructor`] for the [`BinaryNotEqualsPropagator`] of a disequality an
+/// all-different is decomposed into, whose inferences carry the [`AllDifferentPairRule`]; it
+/// propagates as [`BinaryNotEqualsPropagatorArgs`] does.
+#[derive(Clone, Debug)]
+pub struct AllDifferentPairPropagatorArgs<AVar, BVar> {
+    pub constraint_description: BinaryNotEqualsDescription<AVar, BVar>,
+    pub constraint_tag: ConstraintTag,
+}
+
+impl<AVar, BVar> PropagatorConstructor for AllDifferentPairPropagatorArgs<AVar, BVar>
+where
+    AVar: IntegerVariable + 'static,
+    BVar: IntegerVariable + 'static,
+{
+    type PropagatorImpl = BinaryNotEqualsPropagator<AVar, BVar>;
+    type Rule = AllDifferentPairRule<AVar, BVar>;
+
+    fn constraint_description(&self) -> BinaryNotEqualsDescription<AVar, BVar> {
+        self.constraint_description.clone()
+    }
+
+    fn constraint_tag(&self) -> ConstraintTag {
+        self.constraint_tag
+    }
+
+    fn create(
+        self,
+        context: PropagatorConstructorContext,
+        inference_code: InferenceCode,
+    ) -> PropagatorWithEvents<Self::PropagatorImpl> {
+        BinaryNotEqualsPropagatorArgs {
+            constraint_description: self.constraint_description,
+            constraint_tag: self.constraint_tag,
+        }
+        .create(context, inference_code)
     }
 }

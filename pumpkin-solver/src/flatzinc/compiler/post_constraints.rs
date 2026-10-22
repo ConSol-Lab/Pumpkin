@@ -335,6 +335,16 @@ pub(crate) fn run(
                 constraint_tag,
                 pumpkin_constraints::less_than_or_equals,
             )?,
+            // The DRCP checker has no rule for the propagator of a two-term equality: its
+            // inferences are those of the linear bounds of the two inequalities.
+            "int_lin_eq" if context.proof_logging.is_drcp() => compile_int_lin_predicate(
+                context,
+                exprs,
+                annos,
+                "int_lin_eq",
+                constraint_tag,
+                pumpkin_constraints::equals_by_bounds,
+            )?,
             "int_lin_eq" => compile_int_lin_predicate(
                 context,
                 exprs,
@@ -1305,7 +1315,14 @@ fn compile_all_different(
     context
         .solver
         .name_positions_of_constraint(constraint_tag, variables.clone());
-    pumpkin_constraints::all_different(variables, constraint_tag).post(context.solver);
+    if context.proof_logging.is_drcp() {
+        // The DRCP checker has no rule `binary_not_equals`: the inferences of the disequalities
+        // are cited under its rule `all_different`.
+        pumpkin_constraints::all_different_under_own_rule(variables, constraint_tag)
+            .post(context.solver);
+    } else {
+        pumpkin_constraints::all_different(variables, constraint_tag).post(context.solver);
+    }
 
     Ok(())
 }

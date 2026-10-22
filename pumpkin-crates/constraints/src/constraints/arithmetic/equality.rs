@@ -97,14 +97,7 @@ where
                 constraint_tag: self.constraint_tag,
             });
         } else {
-            less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag).post(solver);
-
-            let negated = self
-                .terms
-                .iter()
-                .map(|var| var.scaled(-1))
-                .collect::<Box<[_]>>();
-            less_than_or_equals(negated, -self.rhs, self.constraint_tag).post(solver);
+            EqualityByBounds::from(self).post(solver);
         }
     }
 
@@ -121,17 +114,71 @@ where
                 reification_literal,
             });
         } else {
-            less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag)
-                .implied_by(solver, reification_literal);
-
-            let negated = self
-                .terms
-                .iter()
-                .map(|var| var.scaled(-1))
-                .collect::<Box<[_]>>();
-            less_than_or_equals(negated, -self.rhs, self.constraint_tag)
-                .implied_by(solver, reification_literal);
+            EqualityByBounds::from(self).implied_by(solver, reification_literal);
         }
+    }
+}
+
+/// The equality `∑ terms_i = rhs` as the two linear inequalities `∑ terms_i <= rhs` and
+/// `∑ -terms_i <= -rhs`, for any number of terms.
+struct EqualityByBounds<Var> {
+    terms: Box<[Var]>,
+    rhs: i32,
+    constraint_tag: ConstraintTag,
+}
+
+impl<Var> From<EqualConstraint<Var>> for EqualityByBounds<Var> {
+    fn from(equality: EqualConstraint<Var>) -> Self {
+        EqualityByBounds {
+            terms: equality.terms,
+            rhs: equality.rhs,
+            constraint_tag: equality.constraint_tag,
+        }
+    }
+}
+
+/// Creates the [`Constraint`] `∑ terms_i = rhs` as the two linear inequalities
+/// `∑ terms_i <= rhs` and `∑ -terms_i <= -rhs`, whose inferences are those of the linear bounds
+/// rule, also when there are two terms, for which [`equals`] posts the propagator of
+/// [`binary_equals`].
+pub fn equals_by_bounds<Var: IntegerVariable + Clone + 'static>(
+    terms: impl Into<Box<[Var]>>,
+    rhs: i32,
+    constraint_tag: ConstraintTag,
+) -> impl Constraint {
+    EqualityByBounds {
+        terms: terms.into(),
+        rhs,
+        constraint_tag,
+    }
+}
+
+impl<Var> Constraint for EqualityByBounds<Var>
+where
+    Var: IntegerVariable + Clone + 'static,
+{
+    fn post(self, solver: &mut Solver) {
+        less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag).post(solver);
+
+        let negated = self
+            .terms
+            .iter()
+            .map(|var| var.scaled(-1))
+            .collect::<Box<[_]>>();
+        less_than_or_equals(negated, -self.rhs, self.constraint_tag).post(solver);
+    }
+
+    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
+        less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag)
+            .implied_by(solver, reification_literal);
+
+        let negated = self
+            .terms
+            .iter()
+            .map(|var| var.scaled(-1))
+            .collect::<Box<[_]>>();
+        less_than_or_equals(negated, -self.rhs, self.constraint_tag)
+            .implied_by(solver, reification_literal);
     }
 }
 

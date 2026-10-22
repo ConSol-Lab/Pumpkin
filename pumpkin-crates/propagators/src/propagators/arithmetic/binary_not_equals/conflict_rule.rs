@@ -51,3 +51,33 @@ where
         Self::checker(constraint_description)
     }
 }
+
+/// The rule of the disequalities an all-different is decomposed into, each of whose inferences is
+/// one of the all-different on the pair, under the name of the all-different rule of the DRCP
+/// checker. Its checkers are those of [`BinaryNotEqualsRule`].
+#[derive(Clone, Copy, Debug)]
+pub struct AllDifferentPairRule<AVar, BVar>(PhantomData<(AVar, BVar)>);
+
+impl<AVar, BVar> ConflictRule for AllDifferentPairRule<AVar, BVar>
+where
+    AVar: IntegerVariable + 'static,
+    BVar: IntegerVariable + 'static,
+{
+    type Description = BinaryNotEqualsDescription<AVar, BVar>;
+
+    fn name() -> Cow<'static, str> {
+        Cow::Borrowed("all_different")
+    }
+
+    fn create_conflict_checker(
+        constraint_description: &BinaryNotEqualsDescription<AVar, BVar>,
+    ) -> impl ConflictChecker<Predicate> + 'static {
+        BinaryNotEqualsRule::checker(constraint_description)
+    }
+
+    fn create_retention_checker(
+        constraint_description: &BinaryNotEqualsDescription<AVar, BVar>,
+    ) -> impl RetentionChecker<Predicate> + 'static {
+        BinaryNotEqualsRule::checker(constraint_description)
+    }
+}
