@@ -1,0 +1,19 @@
+[package]
+name = "pumpkin-core-derive"
+version.workspace = true
+repository.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Derive macros for pumpkin-core."
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0.95"
+quote = "1.0.40"
+syn = "3.0.3"
+
+[lints]
+workspace = true

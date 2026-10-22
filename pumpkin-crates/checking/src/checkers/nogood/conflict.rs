@@ -4,7 +4,7 @@ use super::NogoodChecker;
 use crate::AtomicConstraint;
 use crate::ConflictCheck;
 use crate::ConflictChecker;
-use crate::DomainView;
+use crate::DomainContext;
 use crate::VariableState;
 
 impl<Atomic> ConflictChecker<Atomic> for NogoodChecker<Atomic>

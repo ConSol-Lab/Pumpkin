@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use super::HypercubeLinearChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
-use crate::DomainView;
+use crate::DomainContext;
 use crate::IntExt;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
@@ -19,7 +19,7 @@ where
     Atomic: AtomicConstraint + Clone + Debug,
     Var: CheckerVariable<Atomic>,
 {
-    fn check_retention(&self, state: &dyn DomainView<Atomic>) -> RetentionCheck {
+    fn check_retention(&self, state: &dyn DomainContext<Atomic>) -> RetentionCheck {
         if self
             .hypercube
             .iter()
@@ -107,7 +107,7 @@ enum UpperBound {
 fn tightened_upper_bound<Atomic: AtomicConstraint, Var: CheckerVariable<Atomic>>(
     term: &Var,
     slack: IntExt<i64>,
-    state: &dyn DomainView<Atomic>,
+    state: &dyn DomainContext<Atomic>,
 ) -> UpperBound {
     let new_upper_bound = slack + IntExt::<i64>::from(term.induced_lower_bound(state));
 

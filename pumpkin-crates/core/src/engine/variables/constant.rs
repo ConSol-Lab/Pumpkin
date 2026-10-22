@@ -1,6 +1,6 @@
 use enumset::EnumSet;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::DomainView;
+use pumpkin_checking::DomainContext;
 use pumpkin_checking::IntExt;
 
 use crate::engine::Assignments;
@@ -171,28 +171,28 @@ impl CheckerVariable<Predicate> for i32 {
 
     fn induced_lower_bound<View>(&self, _variable_state: &View) -> IntExt
     where
-        View: DomainView<Predicate> + ?Sized,
+        View: DomainContext<Predicate> + ?Sized,
     {
         IntExt::Int(*self)
     }
 
     fn induced_upper_bound<View>(&self, _variable_state: &View) -> IntExt
     where
-        View: DomainView<Predicate> + ?Sized,
+        View: DomainContext<Predicate> + ?Sized,
     {
         IntExt::Int(*self)
     }
 
     fn induced_fixed_value<View>(&self, _variable_state: &View) -> Option<i32>
     where
-        View: DomainView<Predicate> + ?Sized,
+        View: DomainContext<Predicate> + ?Sized,
     {
         Some(*self)
     }
 
     fn induced_domain_contains<View>(&self, _variable_state: &View, value: i32) -> bool
     where
-        View: DomainView<Predicate> + ?Sized,
+        View: DomainContext<Predicate> + ?Sized,
     {
         value == *self
     }
@@ -203,7 +203,7 @@ impl CheckerVariable<Predicate> for i32 {
     ) -> impl Iterator<Item = i32> + 'state
     where
         'this: 'state,
-        View: DomainView<Predicate> + ?Sized,
+        View: DomainContext<Predicate> + ?Sized,
     {
         std::iter::empty()
     }
@@ -214,7 +214,7 @@ impl CheckerVariable<Predicate> for i32 {
     ) -> Option<impl Iterator<Item = i32> + 'state>
     where
         'this: 'state,
-        View: DomainView<Predicate> + ?Sized,
+        View: DomainContext<Predicate> + ?Sized,
     {
         Some(std::iter::once(*self))
     }

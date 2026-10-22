@@ -3,7 +3,7 @@ use super::helpers::compute_quotient_bound_ext;
 use super::helpers::product_bound_ext;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
-use crate::DomainView;
+use crate::DomainContext;
 use crate::IntExt;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
@@ -18,7 +18,7 @@ where
     VB: CheckerVariable<Atomic>,
     VC: CheckerVariable<Atomic>,
 {
-    fn check_retention(&self, state: &dyn DomainView<Atomic>) -> RetentionCheck {
+    fn check_retention(&self, state: &dyn DomainContext<Atomic>) -> RetentionCheck {
         let (a_min, a_max) = bounds(&self.a, state);
         let (b_min, b_max) = bounds(&self.b, state);
         let (c_min, c_max) = bounds(&self.c, state);
@@ -79,7 +79,7 @@ fn tightened_quotient(
 
 fn bounds<Atomic: AtomicConstraint, Var: CheckerVariable<Atomic>>(
     variable: &Var,
-    state: &dyn DomainView<Atomic>,
+    state: &dyn DomainContext<Atomic>,
 ) -> (IntExt<i64>, IntExt<i64>) {
     (
         variable.induced_lower_bound(state).into(),

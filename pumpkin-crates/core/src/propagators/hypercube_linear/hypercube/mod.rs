@@ -1,4 +1,4 @@
-use pumpkin_checking::DomainView;
+use pumpkin_checking::DomainContext;
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 

@@ -1342,7 +1342,7 @@ mod tests {
     impl pumpkin_checking::RetentionChecker<crate::predicates::Predicate> for CountingChecker {
         fn check_retention(
             &self,
-            _: &dyn pumpkin_checking::DomainView<crate::predicates::Predicate>,
+            _: &dyn pumpkin_checking::DomainContext<crate::predicates::Predicate>,
         ) -> pumpkin_checking::RetentionCheck {
             let _ = self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             pumpkin_checking::RetentionCheck::NothingToPropagate
@@ -1417,7 +1417,7 @@ mod tests {
     impl<Checker> crate::propagation::ConstraintDescription for CheckedPropagator<Checker> {
         fn check_solution(
             &self,
-            _: &dyn pumpkin_checking::DomainView<crate::predicates::Predicate>,
+            _: &crate::checkers::CompleteSolution<'_>,
         ) -> crate::propagation::SolutionCheck {
             crate::propagation::SolutionCheck::ConstraintSatisfied
         }
@@ -1496,7 +1496,7 @@ mod tests {
     impl pumpkin_checking::RetentionChecker<crate::predicates::Predicate> for UnfinishedChecker {
         fn check_retention(
             &self,
-            _: &dyn pumpkin_checking::DomainView<crate::predicates::Predicate>,
+            _: &dyn pumpkin_checking::DomainContext<crate::predicates::Predicate>,
         ) -> pumpkin_checking::RetentionCheck {
             pumpkin_checking::RetentionCheck::PropagationMissed
         }
@@ -1514,7 +1514,7 @@ mod tests {
     {
         fn check_retention(
             &self,
-            _: &dyn pumpkin_checking::DomainView<crate::predicates::Predicate>,
+            _: &dyn pumpkin_checking::DomainContext<crate::predicates::Predicate>,
         ) -> pumpkin_checking::RetentionCheck {
             if self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed) == 0 {
                 pumpkin_checking::RetentionCheck::NothingToPropagate

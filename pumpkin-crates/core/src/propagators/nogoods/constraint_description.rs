@@ -1,33 +1,25 @@
-use pumpkin_checking::DomainView;
-
+use crate::checkers::CompleteSolution;
+use crate::checkers::ScopeItem;
 use crate::predicates::Predicate;
 use crate::propagation::ConstraintDescription;
 use crate::propagation::SolutionCheck;
 
-crate::scoped_struct! {
 /// The description of a nogood: the atomic constraints that cannot all hold at once.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ScopeItem)]
 pub struct NogoodDescription {
     pub nogood: Box<[Predicate]>,
 }
-}
 
 impl ConstraintDescription for NogoodDescription {
-    fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck {
-        if self
+    fn check_solution(&self, solution: &CompleteSolution<'_>) -> SolutionCheck {
+        if !self
             .nogood
             .iter()
-            .any(|&predicate| domains.is_true(&!predicate))
+            .all(|&predicate| solution.predicate_holds(predicate))
         {
             SolutionCheck::ConstraintSatisfied
-        } else if self
-            .nogood
-            .iter()
-            .all(|predicate| domains.is_true(predicate))
-        {
-            SolutionCheck::ConstraintViolated
         } else {
-            SolutionCheck::Unknown
+            SolutionCheck::ConstraintViolated
         }
     }
 }

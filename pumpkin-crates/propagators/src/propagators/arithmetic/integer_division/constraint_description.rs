@@ -1,17 +1,15 @@
-use pumpkin_checking::DomainView;
-use pumpkin_core::predicates::Predicate;
+use pumpkin_core::checkers::CompleteSolution;
+use pumpkin_core::checkers::ScopeItem;
 use pumpkin_core::propagation::ConstraintDescription;
 use pumpkin_core::propagation::SolutionCheck;
 use pumpkin_core::variables::IntegerVariable;
 
-pumpkin_core::scoped_struct! {
 /// The description of the constraint `numerator / denominator = rhs`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ScopeItem)]
 pub struct DivisionDescription<VA, VB, VC> {
     pub numerator: VA,
     pub denominator: VB,
     pub rhs: VC,
-}
 }
 
 impl<VA, VB, VC> ConstraintDescription for DivisionDescription<VA, VB, VC>
@@ -20,17 +18,13 @@ where
     VB: IntegerVariable,
     VC: IntegerVariable,
 {
-    fn check_solution(&self, domains: &dyn DomainView<Predicate>) -> SolutionCheck {
-        let (Some(numerator), Some(denominator), Some(rhs)) = (
-            self.numerator.induced_fixed_value(domains),
-            self.denominator.induced_fixed_value(domains),
-            self.rhs.induced_fixed_value(domains),
-        ) else {
-            return SolutionCheck::Unknown;
-        };
+    fn check_solution(&self, solution: &CompleteSolution<'_>) -> SolutionCheck {
+        let numerator = i64::from(solution.integer_value(&self.numerator));
+        let denominator = i64::from(solution.integer_value(&self.denominator));
+        let rhs = i64::from(solution.integer_value(&self.rhs));
 
         // The division truncates towards zero.
-        if denominator != 0 && i64::from(rhs) == i64::from(numerator) / i64::from(denominator) {
+        if denominator != 0 && rhs == numerator / denominator {
             SolutionCheck::ConstraintSatisfied
         } else {
             SolutionCheck::ConstraintViolated

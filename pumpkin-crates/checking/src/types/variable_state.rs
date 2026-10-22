@@ -6,7 +6,7 @@ use crate::AtomicConstraint;
 use crate::Comparison;
 #[cfg(doc)]
 use crate::ConflictChecker;
-use crate::DomainView;
+use crate::DomainContext;
 use crate::IntExt;
 
 /// The domains of all variables in the problem.
@@ -118,7 +118,7 @@ where
     }
 }
 
-impl<Atomic: AtomicConstraint> DomainView<Atomic> for VariableState<Atomic> {
+impl<Atomic: AtomicConstraint> DomainContext<Atomic> for VariableState<Atomic> {
     fn lower_bound(&self, identifier: &Atomic::Identifier) -> IntExt {
         self.domains
             .get(identifier)

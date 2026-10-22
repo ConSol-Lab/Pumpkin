@@ -10,10 +10,12 @@ use std::borrow::Cow;
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::ConflictCheck;
 use pumpkin_checking::ConflictChecker;
-use pumpkin_checking::DomainView;
+use pumpkin_checking::DomainContext;
 use pumpkin_checking::RetentionCheck;
 use pumpkin_checking::RetentionChecker;
 use pumpkin_checking::VariableState;
+use pumpkin_core::checkers::CompleteSolution;
+use pumpkin_core::checkers::ScopeItem;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ConflictRule;
 use pumpkin_core::propagation::ConstraintDescription;
@@ -46,15 +48,13 @@ impl ConflictRule for DeductionRule {
     }
 }
 
-pumpkin_core::scoped_struct! {
 /// The description of a deduction database, which holds no constraint of its own: each
 /// deduction it holds has the description and checkers of [`DeductionRule`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ScopeItem)]
 pub(crate) struct DeductionDatabaseDescription {}
-}
 
 impl ConstraintDescription for DeductionDatabaseDescription {
-    fn check_solution(&self, _: &dyn DomainView<Predicate>) -> SolutionCheck {
+    fn check_solution(&self, _: &CompleteSolution<'_>) -> SolutionCheck {
         SolutionCheck::ConstraintSatisfied
     }
 }
@@ -90,7 +90,7 @@ impl ConflictRule for DeductionDatabaseRule {
 struct NoRetentionCheck;
 
 impl<Atomic: AtomicConstraint> RetentionChecker<Atomic> for NoRetentionCheck {
-    fn check_retention(&self, _: &dyn DomainView<Atomic>) -> RetentionCheck {
+    fn check_retention(&self, _: &dyn DomainContext<Atomic>) -> RetentionCheck {
         RetentionCheck::NothingToPropagate
     }
 }

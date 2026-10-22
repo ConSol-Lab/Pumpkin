@@ -6,6 +6,8 @@
 //!   propagator did not enqueue itself again, and at a fixpoint;
 //! - the solution check under `check-solutions`, which runs when the solver finds a solution.
 
+#[cfg(feature = "check-solutions")]
+use crate::checkers::CompleteSolution;
 #[cfg(feature = "inference-checkers")]
 use crate::checkers::Inference;
 #[cfg(feature = "check-retention")]
@@ -14,6 +16,8 @@ use crate::checkers::RetentionCoverage;
 use crate::checkers::RetentionFailure;
 #[cfg(feature = "check-solutions")]
 use crate::checkers::SolutionFailure;
+#[cfg(feature = "check-solutions")]
+use crate::checkers::UnfixedDomain;
 #[cfg(feature = "inference-checkers")]
 use crate::checkers::check_inference;
 #[cfg(feature = "inference-checkers")]
@@ -22,8 +26,6 @@ use crate::engine::reason::ReasonRef;
 use crate::propagation::Domains;
 #[cfg(feature = "check-retention")]
 use crate::propagation::PropagatorId;
-#[cfg(feature = "check-solutions")]
-use crate::propagation::SolutionCheck;
 #[cfg(feature = "inference-checkers")]
 use crate::state::PropagatorConflict;
 use crate::state::State;
@@ -208,15 +210,19 @@ enum RetentionMoment {
 
 #[cfg(feature = "check-solutions")]
 impl State {
-    /// Check that the assignment satisfies the description of every constraint.
+    /// Check that the assignment is complete and satisfies the description of every constraint.
     ///
-    /// Panics, naming the rule and the propagator of the first constraint it does not satisfy.
+    /// Panics, naming a domain that is not fixed, or the rule and the propagator of the first
+    /// constraint that the solution violates.
     pub fn check_solution(&self) {
-        if let Err(failure) = self
-            .rule_checkers
-            .solution_checkers
-            .check(&self.assignments)
-        {
+        let solution = match CompleteSolution::try_new(&self.assignments) {
+            Ok(solution) => solution,
+            Err(UnfixedDomain(domain)) => panic!(
+                "The solver reported a solution in which the domain {domain:?} is not fixed."
+            ),
+        };
+
+        if let Err(failure) = self.rule_checkers.solution_checkers.check(&solution) {
             self.report_solution_failure(&failure);
         }
     }
@@ -225,18 +231,9 @@ impl State {
         let rule = self.rule_name(failure.inference_code);
         let propagator = self.propagators[failure.propagator].name();
 
-        match failure.outcome {
-            SolutionCheck::ConstraintViolated => panic!(
-                "The solver reported a solution that violates the constraint of the rule '{rule}' \
-                 of the propagator '{propagator}'."
-            ),
-            SolutionCheck::Unknown => panic!(
-                "The solver reported a solution in which the constraint of the rule '{rule}' of \
-                 the propagator '{propagator}' depends on variables that are not fixed."
-            ),
-            SolutionCheck::ConstraintSatisfied => {
-                unreachable!("a satisfied constraint is not a failure")
-            }
-        }
+        panic!(
+            "The solver reported a solution that violates the constraint of the rule '{rule}' of \
+             the propagator '{propagator}'."
+        )
     }
 }

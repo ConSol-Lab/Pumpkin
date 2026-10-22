@@ -12,6 +12,7 @@ workspace = true
 
 [dependencies]
 pumpkin-checking = { version = "0.5.0", path = "../checking" }
+pumpkin-core-derive = { version = "0.5.0", path = "../core-derive" }
 thiserror = "2.0.12"
 log = "0.4.30"
 enumset = "1.1.13"

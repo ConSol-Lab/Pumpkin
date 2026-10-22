@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use dyn_clone::DynClone;
 
 use crate::AtomicConstraint;
-use crate::DomainView;
+use crate::DomainContext;
 
 /// Verifies that a propagator has nothing left to propagate.
 ///
@@ -12,10 +12,10 @@ use crate::DomainView;
 /// does not let the rule report a conflict.
 ///
 /// The checkers assume that every domain has finite bounds. This holds for the domains of the
-/// solver, whose bounds are `i32` values, but it is not enforced by [`DomainView`].
+/// solver, whose bounds are `i32` values, but it is not enforced by [`DomainContext`].
 pub trait RetentionChecker<Atomic: AtomicConstraint>: Debug + DynClone {
     /// Whether some inference of the rule still applies in `domains`.
-    fn check_retention(&self, domains: &dyn DomainView<Atomic>) -> RetentionCheck;
+    fn check_retention(&self, domains: &dyn DomainContext<Atomic>) -> RetentionCheck;
 }
 
 /// The outcome of [`RetentionChecker::check_retention`].
@@ -44,7 +44,7 @@ impl<Atomic: AtomicConstraint> BoxedRetentionChecker<Atomic> {
     }
 
     /// See [`RetentionChecker::check_retention`].
-    pub fn check_retention(&self, domains: &dyn DomainView<Atomic>) -> RetentionCheck {
+    pub fn check_retention(&self, domains: &dyn DomainContext<Atomic>) -> RetentionCheck {
         self.0.check_retention(domains)
     }
 }

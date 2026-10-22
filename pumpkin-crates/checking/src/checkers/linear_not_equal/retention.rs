@@ -1,7 +1,7 @@
 use super::LinearNotEqualChecker;
 use crate::AtomicConstraint;
 use crate::CheckerVariable;
-use crate::DomainView;
+use crate::DomainContext;
 use crate::RetentionCheck;
 use crate::RetentionChecker;
 
@@ -10,7 +10,7 @@ where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
-    fn check_retention(&self, state: &dyn DomainView<Atomic>) -> RetentionCheck {
+    fn check_retention(&self, state: &dyn DomainContext<Atomic>) -> RetentionCheck {
         let unfixed_terms = self
             .terms
             .iter()
