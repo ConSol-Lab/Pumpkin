@@ -27,7 +27,7 @@
     ],
     [
       "--optimisation-strategy",
-      "Determine what type of optimisation strategy is used by the solver [default: linear-sat-unsat] [possible values: linear-sat-unsat, linear-unsat-sat]",
+      "Determines what type of optimisation strategy is used by the solver [default: linear-sat-unsat] [possible values: linear-sat-unsat, linear-unsat-sat]",
       "opt:linear-sat-unsat:linear-unsat-sat",
       "linear-sat-unsat"
     ],
@@ -39,13 +39,13 @@
     ],
     [
       "--recursive-minimisation",
-      "Decides whether learned clauses are minimised as a post-processing step after computing the 1-UIP Minimisation is done; according to the idea proposed in \"Generalized Conflict-Clause Strengthening for Satisfiability Solvers - Allen van Gelder (2011)\".",
+      "Enables recursive minimisation of learned nogoods as a post-processing step after conflict analysis; according to the idea proposed in \"Generalized Conflict-Clause Strengthening for Satisfiability Solvers - Allen van Gelder (2011)\".",
       "bool",
       "false"
     ],
     [
       "--no-iterative-minimisation",
-      "Decides whether to apply semantic minimisation during conflict analysis; according to the idea proposed in \"Semantic Learning for Lazy Clause Generation - Feydy et al. (2013)\".",
+      "Disables semantic minimisation of learned nogoods during conflict analysis; according to the idea proposed in \"Semantic Learning for Lazy Clause Generation - Feydy et al. (2013)\".",
       "bool",
       "false"
     ],
@@ -69,13 +69,13 @@
     ],
     [
       "--learning-low-lbd-threshold",
-      "The treshold determining whether a learned nogood is \"low\" LBD. [default: 3] [possible values: int]",
+      "The threshold determining whether a learned nogood is \"low\" LBD. [default: 3] [possible values: int]",
       "int:0:4294967295",
       "3"
     ],
     [
       "--learning-high-lbd-threshold",
-      "The treshold determining whether a learned nogood is \"high\" LBD. [default: 7] [possible values: int]",
+      "The threshold determining whether a learned nogood is \"high\" LBD. [default: 7] [possible values: int]",
       "int:0:4294967295",
       "7"
     ],
@@ -111,7 +111,7 @@
     ],
     [
       "--restart-geometric-coef",
-      "The coefficient in the geometric sequence `x_i = x_{i-1} * \"--restart-geometric-coef\"` where `x_1 = \"--restarts-base-interval\"`. Used only if \"--restarts-sequence-generator\" is assigned to \"geometric\". [possible values: float]",
+      "The coefficient in the geometric sequence `x_i = x_{i-1} * \"--restart-geometric-coef\"` where `x_1 = \"--restart-base-interval\"`. Used only if \"--restart-sequence-generator-type\" is assigned to \"geometric\". [possible values: float]",
       "float",
       ""
     ],
@@ -159,7 +159,7 @@
     ],
     [
       "--cumulative-single-profiles",
-      "Determines whether a single profiles are used generated when explaining a propagation for the cumulative constraint",
+      "Determines whether single profiles are used when explaining a propagation of the cumulative constraint",
       "bool",
       "false"
     ],
