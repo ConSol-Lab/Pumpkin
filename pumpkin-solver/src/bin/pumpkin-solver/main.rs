@@ -66,10 +66,13 @@ About: {about}
     author,
     version,
     about,
-    arg_required_else_help = true
+    arg_required_else_help = true,
+    next_line_help = true
 )]
 struct Args {
-    /// The instance to solve. The file should have one of the following extensions:
+    /// The instance to solve.
+    ///
+    /// The file should have one of the following extensions:
     ///  - '*.cnf' for SAT instances, given in the DIMACS format,
     ///  - '*.wcnf' for MaxSAT instances, given in the WDIMACS format.
     ///  - '*.fzn' for FlatZinc instances (see <https://docs.minizinc.dev/en/stable/flattening.html>).
@@ -80,6 +83,65 @@ struct Args {
     #[arg(long, hide = true, exclusive = true)]
     generate_msc: Option<PathBuf>,
 
+    /// The time budget for the solver, given in milliseconds.
+    #[arg(
+        short = 't',
+        long = "time-limit",
+        verbatim_doc_comment,
+        value_name = "MS"
+    )]
+    time_limit: Option<u64>,
+
+    /// The random seed to use for the Pseudo Random Number Generator.
+    ///
+    /// Randomisation can be used for aspects such as the variable/value generator or initial
+    /// ordering of variables.
+    #[arg(
+        short = 'r',
+        long = "random-seed",
+        default_value_t = 42,
+        verbatim_doc_comment,
+        value_name = "u64"
+    )]
+    random_seed: u64,
+
+    /// Reports all solutions (satisfaction) or all intermediate solutions (optimisation).
+    ///
+    /// For satisfaction problems, every solution is reported. For optimisation problems, solutions
+    /// of increasing quality are reported as they are found.
+    ///
+    /// See the MiniZinc specification (<https://docs.minizinc.dev/en/stable/fzn-spec.html#cmdoption-a>)
+    /// for more information.
+    #[arg(
+        help_heading = "Output",
+        short = 'a',
+        long = "all-solutions",
+        verbatim_doc_comment
+    )]
+    all_solutions: bool,
+
+    /// Enables log message output from the solver.
+    ///
+    /// For printing statistics see the option "--log-statistics", and for printing all solutions
+    /// (in case of a satisfaction problem) or printing solutions of increasing quality (in case of
+    /// an optimization problem) see the option "--all-solutions".
+    #[arg(
+        help_heading = "Output",
+        short = 'v',
+        long = "verbose",
+        verbatim_doc_comment
+    )]
+    verbose: bool,
+
+    /// Enables logging of statistics from the solver.
+    #[arg(
+        help_heading = "Output",
+        short = 's',
+        long = "log-statistics",
+        verbatim_doc_comment
+    )]
+    log_statistics: bool,
+
     /// The output path for the proof file.
     ///
     /// When solving a DIMACS instance, a DRAT proof is logged. In case of a FlatZinc model, a DRCP
@@ -87,25 +149,95 @@ struct Args {
     ///
     /// In case of a DRCP proof, if the file extension ends with `.gz`, a gzipped proof will be
     /// produced.
-    #[arg(long, verbatim_doc_comment)]
+    #[arg(
+        help_heading = "Proof Logging",
+        long,
+        verbatim_doc_comment,
+        value_name = "PATH"
+    )]
     proof_path: Option<PathBuf>,
 
     /// What type of proof to log.
     ///
-    /// If the `proof_path` option is not provided, this is ignored.
-    #[arg(long, value_enum, default_value_t)]
+    /// Requires "--proof-path" to be provided.
+    #[arg(
+        help_heading = "Proof Logging",
+        long,
+        value_enum,
+        default_value_t,
+        verbatim_doc_comment,
+        value_name = "TYPE",
+        requires = "proof_path"
+    )]
     proof_type: ProofType,
+
+    /// Determines what type of optimisation strategy is used by the solver.
+    #[arg(
+        help_heading = "Search",
+        long = "optimisation-strategy",
+        value_enum,
+        default_value_t,
+        verbatim_doc_comment,
+        value_name = "STRATEGY"
+    )]
+    optimisation_strategy: OptimisationStrategy,
+
+    /// Allows the solver to ignore the search annotations specified in a MiniZinc model.
+    ///
+    /// See the MiniZinc specification (<https://docs.minizinc.dev/en/stable/fzn-spec.html#cmdoption-f>)
+    /// for more information.
+    #[arg(
+        help_heading = "Search",
+        short = 'f',
+        long = "free-search",
+        verbatim_doc_comment
+    )]
+    free_search: bool,
+
+    /// Determines the conflict resolver.
+    #[arg(
+        help_heading = "Conflict Analysis",
+        long,
+        value_enum,
+        default_value_t,
+        verbatim_doc_comment,
+        value_name = "RESOLVER"
+    )]
+    conflict_resolver: ConflictResolverType,
+
+    /// Enables recursive minimisation of learned nogoods.
+    ///
+    /// The minimisation is applied as a post-processing step after conflict analysis; according to
+    /// the idea proposed in "Generalized Conflict-Clause Strengthening for Satisfiability Solvers
+    /// - Allen van Gelder (2011)".
+    #[arg(
+        help_heading = "Conflict Analysis",
+        long = "recursive-minimisation",
+        verbatim_doc_comment
+    )]
+    recursive_minimisation: bool,
+
+    /// Disables semantic minimisation of learned nogoods during conflict analysis.
+    ///
+    /// By default, semantic minimisation is applied during conflict analysis; according to the
+    /// idea proposed in "Semantic Learning for Lazy Clause Generation - Feydy et al. (2013)".
+    #[arg(
+        help_heading = "Conflict Analysis",
+        long = "no-iterative-minimisation",
+        verbatim_doc_comment
+    )]
+    no_iterative_minimisation: bool,
 
     /// The number of high-lbd learned nogoods that are kept in the database.
     ///
     /// Learned nogoods are kept based on the tiered system introduced in "Improving
     /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)".
-    ///
-    /// Possible values: usize
     #[arg(
+        help_heading = "Nogood Database",
         long = "learning-max-num-high-lbd-nogoods",
         default_value_t = 20_000,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "usize"
     )]
     learning_max_num_high_lbd_nogoods: usize,
 
@@ -113,12 +245,12 @@ struct Args {
     ///
     /// This is based on the variation of the three-tiered system proposed in
     /// "Improving Implementation of SAT Competitions 2017–2019 Winners".
-    ///
-    /// Possible values: usize
     #[arg(
+        help_heading = "Nogood Database",
         long = "learning-max-num-mid-lbd-nogoods",
         default_value_t = 7000,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "usize"
     )]
     learning_max_num_mid_lbd_nogoods: usize,
 
@@ -126,32 +258,32 @@ struct Args {
     ///
     /// This is based on the variation of the three-tiered system proposed in
     /// "Improving Implementation of SAT Competitions 2017–2019 Winners".
-    ///
-    /// Possible values: usize
     #[arg(
+        help_heading = "Nogood Database",
         long = "learning-max-num-low-lbd-nogoods",
         default_value_t = 100_000,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "usize"
     )]
     learning_max_num_low_lbd_nogoods: usize,
 
-    /// The treshold determining whether a learned nogood is "low" LBD.
+    /// The threshold determining whether a learned nogood is "low" LBD.
     ///
     /// "Low" LBD nogood are kept around for longer since they are of better "quality".
     ///
     /// Learned nogoods are kept based on the tiered system introduced "Improving
     /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)"
     /// with the variation from "Improving Implementation of SAT Competitions 2017–2019 Winners".
-    ///
-    /// Possible values: u32
     #[arg(
+        help_heading = "Nogood Database",
         long = "learning-low-lbd-threshold",
         default_value_t = 3,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "u32"
     )]
     learning_low_lbd_threshold: u32,
 
-    /// The treshold determining whether a learned nogood is "low" LBD.
+    /// The threshold determining whether a learned nogood is "high" LBD.
     ///
     /// "High" LBD nogood are kept around for a shorter amount of time since they are of bad
     /// "quality".
@@ -159,31 +291,52 @@ struct Args {
     /// Learned nogoods are kept based on the tiered system introduced "Improving
     /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)"
     /// with the variation from "Improving Implementation of SAT Competitions 2017–2019 Winners".
-    ///
-    /// Possible values: u32
     #[arg(
+        help_heading = "Nogood Database",
         long = "learning-high-lbd-threshold",
         default_value_t = 7,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "u32"
     )]
     learning_high_lbd_threshold: u32,
 
-    /// Decides whether learned clauses are minimised as a post-processing step after computing the
-    /// 1-UIP Minimisation is done; according to the idea proposed in "Generalized Conflict-Clause
-    /// Strengthening for Satisfiability Solvers - Allen van Gelder (2011)".
-    ///
-    /// Possible values: bool
-    #[arg(long = "recursive-minimisation", verbatim_doc_comment)]
-    recursive_minimisation: bool,
+    /// The amount of memory (in MB) that is preallocated for storing nogoods.
+    #[arg(
+        help_heading = "Nogood Database",
+        long = "memory-preallocated",
+        default_value_t = 50,
+        verbatim_doc_comment,
+        value_name = "MB"
+    )]
+    memory_preallocated: usize,
 
-    /// Decides whether to apply semantic minimisation during conflict analysis; according to the
-    /// idea proposed in "Semantic Learning for Lazy Clause Generation - Feydy et al. (2013)".
-    ///
-    /// If this flag is present then the minimisation is turned on.
-    ///
-    /// Possible values: bool
-    #[arg(long = "no-iterative-minimisation", verbatim_doc_comment)]
-    no_iterative_minimisation: bool,
+    /// The priority of the nogood propagator.
+    #[arg(
+        help_heading = "Nogood Database",
+        long = "nogood-priority",
+        value_enum,
+        default_value_t,
+        verbatim_doc_comment,
+        value_name = "PRIORITY"
+    )]
+    nogood_propagator_priority: Priority,
+
+    /// Determines that no restarts are allowed by the solver.
+    #[arg(
+        help_heading = "Restarts",
+        long = "no-restarts",
+        verbatim_doc_comment,
+        conflicts_with_all = [
+            "restart_sequence_generator_type",
+            "restart_base_interval",
+            "restart_geometric_coef",
+            "restart_min_num_conflicts_before_first_restart",
+            "restart_lbd_coef",
+            "restart_num_assigned_coef",
+            "restart_num_assigned_window",
+        ]
+    )]
+    no_restarts: bool,
 
     /// Decides the sequence based on which the restarts are performed.
     ///
@@ -194,11 +347,19 @@ struct Args {
     ///   1, 1, 2, 4, 8, 1, 1, 2.... (see "Optimal speedup of Las Vegas algorithms - Luby et al.
     ///   (1993)")
     ///
-    /// To be used in combination with "--restarts-base-interval".
-    #[arg(long, value_enum, default_value_t)]
+    /// To be used in combination with "--restart-base-interval".
+    #[arg(
+        help_heading = "Restarts",
+        long,
+        value_enum,
+        default_value_t,
+        verbatim_doc_comment,
+        value_name = "SEQUENCE_GENERATOR"
+    )]
     restart_sequence_generator_type: SequenceGeneratorType,
 
-    /// The base interval length is used as a multiplier to the restart sequence.
+    /// The base interval length which is used as a multiplier to the restart sequence.
+    ///
     /// - In the case of the "constant" restart sequence this argument indicates the constant which
     ///   is used to determine when a restart occurs
     /// - For the "geometric" approach this argument indicates the starting value of the sequence
@@ -206,219 +367,183 @@ struct Args {
     ///
     /// For example, constant restarts with base interval 50 means a restart is triggered every 50
     /// conflicts.
-    ///
-    /// Possible values: u64
     #[arg(
+        help_heading = "Restarts",
         long = "restart-base-interval",
         default_value_t = 50,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "u64"
     )]
     restart_base_interval: u64,
 
-    /// Indicates the minimum number of initial conflicts before the first restart can occur. This
-    /// allows the solver to learn some things about the problem before a restart is allowed to
-    /// occur.
+    /// The coefficient of the geometric restart sequence.
     ///
-    /// Possible values: u64
+    /// The sequence is defined as `x_i = x_{i-1} * "--restart-geometric-coef"` where
+    /// `x_1 = "--restart-base-interval"`. Required if "--restart-sequence-generator-type" is
+    /// assigned to "geometric".
     #[arg(
+        help_heading = "Restarts",
+        long = "restart-geometric-coef",
+        verbatim_doc_comment,
+        value_name = "f64",
+        required_if_eq("restart_sequence_generator_type", "geometric")
+    )]
+    restart_geometric_coef: Option<f64>,
+
+    /// Indicates the minimum number of initial conflicts before the first restart can occur.
+    ///
+    /// This allows the solver to learn some things about the problem before a restart is allowed
+    /// to occur.
+    #[arg(
+        help_heading = "Restarts",
         long = "restart-min-initial-conflicts",
         default_value_t = 10000,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "u64"
     )]
     restart_min_num_conflicts_before_first_restart: u64,
 
-    /// Used to determine if a restart should be forced (see "Refining Restarts Strategies for SAT
-    /// and UNSAT - Audemard and Simon (2012)").
+    /// The coefficient used to determine whether a restart should be forced.
+    ///
+    /// See "Refining Restarts Strategies for SAT and UNSAT - Audemard and Simon (2012)".
     ///
     /// The state is "bad" if the current LBD value is much greater than
     /// the global LBD average. A greater (lower) value for lbd-coef means a less (more) frequent
     /// restart policy. If the long-term average LBD multiplied by this coefficient is lower
     /// than the short-term average LBD then a restart is performed.
-    ///
-    /// Possible values: f64
     #[arg(
+        help_heading = "Restarts",
         long = "restart-lbd-coef",
         default_value_t = 1.25,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "f64"
     )]
     restart_lbd_coef: f64,
 
-    /// Used to determine if a restart should be blocked (see "Refining Restarts Strategies for SAT
-    /// and UNSAT - Audemard and Simon (2012)").
+    /// The coefficient used to determine whether a restart should be blocked.
     ///
-    /// To be used in combination with "--restarts-num-assigned-window".
+    /// See "Refining Restarts Strategies for SAT and UNSAT - Audemard and Simon (2012)".
+    ///
+    /// To be used in combination with "--restart-num-assigned-window".
     ///
     /// A restart is blocked if the number of assigned propositional variables is much greater than
     /// the average number of assigned variables in the recent past. A greater (lower) value for
     /// "--restart-num-assigned-coef" means fewer (more) blocked restarts.
-    ///
-    /// Possible values: f64
     #[arg(
+        help_heading = "Restarts",
         long = "restart-num-assigned-coef",
         default_value_t = 1.4,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "f64"
     )]
     restart_num_assigned_coef: f64,
 
-    /// Used to determine the length of the recent past that should be considered when deciding on
-    /// blocking restarts (see "Refining Restarts Strategies for SAT
-    /// and UNSAT - Audemard and Simon (2012)").
+    /// The length of the recent past that is considered when deciding whether to block a restart.
     ///
-    /// The solver considers the last "--restart_num_assigned_window" conflicts as the reference
+    /// See "Refining Restarts Strategies for SAT and UNSAT - Audemard and Simon (2012)".
+    ///
+    /// The solver considers the last "--restart-num-assigned-window" conflicts as the reference
     /// point for the number of assigned variables.
-    ///
-    /// Possible values: u64
     #[arg(
+        help_heading = "Restarts",
         long = "restart-num-assigned-window",
         default_value_t = 5000,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "u64"
     )]
     restart_num_assigned_window: u64,
 
-    /// The coefficient in the geometric sequence `x_i = x_{i-1} * "--restart-geometric-coef"`
-    /// where `x_1 = "--restarts-base-interval"`. Used only if "--restarts-sequence-generator"
-    /// is assigned to "geometric".
+    /// Determines the type of propagator which is used for the cumulative constraint.
     ///
-    /// Possible values: f64 (Optional)
-    #[arg(long = "restart-geometric-coef", verbatim_doc_comment)]
-    restart_geometric_coef: Option<f64>,
-
-    /// The time budget for the solver, given in milliseconds.
-    ///
-    /// Possible values: u64 (Optional)
-    #[arg(short = 't', long = "time-limit", verbatim_doc_comment)]
-    time_limit: Option<u64>,
-
-    /// The random seed to use for the Pseudo Random Number Generator.
-    ///
-    /// Randomisation can be used for aspects such as the variable/value generator or initial
-    /// ordering of variables.
-    ///
-    /// Possible values: u64
+    /// Currently, the solver only supports variations on time-tabling methods.
     #[arg(
-        short = 'r',
-        long = "random-seed",
-        default_value_t = 42,
+        help_heading = "Cumulative",
+        long,
+        value_enum,
+        default_value_t,
+        verbatim_doc_comment,
+        value_name = "PROPAGATION"
+    )]
+    cumulative_propagation_method: CumulativePropagationMethod,
+
+    /// Determines the type of explanation used by the cumulative propagator(s).
+    #[arg(
+        help_heading = "Cumulative",
+        long,
+        value_enum,
+        default_value_t,
+        verbatim_doc_comment,
+        value_name = "EXPLANATION"
+    )]
+    cumulative_explanation_type: CumulativeExplanationType,
+
+    /// Determines that the cumulative propagator(s) are allowed to create holes in the domain.
+    #[arg(
+        help_heading = "Cumulative",
+        long = "cumulative-allow-holes",
         verbatim_doc_comment
     )]
-    random_seed: u64,
+    cumulative_allow_holes: bool,
 
-    /// Enables log message output from the solver.
-    ///
-    /// For printing statistics see the option "--log-statistics", and for printing all solutions
-    /// (in case of a satisfaction problem) or printing solutions of increasing quality (in case of
-    /// an optimization problem) see the option "--all-solutions".
-    ///
-    /// Possible values: bool
-    #[arg(short = 'v', long = "verbose", verbatim_doc_comment)]
-    verbose: bool,
+    /// Uses single profiles when explaining propagations of the cumulative constraint.
+    #[arg(
+        help_heading = "Cumulative",
+        long = "cumulative-single-profiles",
+        verbatim_doc_comment
+    )]
+    cumulative_single_profiles: bool,
 
-    /// Enables logging of statistics from the solver.
+    /// Enables incremental backtracking for the cumulative propagator(s).
     ///
-    /// Possible values: bool
-    #[arg(short = 's', long = "log-statistics", verbatim_doc_comment)]
-    log_statistics: bool,
-
-    /// Instructs the solver to perform free search when solving a MiniZinc model; this flag
-    /// indicates that it is allowed to ignore the search annotations specified in the model.
-    ///
-    /// See the MiniZinc specification (<https://docs.minizinc.dev/en/stable/fzn-spec.html#cmdoption-f>)
-    /// for more information.
-    ///
-    /// Possible values: bool
-    #[arg(short = 'f', long = "free-search", verbatim_doc_comment)]
-    free_search: bool,
-
-    /// Instructs the solver to report all solutions in the case of satisfaction problems,
-    /// or print intermediate solutions of increasing quality in the case of optimisation
-    /// problems.
-    ///
-    /// See the MiniZinc specification (<https://docs.minizinc.dev/en/stable/fzn-spec.html#cmdoption-a>)
-    /// for more information.
-    ///
-    /// Possible values: bool
-    #[arg(short = 'a', long = "all-solutions", verbatim_doc_comment)]
-    all_solutions: bool,
-
-    /// If `--verbose` is enabled then this option removes the timestamp information from the log
-    /// messages. Note that this option will only take affect in the case of a (W)CNF instance.
-    ///
-    /// Possible values: bool
-    #[arg(long = "omit-timestamp", verbatim_doc_comment)]
-    omit_timestamp: bool,
-
-    /// If `--verbose` is enabled then this option removes the call site information from the log
-    /// messages. The call site is the file and line from which the message
-    /// originated. Note that this option will only take affect in the case of a (W)CNF instance.
-    ///
-    /// Possible values: bool
-    #[arg(long = "omit-call-site", default_value_t = false, verbatim_doc_comment)]
-    omit_call_site: bool,
+    /// Otherwise, the cumulative propagator(s) compute the time-table from scratch upon
+    /// backtracking.
+    #[arg(
+        help_heading = "Cumulative",
+        long = "cumulative-incremental-backtracking",
+        verbatim_doc_comment
+    )]
+    cumulative_incremental_backtracking: bool,
 
     /// The encoding to use for the upper bound constraint in a MaxSAT optimisation problem.
     ///
-    /// - The "generalised-totalizer" value specifies that the solver should use the Generalized
+    /// - The "generalized-totalizer" value specifies that the solver should use the Generalized
     ///   Totalizer Encoding (see "Generalized totalizer encoding for pseudo-boolean constraints -
     ///   Saurabh et al. (2015)")
     /// - The "cardinality-network" value specifies that the solver should use the Cardinality
     ///   Network Encoding (see "Cardinality networks: a theoretical and empirical study - Asín et
     ///   al. (2011)").
-    #[arg(long, value_enum, default_value_t)]
+    #[arg(
+        help_heading = "Max(SAT)",
+        long,
+        value_enum,
+        default_value_t,
+        verbatim_doc_comment,
+        value_name = "ENCODING"
+    )]
     upper_bound_encoding: PseudoBooleanEncoding,
 
-    /// Determines that no restarts are allowed by the solver.
+    /// Removes the timestamp information from the log messages.
     ///
-    /// Possible values: bool
-    #[arg(long = "no-restarts", verbatim_doc_comment)]
-    no_restarts: bool,
+    /// Only applicable if `--verbose` is enabled, and only for (W)CNF instances.
+    #[arg(
+        help_heading = "Max(SAT)",
+        long = "omit-timestamp",
+        verbatim_doc_comment
+    )]
+    omit_timestamp: bool,
 
-    /// Determines the conflict resolver.
-    #[arg(long, value_enum, default_value_t)]
-    conflict_resolver: ConflictResolverType,
-
-    /// Determines that the cumulative propagator(s) are allowed to create holes in the domain.
+    /// Removes the call site information from the log messages.
     ///
-    /// Possible values: bool
-    #[arg(long = "cumulative-allow-holes", verbatim_doc_comment)]
-    cumulative_allow_holes: bool,
-
-    /// Determines the type of explanation used by the cumulative propagator(s) to explain
-    /// propagations/conflicts.
-    #[arg(long, value_enum, default_value_t)]
-    cumulative_explanation_type: CumulativeExplanationType,
-
-    /// Determines the type of propagator which is used by the cumulative propagator(s) to
-    /// propagate the constraint.
+    /// Only applicable if `--verbose` is enabled, and only for (W)CNF instances.
     ///
-    /// Currently, the solver only supports variations on time-tabling methods.
-    #[arg(long, value_enum, default_value_t)]
-    cumulative_propagation_method: CumulativePropagationMethod,
-
-    /// Determines whether a single profiles are used generated when explaining a propagation for
-    /// the cumulative constraint.
-    ///
-    /// Possible values: bool
-    #[arg(long = "cumulative-single-profiles")]
-    cumulative_single_profiles: bool,
-
-    /// Determines whether incremental backtracking is applied or whether the cumulative
-    /// propagators compute the time-table from scratch upon backtracking
-    ///
-    /// Possible values: bool
-    #[arg(long = "cumulative-incremental-backtracking")]
-    cumulative_incremental_backtracking: bool,
-
-    /// Determine what type of optimisation strategy is used by the solver
-    #[arg(long = "optimisation-strategy", value_enum, default_value_t)]
-    optimisation_strategy: OptimisationStrategy,
-
-    /// The amount of memory (in MB) that is preallocated for storing nogoods.
-    #[arg(long = "memory-preallocated", default_value_t = 50)]
-    memory_preallocated: usize,
-
-    /// The priority of the nogood propagator.
-    #[arg(long = "nogood-priority", value_enum, default_value_t)]
-    nogood_propagator_priority: Priority,
+    /// The call site is the file and line from which the message originated.
+    #[arg(
+        help_heading = "Max(SAT)",
+        long = "omit-call-site",
+        default_value_t = false,
+        verbatim_doc_comment
+    )]
+    omit_call_site: bool,
 }
 
 fn configure_logging(

@@ -28,11 +28,15 @@ pub trait OptimisationProcedure<B: Brancher, R: ConflictResolver, Callback: Solu
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum OptimisationStrategy {
     /// Linear SAT-UNSAT - Starts with a satisfiable solution and tightens the bound on the
-    /// objective variable until an UNSAT result is reached. Can be seen as upper-bounding search.
+    /// objective variable until an UNSAT result is reached.
+    ///
+    /// Can be seen as upper-bounding search.
     #[default]
     LinearSatUnsat,
     /// Linear UNSAT-SAT - Starts with an unsatisfiable solution and tightens the bound on the
-    /// objective variable until a SAT result is reached. Can be seen as lower-bounding search.
+    /// objective variable until a SAT result is reached.
+    ///
+    /// Can be seen as lower-bounding search.
     LinearUnsatSat,
 }
 
