@@ -66,7 +66,8 @@ About: {about}
     author,
     version,
     about,
-    arg_required_else_help = true
+    arg_required_else_help = true,
+    next_line_help = true
 )]
 struct Args {
     /// The instance to solve. The file should have one of the following extensions:
@@ -85,7 +86,7 @@ struct Args {
         short = 't',
         long = "time-limit",
         verbatim_doc_comment,
-        value_name = "u64"
+        value_name = "MS"
     )]
     time_limit: Option<u64>,
 
@@ -156,7 +157,13 @@ struct Args {
     /// What type of proof to log.
     ///
     /// If the `proof_path` option is not provided, this is ignored.
-    #[arg(help_heading = "Proof Logging", long, value_enum, default_value_t)]
+    #[arg(
+        help_heading = "Proof Logging",
+        long,
+        value_enum,
+        default_value_t,
+        value_name = "TYPE"
+    )]
     proof_type: ProofType,
 
     /// Determine what type of optimisation strategy is used by the solver
@@ -164,7 +171,8 @@ struct Args {
         help_heading = "Search",
         long = "optimisation-strategy",
         value_enum,
-        default_value_t
+        default_value_t,
+        value_name = "STRATEGY"
     )]
     optimisation_strategy: OptimisationStrategy,
 
@@ -182,7 +190,13 @@ struct Args {
     free_search: bool,
 
     /// Determines the conflict resolver.
-    #[arg(help_heading = "Conflict Analysis", long, value_enum, default_value_t)]
+    #[arg(
+        help_heading = "Conflict Analysis",
+        long,
+        value_enum,
+        default_value_t,
+        value_name = "RESOLVER"
+    )]
     conflict_resolver: ConflictResolverType,
 
     /// Decides whether learned clauses are minimised as a post-processing step after computing the
@@ -283,7 +297,7 @@ struct Args {
         help_heading = "Nogood Database",
         long = "memory-preallocated",
         default_value_t = 50,
-        value_name = "usize"
+        value_name = "MB"
     )]
     memory_preallocated: usize,
 
@@ -292,7 +306,8 @@ struct Args {
         help_heading = "Nogood Database",
         long = "nogood-priority",
         value_enum,
-        default_value_t
+        default_value_t,
+        value_name = "PRIORITY"
     )]
     nogood_propagator_priority: Priority,
 
@@ -310,7 +325,13 @@ struct Args {
     ///   (1993)")
     ///
     /// To be used in combination with "--restarts-base-interval".
-    #[arg(help_heading = "Restarts", long, value_enum, default_value_t)]
+    #[arg(
+        help_heading = "Restarts",
+        long,
+        value_enum,
+        default_value_t,
+        value_name = "SEQUENCE_GENERATOR"
+    )]
     restart_sequence_generator_type: SequenceGeneratorType,
 
     /// The base interval length is used as a multiplier to the restart sequence.
@@ -406,12 +427,24 @@ struct Args {
     /// propagate the constraint.
     ///
     /// Currently, the solver only supports variations on time-tabling methods.
-    #[arg(help_heading = "Cumulative", long, value_enum, default_value_t)]
+    #[arg(
+        help_heading = "Cumulative",
+        long,
+        value_enum,
+        default_value_t,
+        value_name = "PROPAGATION"
+    )]
     cumulative_propagation_method: CumulativePropagationMethod,
 
     /// Determines the type of explanation used by the cumulative propagator(s) to explain
     /// propagations/conflicts.
-    #[arg(help_heading = "Cumulative", long, value_enum, default_value_t)]
+    #[arg(
+        help_heading = "Cumulative",
+        long,
+        value_enum,
+        default_value_t,
+        value_name = "EXPLANATION"
+    )]
     cumulative_explanation_type: CumulativeExplanationType,
 
     /// Determines that the cumulative propagator(s) are allowed to create holes in the domain.
@@ -443,7 +476,13 @@ struct Args {
     /// - The "cardinality-network" value specifies that the solver should use the Cardinality
     ///   Network Encoding (see "Cardinality networks: a theoretical and empirical study - Asín et
     ///   al. (2011)").
-    #[arg(help_heading = "Max(SAT)", long, value_enum, default_value_t)]
+    #[arg(
+        help_heading = "Max(SAT)",
+        long,
+        value_enum,
+        default_value_t,
+        value_name = "ENCODING"
+    )]
     upper_bound_encoding: PseudoBooleanEncoding,
 
     /// If `--verbose` is enabled then this option removes the timestamp information from the log
