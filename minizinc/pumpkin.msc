@@ -7,12 +7,24 @@
   "stdFlags": [
     "-t",
     "-r",
+    "-a",
     "-v",
     "-s",
-    "-f",
-    "-a"
+    "-f"
   ],
   "extraFlags": [
+    [
+      "--omit-timestamp",
+      "If `--verbose` is enabled then this option removes the timestamp information from the log messages (only applicable for (W)CNF instances).",
+      "bool",
+      "false"
+    ],
+    [
+      "--omit-call-site",
+      "If `--verbose` is enabled then this option removes the call site information from the log messages (only applicable for (W)CNF instances).",
+      "bool",
+      "false"
+    ],
     [
       "--proof-path",
       "The output path for the proof file. [possible values: string]",
@@ -24,6 +36,30 @@
       "What type of proof to log. [default: scaffold] [possible values: scaffold, full]",
       "opt:scaffold:full",
       "scaffold"
+    ],
+    [
+      "--optimisation-strategy",
+      "Determine what type of optimisation strategy is used by the solver [default: linear-sat-unsat] [possible values: linear-sat-unsat, linear-unsat-sat]",
+      "opt:linear-sat-unsat:linear-unsat-sat",
+      "linear-sat-unsat"
+    ],
+    [
+      "--conflict-resolver",
+      "Determines the conflict resolver [default: one-uip] [possible values: no-learning, one-uip, all-decision, extended-cpip, bounds-extended-cpip]",
+      "opt:no-learning:one-uip:all-decision:extended-cpip:bounds-extended-cpip",
+      "one-uip"
+    ],
+    [
+      "--recursive-minimisation",
+      "Decides whether learned clauses are minimised as a post-processing step after computing the 1-UIP Minimisation is done; according to the idea proposed in \"Generalized Conflict-Clause Strengthening for Satisfiability Solvers - Allen van Gelder (2011)\".",
+      "bool",
+      "false"
+    ],
+    [
+      "--no-iterative-minimisation",
+      "Decides whether to apply semantic minimisation during conflict analysis; according to the idea proposed in \"Semantic Learning for Lazy Clause Generation - Feydy et al. (2013)\".",
+      "bool",
+      "false"
     ],
     [
       "--learning-max-num-high-lbd-nogoods",
@@ -56,14 +92,20 @@
       "7"
     ],
     [
-      "--recursive-minimisation",
-      "Decides whether learned clauses are minimised as a post-processing step after computing the 1-UIP Minimisation is done; according to the idea proposed in \"Generalized Conflict-Clause Strengthening for Satisfiability Solvers - Allen van Gelder (2011)\".",
-      "bool",
-      "false"
+      "--memory-preallocated",
+      "The amount of memory (in MB) that is preallocated for storing nogoods [default: 50] [possible values: int]",
+      "int:0:18446744073709551615",
+      "50"
     ],
     [
-      "--no-iterative-minimisation",
-      "Decides whether to apply semantic minimisation during conflict analysis; according to the idea proposed in \"Semantic Learning for Lazy Clause Generation - Feydy et al. (2013)\".",
+      "--nogood-priority",
+      "The priority of the nogood propagator [default: very-low] [possible values: high, medium, low, very-low, ultra-low, lowest]",
+      "opt:high:medium:low:very-low:ultra-low:lowest",
+      "very-low"
+    ],
+    [
+      "--no-restarts",
+      "Determines that no restarts are allowed by the solver.",
       "bool",
       "false"
     ],
@@ -78,6 +120,12 @@
       "The base interval length is used as a multiplier to the restart sequence. [default: 50] [possible values: int]",
       "int:0:18446744073709551615",
       "50"
+    ],
+    [
+      "--restart-geometric-coef",
+      "The coefficient in the geometric sequence `x_i = x_{i-1} * \"--restart-geometric-coef\"` where `x_1 = \"--restarts-base-interval\"`. Used only if \"--restarts-sequence-generator\" is assigned to \"geometric\". [possible values: float]",
+      "float",
+      ""
     ],
     [
       "--restart-min-initial-conflicts",
@@ -104,46 +152,10 @@
       "5000"
     ],
     [
-      "--restart-geometric-coef",
-      "The coefficient in the geometric sequence `x_i = x_{i-1} * \"--restart-geometric-coef\"` where `x_1 = \"--restarts-base-interval\"`. Used only if \"--restarts-sequence-generator\" is assigned to \"geometric\". [possible values: float]",
-      "float",
-      ""
-    ],
-    [
-      "--omit-timestamp",
-      "If `--verbose` is enabled then this option removes the timestamp information from the log messages (only applicable for (W)CNF instances).",
-      "bool",
-      "false"
-    ],
-    [
-      "--omit-call-site",
-      "If `--verbose` is enabled then this option removes the call site information from the log messages (only applicable for (W)CNF instances).",
-      "bool",
-      "false"
-    ],
-    [
-      "--upper-bound-encoding",
-      "The encoding to use for the upper bound constraint in a MaxSAT optimisation problem. [default: generalized-totalizer] [possible values: generalized-totalizer, cardinality-network]",
-      "opt:generalized-totalizer:cardinality-network",
-      "generalized-totalizer"
-    ],
-    [
-      "--no-restarts",
-      "Determines that no restarts are allowed by the solver.",
-      "bool",
-      "false"
-    ],
-    [
-      "--conflict-resolver",
-      "Determines the conflict resolver [default: one-uip] [possible values: no-learning, one-uip, all-decision, extended-cpip, bounds-extended-cpip]",
-      "opt:no-learning:one-uip:all-decision:extended-cpip:bounds-extended-cpip",
-      "one-uip"
-    ],
-    [
-      "--cumulative-allow-holes",
-      "Determines that the cumulative propagator(s) are allowed to create holes in the domain.",
-      "bool",
-      "false"
+      "--cumulative-propagation-method",
+      "Determines the type of propagator which is used by the cumulative propagator(s) to propagate the constraint. [default: time-table-over-interval-incremental] [possible values: time-table-per-point, time-table-per-point-incremental, time-table-per-point-incremental-synchronised, time-table-over-interval, time-table-over-interval-incremental, time-table-over-interval-incremental-synchronised]",
+      "opt:time-table-per-point:time-table-per-point-incremental:time-table-per-point-incremental-synchronised:time-table-over-interval:time-table-over-interval-incremental:time-table-over-interval-incremental-synchronised",
+      "time-table-over-interval-incremental"
     ],
     [
       "--cumulative-explanation-type",
@@ -152,10 +164,10 @@
       "pointwise"
     ],
     [
-      "--cumulative-propagation-method",
-      "Determines the type of propagator which is used by the cumulative propagator(s) to propagate the constraint. [default: time-table-over-interval-incremental] [possible values: time-table-per-point, time-table-per-point-incremental, time-table-per-point-incremental-synchronised, time-table-over-interval, time-table-over-interval-incremental, time-table-over-interval-incremental-synchronised]",
-      "opt:time-table-per-point:time-table-per-point-incremental:time-table-per-point-incremental-synchronised:time-table-over-interval:time-table-over-interval-incremental:time-table-over-interval-incremental-synchronised",
-      "time-table-over-interval-incremental"
+      "--cumulative-allow-holes",
+      "Determines that the cumulative propagator(s) are allowed to create holes in the domain.",
+      "bool",
+      "false"
     ],
     [
       "--cumulative-single-profiles",
@@ -170,22 +182,10 @@
       "false"
     ],
     [
-      "--optimisation-strategy",
-      "Determine what type of optimisation strategy is used by the solver [default: linear-sat-unsat] [possible values: linear-sat-unsat, linear-unsat-sat]",
-      "opt:linear-sat-unsat:linear-unsat-sat",
-      "linear-sat-unsat"
-    ],
-    [
-      "--memory-preallocated",
-      "The amount of memory (in MB) that is preallocated for storing nogoods [default: 50] [possible values: int]",
-      "int:0:18446744073709551615",
-      "50"
-    ],
-    [
-      "--nogood-priority",
-      "The priority of the nogood propagator [default: very-low] [possible values: high, medium, low, very-low, ultra-low, lowest]",
-      "opt:high:medium:low:very-low:ultra-low:lowest",
-      "very-low"
+      "--upper-bound-encoding",
+      "The encoding to use for the upper bound constraint in a MaxSAT optimisation problem. [default: generalized-totalizer] [possible values: generalized-totalizer, cardinality-network]",
+      "opt:generalized-totalizer:cardinality-network",
+      "generalized-totalizer"
     ]
   ],
   "tags": [
