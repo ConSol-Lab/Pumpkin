@@ -629,7 +629,18 @@ impl ConstraintSatisfactionSolver {
             &mut SelectionContext::new(&self.state, &mut self.internal_parameters.random_generator);
 
         // If there is a next decision, make the decision.
-        let Some(decision_predicate) = brancher.next_decision(context) else {
+        //
+        // Note that we only measure the time spent in the call to the brancher rather than the
+        // time spent in this entire function. Measuring the latter would require restructuring
+        // this function to accommodate its several exit points, which we leave for a later time
+        // since this measurement will do fine.
+        let start_time = Instant::now();
+        let next_decision = brancher.next_decision(context);
+        self.solver_statistics
+            .engine_statistics
+            .time_spent_in_branching += start_time.elapsed();
+
+        let Some(decision_predicate) = next_decision else {
             // Otherwise there are no more decisions to be made,
             // all predicates have been applied without a conflict,
             // meaning the problem is feasible.
@@ -690,7 +701,13 @@ impl ConstraintSatisfactionSolver {
             rng: &mut self.internal_parameters.random_generator,
         };
 
+        let start_time = Instant::now();
+
         resolver.resolve_conflict(&mut conflict_analysis_context);
+
+        self.solver_statistics
+            .engine_statistics
+            .time_spent_in_conflict_analysis += start_time.elapsed();
 
         self.solver_state.declare_solving();
     }
