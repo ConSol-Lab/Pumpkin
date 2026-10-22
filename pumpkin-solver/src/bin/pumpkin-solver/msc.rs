@@ -105,15 +105,23 @@ fn extra_flag(arg: &Arg) -> Value {
             .map(|value| value.get_name().to_owned())
             .collect::<Vec<_>>();
         let description = format!(
-            "{summary} (values: {}; default: {default})",
+            "{summary} [default: {default}] [possible values: {}]",
             values.join(", ")
         );
         (format!("opt:{}", values.join(":")), default, description)
-    } else if default.is_empty() {
-        (value_type(arg), default, summary)
     } else {
-        let description = format!("{summary} (default: {default})");
-        (value_type(arg), default, description)
+        let flag_type = value_type(arg);
+        // Strip the bounds from the type, e.g. `int:0:4294967295` is shown as `int`.
+        let type_name = flag_type
+            .split(':')
+            .next()
+            .expect("split yields at least one item");
+        let description = if default.is_empty() {
+            format!("{summary} [possible values: {type_name}]")
+        } else {
+            format!("{summary} [default: {default}] [possible values: {type_name}]")
+        };
+        (flag_type, default, description)
     };
 
     json!([flag, description, flag_type, default])
