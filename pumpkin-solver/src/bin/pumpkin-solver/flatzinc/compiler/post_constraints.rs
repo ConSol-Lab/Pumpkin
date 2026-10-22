@@ -12,6 +12,8 @@ use pumpkin_solver::core::variables::AffineView;
 use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::core::variables::TransformableVariable;
 
+use super::constant_comparison::IntComparison;
+use super::constant_comparison::constant_comparison_predicate;
 use super::context::CompilationContext;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::FlatZincOptions;
@@ -61,6 +63,7 @@ pub(crate) fn run(
                 annos,
                 "int_eq_imp",
                 constraint_tag,
+                IntComparison::Equal,
                 pumpkin_constraints::binary_equals,
             )?,
             "int_ge_imp" => compile_binary_int_imp(
@@ -69,6 +72,7 @@ pub(crate) fn run(
                 annos,
                 "int_ge_imp",
                 constraint_tag,
+                IntComparison::GreaterThanOrEqual,
                 pumpkin_constraints::binary_greater_than_or_equals,
             )?,
             "int_gt_imp" => compile_binary_int_imp(
@@ -77,6 +81,7 @@ pub(crate) fn run(
                 annos,
                 "int_gt_imp",
                 constraint_tag,
+                IntComparison::GreaterThan,
                 pumpkin_constraints::binary_greater_than,
             )?,
             "int_le_imp" => compile_binary_int_imp(
@@ -85,6 +90,7 @@ pub(crate) fn run(
                 annos,
                 "int_le_imp",
                 constraint_tag,
+                IntComparison::LessThanOrEqual,
                 pumpkin_constraints::binary_less_than_or_equals,
             )?,
             "int_lt_imp" => compile_binary_int_imp(
@@ -93,6 +99,7 @@ pub(crate) fn run(
                 annos,
                 "int_lt_imp",
                 constraint_tag,
+                IntComparison::LessThan,
                 pumpkin_constraints::binary_less_than,
             )?,
             "int_ne_imp" => compile_binary_int_imp(
@@ -101,6 +108,7 @@ pub(crate) fn run(
                 annos,
                 "int_ne_imp",
                 constraint_tag,
+                IntComparison::NotEqual,
                 pumpkin_constraints::binary_not_equals,
             )?,
 
@@ -215,6 +223,7 @@ pub(crate) fn run(
                 annos,
                 "int_ne_reif",
                 constraint_tag,
+                IntComparison::NotEqual,
                 pumpkin_constraints::binary_not_equals,
             )?,
             "int_eq" => compile_binary_int_predicate(
@@ -231,6 +240,7 @@ pub(crate) fn run(
                 annos,
                 "int_eq_reif",
                 constraint_tag,
+                IntComparison::Equal,
                 pumpkin_constraints::binary_equals,
             )?,
             "int_le" => compile_binary_int_predicate(
@@ -247,6 +257,7 @@ pub(crate) fn run(
                 annos,
                 "int_le_reif",
                 constraint_tag,
+                IntComparison::LessThanOrEqual,
                 pumpkin_constraints::binary_less_than_or_equals,
             )?,
             "int_lt" => compile_binary_int_predicate(
@@ -263,6 +274,7 @@ pub(crate) fn run(
                 annos,
                 "int_lt_reif",
                 constraint_tag,
+                IntComparison::LessThan,
                 pumpkin_constraints::binary_less_than,
             )?,
 
@@ -466,18 +478,11 @@ fn compile_set_in_reif(
         } => {
             // `reif -> x \in S`
             // Decomposed to `reif -> x >= lb /\ reif -> x <= ub`
+            context
+                .solver
+                .add_clause([!reif, predicate![variable >= lower_bound]], constraint_tag);
             context.solver.add_clause(
-                [
-                    !reif.get_true_predicate(),
-                    predicate![variable >= lower_bound],
-                ],
-                constraint_tag,
-            );
-            context.solver.add_clause(
-                [
-                    !reif.get_true_predicate(),
-                    !predicate![variable >= upper_bound + 1],
-                ],
+                [!reif, !predicate![variable >= upper_bound + 1]],
                 constraint_tag,
             );
 
@@ -485,7 +490,7 @@ fn compile_set_in_reif(
             // Decomposed to `!reif -> (x < lb \/ x > ub)`
             context.solver.add_clause(
                 [
-                    reif.get_true_predicate(),
+                    reif,
                     !predicate![variable >= lower_bound],
                     predicate![variable >= upper_bound + 1],
                 ],
@@ -496,11 +501,7 @@ fn compile_set_in_reif(
         Set::Sparse { values } => {
             let clause = values
                 .iter()
-                .map(|&value| {
-                    context
-                        .solver
-                        .new_literal_for_predicate(predicate![variable == value], constraint_tag)
-                })
+                .map(|&value| predicate![variable == value])
                 .collect::<Vec<_>>();
 
             pumpkin_constraints::clause(clause, constraint_tag).reify(context.solver, reif)
@@ -592,7 +593,6 @@ fn compile_bool_clause(
         .iter()
         .cloned()
         .chain(clause_2.iter().map(|literal| !*literal))
-        .map(|literal| literal.get_true_predicate())
         .collect();
 
     context.solver.add_clause(clause, constraint_tag);
@@ -630,8 +630,9 @@ fn compile_bool2int(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_integer_variable(&exprs[1])?;
 
-    pumpkin_constraints::binary_equals(a.get_integer_variable(), b.scaled(1), constraint_tag)
-        .post(context.solver);
+    // a <-> [b == 1] and !a <-> [b == 0]; together these also restrict b to {0, 1}.
+    pumpkin_constraints::clause([!a, predicate![b == 1]], constraint_tag).post(context.solver);
+    pumpkin_constraints::clause([a, predicate![b == 0]], constraint_tag).post(context.solver);
 
     Ok(())
 }
@@ -658,12 +659,8 @@ fn compile_bool_xor(
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 2, "pumpkin_bool_xor");
 
-    let a = context
-        .resolve_bool_variable(&exprs[0])?
-        .get_true_predicate();
-    let b = context
-        .resolve_bool_variable(&exprs[1])?
-        .get_true_predicate();
+    let a = context.resolve_bool_variable(&exprs[0])?;
+    let b = context.resolve_bool_variable(&exprs[1])?;
 
     context.solver.add_clause([!a, !b], constraint_tag);
     context.solver.add_clause([b, a], constraint_tag);
@@ -768,9 +765,22 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
     _: &[flatzinc::Annotation],
     predicate_name: &str,
     constraint_tag: ConstraintTag,
+    comparison: IntComparison,
     create_constraint: impl FnOnce(DomainId, DomainId, ConstraintTag) -> C,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
+
+    if let Some(predicate) =
+        constant_comparison_predicate(comparison, &exprs[0], &exprs[1], context)
+    {
+        // `r <-> [x op c]`; the boolean could not be defined as the predicate of the comparison
+        // itself (see `define_reified_predicates`), so they are linked with clauses.
+        let reif = context.resolve_bool_variable(&exprs[2])?;
+
+        pumpkin_constraints::clause([!reif, predicate], constraint_tag).post(context.solver);
+        pumpkin_constraints::clause([reif, !predicate], constraint_tag).post(context.solver);
+        return Ok(());
+    }
 
     let a = context.resolve_integer_variable(&exprs[0])?;
     let b = context.resolve_integer_variable(&exprs[1])?;
@@ -864,9 +874,20 @@ fn compile_binary_int_imp<C: Constraint>(
     _: &[flatzinc::Annotation],
     predicate_name: &str,
     constraint_tag: ConstraintTag,
+    comparison: IntComparison,
     create_constraint: impl FnOnce(DomainId, DomainId, ConstraintTag) -> C,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
+
+    if let Some(predicate) =
+        constant_comparison_predicate(comparison, &exprs[0], &exprs[1], context)
+    {
+        // `r -> [x op c]` is a clause over the predicate of the comparison.
+        let reif = context.resolve_bool_variable(&exprs[2])?;
+
+        pumpkin_constraints::clause([!reif, predicate], constraint_tag).post(context.solver);
+        return Ok(());
+    }
 
     let a = context.resolve_integer_variable(&exprs[0])?;
     let b = context.resolve_integer_variable(&exprs[1])?;

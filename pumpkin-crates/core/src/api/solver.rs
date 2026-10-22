@@ -17,7 +17,6 @@ use crate::engine::termination::TerminationCondition;
 use crate::engine::variables::DomainGeneratorIterator;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::variables::Literal;
 use crate::optimisation::OptimisationProcedure;
 #[cfg(doc)]
 use crate::optimisation::linear_sat_unsat::LinearSatUnsat;
@@ -77,9 +76,6 @@ use crate::termination::Indefinite;
 /// // We can also create such a variable with a name
 /// let named_literal = solver.new_named_literal("z");
 ///
-/// // We can also get the predicate from the literal
-/// let true_predicate = literal.get_true_predicate();
-///
 /// // We can also create an iterator of new literals and get a number of them at once
 /// let list_of_5_literals = solver.new_literals().take(5).collect::<Vec<_>>();
 /// assert_eq!(list_of_5_literals.len(), 5);
@@ -91,16 +87,13 @@ use crate::termination::Indefinite;
 pub struct Solver {
     /// The internal [`ConstraintSatisfactionSolver`] which is used to solve the problems.
     pub(crate) satisfaction_solver: ConstraintSatisfactionSolver,
-    true_literal: Literal,
 }
 
 impl Default for Solver {
     fn default() -> Self {
         let satisfaction_solver = ConstraintSatisfactionSolver::default();
-        let true_literal = Literal::new(Predicate::trivially_true().get_domain());
         Self {
             satisfaction_solver,
-            true_literal,
         }
     }
 }
@@ -109,10 +102,8 @@ impl Solver {
     /// Creates a solver with the provided [`SolverOptions`].
     pub fn with_options(solver_options: SolverOptions) -> Self {
         let satisfaction_solver = ConstraintSatisfactionSolver::new(solver_options);
-        let true_literal = Literal::new(Predicate::trivially_true().get_domain());
         Self {
             satisfaction_solver,
-            true_literal,
         }
     }
 
@@ -157,10 +148,10 @@ impl Solver {
 
 /// Methods to retrieve information about variables
 impl Solver {
-    /// Get the value of the given [`Literal`] at the root level (after propagation), which could be
-    /// unassigned.
-    pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
-        self.satisfaction_solver.get_literal_value(literal)
+    /// Get the value of the given [`Predicate`] at the root level (after propagation), which could
+    /// be unassigned.
+    pub fn get_predicate_value(&self, predicate: Predicate) -> Option<bool> {
+        self.satisfaction_solver.get_predicate_value(predicate)
     }
 
     /// Get the lower-bound of the given [`IntegerVariable`] at the root level (after propagation).
@@ -193,16 +184,16 @@ impl Solver {
     /// # Example
     /// ```
     /// # use pumpkin_core::Solver;
-    /// # use pumpkin_core::variables::Literal;
+    /// # use pumpkin_core::predicates::Predicate;
     /// let mut solver = Solver::default();
-    /// let literals: Vec<Literal> = solver.new_literals().take(5).collect();
+    /// let literals: Vec<Predicate> = solver.new_literals().take(5).collect();
     ///
     /// // `literals` contains 5 positive literals of newly created propositional variables.
     /// assert_eq!(literals.len(), 5);
     /// ```
     ///
     /// Note that this method captures the lifetime of the immutable reference to `self`.
-    pub fn new_literals(&mut self) -> impl Iterator<Item = Literal> + '_ {
+    pub fn new_literals(&mut self) -> impl Iterator<Item = Predicate> + '_ {
         std::iter::from_fn(|| Some(self.new_literal()))
     }
 
@@ -216,30 +207,8 @@ impl Solver {
     /// // We can create a literal
     /// let literal = solver.new_literal();
     /// ```
-    pub fn new_literal(&mut self) -> Literal {
+    pub fn new_literal(&mut self) -> Predicate {
         self.satisfaction_solver.create_new_literal(None)
-    }
-
-    pub fn new_literal_for_predicate(
-        &mut self,
-        predicate: Predicate,
-        constraint_tag: ConstraintTag,
-    ) -> Literal {
-        self.satisfaction_solver
-            .create_new_literal_for_predicate(predicate, None, constraint_tag)
-    }
-
-    pub fn new_named_literal_for_predicate(
-        &mut self,
-        predicate: Predicate,
-        constraint_tag: ConstraintTag,
-        name: impl Into<String>,
-    ) -> Literal {
-        self.satisfaction_solver.create_new_literal_for_predicate(
-            predicate,
-            Some(name.into().into()),
-            constraint_tag,
-        )
     }
 
     /// Create a fresh propositional variable with a given name and return the literal with positive
@@ -253,20 +222,20 @@ impl Solver {
     /// // We can also create such a variable with a name
     /// let named_literal = solver.new_named_literal("z");
     /// ```
-    pub fn new_named_literal(&mut self, name: impl Into<String>) -> Literal {
+    pub fn new_named_literal(&mut self, name: impl Into<String>) -> Predicate {
         let name = name.into();
         self.satisfaction_solver
             .create_new_literal(Some(name.into()))
     }
 
-    /// Get a literal which is always true.
-    pub fn get_true_literal(&self) -> Literal {
-        self.true_literal
+    /// Get a predicate which is always true.
+    pub fn get_true_predicate(&self) -> Predicate {
+        Predicate::trivially_true()
     }
 
-    /// Get a literal which is always false.
-    pub fn get_false_literal(&self) -> Literal {
-        !self.true_literal
+    /// Get a predicate which is always false.
+    pub fn get_false_predicate(&self) -> Predicate {
+        Predicate::trivially_false()
     }
 
     /// Create a new integer variable with the given bounds.

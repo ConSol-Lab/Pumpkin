@@ -6,7 +6,8 @@ use flatzinc::Annotation;
 use pumpkin_core::Solver;
 use pumpkin_core::containers::HashMap;
 use pumpkin_core::variables::DomainId;
-use pumpkin_solver::core::variables::Literal;
+use pumpkin_solver::core::predicate;
+use pumpkin_solver::core::predicates::Predicate;
 
 use super::context::CompilationContext;
 use super::context::Domain;
@@ -24,25 +25,10 @@ pub(crate) fn run(
             SingleVarDecl::Bool { id, annos, .. } => {
                 let id = context.identifiers.get_interned(id);
 
-                let representative = context.equivalences.representative(&id);
-                let domain = context.equivalences.domain(&id);
-
-                let domain_id = *context
-                    .variable_map
-                    .entry(Rc::clone(&representative))
-                    .or_insert_with(|| {
-                        create_integer_domain(
-                            context.solver,
-                            &mut context.constant_domain_ids,
-                            representative,
-                            domain,
-                        )
-                    });
-
-                let literal = Literal::new(domain_id);
+                let predicate = get_or_create_predicate(context, &id);
 
                 if is_output_variable(annos) {
-                    context.outputs.push(Output::bool(id, literal));
+                    context.outputs.push(Output::bool(id, predicate));
                 }
             }
 
@@ -52,20 +38,7 @@ pub(crate) fn run(
             } => {
                 let id = context.identifiers.get_interned(id);
 
-                let representative = context.equivalences.representative(&id);
-                let domain = context.equivalences.domain(&id);
-
-                let domain_id = *context
-                    .variable_map
-                    .entry(Rc::clone(&representative))
-                    .or_insert_with(|| {
-                        create_integer_domain(
-                            context.solver,
-                            &mut context.constant_domain_ids,
-                            representative,
-                            domain,
-                        )
-                    });
+                let domain_id = get_or_create_domain(context, &id);
 
                 if is_output_variable(annos) {
                     context.outputs.push(Output::int(id, domain_id));
@@ -75,6 +48,36 @@ pub(crate) fn run(
     }
 
     Ok(())
+}
+
+/// Returns the predicate for the given boolean variable, which is either defined over a comparison
+/// (see [`CompilationContext::boolean_predicates`]) or over the domain of the boolean.
+fn get_or_create_predicate(context: &mut CompilationContext, id: &str) -> Predicate {
+    let representative = context.equivalences.representative(id);
+
+    if let Some(predicate) = context.boolean_predicates.get(&representative) {
+        return *predicate;
+    }
+
+    let domain_id = get_or_create_domain(context, id);
+    predicate![domain_id >= 1]
+}
+
+pub(crate) fn get_or_create_domain(context: &mut CompilationContext, id: &str) -> DomainId {
+    let representative = context.equivalences.representative(id);
+    let domain = context.equivalences.domain(id);
+
+    *context
+        .variable_map
+        .entry(Rc::clone(&representative))
+        .or_insert_with(|| {
+            create_integer_domain(
+                context.solver,
+                &mut context.constant_domain_ids,
+                representative,
+                domain,
+            )
+        })
 }
 
 fn create_integer_domain(

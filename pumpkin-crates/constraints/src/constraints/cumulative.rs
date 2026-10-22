@@ -3,9 +3,9 @@ use std::fmt::Debug;
 use pumpkin_core::Solver;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::constraints::Constraint;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
-use pumpkin_core::variables::Literal;
 use pumpkin_propagators::cumulative::ArgTask;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_propagators::cumulative::options::CumulativePropagationMethod;
@@ -231,7 +231,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
         }
     }
 
-    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
+    fn implied_by(self, solver: &mut Solver, reification_predicate: Predicate) {
         match self.options.propagation_method {
             CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointPropagator::new(
                 &self.tasks,
@@ -239,7 +239,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                 self.options.propagator_options,
                 self.constraint_tag,
             )
-            .implied_by(solver, reification_literal),
+            .implied_by(solver, reification_predicate),
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
                 TimeTablePerPointIncrementalPropagator::<Var, false>::new(
                     &self.tasks,
@@ -247,7 +247,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.options.propagator_options,
                     self.constraint_tag,
                 )
-                .implied_by(solver, reification_literal)
+                .implied_by(solver, reification_predicate)
             }
             CumulativePropagationMethod::TimeTablePerPointIncrementalSynchronised => {
                 TimeTablePerPointIncrementalPropagator::<Var, true>::new(
@@ -256,7 +256,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.options.propagator_options,
                     self.constraint_tag,
                 )
-                .implied_by(solver, reification_literal)
+                .implied_by(solver, reification_predicate)
             }
             CumulativePropagationMethod::TimeTableOverInterval => {
                 TimeTableOverIntervalPropagator::new(
@@ -265,7 +265,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.options.propagator_options,
                     self.constraint_tag,
                 )
-                .implied_by(solver, reification_literal)
+                .implied_by(solver, reification_predicate)
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
                 TimeTableOverIntervalIncrementalPropagator::<Var, false>::new(
@@ -274,7 +274,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.options.propagator_options,
                     self.constraint_tag,
                 )
-                .implied_by(solver, reification_literal)
+                .implied_by(solver, reification_predicate)
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncrementalSynchronised => {
                 TimeTableOverIntervalIncrementalPropagator::<Var, true>::new(
@@ -283,7 +283,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.options.propagator_options,
                     self.constraint_tag,
                 )
-                .implied_by(solver, reification_literal)
+                .implied_by(solver, reification_predicate)
             }
         }
     }
