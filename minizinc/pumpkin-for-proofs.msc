@@ -15,175 +15,175 @@
   "extraFlags": [
     [
       "--proof-path",
-      "The output path for the proof file.\n\nWhen solving a DIMACS instance, a DRAT proof is logged. In case of a FlatZinc model, a DRCP\nproof is logged.\n\nIn case of a DRCP proof, if the file extension ends with `.gz`, a gzipped proof will be\nproduced.",
+      "The output path for the proof file.",
       "string",
       ""
     ],
     [
       "--proof-type",
-      "What type of proof to log.\n\nIf the `proof_path` option is not provided, this is ignored.",
+      "What type of proof to log. (values: scaffold, full; default: scaffold)",
       "opt:scaffold:full",
       "scaffold"
     ],
     [
       "--learning-max-num-high-lbd-nogoods",
-      "The number of high-lbd learned nogoods that are kept in the database.\n\nLearned nogoods are kept based on the tiered system introduced in \"Improving\nSAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)\".\n\nPossible values: usize",
+      "The number of high-lbd learned nogoods that are kept in the database. (default: 20000)",
       "int:0:18446744073709551615",
       "20000"
     ],
     [
       "--learning-max-num-mid-lbd-nogoods",
-      "The number of mid-lbd learned nogoods that are kept in the database.\n\nThis is based on the variation of the three-tiered system proposed in\n\"Improving Implementation of SAT Competitions 2017–2019 Winners\".\n\nPossible values: usize",
+      "The number of mid-lbd learned nogoods that are kept in the database. (default: 7000)",
       "int:0:18446744073709551615",
       "7000"
     ],
     [
       "--learning-max-num-low-lbd-nogoods",
-      "The number of low-lbd learned nogoods that are kept in the database.\n\nThis is based on the variation of the three-tiered system proposed in\n\"Improving Implementation of SAT Competitions 2017–2019 Winners\".\n\nPossible values: usize",
+      "The number of low-lbd learned nogoods that are kept in the database. (default: 100000)",
       "int:0:18446744073709551615",
       "100000"
     ],
     [
       "--learning-low-lbd-threshold",
-      "The treshold determining whether a learned nogood is \"low\" LBD.\n\n\"Low\" LBD nogood are kept around for longer since they are of better \"quality\".\n\nLearned nogoods are kept based on the tiered system introduced \"Improving\nSAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)\"\nwith the variation from \"Improving Implementation of SAT Competitions 2017–2019 Winners\".\n\nPossible values: u32",
+      "The treshold determining whether a learned nogood is \"low\" LBD. (default: 3)",
       "int:0:4294967295",
       "3"
     ],
     [
       "--learning-high-lbd-threshold",
-      "The treshold determining whether a learned nogood is \"low\" LBD.\n\n\"High\" LBD nogood are kept around for a shorter amount of time since they are of bad\n\"quality\".\n\nLearned nogoods are kept based on the tiered system introduced \"Improving\nSAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)\"\nwith the variation from \"Improving Implementation of SAT Competitions 2017–2019 Winners\".\n\nPossible values: u32",
+      "The treshold determining whether a learned nogood is \"high\" LBD. (default: 7)",
       "int:0:4294967295",
       "7"
     ],
     [
       "--recursive-minimisation",
-      "Decides whether learned clauses are minimised as a post-processing step after computing the\n1-UIP Minimisation is done; according to the idea proposed in \"Generalized Conflict-Clause\nStrengthening for Satisfiability Solvers - Allen van Gelder (2011)\".\n\nPossible values: bool",
+      "Decides whether learned clauses are minimised as a post-processing step after computing the 1-UIP Minimisation is done; according to the idea proposed in \"Generalized Conflict-Clause Strengthening for Satisfiability Solvers - Allen van Gelder (2011)\".",
       "bool",
       "false"
     ],
     [
       "--no-iterative-minimisation",
-      "Decides whether to apply semantic minimisation during conflict analysis; according to the\nidea proposed in \"Semantic Learning for Lazy Clause Generation - Feydy et al. (2013)\".\n\nIf this flag is present then the minimisation is turned on.\n\nPossible values: bool",
+      "Decides whether to apply semantic minimisation during conflict analysis; according to the idea proposed in \"Semantic Learning for Lazy Clause Generation - Feydy et al. (2013)\".",
       "bool",
       "false"
     ],
     [
       "--restart-sequence-generator-type",
-      "Decides the sequence based on which the restarts are performed.\n\n- The \"constant\" approach uses a constant number of conflicts before another restart is triggered - The \"geometric\" approach uses a geometrically increasing sequence - The \"luby\" approach uses a recursive sequence of the form 1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8, 1, 1, 2.... (see \"Optimal speedup of Las Vegas algorithms - Luby et al. (1993)\")\n\nTo be used in combination with \"--restarts-base-interval\".",
+      "Decides the sequence based on which the restarts are performed. (values: constant, geometric, luby; default: constant)",
       "opt:constant:geometric:luby",
       "constant"
     ],
     [
       "--restart-base-interval",
-      "The base interval length is used as a multiplier to the restart sequence.\n- In the case of the \"constant\" restart sequence this argument indicates the constant which\n  is used to determine when a restart occurs\n- For the \"geometric\" approach this argument indicates the starting value of the sequence\n- For the \"luby\" approach, the sequence is multiplied by this value\n\nFor example, constant restarts with base interval 50 means a restart is triggered every 50\nconflicts.\n\nPossible values: u64",
+      "The base interval length is used as a multiplier to the restart sequence. (default: 50)",
       "int:0:18446744073709551615",
       "50"
     ],
     [
       "--restart-min-initial-conflicts",
-      "Indicates the minimum number of initial conflicts before the first restart can occur. This\nallows the solver to learn some things about the problem before a restart is allowed to\noccur.\n\nPossible values: u64",
+      "Indicates the minimum number of initial conflicts before the first restart can occur. (default: 10000)",
       "int:0:18446744073709551615",
       "10000"
     ],
     [
       "--restart-lbd-coef",
-      "Used to determine if a restart should be forced (see \"Refining Restarts Strategies for SAT\nand UNSAT - Audemard and Simon (2012)\").\n\nThe state is \"bad\" if the current LBD value is much greater than\nthe global LBD average. A greater (lower) value for lbd-coef means a less (more) frequent\nrestart policy. If the long-term average LBD multiplied by this coefficient is lower\nthan the short-term average LBD then a restart is performed.\n\nPossible values: f64",
+      "Used to determine if a restart should be forced (see \"Refining Restarts Strategies for SAT and UNSAT - Audemard and Simon (2012)\"). (default: 1.25)",
       "float",
       "1.25"
     ],
     [
       "--restart-num-assigned-coef",
-      "Used to determine if a restart should be blocked (see \"Refining Restarts Strategies for SAT\nand UNSAT - Audemard and Simon (2012)\").\n\nTo be used in combination with \"--restarts-num-assigned-window\".\n\nA restart is blocked if the number of assigned propositional variables is much greater than\nthe average number of assigned variables in the recent past. A greater (lower) value for\n\"--restart-num-assigned-coef\" means fewer (more) blocked restarts.\n\nPossible values: f64",
+      "Used to determine if a restart should be blocked (see \"Refining Restarts Strategies for SAT and UNSAT - Audemard and Simon (2012)\"). (default: 1.4)",
       "float",
       "1.4"
     ],
     [
       "--restart-num-assigned-window",
-      "Used to determine the length of the recent past that should be considered when deciding on\nblocking restarts (see \"Refining Restarts Strategies for SAT\nand UNSAT - Audemard and Simon (2012)\").\n\nThe solver considers the last \"--restart_num_assigned_window\" conflicts as the reference\npoint for the number of assigned variables.\n\nPossible values: u64",
+      "Used to determine the length of the recent past that should be considered when deciding on blocking restarts (see \"Refining Restarts Strategies for SAT and UNSAT - Audemard and Simon (2012)\"). (default: 5000)",
       "int:0:18446744073709551615",
       "5000"
     ],
     [
       "--restart-geometric-coef",
-      "The coefficient in the geometric sequence `x_i = x_{i-1} * \"--restart-geometric-coef\"`\nwhere `x_1 = \"--restarts-base-interval\"`. Used only if \"--restarts-sequence-generator\"\nis assigned to \"geometric\".\n\nPossible values: f64 (Optional)",
+      "The coefficient in the geometric sequence `x_i = x_{i-1} * \"--restart-geometric-coef\"` where `x_1 = \"--restarts-base-interval\"`. Used only if \"--restarts-sequence-generator\" is assigned to \"geometric\".",
       "float",
       ""
     ],
     [
       "--omit-timestamp",
-      "If `--verbose` is enabled then this option removes the timestamp information from the log\nmessages. Note that this option will only take affect in the case of a (W)CNF instance.\n\nPossible values: bool",
+      "If `--verbose` is enabled then this option removes the timestamp information from the log messages (only applicable for (W)CNF instances).",
       "bool",
       "false"
     ],
     [
       "--omit-call-site",
-      "If `--verbose` is enabled then this option removes the call site information from the log\nmessages. The call site is the file and line from which the message\noriginated. Note that this option will only take affect in the case of a (W)CNF instance.\n\nPossible values: bool",
+      "If `--verbose` is enabled then this option removes the call site information from the log messages (only applicable for (W)CNF instances).",
       "bool",
       "false"
     ],
     [
       "--upper-bound-encoding",
-      "The encoding to use for the upper bound constraint in a MaxSAT optimisation problem.\n\n- The \"generalised-totalizer\" value specifies that the solver should use the Generalized Totalizer Encoding (see \"Generalized totalizer encoding for pseudo-boolean constraints - Saurabh et al. (2015)\") - The \"cardinality-network\" value specifies that the solver should use the Cardinality Network Encoding (see \"Cardinality networks: a theoretical and empirical study - Asín et al. (2011)\").",
+      "The encoding to use for the upper bound constraint in a MaxSAT optimisation problem. (values: generalized-totalizer, cardinality-network; default: generalized-totalizer)",
       "opt:generalized-totalizer:cardinality-network",
       "generalized-totalizer"
     ],
     [
       "--no-restarts",
-      "Determines that no restarts are allowed by the solver.\n\nPossible values: bool",
+      "Determines that no restarts are allowed by the solver.",
       "bool",
       "false"
     ],
     [
       "--conflict-resolver",
-      "Determines the conflict resolver",
+      "Determines the conflict resolver (values: no-learning, one-uip, all-decision, extended-cpip, bounds-extended-cpip; default: one-uip)",
       "opt:no-learning:one-uip:all-decision:extended-cpip:bounds-extended-cpip",
       "one-uip"
     ],
     [
       "--cumulative-allow-holes",
-      "Determines that the cumulative propagator(s) are allowed to create holes in the domain.\n\nPossible values: bool",
+      "Determines that the cumulative propagator(s) are allowed to create holes in the domain.",
       "bool",
       "false"
     ],
     [
       "--cumulative-explanation-type",
-      "Determines the type of explanation used by the cumulative propagator(s) to explain propagations/conflicts",
+      "Determines the type of explanation used by the cumulative propagator(s) to explain propagations/conflicts (values: naive, big-step, pointwise; default: pointwise)",
       "opt:naive:big-step:pointwise",
       "pointwise"
     ],
     [
       "--cumulative-propagation-method",
-      "Determines the type of propagator which is used by the cumulative propagator(s) to propagate the constraint.\n\nCurrently, the solver only supports variations on time-tabling methods.",
+      "Determines the type of propagator which is used by the cumulative propagator(s) to propagate the constraint. (values: time-table-per-point, time-table-per-point-incremental, time-table-per-point-incremental-synchronised, time-table-over-interval, time-table-over-interval-incremental, time-table-over-interval-incremental-synchronised; default: time-table-over-interval-incremental)",
       "opt:time-table-per-point:time-table-per-point-incremental:time-table-per-point-incremental-synchronised:time-table-over-interval:time-table-over-interval-incremental:time-table-over-interval-incremental-synchronised",
       "time-table-over-interval-incremental"
     ],
     [
       "--cumulative-single-profiles",
-      "Determines whether a single profiles are used generated when explaining a propagation for the cumulative constraint.\n\nPossible values: bool",
+      "Determines whether a single profiles are used generated when explaining a propagation for the cumulative constraint",
       "bool",
       "false"
     ],
     [
       "--cumulative-incremental-backtracking",
-      "Determines whether incremental backtracking is applied or whether the cumulative propagators compute the time-table from scratch upon backtracking\n\nPossible values: bool",
+      "Determines whether incremental backtracking is applied or whether the cumulative propagators compute the time-table from scratch upon backtracking",
       "bool",
       "false"
     ],
     [
       "--optimisation-strategy",
-      "Determine what type of optimisation strategy is used by the solver",
+      "Determine what type of optimisation strategy is used by the solver (values: linear-sat-unsat, linear-unsat-sat; default: linear-sat-unsat)",
       "opt:linear-sat-unsat:linear-unsat-sat",
       "linear-sat-unsat"
     ],
     [
       "--memory-preallocated",
-      "The amount of memory (in MB) that is preallocated for storing nogoods",
+      "The amount of memory (in MB) that is preallocated for storing nogoods (default: 50)",
       "int:0:18446744073709551615",
       "50"
     ],
     [
       "--nogood-priority",
-      "The priority of the nogood propagator",
+      "The priority of the nogood propagator (values: high, medium, low, very-low, ultra-low, lowest; default: very-low)",
       "opt:high:medium:low:very-low:ultra-low:lowest",
       "very-low"
     ]

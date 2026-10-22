@@ -82,10 +82,10 @@ fn extra_flag(arg: &Arg) -> Value {
         (None, Some(short)) => format!("-{short}"),
         (None, None) => unreachable!("non-positional arguments have a long or short flag"),
     };
-    let description = arg
+    let summary = arg
         .get_long_help()
         .or(arg.get_help())
-        .map(|help| help.to_string())
+        .map(|help| summary(&help.to_string()))
         .unwrap_or_default();
 
     let default = arg
@@ -95,8 +95,8 @@ fn extra_flag(arg: &Arg) -> Value {
         .collect::<Vec<_>>()
         .join(",");
 
-    let (flag_type, default) = if matches!(arg.get_action(), ArgAction::SetTrue) {
-        ("bool".to_owned(), "false".to_owned())
+    let (flag_type, default, description) = if matches!(arg.get_action(), ArgAction::SetTrue) {
+        ("bool".to_owned(), "false".to_owned(), summary)
     } else if !arg.get_possible_values().is_empty() {
         let values = arg
             .get_possible_values()
@@ -104,12 +104,31 @@ fn extra_flag(arg: &Arg) -> Value {
             .filter(|value| !value.is_hide_set())
             .map(|value| value.get_name().to_owned())
             .collect::<Vec<_>>();
-        (format!("opt:{}", values.join(":")), default)
+        let description = format!(
+            "{summary} (values: {}; default: {default})",
+            values.join(", ")
+        );
+        (format!("opt:{}", values.join(":")), default, description)
+    } else if default.is_empty() {
+        (value_type(arg), default, summary)
     } else {
-        (value_type(arg), default)
+        let description = format!("{summary} (default: {default})");
+        (value_type(arg), default, description)
     };
 
     json!([flag, description, flag_type, default])
+}
+
+/// Condenses the help of an argument into a single line, such that it is displayed nicely by
+/// `minizinc --help`, which does not indent the continuation lines of a description.
+///
+/// The summary is the first paragraph of the help, up to the start of any list.
+fn summary(help: &str) -> String {
+    help.lines()
+        .map(str::trim)
+        .take_while(|line| !line.is_empty() && !line.starts_with("- "))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Returns the MiniZinc type corresponding to the type of value which is parsed for `arg`.

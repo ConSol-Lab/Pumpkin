@@ -87,7 +87,7 @@ struct Args {
     ///
     /// In case of a DRCP proof, if the file extension ends with `.gz`, a gzipped proof will be
     /// produced.
-    #[arg(long, verbatim_doc_comment)]
+    #[arg(long, verbatim_doc_comment, value_name = "PATH")]
     proof_path: Option<PathBuf>,
 
     /// What type of proof to log.
@@ -100,12 +100,11 @@ struct Args {
     ///
     /// Learned nogoods are kept based on the tiered system introduced in "Improving
     /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)".
-    ///
-    /// Possible values: usize
     #[arg(
         long = "learning-max-num-high-lbd-nogoods",
         default_value_t = 20_000,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "usize"
     )]
     learning_max_num_high_lbd_nogoods: usize,
 
@@ -113,12 +112,11 @@ struct Args {
     ///
     /// This is based on the variation of the three-tiered system proposed in
     /// "Improving Implementation of SAT Competitions 2017–2019 Winners".
-    ///
-    /// Possible values: usize
     #[arg(
         long = "learning-max-num-mid-lbd-nogoods",
         default_value_t = 7000,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "usize"
     )]
     learning_max_num_mid_lbd_nogoods: usize,
 
@@ -126,12 +124,11 @@ struct Args {
     ///
     /// This is based on the variation of the three-tiered system proposed in
     /// "Improving Implementation of SAT Competitions 2017–2019 Winners".
-    ///
-    /// Possible values: usize
     #[arg(
         long = "learning-max-num-low-lbd-nogoods",
         default_value_t = 100_000,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "usize"
     )]
     learning_max_num_low_lbd_nogoods: usize,
 
@@ -142,16 +139,15 @@ struct Args {
     /// Learned nogoods are kept based on the tiered system introduced "Improving
     /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)"
     /// with the variation from "Improving Implementation of SAT Competitions 2017–2019 Winners".
-    ///
-    /// Possible values: u32
     #[arg(
         long = "learning-low-lbd-threshold",
         default_value_t = 3,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "u32"
     )]
     learning_low_lbd_threshold: u32,
 
-    /// The treshold determining whether a learned nogood is "low" LBD.
+    /// The treshold determining whether a learned nogood is "high" LBD.
     ///
     /// "High" LBD nogood are kept around for a shorter amount of time since they are of bad
     /// "quality".
@@ -159,20 +155,17 @@ struct Args {
     /// Learned nogoods are kept based on the tiered system introduced "Improving
     /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)"
     /// with the variation from "Improving Implementation of SAT Competitions 2017–2019 Winners".
-    ///
-    /// Possible values: u32
     #[arg(
         long = "learning-high-lbd-threshold",
         default_value_t = 7,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "u32"
     )]
     learning_high_lbd_threshold: u32,
 
     /// Decides whether learned clauses are minimised as a post-processing step after computing the
     /// 1-UIP Minimisation is done; according to the idea proposed in "Generalized Conflict-Clause
     /// Strengthening for Satisfiability Solvers - Allen van Gelder (2011)".
-    ///
-    /// Possible values: bool
     #[arg(long = "recursive-minimisation", verbatim_doc_comment)]
     recursive_minimisation: bool,
 
@@ -180,8 +173,6 @@ struct Args {
     /// idea proposed in "Semantic Learning for Lazy Clause Generation - Feydy et al. (2013)".
     ///
     /// If this flag is present then the minimisation is turned on.
-    ///
-    /// Possible values: bool
     #[arg(long = "no-iterative-minimisation", verbatim_doc_comment)]
     no_iterative_minimisation: bool,
 
@@ -206,24 +197,23 @@ struct Args {
     ///
     /// For example, constant restarts with base interval 50 means a restart is triggered every 50
     /// conflicts.
-    ///
-    /// Possible values: u64
     #[arg(
         long = "restart-base-interval",
         default_value_t = 50,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "u64"
     )]
     restart_base_interval: u64,
 
-    /// Indicates the minimum number of initial conflicts before the first restart can occur. This
-    /// allows the solver to learn some things about the problem before a restart is allowed to
-    /// occur.
+    /// Indicates the minimum number of initial conflicts before the first restart can occur.
     ///
-    /// Possible values: u64
+    /// This allows the solver to learn some things about the problem before a restart is allowed
+    /// to occur.
     #[arg(
         long = "restart-min-initial-conflicts",
         default_value_t = 10000,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "u64"
     )]
     restart_min_num_conflicts_before_first_restart: u64,
 
@@ -234,12 +224,11 @@ struct Args {
     /// the global LBD average. A greater (lower) value for lbd-coef means a less (more) frequent
     /// restart policy. If the long-term average LBD multiplied by this coefficient is lower
     /// than the short-term average LBD then a restart is performed.
-    ///
-    /// Possible values: f64
     #[arg(
         long = "restart-lbd-coef",
         default_value_t = 1.25,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "f64"
     )]
     restart_lbd_coef: f64,
 
@@ -251,12 +240,11 @@ struct Args {
     /// A restart is blocked if the number of assigned propositional variables is much greater than
     /// the average number of assigned variables in the recent past. A greater (lower) value for
     /// "--restart-num-assigned-coef" means fewer (more) blocked restarts.
-    ///
-    /// Possible values: f64
     #[arg(
         long = "restart-num-assigned-coef",
         default_value_t = 1.4,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "f64"
     )]
     restart_num_assigned_coef: f64,
 
@@ -266,40 +254,43 @@ struct Args {
     ///
     /// The solver considers the last "--restart_num_assigned_window" conflicts as the reference
     /// point for the number of assigned variables.
-    ///
-    /// Possible values: u64
     #[arg(
         long = "restart-num-assigned-window",
         default_value_t = 5000,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "u64"
     )]
     restart_num_assigned_window: u64,
 
     /// The coefficient in the geometric sequence `x_i = x_{i-1} * "--restart-geometric-coef"`
     /// where `x_1 = "--restarts-base-interval"`. Used only if "--restarts-sequence-generator"
     /// is assigned to "geometric".
-    ///
-    /// Possible values: f64 (Optional)
-    #[arg(long = "restart-geometric-coef", verbatim_doc_comment)]
+    #[arg(
+        long = "restart-geometric-coef",
+        verbatim_doc_comment,
+        value_name = "f64"
+    )]
     restart_geometric_coef: Option<f64>,
 
     /// The time budget for the solver, given in milliseconds.
-    ///
-    /// Possible values: u64 (Optional)
-    #[arg(short = 't', long = "time-limit", verbatim_doc_comment)]
+    #[arg(
+        short = 't',
+        long = "time-limit",
+        verbatim_doc_comment,
+        value_name = "u64"
+    )]
     time_limit: Option<u64>,
 
     /// The random seed to use for the Pseudo Random Number Generator.
     ///
     /// Randomisation can be used for aspects such as the variable/value generator or initial
     /// ordering of variables.
-    ///
-    /// Possible values: u64
     #[arg(
         short = 'r',
         long = "random-seed",
         default_value_t = 42,
-        verbatim_doc_comment
+        verbatim_doc_comment,
+        value_name = "u64"
     )]
     random_seed: u64,
 
@@ -308,14 +299,10 @@ struct Args {
     /// For printing statistics see the option "--log-statistics", and for printing all solutions
     /// (in case of a satisfaction problem) or printing solutions of increasing quality (in case of
     /// an optimization problem) see the option "--all-solutions".
-    ///
-    /// Possible values: bool
     #[arg(short = 'v', long = "verbose", verbatim_doc_comment)]
     verbose: bool,
 
     /// Enables logging of statistics from the solver.
-    ///
-    /// Possible values: bool
     #[arg(short = 's', long = "log-statistics", verbatim_doc_comment)]
     log_statistics: bool,
 
@@ -324,8 +311,6 @@ struct Args {
     ///
     /// See the MiniZinc specification (<https://docs.minizinc.dev/en/stable/fzn-spec.html#cmdoption-f>)
     /// for more information.
-    ///
-    /// Possible values: bool
     #[arg(short = 'f', long = "free-search", verbatim_doc_comment)]
     free_search: bool,
 
@@ -335,23 +320,18 @@ struct Args {
     ///
     /// See the MiniZinc specification (<https://docs.minizinc.dev/en/stable/fzn-spec.html#cmdoption-a>)
     /// for more information.
-    ///
-    /// Possible values: bool
     #[arg(short = 'a', long = "all-solutions", verbatim_doc_comment)]
     all_solutions: bool,
 
     /// If `--verbose` is enabled then this option removes the timestamp information from the log
-    /// messages. Note that this option will only take affect in the case of a (W)CNF instance.
-    ///
-    /// Possible values: bool
+    /// messages (only applicable for (W)CNF instances).
     #[arg(long = "omit-timestamp", verbatim_doc_comment)]
     omit_timestamp: bool,
 
     /// If `--verbose` is enabled then this option removes the call site information from the log
-    /// messages. The call site is the file and line from which the message
-    /// originated. Note that this option will only take affect in the case of a (W)CNF instance.
+    /// messages (only applicable for (W)CNF instances).
     ///
-    /// Possible values: bool
+    /// The call site is the file and line from which the message originated.
     #[arg(long = "omit-call-site", default_value_t = false, verbatim_doc_comment)]
     omit_call_site: bool,
 
@@ -367,8 +347,6 @@ struct Args {
     upper_bound_encoding: PseudoBooleanEncoding,
 
     /// Determines that no restarts are allowed by the solver.
-    ///
-    /// Possible values: bool
     #[arg(long = "no-restarts", verbatim_doc_comment)]
     no_restarts: bool,
 
@@ -377,8 +355,6 @@ struct Args {
     conflict_resolver: ConflictResolverType,
 
     /// Determines that the cumulative propagator(s) are allowed to create holes in the domain.
-    ///
-    /// Possible values: bool
     #[arg(long = "cumulative-allow-holes", verbatim_doc_comment)]
     cumulative_allow_holes: bool,
 
@@ -396,15 +372,11 @@ struct Args {
 
     /// Determines whether a single profiles are used generated when explaining a propagation for
     /// the cumulative constraint.
-    ///
-    /// Possible values: bool
     #[arg(long = "cumulative-single-profiles")]
     cumulative_single_profiles: bool,
 
     /// Determines whether incremental backtracking is applied or whether the cumulative
     /// propagators compute the time-table from scratch upon backtracking
-    ///
-    /// Possible values: bool
     #[arg(long = "cumulative-incremental-backtracking")]
     cumulative_incremental_backtracking: bool,
 
@@ -413,7 +385,11 @@ struct Args {
     optimisation_strategy: OptimisationStrategy,
 
     /// The amount of memory (in MB) that is preallocated for storing nogoods.
-    #[arg(long = "memory-preallocated", default_value_t = 50)]
+    #[arg(
+        long = "memory-preallocated",
+        default_value_t = 50,
+        value_name = "usize"
+    )]
     memory_preallocated: usize,
 
     /// The priority of the nogood propagator.
