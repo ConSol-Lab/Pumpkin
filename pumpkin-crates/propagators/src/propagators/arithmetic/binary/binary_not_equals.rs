@@ -1,6 +1,6 @@
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
@@ -53,7 +53,7 @@ where
             .build();
 
         let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
+        let inference_code = checkers.add_conflict_checker(
             constraint_tag,
             BinaryNotEquals,
             BinaryNotEqualsChecker {
@@ -190,7 +190,7 @@ pub struct BinaryNotEqualsChecker<Lhs, Rhs> {
     pub rhs: Rhs,
 }
 
-impl<Lhs, Rhs, Atomic> InferenceChecker<Atomic> for BinaryNotEqualsChecker<Lhs, Rhs>
+impl<Lhs, Rhs, Atomic> ConflictChecker<Atomic> for BinaryNotEqualsChecker<Lhs, Rhs>
 where
     Atomic: AtomicConstraint,
     Lhs: CheckerVariable<Atomic>,

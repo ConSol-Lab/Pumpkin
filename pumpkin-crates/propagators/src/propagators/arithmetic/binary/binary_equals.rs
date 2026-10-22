@@ -4,7 +4,7 @@ use std::slice;
 use bitfield_struct::bitfield;
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::IntExt;
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::conjunction;
@@ -69,7 +69,7 @@ where
             .build();
 
         let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
+        let inference_code = checkers.add_conflict_checker(
             constraint_tag,
             BinaryEquals,
             BinaryEqualsChecker {
@@ -417,7 +417,7 @@ pub struct BinaryEqualsChecker<Lhs, Rhs> {
     pub rhs: Rhs,
 }
 
-impl<Lhs, Rhs, Atomic> InferenceChecker<Atomic> for BinaryEqualsChecker<Lhs, Rhs>
+impl<Lhs, Rhs, Atomic> ConflictChecker<Atomic> for BinaryEqualsChecker<Lhs, Rhs>
 where
     Atomic: AtomicConstraint,
     Lhs: CheckerVariable<Atomic>,

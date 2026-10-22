@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 
@@ -27,7 +27,7 @@ fn can_be_propagated_by_profile<Var: CheckerVariable<Atomic>, Atomic: AtomicCons
     height + task.resource_usage > capacity
 }
 
-impl<Var, Atomic> InferenceChecker<Atomic> for TimeTableChecker<Var>
+impl<Var, Atomic> ConflictChecker<Atomic> for TimeTableChecker<Var>
 where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
