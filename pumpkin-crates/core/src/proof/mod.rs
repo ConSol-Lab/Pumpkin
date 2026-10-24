@@ -257,6 +257,7 @@ impl ProofLog {
             rule_labels: vec![],
             unnamed_domains: vec![],
             seen_premises: ProofHashSet::default(),
+            refutation_state: RefutationState::default(),
             facts_from_unit_nogoods: vec![],
             root_domains: root_domains.then(RootDomains::default),
             premise_free_inferences: false,
@@ -1445,6 +1446,8 @@ struct BlockProof {
     unnamed_domains: Vec<bool>,
     /// The premises of an inference seen so far, reused from one inference to the next.
     seen_premises: ProofHashSet<Predicate>,
+    /// The domains of a refutation, reused from one refutation to the next.
+    refutation_state: RefutationState,
     /// The facts the next nogood infers from unit nogoods before its other inferences.
     facts_from_unit_nogoods: Vec<(Predicate, ConstraintTag)>,
     /// The root domains the checker holds, when the proof is written for its reading within
@@ -1692,6 +1695,171 @@ impl RootDomains {
     }
 }
 
+/// The domains of the variables during a refutation, as [`VariableState`] holds them, in arrays
+/// by the index of the domain: a refutation applies many atomic constraints over many variables,
+/// and an index costs less than a lookup in a hash map that grows from empty for each refutation.
+/// The domain of a variable is every integer until an atomic constraint over it is applied.
+/// [`RefutationState::apply`] and [`RefutationState::is_true`] are those of [`VariableState`].
+#[derive(Debug, Default)]
+struct RefutationState {
+    /// The domain of each variable, valid when its number is [`RefutationState::refutation`].
+    domains: Vec<RefutationDomain>,
+    /// The number of the current refutation.
+    refutation: u32,
+}
+
+/// The domain of a variable in a [`RefutationState`], as `pumpkin_checking`'s `Domain`: its
+/// bounds, and the holes strictly between them, in increasing order.
+#[derive(Clone, Debug)]
+struct RefutationDomain {
+    refutation: u32,
+    lower: IntExt,
+    upper: IntExt,
+    holes: Vec<i32>,
+}
+
+impl RefutationDomain {
+    fn tighten_lower_bound(&mut self, bound: i32) {
+        if self.lower >= bound && self.holes.binary_search(&bound).is_err() {
+            return;
+        }
+        self.lower = IntExt::Int(bound);
+        let below = self.holes.partition_point(|&hole| hole < bound);
+        let _ = self.holes.drain(..below);
+        if self.holes.binary_search(&bound).is_ok() {
+            match bound.checked_add(1) {
+                Some(next) => self.tighten_lower_bound(next),
+                None => self.make_empty(),
+            }
+        }
+    }
+
+    fn tighten_upper_bound(&mut self, bound: i32) {
+        if self.upper <= bound && self.holes.binary_search(&bound).is_err() {
+            return;
+        }
+        self.upper = IntExt::Int(bound);
+        if bound.checked_add(1).is_some() {
+            let kept = self.holes.partition_point(|&hole| hole <= bound);
+            self.holes.truncate(kept);
+        }
+        if self.holes.binary_search(&bound).is_ok() {
+            match bound.checked_sub(1) {
+                Some(next) => self.tighten_upper_bound(next),
+                None => self.make_empty(),
+            }
+        }
+    }
+
+    fn make_empty(&mut self) {
+        self.lower = IntExt::PositiveInf;
+        self.upper = IntExt::NegativeInf;
+        self.holes.clear();
+    }
+}
+
+impl RefutationState {
+    /// Start a new refutation, in which every variable has every integer.
+    fn clear(&mut self) {
+        self.refutation = self.refutation.wrapping_add(1);
+        if self.refutation == 0 {
+            self.domains
+                .iter_mut()
+                .for_each(|domain| domain.refutation = 0);
+            self.refutation = 1;
+        }
+    }
+
+    /// Start a new refutation and apply the atomic constraints; returns whether they can hold
+    /// together, as `VariableState::prepare_for_conflict_check` does.
+    fn prepare_for_conflict_check(&mut self, atoms: impl IntoIterator<Item = Predicate>) -> bool {
+        self.clear();
+        atoms.into_iter().all(|atom| self.apply(&atom))
+    }
+
+    /// The domain of the variable, every integer if no atomic constraint over it was applied.
+    fn domain_mut(&mut self, domain: DomainId) -> &mut RefutationDomain {
+        let index = domain.id() as usize;
+        if index >= self.domains.len() {
+            self.domains.resize(
+                index + 1,
+                RefutationDomain {
+                    refutation: 0,
+                    lower: IntExt::NegativeInf,
+                    upper: IntExt::PositiveInf,
+                    holes: vec![],
+                },
+            );
+        }
+        let refutation = self.refutation;
+        let entry = &mut self.domains[index];
+        if entry.refutation != refutation {
+            entry.refutation = refutation;
+            entry.lower = IntExt::NegativeInf;
+            entry.upper = IntExt::PositiveInf;
+            entry.holes.clear();
+        }
+        entry
+    }
+
+    /// Apply the atomic constraint; returns whether the domain of its variable keeps a value.
+    fn apply(&mut self, atom: &Predicate) -> bool {
+        let value = atom.get_right_hand_side();
+        let domain = self.domain_mut(atom.get_domain());
+        match atom.get_predicate_type() {
+            PredicateType::LowerBound => domain.tighten_lower_bound(value),
+            PredicateType::UpperBound => domain.tighten_upper_bound(value),
+            PredicateType::Equal => {
+                domain.tighten_lower_bound(value);
+                domain.tighten_upper_bound(value);
+            }
+            PredicateType::NotEqual => {
+                if domain.lower == value {
+                    match value.checked_add(1) {
+                        Some(bound) => domain.tighten_lower_bound(bound),
+                        None => domain.make_empty(),
+                    }
+                }
+                if domain.upper == value {
+                    match value.checked_sub(1) {
+                        Some(bound) => domain.tighten_upper_bound(bound),
+                        None => domain.make_empty(),
+                    }
+                }
+                if domain.lower < value && domain.upper > value {
+                    if let Err(position) = domain.holes.binary_search(&value) {
+                        domain.holes.insert(position, value);
+                    }
+                }
+            }
+        }
+        domain.lower <= domain.upper
+    }
+
+    /// Whether the atomic constraint holds in the domain of its variable; never for a variable
+    /// over which no atomic constraint was applied.
+    fn is_true(&self, atom: &Predicate) -> bool {
+        let Some(domain) = self
+            .domains
+            .get(atom.get_domain().id() as usize)
+            .filter(|domain| domain.refutation == self.refutation)
+        else {
+            return false;
+        };
+        let value = atom.get_right_hand_side();
+        match atom.get_predicate_type() {
+            PredicateType::LowerBound => domain.lower >= value,
+            PredicateType::UpperBound => domain.upper <= value,
+            PredicateType::Equal => domain.lower >= value && domain.upper <= value,
+            PredicateType::NotEqual => {
+                domain.lower > value
+                    || domain.upper < value
+                    || domain.holes.binary_search(&value).is_ok()
+            }
+        }
+    }
+}
+
 /// Whether the lenient reading takes the premises of an inference by the rule from the current
 /// domains of a refutation, so that a line may state its consequent alone; the reified and
 /// half-reified forms of these rules too.
@@ -1703,7 +1871,7 @@ fn premise_free_rule(rule: &str) -> bool {
 /// once per variable, with the declared domain of the variable when `declares_domain` holds of
 /// it. Returns whether the state keeps a value for every variable.
 fn apply_root_facts(
-    state: &mut VariableState<Predicate>,
+    state: &mut RefutationState,
     atoms: impl IntoIterator<Item = Predicate>,
     root_domains: &mut RootDomains,
     declares_domain: impl Fn(DomainId) -> bool,
@@ -2020,6 +2188,7 @@ impl BlockProof {
             .collect();
 
         let mut seen = std::mem::take(&mut self.seen_premises);
+        let mut refutation_state = std::mem::take(&mut self.refutation_state);
         let facts = std::mem::take(&mut self.facts_from_unit_nogoods);
         // When the facts of the root domains leave the nogood no value, as for a nogood over one
         // atomic constraint derived again, the nogood is derived as it is without them.
@@ -2032,6 +2201,7 @@ impl BlockProof {
                 variable_names,
                 assignments,
                 &mut seen,
+                &mut refutation_state,
                 Some(root_domains),
             ),
             None => None,
@@ -2047,11 +2217,13 @@ impl BlockProof {
                     variable_names,
                     assignments,
                     &mut seen,
+                    &mut refutation_state,
                     None,
                 )
                 .expect("without the root domains, the refutation is found"),
         };
         self.seen_premises = seen;
+        self.refutation_state = refutation_state;
 
         let mut no_chain = false;
         let chain = if self.resolution_chains && reached_conflict && !kept.is_empty() {
@@ -2384,6 +2556,7 @@ impl BlockProof {
         variable_names: &VariableNames,
         assignments: &Assignments,
         seen: &mut ProofHashSet<Predicate>,
+        state: &mut RefutationState,
         mut root_domains: Option<&mut RootDomains>,
     ) -> Option<(Vec<KeptInference>, Vec<Vec<Predicate>>, bool)> {
         let is_constant = |predicate: Predicate| self.is_constant(predicate);
@@ -2392,17 +2565,16 @@ impl BlockProof {
         let mut left_out: Vec<Vec<Predicate>> = vec![];
         let mut reached_conflict = false;
 
-        let Ok(mut state) = VariableState::prepare_for_conflict_check(nogood.iter().copied(), None)
-        else {
+        if !state.prepare_for_conflict_check(nogood.iter().copied()) {
             // The nogood's atoms cannot all hold, so it needs no inference.
             return Some((kept, left_out, true));
-        };
+        }
         if let Some(root_domains) = root_domains.as_deref_mut() {
             root_domains.begin_refutation();
         }
         if let Some(root_domains) = root_domains.as_deref_mut()
             && !apply_root_facts(
-                &mut state,
+                state,
                 nogood.iter().copied(),
                 root_domains,
                 declares_domain,
@@ -2419,7 +2591,7 @@ impl BlockProof {
             }
             if let Some(root_domains) = root_domains.as_deref_mut()
                 && !apply_root_facts(
-                    &mut state,
+                    state,
                     [fact],
                     root_domains,
                     declares_domain,
@@ -2470,7 +2642,7 @@ impl BlockProof {
                     .copied()
                     .chain(consequent.filter(|&consequent| !is_constant(consequent)));
                 if !apply_root_facts(
-                    &mut state,
+                    state,
                     atoms,
                     root_domains,
                     declares_domain,
