@@ -1492,9 +1492,104 @@ struct RootDomains {
     declared: HashMap<DomainId, Vec<Predicate>>,
     /// The negation of the atomic constraint of every nogood over one atomic constraint written.
     units: Vec<Predicate>,
+    /// The facts on each variable as `facts` holds them, by the index of its domain, refreshed
+    /// whenever the facts on the variable change: a refutation reads them for every variable it
+    /// touches, and a lookup in `facts` costs more than an index.
+    cached: Vec<CachedFacts>,
+    /// For each variable, by the index of its domain, the number of the last refutation whose
+    /// state the facts on it were applied to; see [`RootDomains::begin_refutation`].
+    applied_in: Vec<u32>,
+    /// The number of the current refutation.
+    refutation: u32,
+}
+
+/// The facts on one variable, as [`RootDomains::facts`] holds them.
+#[derive(Clone, Debug)]
+struct CachedFacts {
+    /// Whether the declared domain of the variable is applied to the facts (it is a key of
+    /// [`RootDomains::declared`]).
+    declared: bool,
+    lower: IntExt,
+    upper: IntExt,
+    /// The holes, in increasing order.
+    holes: Vec<i32>,
+    /// The atomic constraints that state the facts: the bounds, then the holes.
+    atoms: Vec<Predicate>,
+}
+
+impl Default for CachedFacts {
+    fn default() -> Self {
+        CachedFacts {
+            declared: false,
+            lower: IntExt::NegativeInf,
+            upper: IntExt::PositiveInf,
+            holes: vec![],
+            atoms: vec![],
+        }
+    }
 }
 
 impl RootDomains {
+    /// The cached facts on the variable, if any were ever applied to it.
+    fn cached(&self, domain: DomainId) -> Option<&CachedFacts> {
+        self.cached.get(domain.id() as usize)
+    }
+
+    /// The entry of the variable in [`RootDomains::cached`], created when it is missing.
+    fn cached_mut(&mut self, domain: DomainId) -> &mut CachedFacts {
+        let index = domain.id() as usize;
+        if index >= self.cached.len() {
+            self.cached.resize(index + 1, CachedFacts::default());
+        }
+        &mut self.cached[index]
+    }
+
+    /// Copy the facts on the variable from [`RootDomains::facts`] to its cached entry.
+    fn refresh(&mut self, domain: DomainId) {
+        let lower = self.facts.lower_bound(&domain);
+        let upper = self.facts.upper_bound(&domain);
+        let holes: Vec<i32> = self.facts.holes(&domain).collect();
+        let mut atoms = vec![];
+        if let IntExt::Int(lower) = lower {
+            atoms.push(predicate![domain >= lower]);
+        }
+        if let IntExt::Int(upper) = upper {
+            atoms.push(predicate![domain <= upper]);
+        }
+        atoms.extend(holes.iter().map(|&hole| predicate![domain != hole]));
+        let entry = self.cached_mut(domain);
+        entry.lower = lower;
+        entry.upper = upper;
+        entry.holes = holes;
+        entry.atoms = atoms;
+    }
+
+    /// Start the state of a new refutation: no facts are applied to it yet.
+    fn begin_refutation(&mut self) {
+        self.refutation = self.refutation.wrapping_add(1);
+        if self.refutation == 0 {
+            self.applied_in.iter_mut().for_each(|number| *number = 0);
+            self.refutation = 1;
+        }
+    }
+
+    /// Mark the facts on the variable as applied to the state of the current refutation; returns
+    /// whether they were not yet.
+    fn mark_applied(&mut self, domain: DomainId) -> bool {
+        let index = domain.id() as usize;
+        if index >= self.applied_in.len() {
+            self.applied_in.resize(index + 1, 0);
+        }
+        let first = self.applied_in[index] != self.refutation;
+        self.applied_in[index] = self.refutation;
+        first
+    }
+
+    /// Whether the declared domain of the variable is applied to the facts.
+    fn is_declared(&self, domain: DomainId) -> bool {
+        self.cached(domain).is_some_and(|entry| entry.declared)
+    }
+
     /// Apply the declared domain of the variable to the facts, once, when `declared` holds: the
     /// initial bounds and holes of the solver's domain, except a bound the front end gives a
     /// variable declared without one.
@@ -1504,7 +1599,7 @@ impl RootDomains {
         declared: bool,
         assignments: &Assignments,
     ) {
-        if !declared || self.declared.contains_key(&domain) {
+        if !declared || self.is_declared(domain) {
             return;
         }
         let lower = assignments.get_initial_lower_bound(domain);
@@ -1526,6 +1621,8 @@ impl RootDomains {
             let _ = self.facts.apply(atom);
         }
         let _ = self.declared.insert(domain, atoms);
+        self.refresh(domain);
+        self.cached_mut(domain).declared = true;
     }
 
     /// Stop taking the declared domain of the variable as a fact, for a variable found to have
@@ -1542,6 +1639,15 @@ impl RootDomains {
         for atom in self.units.iter().chain(self.declared.values().flatten()) {
             let _ = self.facts.apply(atom);
         }
+        self.cached.clear();
+        let domains: Vec<DomainId> = self.facts.domains().copied().collect();
+        for domain in domains {
+            self.refresh(domain);
+        }
+        let declared: Vec<DomainId> = self.declared.keys().copied().collect();
+        for domain in declared {
+            self.cached_mut(domain).declared = true;
+        }
     }
 
     /// Record the nogood written: a nogood over one atomic constraint makes its negation a fact.
@@ -1550,32 +1656,39 @@ impl RootDomains {
             let fact = !*atom;
             self.units.push(fact);
             let _ = self.facts.apply(&fact);
+            self.refresh(fact.get_domain());
         }
     }
 
     /// Whether the facts on the variable of the atomic constraint entail it. Facts that leave the
     /// variable no value are taken to entail nothing.
     fn entails(&self, atom: Predicate) -> bool {
-        let domain = atom.get_domain();
-        self.facts.lower_bound(&domain) <= self.facts.upper_bound(&domain)
-            && self.facts.is_true(&atom)
+        // As `VariableState::is_true` on `facts`, which holds of no atomic constraint over a
+        // variable without facts.
+        let Some(facts) = self.cached(atom.get_domain()) else {
+            return false;
+        };
+        if facts.lower > facts.upper {
+            return false;
+        }
+        let value = atom.get_right_hand_side();
+        match atom.get_predicate_type() {
+            PredicateType::LowerBound => facts.lower >= value,
+            PredicateType::UpperBound => facts.upper <= value,
+            PredicateType::Equal => facts.lower >= value && facts.upper <= value,
+            PredicateType::NotEqual => {
+                facts.lower > value
+                    || facts.upper < value
+                    || facts.holes.binary_search(&value).is_ok()
+            }
+        }
     }
 
     /// The atomic constraints that state the facts on the variable: its bounds and holes.
-    fn facts_on(&self, domain: DomainId) -> Vec<Predicate> {
-        let mut atoms = vec![];
-        if let IntExt::Int(lower) = self.facts.lower_bound(&domain) {
-            atoms.push(predicate![domain >= lower]);
-        }
-        if let IntExt::Int(upper) = self.facts.upper_bound(&domain) {
-            atoms.push(predicate![domain <= upper]);
-        }
-        atoms.extend(
-            self.facts
-                .holes(&domain)
-                .map(|hole| predicate![domain != hole]),
-        );
-        atoms
+    fn facts_on(&self, domain: DomainId) -> &[Predicate] {
+        self.cached(domain)
+            .map(|facts| facts.atoms.as_slice())
+            .unwrap_or_default()
     }
 }
 
@@ -1593,18 +1706,19 @@ fn apply_root_facts(
     state: &mut VariableState<Predicate>,
     atoms: impl IntoIterator<Item = Predicate>,
     root_domains: &mut RootDomains,
-    applied: &mut HashSet<DomainId>,
     declares_domain: impl Fn(DomainId) -> bool,
     assignments: &Assignments,
 ) -> bool {
     for atom in atoms {
         let domain = atom.get_domain();
-        if !applied.insert(domain) {
+        if !root_domains.mark_applied(domain) {
             continue;
         }
-        root_domains.apply_declared_domain(domain, declares_domain(domain), assignments);
+        if !root_domains.is_declared(domain) {
+            root_domains.apply_declared_domain(domain, declares_domain(domain), assignments);
+        }
         for fact in root_domains.facts_on(domain) {
-            if !state.apply(&fact) {
+            if !state.apply(fact) {
                 return false;
             }
         }
@@ -2283,13 +2397,14 @@ impl BlockProof {
             // The nogood's atoms cannot all hold, so it needs no inference.
             return Some((kept, left_out, true));
         };
-        let mut applied: HashSet<DomainId> = HashSet::default();
+        if let Some(root_domains) = root_domains.as_deref_mut() {
+            root_domains.begin_refutation();
+        }
         if let Some(root_domains) = root_domains.as_deref_mut()
             && !apply_root_facts(
                 &mut state,
                 nogood.iter().copied(),
                 root_domains,
-                &mut applied,
                 declares_domain,
                 assignments,
             )
@@ -2307,7 +2422,6 @@ impl BlockProof {
                     &mut state,
                     [fact],
                     root_domains,
-                    &mut applied,
                     declares_domain,
                     assignments,
                 )
@@ -2359,7 +2473,6 @@ impl BlockProof {
                     &mut state,
                     atoms,
                     root_domains,
-                    &mut applied,
                     declares_domain,
                     assignments,
                 ) {
@@ -2819,7 +2932,7 @@ fn resolution_chain(
     }
     let held_before = |domain: DomainId, position: isize| {
         root_domains
-            .map(|root_domains| root_domains.facts_on(domain))
+            .map(|root_domains| root_domains.facts_on(domain).to_vec())
             .unwrap_or_default()
             .into_iter()
             .chain(
