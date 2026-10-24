@@ -1499,9 +1499,6 @@ struct RootDomains {
     /// whenever the facts on the variable change: a refutation reads them for every variable it
     /// touches, and a lookup in `facts` costs more than an index.
     cached: Vec<CachedFacts>,
-    /// For each variable, by the index of its domain, the number of the last refutation whose
-    /// state the facts on it were applied to; see [`RootDomains::begin_refutation`].
-    applied_in: Vec<u32>,
     /// The number of the current refutation.
     refutation: u32,
 }
@@ -1509,6 +1506,10 @@ struct RootDomains {
 /// The facts on one variable, as [`RootDomains::facts`] holds them.
 #[derive(Clone, Debug)]
 struct CachedFacts {
+    /// The number of the last refutation whose state the facts on the variable were applied to;
+    /// see [`RootDomains::begin_refutation`]. Kept here, beside the facts it guards, since a
+    /// refutation reads both for every variable it touches.
+    applied_in: u32,
     /// Whether the declared domain of the variable is applied to the facts (it is a key of
     /// [`RootDomains::declared`]).
     declared: bool,
@@ -1516,18 +1517,16 @@ struct CachedFacts {
     upper: IntExt,
     /// The holes, in increasing order.
     holes: Vec<i32>,
-    /// The atomic constraints that state the facts: the bounds, then the holes.
-    atoms: Vec<Predicate>,
 }
 
 impl Default for CachedFacts {
     fn default() -> Self {
         CachedFacts {
+            applied_in: 0,
             declared: false,
             lower: IntExt::NegativeInf,
             upper: IntExt::PositiveInf,
             holes: vec![],
-            atoms: vec![],
         }
     }
 }
@@ -1552,26 +1551,19 @@ impl RootDomains {
         let lower = self.facts.lower_bound(&domain);
         let upper = self.facts.upper_bound(&domain);
         let holes: Vec<i32> = self.facts.holes(&domain).collect();
-        let mut atoms = vec![];
-        if let IntExt::Int(lower) = lower {
-            atoms.push(predicate![domain >= lower]);
-        }
-        if let IntExt::Int(upper) = upper {
-            atoms.push(predicate![domain <= upper]);
-        }
-        atoms.extend(holes.iter().map(|&hole| predicate![domain != hole]));
         let entry = self.cached_mut(domain);
         entry.lower = lower;
         entry.upper = upper;
         entry.holes = holes;
-        entry.atoms = atoms;
     }
 
     /// Start the state of a new refutation: no facts are applied to it yet.
     fn begin_refutation(&mut self) {
         self.refutation = self.refutation.wrapping_add(1);
         if self.refutation == 0 {
-            self.applied_in.iter_mut().for_each(|number| *number = 0);
+            self.cached
+                .iter_mut()
+                .for_each(|entry| entry.applied_in = 0);
             self.refutation = 1;
         }
     }
@@ -1579,12 +1571,10 @@ impl RootDomains {
     /// Mark the facts on the variable as applied to the state of the current refutation; returns
     /// whether they were not yet.
     fn mark_applied(&mut self, domain: DomainId) -> bool {
-        let index = domain.id() as usize;
-        if index >= self.applied_in.len() {
-            self.applied_in.resize(index + 1, 0);
-        }
-        let first = self.applied_in[index] != self.refutation;
-        self.applied_in[index] = self.refutation;
+        let refutation = self.refutation;
+        let entry = self.cached_mut(domain);
+        let first = entry.applied_in != refutation;
+        entry.applied_in = refutation;
         first
     }
 
@@ -1642,7 +1632,12 @@ impl RootDomains {
         for atom in self.units.iter().chain(self.declared.values().flatten()) {
             let _ = self.facts.apply(atom);
         }
-        self.cached.clear();
+        for entry in self.cached.iter_mut() {
+            *entry = CachedFacts {
+                applied_in: entry.applied_in,
+                ..CachedFacts::default()
+            };
+        }
         let domains: Vec<DomainId> = self.facts.domains().copied().collect();
         for domain in domains {
             self.refresh(domain);
@@ -1687,11 +1682,36 @@ impl RootDomains {
         }
     }
 
-    /// The atomic constraints that state the facts on the variable: its bounds and holes.
-    fn facts_on(&self, domain: DomainId) -> &[Predicate] {
-        self.cached(domain)
-            .map(|facts| facts.atoms.as_slice())
-            .unwrap_or_default()
+    /// The atomic constraints that state the facts on the variable: its bounds, then its holes.
+    fn facts_on(&self, domain: DomainId) -> Vec<Predicate> {
+        let mut atoms = vec![];
+        let _ = self.for_each_fact_on(domain, |atom| {
+            atoms.push(atom);
+            true
+        });
+        atoms
+    }
+
+    /// Give the atomic constraints of [`RootDomains::facts_on`] one by one to `apply`, without
+    /// listing them, until it returns `false`; returns whether it never did.
+    fn for_each_fact_on(&self, domain: DomainId, mut apply: impl FnMut(Predicate) -> bool) -> bool {
+        let Some(facts) = self.cached(domain) else {
+            return true;
+        };
+        if let IntExt::Int(lower) = facts.lower
+            && !apply(predicate![domain >= lower])
+        {
+            return false;
+        }
+        if let IntExt::Int(upper) = facts.upper
+            && !apply(predicate![domain <= upper])
+        {
+            return false;
+        }
+        facts
+            .holes
+            .iter()
+            .all(|&hole| apply(predicate![domain != hole]))
     }
 }
 
@@ -1885,10 +1905,8 @@ fn apply_root_facts(
         if !root_domains.is_declared(domain) {
             root_domains.apply_declared_domain(domain, declares_domain(domain), assignments);
         }
-        for fact in root_domains.facts_on(domain) {
-            if !state.apply(fact) {
-                return false;
-            }
+        if !root_domains.for_each_fact_on(domain, |fact| state.apply(&fact)) {
+            return false;
         }
     }
     true
@@ -3104,7 +3122,7 @@ fn resolution_chain(
     }
     let held_before = |domain: DomainId, position: isize| {
         root_domains
-            .map(|root_domains| root_domains.facts_on(domain).to_vec())
+            .map(|root_domains| root_domains.facts_on(domain))
             .unwrap_or_default()
             .into_iter()
             .chain(
