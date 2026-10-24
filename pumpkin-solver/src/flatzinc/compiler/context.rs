@@ -94,6 +94,13 @@ pub(crate) struct CompilationContext<'a> {
     pub(crate) literal_booleans: HashMap<Rc<str>, Literal>,
 }
 
+/// An integer as [`CompilationContext::peek_integer`] gives it.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum IntegerTerm {
+    Constant,
+    Variable(AffineView<DomainId>),
+}
+
 /// A FlatZinc variable the compiler removed because no constraint mentions it.
 #[derive(Clone, Debug)]
 pub(crate) struct UnusedVariable {
@@ -500,6 +507,32 @@ impl CompilationContext<'_> {
                     identifier: identifier.into(),
                     expected_type: "integer variable".into(),
                 })
+        }
+    }
+
+    /// The integer `expr` denotes, as [`CompilationContext::resolve_integer_variable`] resolves
+    /// it, but without creating the domain of a constant: a constant is returned as such.
+    ///
+    /// The passes that run only under proof logging use it. A domain they created would shift the
+    /// identifiers of the domains created after it, and the default search, which draws domains
+    /// at random by their position, would then search differently with a proof than without.
+    pub(crate) fn peek_integer(&self, expr: &flatzinc::Expr) -> Option<IntegerTerm> {
+        match expr {
+            flatzinc::Expr::VarParIdentifier(identifier) => {
+                if !self.equivalences.classes.contains_key(identifier.as_str()) {
+                    return None;
+                }
+                let (representative, view) = self.equivalences.view(identifier);
+                if let Some(domain_id) = self.variable_map.get(&representative) {
+                    Some(IntegerTerm::Variable(domain_id.scaled(view.scale).offset(view.offset)))
+                } else {
+                    self.integer_parameters
+                        .get(&representative)
+                        .map(|_| IntegerTerm::Constant)
+                }
+            }
+            flatzinc::Expr::Int(_) => Some(IntegerTerm::Constant),
+            _ => None,
         }
     }
 

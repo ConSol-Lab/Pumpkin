@@ -3,6 +3,7 @@
 //! named once their variables exist.
 
 use super::context::CompilationContext;
+use super::context::IntegerTerm;
 use crate::core::proof::ConstraintTag;
 use crate::flatzinc::ProofLogging;
 use crate::flatzinc::error::FlatZincError;
@@ -88,11 +89,16 @@ pub(crate) fn run(
                 .name_rule_of_constraint(constraint_tag, "linear_bounds");
         }
         // A product with a constant factor is the linear equality product - factor * other = 0.
+        // The factor is inspected without creating a domain for a constant (see
+        // `CompilationContext::peek_integer`).
         if id == "int_times"
             && exprs.iter().take(2).any(|expr| {
                 is_known(context, expr)
-                    && context.resolve_integer_variable(expr).is_ok_and(|view| {
-                        context.solver.lower_bound(&view) == context.solver.upper_bound(&view)
+                    && context.peek_integer(expr).is_some_and(|term| match term {
+                        IntegerTerm::Constant => true,
+                        IntegerTerm::Variable(view) => {
+                            context.solver.lower_bound(&view) == context.solver.upper_bound(&view)
+                        }
                     })
             })
         {

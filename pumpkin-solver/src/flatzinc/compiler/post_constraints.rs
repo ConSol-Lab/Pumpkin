@@ -5,6 +5,7 @@ use std::rc::Rc;
 use pumpkin_propagators::disjunctive::ArgDisjunctiveTask;
 
 use super::context::CompilationContext;
+use super::context::IntegerTerm;
 use crate::core::constraints::Constraint;
 use crate::core::constraints::NegatableConstraint;
 use crate::core::containers::HashMap;
@@ -635,7 +636,9 @@ fn name_set_in_domain(
     constraint_tag: ConstraintTag,
 ) -> Result<(), FlatZincError> {
     check_parameters!(exprs, 2, "set_in");
-    let Ok(member) = context.resolve_integer_variable(&exprs[0]) else {
+    // A constant member is not named, since creating its domain here would shift the identifiers
+    // of the domains created after it (see `CompilationContext::peek_integer`).
+    let Some(IntegerTerm::Variable(member)) = context.peek_integer(&exprs[0]) else {
         return Ok(());
     };
     let scale = i64::from(member.scale());
