@@ -344,8 +344,12 @@ impl IterativeMinimiser {
         // make use of them; this is a no-op when not logging a proof.
         if context.is_proof_logging_inferences() {
             context.explain_initial_domain(domain);
-            for &root_predicate in entry.root_domain.root_predicates.iter() {
-                context.explain_root_assignment(root_predicate);
+            // The root predicates are over `domain`; a proof that leaves out the explanations of
+            // root facts over it explains none of them, so they are not visited one by one.
+            if !context.leaves_out_root_explanation_of(domain) {
+                for &root_predicate in entry.root_domain.root_predicates.iter() {
+                    context.explain_root_assignment(root_predicate);
+                }
             }
         }
     }

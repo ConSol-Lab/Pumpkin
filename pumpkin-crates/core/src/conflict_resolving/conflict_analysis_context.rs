@@ -197,6 +197,13 @@ impl ConflictAnalysisContext<'_> {
         );
     }
 
+    /// Whether the proof leaves out the explanation of every root fact over the domain, so that
+    /// [`ConflictAnalysisContext::explain_root_assignment`] does nothing for a predicate over it.
+    pub fn leaves_out_root_explanation_of(&self, domain_id: DomainId) -> bool {
+        !cfg!(feature = "check-deductions")
+            && self.proof_log.leaves_out_root_explanation_of(domain_id)
+    }
+
     /// Explains the initial domain of the provided [`DomainId`] in the proof.
     pub fn explain_initial_domain(&mut self, domain_id: DomainId) {
         if (self.proof_log.is_logging_proof()
