@@ -57,6 +57,20 @@ pub(crate) fn run(
             "int_ne_reif" | "pumpkin_bool_xor_reif" => Some(("linear_not_equal", equal_rule)),
             _ => None,
         };
+        // The clauses of the decomposition of an exclusive or with a constant indicator are in
+        // no nogood with the indicator, so that the rule of the side the constant takes names
+        // the inferences of the constraint: the checker reads them from the inner constraint,
+        // or from its negation, under the reified form of that rule.
+        if id == "pumpkin_bool_xor_reif"
+            && let (Some((when_true, when_false)), Some(flatzinc::Expr::Bool(indicator))) =
+                (sides, exprs.get(2))
+        {
+            context.solver.name_rule_of_constraint(
+                constraint_tag,
+                if *indicator { when_true } else { when_false },
+            );
+            continue;
+        }
         if let (Some((when_true, when_false)), Some(indicator)) = (
             sides,
             exprs
