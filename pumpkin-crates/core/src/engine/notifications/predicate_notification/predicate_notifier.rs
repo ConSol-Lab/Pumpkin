@@ -41,7 +41,7 @@ pub(crate) struct PredicateNotifier {
     ///
     /// It is also used by the [`PredicateTracker`] to determine which predicates to update when a
     /// disequality [`Predicate`] has been posted.
-    is_tracked: BitSet,
+    pub(crate) is_tracked: BitSet,
 }
 
 impl PredicateNotifier {

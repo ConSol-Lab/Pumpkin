@@ -736,7 +736,9 @@ mod tests {
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x >= 5)),
             &assignments,
-            &id_generator
+            &id_generator,
+            &is_tracked,
+            true
         ));
         assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x <= 5))));
         assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x == 5))));
@@ -752,22 +754,30 @@ mod tests {
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x >= 5)),
             &assignments,
-            &id_generator
+            &id_generator,
+            &is_tracked,
+            true
         ));
         assert!(predicate_id_assignments.is_falsified(
             id_generator.get_id(predicate!(x <= 5)),
             &assignments,
-            &id_generator
+            &id_generator,
+            &is_tracked,
+            true
         ));
         assert!(predicate_id_assignments.is_falsified(
             id_generator.get_id(predicate!(x == 5)),
             &assignments,
-            &id_generator
+            &id_generator,
+            &is_tracked,
+            true
         ));
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x != 5)),
             &assignments,
-            &id_generator
+            &id_generator,
+            &is_tracked,
+            true
         ));
     }
 
@@ -815,7 +825,9 @@ mod tests {
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x <= 5)),
             &assignments,
-            &id_generator
+            &id_generator,
+            &is_tracked,
+            true
         ));
         assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x >= 5))));
         assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x == 5))));
@@ -831,22 +843,30 @@ mod tests {
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x <= 5)),
             &assignments,
-            &id_generator
+            &id_generator,
+            &is_tracked,
+            true
         ));
         assert!(predicate_id_assignments.is_falsified(
             id_generator.get_id(predicate!(x >= 5)),
             &assignments,
-            &id_generator
+            &id_generator,
+            &is_tracked,
+            true
         ));
         assert!(predicate_id_assignments.is_falsified(
             id_generator.get_id(predicate!(x == 5)),
             &assignments,
-            &id_generator
+            &id_generator,
+            &is_tracked,
+            true
         ));
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x != 5)),
             &assignments,
-            &id_generator
+            &id_generator,
+            &is_tracked,
+            true
         ));
     }
 
@@ -894,12 +914,16 @@ mod tests {
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x != 5)),
             &assignments,
-            &id_generator
+            &id_generator,
+            &is_tracked,
+            true
         ));
         assert!(predicate_id_assignments.is_falsified(
             id_generator.get_id(predicate!(x == 5)),
             &assignments,
-            &id_generator
+            &id_generator,
+            &is_tracked,
+            true
         ));
         assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x >= 5))));
         assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x <= 5))));
@@ -957,32 +981,44 @@ mod tests {
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x == 6)),
             &assignments,
-            &id_generator
+            &id_generator,
+            &is_tracked,
+            true
         ));
         assert!(predicate_id_assignments.is_falsified(
             id_generator.get_id(predicate!(x != 6)),
             &assignments,
-            &id_generator
+            &id_generator,
+            &is_tracked,
+            true
         ));
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x != 5)),
             &assignments,
-            &id_generator
+            &id_generator,
+            &is_tracked,
+            true
         ));
         assert!(predicate_id_assignments.is_falsified(
             id_generator.get_id(predicate!(x == 5)),
             &assignments,
-            &id_generator
+            &id_generator,
+            &is_tracked,
+            true
         ));
         assert!(predicate_id_assignments.is_satisfied(
             id_generator.get_id(predicate!(x >= 5)),
             &assignments,
-            &id_generator
+            &id_generator,
+            &is_tracked,
+            true
         ));
         assert!(predicate_id_assignments.is_falsified(
             id_generator.get_id(predicate!(x <= 5)),
             &assignments,
-            &id_generator
+            &id_generator,
+            &is_tracked,
+            true
         ));
     }
 

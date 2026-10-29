@@ -1,9 +1,13 @@
+use bit_set::BitSet;
+
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::Trail;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::Assignments;
+#[cfg(doc)]
+use crate::engine::notifications::predicate_notification::predicate_tracker::PredicateTracker;
 #[cfg(doc)]
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_extreme;
@@ -38,6 +42,11 @@ pub(crate) enum PredicateValue {
     AssignedTrue,
     /// The [`Predicate`] is currently false.
     AssignedFalse,
+    /// The [`Predicate`] is currently unassigned.
+    ///
+    /// It is only reliable if the [`PredicateTracker`] has processed all of the domain events which
+    /// have occurred; otherwise, it is recalculated.
+    Unassigned,
     /// The [`Predicate`] is currently unknown.
     ///
     /// If the value of a [`Predicate`] with this value is retrieved then it will be recalculated.
@@ -84,9 +93,11 @@ impl PredicateIdAssignments {
             .accomodate(predicate_id, PredicateValue::Unknown);
 
         pumpkin_assert_extreme!(
-            self.predicate_values[predicate_id] == PredicateValue::Unknown
-                || self.predicate_values[predicate_id] == value,
-            "Expected {:?} to be either unknown/untracked or for it to equal {value:?} for {predicate_id:?}",
+            matches!(
+                self.predicate_values[predicate_id],
+                PredicateValue::Unknown | PredicateValue::Unassigned
+            ) || self.predicate_values[predicate_id] == value,
+            "Expected {:?} to be either unknown/unassigned or for it to equal {value:?} for {predicate_id:?}",
             self.predicate_values[predicate_id]
         );
         // If we already have the value in the cache then we do not do anything
@@ -101,35 +112,70 @@ impl PredicateIdAssignments {
         }
     }
 
-    /// Recalculates the value of a [`Predicate`] *if* it is unknown.
-    fn update_if_unknown(
+    /// Makes space for the provided [`PredicateId`].
+    pub(crate) fn add_predicate_id(&mut self, predicate_id: PredicateId) {
+        self.predicate_values
+            .accomodate(predicate_id, PredicateValue::Unknown);
+    }
+
+    /// Returns the value of the [`Predicate`], recalculating it if it is unknown, or if it is
+    /// unassigned while `is_up_to_date` is false.
+    ///
+    /// `processed_all_events` should indicate whether the [`PredicateTracker`] has processed all of
+    /// the domain events which have occurred. If not all events have been processed, then the value
+    /// of an unassigned predicate is recalculated.
+    #[inline]
+    fn get_value(
         &mut self,
         predicate_id: PredicateId,
         assignments: &Assignments,
         predicate_id_generator: &PredicateIdGenerator,
-    ) {
-        // First we make space for it if we have not seen the predicate yet
-        if predicate_id.index() >= self.predicate_values.len() {
-            self.predicate_values
-                .resize(predicate_id.index() + 1, PredicateValue::Unknown);
+        is_tracked: &BitSet,
+        processed_all_events: bool,
+    ) -> PredicateValue {
+        let value = self.predicate_values[predicate_id];
+        match value {
+            PredicateValue::AssignedTrue | PredicateValue::AssignedFalse => value,
+            PredicateValue::Unassigned if processed_all_events => value,
+            _ => self.recalculate_value(
+                predicate_id,
+                assignments,
+                predicate_id_generator,
+                is_tracked,
+            ),
         }
+    }
 
-        if self.predicate_values[predicate_id].is_unknown() {
-            // First we calculate the current value of the predicate in the assignments structure
-            let predicate = predicate_id_generator.get_predicate(predicate_id);
-            let value = match assignments.evaluate_predicate(predicate) {
-                Some(satisfied) => {
-                    if satisfied {
-                        PredicateValue::AssignedTrue
-                    } else {
-                        PredicateValue::AssignedFalse
-                    }
+    /// Recalculates the value of a [`Predicate`] using the [`Assignments`] and stores it if it is
+    /// assigned, or if it is unassigned and tracked.
+    #[inline(never)]
+    fn recalculate_value(
+        &mut self,
+        predicate_id: PredicateId,
+        assignments: &Assignments,
+        predicate_id_generator: &PredicateIdGenerator,
+        is_tracked: &BitSet,
+    ) -> PredicateValue {
+        let predicate = predicate_id_generator.get_predicate(predicate_id);
+        let value = match assignments.evaluate_predicate(predicate) {
+            Some(true) => PredicateValue::AssignedTrue,
+            Some(false) => PredicateValue::AssignedFalse,
+            None => {
+                // We differ in the standard behaviour here based on whether a variable is tracked
+                // or not; if it is not, then it will remain Unknown.
+                //
+                // Only the tracker updates an Unassigned value once the predicate is assigned. If
+                // an untracked predicate were stored as Unassigned and then assigned by a
+                // propagation, then, once the domain events have been processed, its stale
+                // Unassigned value would be returned without being recalculated.
+                if is_tracked.contains(predicate_id.index()) {
+                    self.predicate_values[predicate_id] = PredicateValue::Unassigned;
                 }
-                None => PredicateValue::Unknown,
-            };
-            // Then we store it in the cache
-            self.store_predicate(predicate_id, value);
-        }
+                return PredicateValue::Unassigned;
+            }
+        };
+        self.store_predicate(predicate_id, value);
+        value
     }
 
     /// Returns whether the [`Predicate`] is currently satsified.
@@ -141,10 +187,17 @@ impl PredicateIdAssignments {
         predicate_id: PredicateId,
         assignments: &Assignments,
         predicate_id_generator: &PredicateIdGenerator,
+        is_tracked: &BitSet,
+        is_up_to_date: bool,
     ) -> bool {
-        self.update_if_unknown(predicate_id, assignments, predicate_id_generator);
-
-        self.predicate_values[predicate_id].is_satisified()
+        self.get_value(
+            predicate_id,
+            assignments,
+            predicate_id_generator,
+            is_tracked,
+            is_up_to_date,
+        )
+        .is_satisified()
     }
 
     /// Returns whether the [`Predicate`] is currently falsified.
@@ -156,10 +209,17 @@ impl PredicateIdAssignments {
         predicate_id: PredicateId,
         assignments: &Assignments,
         predicate_id_generator: &PredicateIdGenerator,
+        is_tracked: &BitSet,
+        is_up_to_date: bool,
     ) -> bool {
-        self.update_if_unknown(predicate_id, assignments, predicate_id_generator);
-
-        self.predicate_values[predicate_id].is_falsified()
+        self.get_value(
+            predicate_id,
+            assignments,
+            predicate_id_generator,
+            is_tracked,
+            is_up_to_date,
+        )
+        .is_falsified()
     }
 
     pub(crate) fn evaluate(
@@ -167,13 +227,19 @@ impl PredicateIdAssignments {
         predicate_id: PredicateId,
         assignments: &Assignments,
         predicate_id_generator: &PredicateIdGenerator,
+        is_tracked: &BitSet,
+        is_up_to_date: bool,
     ) -> Option<bool> {
-        self.update_if_unknown(predicate_id, assignments, predicate_id_generator);
-
-        match self.predicate_values[predicate_id] {
+        match self.get_value(
+            predicate_id,
+            assignments,
+            predicate_id_generator,
+            is_tracked,
+            is_up_to_date,
+        ) {
             PredicateValue::AssignedTrue => Some(true),
             PredicateValue::AssignedFalse => Some(false),
-            PredicateValue::Unknown => None,
+            PredicateValue::Unassigned | PredicateValue::Unknown => None,
         }
     }
 

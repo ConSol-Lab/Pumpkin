@@ -102,7 +102,11 @@ impl NotificationEngine {
     }
 
     pub(crate) fn get_id(&mut self, predicate: Predicate) -> PredicateId {
-        self.predicate_notifier.predicate_to_id.get_id(predicate)
+        let predicate_id = self.predicate_notifier.predicate_to_id.get_id(predicate);
+        self.predicate_notifier
+            .predicate_id_assignments
+            .add_predicate_id(predicate_id);
+        predicate_id
     }
 
     pub(crate) fn get_predicate(&self, predicate_id: PredicateId) -> Predicate {
@@ -527,6 +531,8 @@ impl NotificationEngine {
                 predicate_id,
                 assignments,
                 &self.predicate_notifier.predicate_to_id,
+                &self.predicate_notifier.is_tracked,
+                self.last_notified_trail_index == assignments.num_trail_entries(),
             );
         pumpkin_assert_extreme!(
             {
@@ -550,6 +556,8 @@ impl NotificationEngine {
             predicate_id,
             assignments,
             &self.predicate_notifier.predicate_to_id,
+            &self.predicate_notifier.is_tracked,
+            self.last_notified_trail_index == assignments.num_trail_entries(),
         )
     }
 
@@ -567,6 +575,8 @@ impl NotificationEngine {
                 predicate_id,
                 assignments,
                 &self.predicate_notifier.predicate_to_id,
+                &self.predicate_notifier.is_tracked,
+                self.last_notified_trail_index == assignments.num_trail_entries(),
             );
 
         pumpkin_assert_extreme!(
