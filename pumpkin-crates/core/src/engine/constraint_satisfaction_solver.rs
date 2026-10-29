@@ -15,7 +15,6 @@ use rand::rngs::SmallRng;
 use super::solver_statistics::SolverStatistics;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
-use super::variables::Literal;
 #[cfg(doc)]
 use crate::Solver;
 use crate::basic_types::CSPSolverExecutionFlag;
@@ -355,35 +354,8 @@ impl ConstraintSatisfactionSolver {
         self.state.new_constraint_tag()
     }
 
-    pub fn create_new_literal(&mut self, name: Option<Arc<str>>) -> Literal {
+    pub fn create_new_literal(&mut self, name: Option<Arc<str>>) -> Predicate {
         self.state.new_literal(name)
-    }
-
-    pub fn create_new_literal_for_predicate(
-        &mut self,
-        predicate: Predicate,
-        name: Option<Arc<str>>,
-        constraint_tag: ConstraintTag,
-    ) -> Literal {
-        let literal = self.state.new_literal(name);
-
-        self.internal_parameters
-            .proof_log
-            .reify_predicate(literal, predicate);
-
-        // If literal --> predicate
-        self.add_clause(
-            vec![!literal.get_true_predicate(), predicate],
-            constraint_tag,
-        );
-
-        // If !literal --> !predicate
-        self.add_clause(
-            vec![!literal.get_false_predicate(), !predicate],
-            constraint_tag,
-        );
-
-        literal
     }
 
     /// Create a new integer variable. Its domain will have the given lower and upper bounds.
@@ -412,7 +384,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     /// Returns an unsatisfiable core or an [`Err`] if the provided assumptions were conflicting
-    /// with one another ([`Err`] then contain the [`Literal`] which was conflicting).
+    /// with one another ([`Err`] then contain the [`Predicate`] which was conflicting).
     ///
     /// We define an unsatisfiable core as a clause containing only negated assumption literals,
     /// which is implied by the formula. Alternatively, it is the negation of a conjunction of
@@ -481,8 +453,8 @@ impl ConstraintSatisfactionSolver {
             })
     }
 
-    pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
-        self.state.get_literal_value(literal)
+    pub fn get_predicate_value(&self, predicate: Predicate) -> Option<bool> {
+        self.state.truth_value(predicate)
     }
 
     /// Get the lower bound for the given variable.
@@ -1231,8 +1203,8 @@ mod tests {
         let c1 = solver.new_constraint_tag();
         let c2 = solver.new_constraint_tag();
         let c3 = solver.new_constraint_tag();
-        let lit1 = solver.create_new_literal(None).get_true_predicate();
-        let lit2 = solver.create_new_literal(None).get_true_predicate();
+        let lit1 = solver.create_new_literal(None);
+        let lit2 = solver.create_new_literal(None);
 
         solver.add_clause([lit1, lit2], c1);
         solver.add_clause([lit1, !lit2], c2);
@@ -1244,7 +1216,7 @@ mod tests {
     fn core_extraction_unit_core() {
         let mut solver = ConstraintSatisfactionSolver::default();
         let constraint_tag = solver.new_constraint_tag();
-        let lit1 = solver.create_new_literal(None).get_true_predicate();
+        let lit1 = solver.create_new_literal(None);
         solver.add_clause(vec![lit1], constraint_tag);
 
         run_test(
@@ -1304,9 +1276,9 @@ mod tests {
         let mut solver = ConstraintSatisfactionSolver::default();
         let c1 = solver.new_constraint_tag();
         let c2 = solver.new_constraint_tag();
-        let lit1 = solver.create_new_literal(None).get_true_predicate();
-        let lit2 = solver.create_new_literal(None).get_true_predicate();
-        let lit3 = solver.create_new_literal(None).get_true_predicate();
+        let lit1 = solver.create_new_literal(None);
+        let lit2 = solver.create_new_literal(None);
+        let lit3 = solver.create_new_literal(None);
 
         solver.add_clause([lit1, lit2, lit3], c1);
         solver.add_clause([lit1, !lit2, lit3], c2);
@@ -1349,9 +1321,9 @@ mod tests {
         let mut solver = ConstraintSatisfactionSolver::default();
         let constraint_tag = solver.new_constraint_tag();
 
-        let lit1 = solver.create_new_literal(None).get_true_predicate();
-        let lit2 = solver.create_new_literal(None).get_true_predicate();
-        let lit3 = solver.create_new_literal(None).get_true_predicate();
+        let lit1 = solver.create_new_literal(None);
+        let lit2 = solver.create_new_literal(None);
+        let lit3 = solver.create_new_literal(None);
 
         solver.add_clause([lit1, lit2, lit3], constraint_tag);
         (solver, vec![lit1, lit2, lit3])

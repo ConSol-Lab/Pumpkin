@@ -663,6 +663,21 @@ impl Assignments {
         }
     }
 
+    /// Returns whether the predicate is assigned (either true or false) at the end of the given
+    /// checkpoint.
+    pub(crate) fn is_assigned_at_checkpoint(
+        &self,
+        predicate: Predicate,
+        checkpoint: usize,
+    ) -> bool {
+        self.trail
+            .last_position_at_checkpoint(checkpoint)
+            .is_some_and(|position| {
+                self.evaluate_predicate_at_trail_position(predicate, position)
+                    .is_some()
+            })
+    }
+
     /// Determines whether the provided [`Predicate`] holds at the provided trail position. In case
     /// the predicate is not assigned yet (neither true nor false), returns None.
     pub(crate) fn evaluate_predicate_at_trail_position(
@@ -1470,6 +1485,7 @@ impl Iterator for IntegerDomainIterator<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::State;
     use crate::engine::notifications::DomainEvent;
 
     #[test]
@@ -1596,6 +1612,28 @@ mod tests {
 
         assert_contains_events(&events, d1, [DomainEvent::LowerBound]);
         assert_contains_events(&events, d1, [DomainEvent::Removal]);
+    }
+
+    #[test]
+    fn predicates_are_assigned_from_the_checkpoint_where_they_are_posted() {
+        let mut state = State::default();
+        let d = state.new_interval_variable(1, 5, None);
+
+        let _ = state.post(predicate!(d >= 2)).expect("non-empty domain");
+        state.new_checkpoint();
+        let _ = state.post(predicate!(d >= 3)).expect("non-empty domain");
+
+        let assignment = &state.assignments;
+
+        // True and false, respectively, at the root.
+        assert!(assignment.is_assigned_at_checkpoint(predicate!(d >= 2), 0));
+        assert!(assignment.is_assigned_at_checkpoint(predicate!(d <= 1), 0));
+
+        assert!(!assignment.is_assigned_at_checkpoint(predicate!(d >= 3), 0));
+        assert!(assignment.is_assigned_at_checkpoint(predicate!(d >= 3), 1));
+
+        assert!(!assignment.is_assigned_at_checkpoint(predicate!(d >= 4), 0));
+        assert!(!assignment.is_assigned_at_checkpoint(predicate!(d >= 4), 1));
     }
 
     #[test]

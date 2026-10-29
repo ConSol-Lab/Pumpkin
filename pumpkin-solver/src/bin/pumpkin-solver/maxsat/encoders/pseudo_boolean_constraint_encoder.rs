@@ -318,12 +318,12 @@ impl PseudoBooleanConstraintEncoder {
 
             for term in &weighted_literals {
                 if term.weight > k - self.constant_term
-                    && solver.get_literal_value(term.literal).is_none()
+                    && solver.get_predicate_value(term.literal).is_none()
                 {
                     has_assigned = true;
 
-                    solver.add_clause([(!term.literal).get_true_predicate()], constraint_tag);
-                } else if solver.get_literal_value(term.literal) == Some(true) {
+                    solver.add_clause([!term.literal], constraint_tag);
+                } else if solver.get_predicate_value(term.literal) == Some(true) {
                     self.constant_term += term.weight;
                 }
             }
@@ -336,7 +336,7 @@ impl PseudoBooleanConstraintEncoder {
         // collect terms that are not assigned at the root level
         let unassigned_weighted_literals: Vec<WeightedLiteral> = weighted_literals
             .iter()
-            .filter(|term| solver.get_literal_value(term.literal).is_none())
+            .filter(|term| solver.get_predicate_value(term.literal).is_none())
             .copied()
             .collect();
 
