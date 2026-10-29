@@ -216,7 +216,30 @@ impl Assignments {
         new_assignment
     }
 
+    /// Most predicates can be answered using the initial bounds, which avoids the binary search
+    /// performed by `get_trail_position`; this is inlined since conflict analysis calls it for
+    /// every predicate it encounters.
+    #[inline]
     pub(crate) fn is_initial_bound(&self, predicate: Predicate) -> bool {
+        let domain_id = predicate.get_domain();
+        let value = predicate.get_right_hand_side();
+        let initial_lower_bound = self.domains[domain_id].initial_lower_bound();
+        let initial_upper_bound = self.domains[domain_id].initial_upper_bound();
+
+        match predicate.get_predicate_type() {
+            PredicateType::LowerBound => value <= initial_lower_bound,
+            PredicateType::UpperBound => value >= initial_upper_bound,
+            PredicateType::Equal => value == initial_lower_bound && value == initial_upper_bound,
+            PredicateType::NotEqual => {
+                value < initial_lower_bound
+                    || value > initial_upper_bound
+                    || self.is_initial_bound_on_trail(predicate)
+            }
+        }
+    }
+
+    #[inline(never)]
+    fn is_initial_bound_on_trail(&self, predicate: Predicate) -> bool {
         let domain_id = predicate.get_domain();
 
         let Some(trail_position) = self.get_trail_position(&predicate) else {
@@ -1471,6 +1494,44 @@ impl Iterator for IntegerDomainIterator<'_> {
 mod tests {
     use super::*;
     use crate::engine::notifications::DomainEvent;
+
+    #[test]
+    fn is_initial_bound_only_holds_for_predicates_implied_by_initial_domain() {
+        let mut notification_engine = NotificationEngine::test_default();
+        let mut assignment = Assignments::default();
+        let d1 = assignment.create_new_integer_variable_sparse(vec![1, 3, 4, 5]);
+        let d2 = assignment.grow(2, 2);
+        notification_engine.grow();
+        notification_engine.grow();
+
+        let _ = assignment
+            .post_predicate(predicate!(d1 >= 3), None, &mut notification_engine)
+            .expect("non-empty domain");
+        let _ = assignment
+            .post_predicate(predicate!(d1 != 4), None, &mut notification_engine)
+            .expect("non-empty domain");
+
+        for (predicate, expected) in [
+            (predicate!(d1 >= 0), true),
+            (predicate!(d1 >= 1), true),
+            (predicate!(d1 >= 3), false),
+            (predicate!(d1 <= 5), true),
+            (predicate!(d1 <= 4), false),
+            (predicate!(d1 != 0), true),
+            (predicate!(d1 != 2), true),
+            (predicate!(d1 != 4), false),
+            (predicate!(d1 != 1), false),
+            (predicate!(d1 == 3), false),
+            (predicate!(d2 == 2), true),
+            (predicate!(d2 != 3), true),
+        ] {
+            assert_eq!(
+                assignment.is_initial_bound(predicate),
+                expected,
+                "{predicate}"
+            );
+        }
+    }
 
     #[test]
     fn jump_in_bound_change_lower_and_upper_bound_event_backtrack() {

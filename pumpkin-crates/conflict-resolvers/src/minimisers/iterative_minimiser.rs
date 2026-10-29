@@ -1,3 +1,4 @@
+use bit_set::BitSet;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::containers::HashMap;
@@ -40,6 +41,12 @@ use pumpkin_core::variables::DomainId;
 pub(crate) struct IterativeMinimiser {
     /// Keeps track of the predicates for each [`DomainId`] in the current nogood.
     domains: HashMap<DomainId, IterativeDomain>,
+    /// The [`DomainId`]s for which root-level predicates have been added to the nogood.
+    ///
+    /// Bound predicates implied by the initial domain do not tighten the root domain, so for those
+    /// only the domain is recorded here, without creating an entry in `domains` (explanations of
+    /// large linear constraints can contain many of them).
+    domains_with_root_predicates: BitSet,
     statistics: IterativeMinimiserStatistics,
 }
 
@@ -68,8 +75,6 @@ struct RootDomain {
     /// The root-level predicates which have been applied; only stored when proof-logging is
     /// enabled.
     root_predicates: Vec<Predicate>,
-    /// Whether any root-level predicates have been added to the nogood.
-    has_root_predicates: bool,
 }
 
 impl RootDomain {
@@ -79,7 +84,6 @@ impl RootDomain {
             root_upper_bound: context.initial_upper_bound(domain),
             root_holes: context.initial_holes(domain).into_iter().collect(),
             root_predicates: Vec::new(),
-            has_root_predicates: false,
         }
     }
 }
@@ -94,12 +98,9 @@ impl IterativeDomain {
         }
     }
 
-    /// Returns whether no predicates have been applied to the induced domain thus far.
+    /// Returns whether no non-root predicates have been applied to the induced domain thus far.
     fn is_empty(&self) -> bool {
-        self.lower_bound.is_none()
-            && self.upper_bound.is_none()
-            && self.not_equals.is_empty()
-            && !self.root_domain.has_root_predicates
+        self.lower_bound.is_none() && self.upper_bound.is_none() && self.not_equals.is_empty()
     }
 
     /// Returns whether `value` is a hole in the induced domain.
@@ -236,6 +237,7 @@ impl IterativeMinimiser {
     /// Clears the structures.
     pub(crate) fn clear(&mut self) {
         self.domains.clear();
+        self.domains_with_root_predicates.make_empty();
     }
 
     pub(crate) fn log_statistics(&self, statistic_logger: StatisticLogger) {
@@ -295,6 +297,30 @@ impl IterativeMinimiser {
         }
     }
 
+    /// Applies the given root-level predicate from the nogood, where the predicate is implied by
+    /// the initial domain of its variable.
+    pub(crate) fn apply_initial_bound(
+        &mut self,
+        predicate: Predicate,
+        context: &ConflictAnalysisContext,
+    ) {
+        // When logging inferences, the root-level predicates need to be stored so that they can be
+        // explained; holes need to be stored in the root domain.
+        if context.is_proof_logging_inferences()
+            || !(predicate.is_lower_bound_predicate() || predicate.is_upper_bound_predicate())
+        {
+            self.apply_root_predicate(predicate, context);
+            return;
+        }
+
+        // Explanations often contain initial bounds over the same domains, so most of the time the
+        // domain is already present; `contains` is cheap compared to `insert`.
+        let index = predicate.get_domain().id() as usize;
+        if !self.domains_with_root_predicates.contains(index) {
+            let _ = self.domains_with_root_predicates.insert(index);
+        }
+    }
+
     /// Applies the given root-level predicate from the nogood.
     ///
     /// Root-level predicates are never removed, and are not guaranteed to adhere to the invariant
@@ -310,7 +336,10 @@ impl IterativeMinimiser {
             .entry(domain)
             .or_insert_with(|| IterativeDomain::new(domain, context));
 
-        entry.root_domain.has_root_predicates = true;
+        let _ = self
+            .domains_with_root_predicates
+            .insert(domain.id() as usize);
+
         if context.is_proof_logging_inferences() {
             entry.root_domain.root_predicates.push(predicate);
         }
@@ -357,9 +386,26 @@ impl IterativeMinimiser {
         context: &mut ConflictAnalysisContext,
     ) -> ProcessingResult {
         let domain = predicate.get_domain();
-        let Some(entry) = self.domains.get(&domain).filter(|entry| !entry.is_empty()) else {
+
+        // We check the following:
+        // 1. There are no root predicates
+        // 2. The domain does not exist in the nogood (yet) or no predicates are stored.
+        // If these conditions hold, then we assume that the provided predicate is not redundant.
+        if !self
+            .domains_with_root_predicates
+            .contains(domain.id() as usize)
+            && self
+                .domains
+                .get(&domain)
+                .is_none_or(IterativeDomain::is_empty)
+        {
             return ProcessingResult::NotRedundant;
-        };
+        }
+
+        let entry = &*self
+            .domains
+            .entry(domain)
+            .or_insert_with(|| IterativeDomain::new(domain, context));
 
         Self::log_root_inferences(context, domain, entry);
 

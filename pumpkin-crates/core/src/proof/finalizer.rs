@@ -140,6 +140,10 @@ pub(crate) struct RootExplanationContext<'a> {
 }
 
 /// Explain why a given predicate is true. We assume that `predicate` is true at the root.
+///
+/// The check whether anything needs to be explained is inlined, since conflict analysis calls this
+/// for every root-level predicate it encounters.
+#[inline]
 pub(crate) fn explain_root_assignment(
     context: &mut RootExplanationContext<'_>,
     predicate: Predicate,
@@ -148,6 +152,11 @@ pub(crate) fn explain_root_assignment(
         return;
     }
 
+    log_root_assignment(context, predicate);
+}
+
+#[inline(never)]
+fn log_root_assignment(context: &mut RootExplanationContext<'_>, predicate: Predicate) {
     assert_eq!(
         context.state.get_checkpoint_for_predicate(predicate),
         Some(0)

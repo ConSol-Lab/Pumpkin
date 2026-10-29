@@ -338,6 +338,19 @@ impl WorkingNogood {
         context: &mut ConflictAnalysisContext,
         predicate_id_generator: &mut PredicateIdGenerator,
     ) {
+        // Predicates implied by the initial domain are root-level predicates. Explanations (e.g.,
+        // of linear constraints) can contain many of them, and checking for them first avoids
+        // looking up their checkpoint.
+        if context.is_initial_bound(predicate) {
+            context.explain_root_assignment(predicate);
+
+            if self.iterative_minimisation {
+                self.iterative_minimiser
+                    .apply_initial_bound(predicate, context);
+            }
+            return;
+        }
+
         let dec_level = context
             .get_checkpoint_for_predicate(predicate)
             .unwrap_or_else(|| {

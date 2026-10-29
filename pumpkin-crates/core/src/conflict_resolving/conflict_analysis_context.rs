@@ -184,6 +184,7 @@ impl ConflictAnalysisContext<'_> {
 /// Methods used for proof logging
 impl ConflictAnalysisContext<'_> {
     /// Explains the root assignment of `predicate` in the proof log.
+    #[inline]
     pub fn explain_root_assignment(&mut self, predicate: Predicate) {
         explain_root_assignment(
             &mut RootExplanationContext {
