@@ -407,6 +407,10 @@ impl Propagator for NogoodPropagator {
                 // that once).
                 let mut falsified_zeroth = None;
 
+                // The domain of the 0-th predicate, which is computed on demand by the extended
+                // nogood propagation.
+                let mut zeroth_domain = None;
+
                 // We start from the index of the last-traversed watcher and circle around after
                 // reaching the end of the nogood to ensure that all possible watcher are
                 // considered.
@@ -418,6 +422,7 @@ impl Propagator for NogoodPropagator {
                         &mut context,
                         nogood_predicates,
                         i,
+                        &mut zeroth_domain,
                     ) {
                         WatcherProcessingStatus::Continue => continue,
                         WatcherProcessingStatus::FoundNewWatch => {
