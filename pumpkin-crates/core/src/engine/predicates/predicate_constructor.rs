@@ -22,7 +22,9 @@ pub trait PredicateConstructor {
 ///
 /// The left-hand side can be any expression whose type implements [`PredicateConstructor`] (e.g. a
 /// local variable, a field access, an index expression, or a method call), and the right-hand side
-/// can be any expression evaluating to the bound. The supported comparison operators are:
+/// can be any expression evaluating to the bound (i32).
+///
+/// The supported comparison operators are:
 /// - `>=`
 /// - `<=`
 /// - `==`
@@ -39,6 +41,7 @@ pub trait PredicateConstructor {
 /// # use pumpkin_core::Solver;
 /// # use pumpkin_core::predicate;
 /// # use pumpkin_core::predicates::Predicate;
+/// # use pumpkin_core::variables::DomainId;
 /// let mut solver = Solver::default();
 /// let x = solver.new_bounded_integer(0, 10);
 ///
@@ -67,6 +70,22 @@ pub trait PredicateConstructor {
 /// let variables = vec![x];
 /// let indexed_predicate = predicate!(variables.iter().next().unwrap() >= 5);
 /// assert_eq!(indexed_predicate, predicate!(x >= 5));
+///
+/// // A left-hand side containing generics needs to be wrapped in parentheses.
+/// let generic_predicate = predicate!((std::convert::identity::<DomainId>(x)) >= 5);
+/// assert_eq!(generic_predicate, predicate!(x >= 5));
+/// ```
+///
+/// Without the parentheses, the `<` of the generic arguments is interpreted as the comparison
+/// operator, resulting in a compilation error:
+/// ```rust,compile_fail
+/// # use pumpkin_core::Solver;
+/// # use pumpkin_core::predicate;
+/// # use pumpkin_core::variables::DomainId;
+/// let mut solver = Solver::default();
+/// let x = solver.new_bounded_integer(0, 10);
+///
+/// let generic_predicate = predicate!(std::convert::identity::<DomainId>(x) >= 5);
 /// ```
 #[macro_export]
 macro_rules! predicate {
