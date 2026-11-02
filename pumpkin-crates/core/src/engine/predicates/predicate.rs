@@ -306,8 +306,8 @@ impl std::ops::Not for Predicate {
         let value = self.get_right_hand_side();
 
         match self.get_predicate_type() {
-            PredicateType::LowerBound => predicate!(self.get_domain() <= value - 1),
-            PredicateType::UpperBound => predicate!(self.get_domain() >= value + 1),
+            PredicateType::LowerBound => predicate!(self.get_domain() < value),
+            PredicateType::UpperBound => predicate!(self.get_domain() > value),
             PredicateType::NotEqual => predicate!(self.get_domain() == value),
             PredicateType::Equal => predicate!(self.get_domain() != value),
         }

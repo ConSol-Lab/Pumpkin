@@ -185,7 +185,7 @@ where
             (conjunction!(), &self.inference_code),
         )?;
         context.post(
-            predicate![self.index <= self.array.len() as i32 - 1],
+            predicate![self.index < self.array.len() as i32],
             (conjunction!(), &self.inference_code),
         )?;
         Ok(())

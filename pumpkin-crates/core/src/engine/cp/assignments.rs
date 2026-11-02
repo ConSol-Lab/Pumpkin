@@ -1349,7 +1349,7 @@ impl IntegerDomain {
 
                     // Check the lower bound first.
                     if let Some(trail_position) =
-                        self.get_update_info(&predicate!(domain_id >= value + 1))
+                        self.get_update_info(&predicate!(domain_id > value))
                     {
                         // The lower bound removed the value from the domain,
                         // report the trail position of the lower bound.
@@ -1357,7 +1357,7 @@ impl IntegerDomain {
                     } else {
                         // The lower bound did not surpass the value,
                         // now check the upper bound.
-                        self.get_update_info(&predicate!(domain_id <= value - 1))
+                        self.get_update_info(&predicate!(domain_id < value))
                     }
                 }
             }

@@ -133,9 +133,8 @@ impl CumulativePropagationHandler {
                     None,
                 ));
 
-                let predicate = predicate![
-                    propagating_task.start_variable >= profiles[profiles.len() - 1].end + 1
-                ];
+                let predicate =
+                    predicate![propagating_task.start_variable > profiles[profiles.len() - 1].end];
                 pumpkin_assert_extreme!(check_explanation(
                     predicate,
                     &full_explanation,
@@ -265,7 +264,7 @@ impl CumulativePropagationHandler {
                         profile,
                         None,
                     );
-                let predicate = predicate![propagating_task.start_variable >= profile.end + 1];
+                let predicate = predicate![propagating_task.start_variable > profile.end];
                 let mut reason = explanation;
                 reason.push(lower_bound_predicate_propagating_task);
 

@@ -22,7 +22,7 @@ pub(crate) fn create_big_step_propagation_explanation<Var: IntegerVariable + 'st
         profile,
         |task| {
             [
-                predicate!(task.start_variable >= profile.end - task.processing_time + 1),
+                predicate!(task.start_variable > profile.end - task.processing_time),
                 predicate!(task.start_variable <= profile.start),
             ]
         },
@@ -41,7 +41,7 @@ pub(crate) fn create_big_step_conflict_explanation<Var: IntegerVariable + 'stati
         conflict_profile,
         move |task| {
             [
-                predicate!(task.start_variable >= conflict_profile.end - task.processing_time + 1),
+                predicate!(task.start_variable > conflict_profile.end - task.processing_time),
                 predicate!(task.start_variable <= conflict_profile.start),
             ]
         },

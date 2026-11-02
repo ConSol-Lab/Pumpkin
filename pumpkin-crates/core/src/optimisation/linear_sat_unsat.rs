@@ -70,7 +70,7 @@ impl<Var, Callback> LinearSatUnsat<Var, Callback> {
                     brancher,
                     termination,
                     resolver,
-                    &[predicate![objective <= best_objective_value - 1]],
+                    &[predicate![objective < best_objective_value]],
                 );
 
                 match solve_result {
