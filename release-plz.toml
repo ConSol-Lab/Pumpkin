@@ -3,7 +3,7 @@ dependencies_update = true
 semver_check = true
 
 # Do not always publish packages. Instead only release when a release-pr has been merged.
-# release_always = false
+release_always = false
 
 repo_url = "https://github.com/consol-lab/pumpkin"
 
@@ -55,7 +55,8 @@ changelog_include = [
     "pumpkin-checking", 
     "pumpkin-conflict-resolvers", 
     "pumpkin-propagators", 
-    "pumpkin-constraints"
+    "pumpkin-constraints",
+    "pumpkin-branching",
 ]
 
 [[package]]
@@ -84,6 +85,12 @@ changelog_update = false
 
 [[package]]
 name = "pumpkin-constraints"
+git_release_enable = false
+git_tag_enable = false
+changelog_update = false
+
+[[package]]
+name = "pumpkin-branching"
 git_release_enable = false
 git_tag_enable = false
 changelog_update = false

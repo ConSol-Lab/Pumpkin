@@ -6,18 +6,24 @@ use crate::variables::IntExpression;
 use crate::variables::Predicate;
 
 #[pyclass(from_py_object)]
-#[allow(clippy::large_enum_variant)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "These will not be stored in bulk, so not an issue."
+)]
 #[derive(Clone)]
-pub enum SatisfactionResult {
+pub(crate) enum SatisfactionResult {
     Satisfiable(Solution),
     Unsatisfiable(),
     Unknown(),
 }
 
 #[pyclass(from_py_object)]
-#[allow(clippy::large_enum_variant)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "These will not be stored in bulk, so not an issue"
+)]
 #[derive(Clone)]
-pub enum SatisfactionUnderAssumptionsResult {
+pub(crate) enum SatisfactionUnderAssumptionsResult {
     Satisfiable(Solution),
     UnsatisfiableUnderAssumptions(Vec<Predicate>),
     Unsatisfiable(),
@@ -26,7 +32,7 @@ pub enum SatisfactionUnderAssumptionsResult {
 
 #[pyclass(from_py_object)]
 #[derive(Clone)]
-pub struct Solution(pumpkin_solver::core::results::Solution);
+pub(crate) struct Solution(pumpkin_solver::core::results::Solution);
 
 impl From<pumpkin_solver::core::results::Solution> for Solution {
     fn from(value: pumpkin_solver::core::results::Solution) -> Self {

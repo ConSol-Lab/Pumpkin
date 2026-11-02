@@ -102,7 +102,7 @@ impl CompilationContext<'_> {
         }
     }
 
-    pub(crate) fn is_identifier_parameter(&mut self, identifier: &str) -> bool {
+    pub(crate) fn is_identifier_parameter(&self, identifier: &str) -> bool {
         self.integer_parameters.contains_key(identifier)
     }
 
@@ -115,7 +115,7 @@ impl CompilationContext<'_> {
     // }
 
     pub(crate) fn resolve_bool_variable(
-        &mut self,
+        &self,
         expr: &flatzinc::Expr,
     ) -> Result<Literal, FlatZincError> {
         match expr {
@@ -593,6 +593,12 @@ impl VariableEquivalences {
         self.classes[variable].borrow().domain.clone()
     }
 
+    #[allow(
+        clippy::needless_pass_by_ref_mut,
+        reason = "The domains are behind a `RefCell`, so `&self` would suffice; taking `&mut self` \
+                  ensures at compile-time that two mutable borrows cannot be handed out at the \
+                  same time, which would panic at runtime"
+    )]
     pub(crate) fn get_mut_domain(&mut self, variable: &str) -> RefMut<'_, Domain> {
         RefMut::map(self.classes[variable].borrow_mut(), |class| {
             &mut class.domain

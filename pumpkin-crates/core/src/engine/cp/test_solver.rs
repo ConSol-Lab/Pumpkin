@@ -135,7 +135,7 @@ impl TestSolver {
         self.state
             .notification_engine
             .notify_propagators_about_domain_events_test(
-                &mut self.state.assignments,
+                &self.state.assignments,
                 &mut self.state.trailed_values,
                 &mut self.state.propagators,
                 &mut propagator_queue,
@@ -164,7 +164,7 @@ impl TestSolver {
         self.state
             .notification_engine
             .notify_propagators_about_domain_events_test(
-                &mut self.state.assignments,
+                &self.state.assignments,
                 &mut self.state.trailed_values,
                 &mut self.state.propagators,
                 &mut propagator_queue,
@@ -193,7 +193,7 @@ impl TestSolver {
         self.state
             .notification_engine
             .notify_propagators_about_domain_events_test(
-                &mut self.state.assignments,
+                &self.state.assignments,
                 &mut self.state.trailed_values,
                 &mut self.state.propagators,
                 &mut propagator_queue,
@@ -282,7 +282,7 @@ impl TestSolver {
         self.state
             .notification_engine
             .notify_propagators_about_domain_events_test(
-                &mut self.state.assignments,
+                &self.state.assignments,
                 &mut self.state.trailed_values,
                 &mut self.state.propagators,
                 &mut PropagatorQueue::new(4),

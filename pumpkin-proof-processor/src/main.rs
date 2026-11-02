@@ -134,6 +134,11 @@ fn post_constraint(
 
             for (weight, variable) in weights.zip(variables) {
                 let weight = weight?;
+
+                if weight == 0 {
+                    continue;
+                }
+
                 let variable = variable_map.resolve(variable?, state);
 
                 terms.push(variable.scaled(weight));
@@ -158,6 +163,11 @@ fn post_constraint(
 
             for (weight, variable) in weights.zip(variables) {
                 let weight = weight?;
+
+                if weight == 0 {
+                    continue;
+                }
+
                 let variable = variable_map.resolve(variable?, state);
 
                 terms.push(variable.scaled(weight));

@@ -264,7 +264,7 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
 /// - \[2\] R. A. Vasile, ‘Evaluating the Impact of Explanations on the Performance of an
 ///   Edge-Finding Propagator’.
 fn create_conflict_explanation<Var: IntegerVariable>(
-    theta_lambda_tree: &mut ThetaLambdaTree<Var>,
+    theta_lambda_tree: &ThetaLambdaTree<Var>,
     context: &PropagationContext,
     lct: i32,
 ) -> PropositionalConjunction {
@@ -329,7 +329,7 @@ fn create_conflict_explanation<Var: IntegerVariable>(
 fn create_propagation_explanation<'a, Var: IntegerVariable>(
     original_tasks: &'a [DisjunctiveTask<Var>],
     propagated_task_id: LocalId,
-    theta_lambda_tree: &mut ThetaLambdaTree<Var>,
+    theta_lambda_tree: &ThetaLambdaTree<Var>,
     context: &'a PropagationContext,
     new_bound: i32,
     lct_j: i32,

@@ -10,7 +10,7 @@ use crate::pumpkin_assert_moderate;
 /// This can be useful when numerous [`PredicateId`]s are defined, not all of which are required to
 /// be defined at the moment.
 #[derive(Debug, Default, Clone)]
-pub(crate) struct DeletablePredicateIdGenerator {
+pub struct DeletablePredicateIdGenerator {
     /// The value of the next id, provided there are no delete_ids that can be reused.
     next_id: u32,
     /// When an id is deleted, it gets stored here, so that the id can be reused in the future.
@@ -22,7 +22,7 @@ pub(crate) struct DeletablePredicateIdGenerator {
 }
 
 impl DeletablePredicateIdGenerator {
-    pub(crate) fn has_id_for_predicate(&self, predicate: Predicate) -> bool {
+    pub fn has_id_for_predicate(&self, predicate: Predicate) -> bool {
         self.predicate_to_id.contains_key(&predicate)
     }
 
@@ -39,7 +39,7 @@ impl DeletablePredicateIdGenerator {
 
     /// Returns an id for the predicate. If the predicate already has an id, its id is returned.
     /// Otherwise, a new id is create and returned.
-    pub(crate) fn get_id(&mut self, predicate: Predicate) -> PredicateId {
+    pub fn get_id(&mut self, predicate: Predicate) -> PredicateId {
         if let Some(id) = self.predicate_to_id.get(&predicate) {
             *id
         } else {
@@ -51,11 +51,11 @@ impl DeletablePredicateIdGenerator {
         }
     }
 
-    pub(crate) fn get_predicate(&self, id: PredicateId) -> Option<Predicate> {
+    pub fn get_predicate(&self, id: PredicateId) -> Option<Predicate> {
         self.id_to_predicate.get(&id).copied()
     }
 
-    pub(crate) fn delete_id(&mut self, id: PredicateId) {
+    pub fn delete_id(&mut self, id: PredicateId) {
         pumpkin_assert_moderate!(!self.deleted_ids.contains(&id));
         // Add the deleted id for future reuse.
         self.deleted_ids.push(id);

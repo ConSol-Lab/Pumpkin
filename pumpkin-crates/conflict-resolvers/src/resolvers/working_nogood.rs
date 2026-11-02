@@ -91,10 +91,12 @@ impl WorkingNogood {
         predicate_id_generator: &mut PredicateIdGenerator,
         mode: AnalysisMode,
     ) {
+        let predicate_id = predicate_id_generator.get_id(predicate);
+
         if self.is_redundant(
             predicate,
             context,
-            predicate_id_generator.get_id(predicate),
+            predicate_id,
             predicate_id_generator,
             mode,
         ) {
@@ -105,8 +107,6 @@ impl WorkingNogood {
 
         // We first retrieve the value that the predicate will get in the heap
         let heap_value = get_heap_value(predicate, context);
-        // And its corresponding predicate id
-        let predicate_id = predicate_id_generator.get_id(predicate);
 
         // Next, we restore the key in the heap
         self.to_process_heap.restore_key(predicate_id);
@@ -117,7 +117,7 @@ impl WorkingNogood {
         mode.predicate_added_to_nogood(predicate, &mut self.unique_variable_helper);
 
         if self.iterative_minimisation {
-            self.iterative_minimiser.apply_predicate(predicate);
+            self.iterative_minimiser.apply_predicate(predicate, context);
         }
     }
 
@@ -147,7 +147,7 @@ impl WorkingNogood {
         // If we are performing iterative minimisation, then we also add it to the iterative
         // minimiser
         if self.iterative_minimisation {
-            self.iterative_minimiser.apply_predicate(predicate);
+            self.iterative_minimiser.apply_predicate(predicate, context);
         }
     }
 
@@ -225,7 +225,7 @@ impl WorkingNogood {
     /// structures.
     pub(crate) fn drain_learned_nogood(
         &mut self,
-        predicate_id_generator: &mut PredicateIdGenerator,
+        predicate_id_generator: &PredicateIdGenerator,
         mode: AnalysisMode,
         statistics: &mut CpipStatistics,
     ) -> impl Iterator<Item = Predicate> {
@@ -256,7 +256,7 @@ impl WorkingNogood {
     /// [`WorkingNogood`] after [`AnalysisMode::should_continue_resolving`] returned false.
     pub(crate) fn remove_final_predicates(
         &mut self,
-        predicate_id_generator: &mut PredicateIdGenerator,
+        predicate_id_generator: &PredicateIdGenerator,
         mode: AnalysisMode,
     ) -> usize {
         let num_removed = self.num_current_checkpoint();
@@ -312,7 +312,7 @@ impl WorkingNogood {
     /// Returns the next [`Predicate`] to resolve upon based on the trail.
     pub(crate) fn pop_max_predicate(
         &mut self,
-        predicate_id_generator: &mut PredicateIdGenerator,
+        predicate_id_generator: &PredicateIdGenerator,
         mode: AnalysisMode,
     ) -> Predicate {
         let next_predicate_id = self.to_process_heap.pop_max().unwrap();
@@ -352,7 +352,8 @@ impl WorkingNogood {
             context.explain_root_assignment(predicate);
 
             if self.iterative_minimisation {
-                self.iterative_minimiser.apply_predicate(predicate);
+                self.iterative_minimiser
+                    .apply_root_predicate(predicate, context);
             }
         }
         // 1UIP
@@ -653,7 +654,7 @@ impl WorkingNogood {
 /// should be resolved upon before the predicates which are explicitly on the trail.
 ///
 /// Panics if the provided [`Predicate`] is not currently true on the trail.
-fn get_heap_value(predicate: Predicate, context: &mut ConflictAnalysisContext<'_>) -> u32 {
+fn get_heap_value(predicate: Predicate, context: &ConflictAnalysisContext<'_>) -> u32 {
     if context.get_state().is_on_trail(predicate) {
         context
             .get_state()

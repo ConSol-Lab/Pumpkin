@@ -22,6 +22,11 @@ impl PredicateIdGenerator {
         }
     }
 
+    /// Returns the id for the predicate if it has been assigned one, without creating a new id.
+    pub(crate) fn get_existing_id(&self, predicate: Predicate) -> Option<PredicateId> {
+        self.predicate_to_id.get(&predicate).copied()
+    }
+
     pub fn get_predicate(&self, id: PredicateId) -> Predicate {
         self.id_to_predicate[id]
     }

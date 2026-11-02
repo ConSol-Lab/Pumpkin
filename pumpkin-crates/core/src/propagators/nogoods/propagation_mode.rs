@@ -19,6 +19,8 @@ use crate::propagators::nogoods::Watcher;
 use crate::propagators::nogoods::arena_allocator::ArenaAllocator;
 use crate::propagators::nogoods::arena_allocator::NogoodIndex;
 use crate::pumpkin_assert_moderate;
+#[cfg(feature = "check-propagations")]
+use crate::pumpkin_assert_simple;
 use crate::state::PropagationStatusCP;
 use crate::state::PropagatorHandle;
 use crate::variables::DomainId;
@@ -315,7 +317,7 @@ impl PropagationMode {
     )]
     #[allow(unused, reason = "Used when using feature flag")]
     pub(crate) fn add_permanent_nogood_non_unit(
-        &mut self,
+        &self,
         nogood: Vec<Predicate>,
         input_nogood: &[Predicate],
         inference_code: InferenceCode,
@@ -324,8 +326,7 @@ impl PropagationMode {
         nogood_info: &mut KeyedVec<NogoodIndex, NogoodInfo>,
         inference_codes: &mut KeyedVec<NogoodIndex, InferenceCode>,
         watch_lists: &mut KeyedVec<PredicateId, Vec<Watcher>>,
-        permanent_nogood_ids: &mut Vec<NogoodId>,
-        statistics: &mut NogoodPropagatorStatistics,
+        statistics: &NogoodPropagatorStatistics,
         propagation_buffer: &mut PropagationBuffer,
     ) {
         #[cfg(feature = "check-propagations")]
@@ -340,13 +341,40 @@ impl PropagationMode {
             .map(|predicate| context.get_id(*predicate))
             .collect::<Vec<_>>();
 
+        // A watcher is only notified when its predicate becomes true, so the watchers must be
+        // placed on predicates which are not yet true. The preprocessed nogood contains no true
+        // predicates, but the input nogood can contain predicates which are true at the root.
+        // Therefore, we move the first two predicates which are not true to the front.
+        #[cfg(feature = "check-propagations")]
+        {
+            let mut num_watchable = 0;
+            for index in 0..nogood.len() {
+                if num_watchable == 2 {
+                    break;
+                }
+                if !context.is_predicate_id_satisfied(nogood[index]) {
+                    nogood.swap(num_watchable, index);
+                    num_watchable += 1;
+                }
+            }
+
+            pumpkin_assert_simple!(
+                !context.is_predicate_id_satisfied(nogood[0])
+                    && !context.is_predicate_id_satisfied(nogood[1]),
+                "the watched predicates of a nogood should not be true"
+            );
+        }
+
         match self {
             PropagationMode::ExtendedNogoodPropagation => {
                 // We try to find a predicate with a different domain than the 0-th predicate;
-                // this is the invariant that we maintain for the watchers
+                // this is the invariant that we maintain for the watchers. The predicate should
+                // also not be true, which can only happen for the input nogood.
                 let other = nogood.iter().position(|&predicate_id| {
                     context.get_predicate(predicate_id).get_domain()
                         != context.get_predicate(nogood[0]).get_domain()
+                        && (cfg!(not(feature = "check-propagations"))
+                            || !context.is_predicate_id_satisfied(predicate_id))
                 });
 
                 let first_domain = context.get_predicate(nogood[0]).get_domain();
@@ -381,8 +409,6 @@ impl PropagationMode {
                         watcher,
                         watch_lists,
                     );
-
-                    permanent_nogood_ids.push(nogood_id);
                 } else {
                     // Otherwise, we treat it as a "unit" nogood and we perform propagation and
                     // then do not add the nogood to the database.
@@ -396,8 +422,6 @@ impl PropagationMode {
                 let nogood_id = nogood_predicates.insert(nogood);
                 let _ = nogood_info.push(NogoodInfo::new_permanent_nogood_info());
                 let _ = inference_codes.push(inference_code);
-
-                permanent_nogood_ids.push(nogood_id);
 
                 let watcher = Watcher {
                     nogood_id,

@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use pumpkin_branching::DefaultBrancher;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::options::SolverOptions;
@@ -34,7 +35,7 @@ fn proof_with_reified_literals() {
         ))
         .post();
 
-    let mut brancher = solver.default_brancher();
+    let mut brancher = DefaultBrancher::default_over_all_variables(&solver);
     let mut resolver = ResolutionResolver::default();
 
     let result = solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver);
@@ -69,7 +70,7 @@ fn proof_with_equality_unit_nogood_step() {
         ))
         .post();
 
-    let mut brancher = solver.default_brancher();
+    let mut brancher = DefaultBrancher::default_over_all_variables(&solver);
     let mut resolver = ResolutionResolver::default();
 
     let result = solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver);

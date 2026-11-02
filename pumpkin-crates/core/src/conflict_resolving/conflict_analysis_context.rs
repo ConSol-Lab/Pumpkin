@@ -4,8 +4,6 @@ use crate::Random;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 #[cfg(doc)]
-use crate::branching::branchers::autonomous_search::AutonomousSearch;
-#[cfg(doc)]
 use crate::conflict_resolving::ConflictResolver;
 use crate::conflict_resolving::LearnedNogood;
 use crate::containers::HashMap;
@@ -271,7 +269,7 @@ impl ConflictAnalysisContext<'_> {
     /// Informs the used [`Brancher`] that the provided `predicate` appeared during conflict
     /// analysis.
     ///
-    /// This is used by [`Brancher`]s such as [`AutonomousSearch`] to guide the search.
+    /// This is used by [`Brancher`]s (e.g. VSIDS-based branchers) to guide the search.
     pub fn predicate_appeared_in_conflict(&mut self, predicate: Predicate) {
         self.brancher.on_appearance_in_conflict_predicate(predicate);
     }
@@ -297,13 +295,17 @@ impl ConflictAnalysisContext<'_> {
 
         let constraint_tag = self.log_deduction(learned_nogood.predicates.iter().copied());
 
-        let inference_code = self.state.add_inference_checker(
-            constraint_tag,
-            NogoodLabel,
-            NogoodChecker {
-                nogood: learned_nogood.predicates.clone().into(),
-            },
-        );
+        let inference_code = if cfg!(feature = "check-propagations") {
+            self.state.add_inference_checker(
+                constraint_tag,
+                NogoodLabel,
+                NogoodChecker {
+                    nogood: learned_nogood.predicates.clone().into(),
+                },
+            )
+        } else {
+            InferenceCode::new(constraint_tag, NogoodLabel)
+        };
 
         self.restore_to(learned_nogood.backtrack_level);
 

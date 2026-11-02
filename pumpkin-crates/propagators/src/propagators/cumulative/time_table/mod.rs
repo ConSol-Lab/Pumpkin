@@ -65,6 +65,9 @@ mod time_table_over_interval;
 mod time_table_per_point;
 mod time_table_util;
 
+#[cfg(test)]
+mod test_suite;
+
 pub use checker::*;
 pub use explanations::CumulativeExplanationType;
 pub use over_interval_incremental_propagator::*;

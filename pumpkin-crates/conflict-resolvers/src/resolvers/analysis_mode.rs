@@ -70,7 +70,7 @@ impl AnalysisMode {
     /// Returns whether to continue resolving.
     pub(crate) fn should_continue_resolving(
         &self,
-        predicate_id_generator: &mut PredicateIdGenerator,
+        predicate_id_generator: &PredicateIdGenerator,
         working_nogood: &WorkingNogood,
     ) -> bool {
         match self {

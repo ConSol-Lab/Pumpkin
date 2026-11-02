@@ -252,17 +252,13 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     // We create the structure responsible for propagations and explanations
-    let mut propagation_handler = CumulativePropagationHandler::new(
+    let propagation_handler = CumulativePropagationHandler::new(
         parameters.options.explanation_type,
         inference_code.clone(),
     );
 
     // Then we go over all of the profiles in the time-table
     'profile_loop: for profile in time_table {
-        // We indicate to the propagation handler that we cannot re-use an existing profile
-        // explanation
-        propagation_handler.next_profile();
-
         // Then we go over all the different tasks
         let mut task_index = 0;
         while task_index < updatable_structures.number_of_unfixed_tasks() {
@@ -366,7 +362,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContext,
     inference_code: &InferenceCode,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
-    updatable_structures: &mut UpdatableStructures<Var>,
+    updatable_structures: &UpdatableStructures<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     let mut profile_buffer = Vec::default();
@@ -379,7 +375,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
     }
 
     // We create the structure responsible for propagations and explanations
-    let mut propagation_handler = CumulativePropagationHandler::new(
+    let propagation_handler = CumulativePropagationHandler::new(
         parameters.options.explanation_type,
         inference_code.clone(),
     );
@@ -394,7 +390,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
         // First we perform lower-bound propagation
         sweep_forward(
             task,
-            &mut propagation_handler,
+            &propagation_handler,
             context,
             &time_table,
             parameters,
@@ -403,7 +399,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
         // Then we perform upper-bound propagation
         sweep_backward(
             task,
-            &mut propagation_handler,
+            &propagation_handler,
             context,
             &time_table,
             parameters,
@@ -425,7 +421,6 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                 profile.start < context.upper_bound(&task.start_variable) + task.processing_time
             });
             for profile in &time_table[lower_bound_index..upper_bound_index] {
-                propagation_handler.next_profile();
                 // Check whether this profile can cause an update
                 if can_be_updated_by_profile(context.domains(), task, profile, parameters.capacity)
                 {
@@ -449,7 +444,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
 /// This method makes use of the fact that the provided `time_table` is sorted chronologically.
 fn sweep_forward<'a, Var: IntegerVariable + 'static>(
     task: &Rc<Task<Var>>,
-    propagation_handler: &mut CumulativePropagationHandler,
+    propagation_handler: &CumulativePropagationHandler,
     context: &mut PropagationContext,
     time_table: &[&'a ResourceProfile<Var>],
     parameters: &CumulativeParameters<Var>,
@@ -470,8 +465,6 @@ fn sweep_forward<'a, Var: IntegerVariable + 'static>(
             // profiles.
             break 'lower_bound_profile_loop;
         }
-
-        propagation_handler.next_profile();
 
         // We check whether a lower-bound propagation can be performed using this profile
         if lower_bound_can_be_propagated_by_profile(
@@ -514,7 +507,7 @@ fn sweep_forward<'a, Var: IntegerVariable + 'static>(
 
 fn sweep_backward<'a, Var: IntegerVariable + 'static>(
     task: &Rc<Task<Var>>,
-    propagation_handler: &mut CumulativePropagationHandler,
+    propagation_handler: &CumulativePropagationHandler,
     context: &mut PropagationContext,
     time_table: &[&'a ResourceProfile<Var>],
     parameters: &CumulativeParameters<Var>,
@@ -539,8 +532,6 @@ fn sweep_backward<'a, Var: IntegerVariable + 'static>(
             // profiles.
             break 'upper_bound_profile_loop;
         }
-
-        propagation_handler.next_profile();
 
         // We check whether an upper-bound propagation can be performed using this profile
         if upper_bound_can_be_propagated_by_profile(
@@ -605,7 +596,9 @@ fn find_profiles_which_propagate_lower_bound<'a, Var: IntegerVariable + 'static>
     while current_index < time_table.len() {
         let next_profile = time_table[current_index];
 
-        if next_profile.start - time_table[last_propagating_index].end >= task.processing_time {
+        // There are `next_profile.start - end - 1` free time-points between the profiles; the task
+        // can only be scheduled in between if this is at least its processing time
+        if next_profile.start - time_table[last_propagating_index].end > task.processing_time {
             break;
         }
 
@@ -645,7 +638,9 @@ fn find_profiles_which_propagate_upper_bound<'a, Var: IntegerVariable + 'static>
     let mut current_index = profile_index - 1;
     loop {
         let previous_profile = time_table[current_index];
-        if time_table[last_propagating].start - previous_profile.end >= task.processing_time {
+        // There are `start - previous_profile.end - 1` free time-points between the profiles; the
+        // task can only be scheduled in between if this is at least its processing time
+        if time_table[last_propagating].start - previous_profile.end > task.processing_time {
             break;
         }
 
@@ -896,6 +891,71 @@ mod tests {
                 resource_usage: 1,
                 id: LocalId::from(0),
             }),
+            1,
+            &mut profile_buffer,
+        );
+        assert_eq!(profile_buffer.len(), 2);
+    }
+
+    #[test]
+    fn test_finding_profiles_with_gap_equal_to_processing_time() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(4, 8, None);
+        let y = state.new_interval_variable(5, 5, None);
+        let z = state.new_interval_variable(8, 8, None);
+
+        // Starting `x` at its lower-bound (4) overlaps with the first profile and starting it at
+        // its upper-bound (8) overlaps with the second profile. There is a single free
+        // time-point between the profiles, so `x` (with processing time 2) cannot be
+        // scheduled in between them; both profiles should thus be used to propagate its
+        // bounds
+        let time_table = [
+            &ResourceProfile {
+                start: 5,
+                end: 6,
+                profile_tasks: vec![Rc::new(Task {
+                    start_variable: y,
+                    processing_time: 2,
+                    resource_usage: 1,
+                    id: LocalId::from(1),
+                })],
+                height: 1,
+            },
+            &ResourceProfile {
+                start: 8,
+                end: 8,
+                profile_tasks: vec![Rc::new(Task {
+                    start_variable: z,
+                    processing_time: 1,
+                    resource_usage: 1,
+                    id: LocalId::from(2),
+                })],
+                height: 1,
+            },
+        ];
+        let task = Rc::new(Task {
+            start_variable: x,
+            processing_time: 2,
+            resource_usage: 1,
+            id: LocalId::from(0),
+        });
+
+        let mut profile_buffer = vec![];
+        find_profiles_which_propagate_lower_bound(
+            0,
+            &time_table,
+            state.get_domains(),
+            &task,
+            1,
+            &mut profile_buffer,
+        );
+        assert_eq!(profile_buffer.len(), 2);
+
+        find_profiles_which_propagate_upper_bound(
+            1,
+            &time_table,
+            state.get_domains(),
+            &task,
             1,
             &mut profile_buffer,
         );

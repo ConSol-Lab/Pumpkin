@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
+use pumpkin_branching::DefaultBrancher;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::containers::HashMap;
@@ -39,14 +40,14 @@ use crate::variables::IntExpression;
 use crate::variables::Predicate;
 
 #[pyclass(unsendable)]
-pub struct Model {
+pub(crate) struct Model {
     solver: Solver,
     brancher: PythonBrancher,
 }
 
 #[pyclass(from_py_object)]
 #[derive(Clone, Debug)]
-pub struct Tag(pub ConstraintTag);
+pub(crate) struct Tag(pub(crate) ConstraintTag);
 
 #[pymethods]
 impl Tag {
@@ -88,7 +89,7 @@ impl Model {
         };
 
         let solver = Solver::with_options(options);
-        let brancher = PythonBrancher::new(solver.default_brancher());
+        let brancher = PythonBrancher::new(DefaultBrancher::default_over_all_variables(&solver));
 
         Ok(Model { solver, brancher })
     }
@@ -346,7 +347,7 @@ impl Model {
                              solution: SolutionReference<'_>,
                              _: &PythonBrancher,
                              _: &ResolutionResolver| {
-            let python_solution = crate::result::Solution::from(solution);
+            let python_solution = Solution::from(solution);
 
             // If there is a solution callback, unpack it.
             let Some(on_solution_callback) = on_solution.as_ref() else {
@@ -408,8 +409,8 @@ fn get_termination(end_time: Option<f32>) -> Box<dyn TerminationCondition> {
     end_time
         .map(|secs| Instant::now() + Duration::from_secs_f32(secs))
         .map(|end_time| end_time - Instant::now())
-        .map(|duration| {
-            Box::new(TimeBudget::starting_now(duration)) as Box<dyn TerminationCondition>
+        .map(|duration| -> Box<dyn TerminationCondition> {
+            Box::new(TimeBudget::starting_now(duration))
         })
         .unwrap_or(Box::new(Indefinite))
 }

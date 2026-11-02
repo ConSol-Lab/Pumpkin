@@ -106,7 +106,7 @@ impl PredicateIdAssignments {
         &mut self,
         predicate_id: PredicateId,
         assignments: &Assignments,
-        predicate_id_generator: &mut PredicateIdGenerator,
+        predicate_id_generator: &PredicateIdGenerator,
     ) {
         // First we make space for it if we have not seen the predicate yet
         if predicate_id.index() >= self.predicate_values.len() {
@@ -140,7 +140,7 @@ impl PredicateIdAssignments {
         &mut self,
         predicate_id: PredicateId,
         assignments: &Assignments,
-        predicate_id_generator: &mut PredicateIdGenerator,
+        predicate_id_generator: &PredicateIdGenerator,
     ) -> bool {
         self.update_if_unknown(predicate_id, assignments, predicate_id_generator);
 
@@ -155,7 +155,7 @@ impl PredicateIdAssignments {
         &mut self,
         predicate_id: PredicateId,
         assignments: &Assignments,
-        predicate_id_generator: &mut PredicateIdGenerator,
+        predicate_id_generator: &PredicateIdGenerator,
     ) -> bool {
         self.update_if_unknown(predicate_id, assignments, predicate_id_generator);
 
@@ -166,7 +166,7 @@ impl PredicateIdAssignments {
         &mut self,
         predicate_id: PredicateId,
         assignments: &Assignments,
-        predicate_id_generator: &mut PredicateIdGenerator,
+        predicate_id_generator: &PredicateIdGenerator,
     ) -> Option<bool> {
         self.update_if_unknown(predicate_id, assignments, predicate_id_generator);
 
@@ -209,7 +209,7 @@ impl PredicateIdAssignments {
     pub(crate) fn debug_create_from_assignments(
         &mut self,
         assignments: &Assignments,
-        predicate_to_id: &mut PredicateIdGenerator,
+        predicate_to_id: &PredicateIdGenerator,
     ) {
         self.predicate_ids()
             .collect::<Vec<_>>()

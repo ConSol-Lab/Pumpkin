@@ -14,7 +14,7 @@ cargo build
 cargo build --release
 
 # Test (standard CI command)
-cargo test --release --no-fail-fast --features pumpkin-solver/check-propagations
+cargo test --release --no-fail-fast --features pumpkin-solver/check-propagations --features pumpkin-core/check-deductions
 
 # Run a single test
 cargo test --release --features pumpkin-solver/check-propagations <test_name>
@@ -46,11 +46,12 @@ Scripts in `scripts/` (`fmt.sh`, `clippy.sh`, `documentation.sh`, `deny.sh`) mir
 The project is a Cargo workspace (edition 2024, resolver 2). Crates are grouped by role:
 
 ### Core Engine (`pumpkin-crates/`)
-- **`core`** — The main solver engine. Contains the CDCL loop, propagation engine, nogood learning, branching heuristics, and proof logging infrastructure. This is the heart of the solver.
+- **`core`** — The main solver engine. Contains the CDCL loop, propagation engine, nogood learning, and proof logging infrastructure. This is the heart of the solver.
 - **`checking`** — Shared types used by both `core` and `pumpkin-checker` (avoids circular deps).
 - **`propagators`** — Implementations of CP propagators (arithmetic, cumulative, disjunctive, element, etc.).
 - **`conflict-resolvers`** — Pluggable conflict analysis strategies for nogood derivation.
 - **`constraints`** — High-level constraint API built on top of `core`.
+- **`branching`** — Branching heuristics (variable/value selection, tie-breaking) and `Brancher` implementations built on top of `core`.
 
 ### Interfaces
 - **`pumpkin-solver`** — CLI binary. Accepts CNF, WCNF (MaxSAT), and FlatZinc input formats.

@@ -67,8 +67,6 @@ pub struct NogoodPropagator {
     nogood_info: KeyedVec<NogoodIndex, NogoodInfo>,
     /// The inference codes for the nogoods.
     inference_codes: KeyedVec<NogoodIndex, InferenceCode>,
-    /// Nogoods which are permanently present
-    permanent_nogood_ids: Vec<NogoodId>,
     /// Stores all learned nogoods.
     learned_nogood_ids: LearnedNogoodIds,
     /// Watch lists for the nogood propagator.
@@ -187,7 +185,6 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             nogood_predicates: ArenaAllocator::new(self.capacity),
             nogood_info: Default::default(),
             inference_codes: Default::default(),
-            permanent_nogood_ids: Default::default(),
             learned_nogood_ids: Default::default(),
             watch_lists: Default::default(),
             updated_predicate_ids: Default::default(),
@@ -430,6 +427,8 @@ impl Propagator for NogoodPropagator {
                                 &mut self.watch_lists,
                             );
 
+                            *last_traversed_watcher = i as u32;
+
                             // No propagation is taking place, go to the next nogood.
                             break;
                         }
@@ -536,6 +535,8 @@ impl Propagator for NogoodPropagator {
     ) -> LazyExplanation<'_> {
         let reason = LazyNogoodExplanation::from_bits(code);
         let id = reason.nogood_id();
+        self.temp_nogood_reason.clear();
+
         let result = if reason.explains_extended_propagation() {
             // The lazy explanations explains a propagation using extended nogood propagation.
             let nogood = &self.nogood_predicates.get_nogood(id);
@@ -550,19 +551,18 @@ impl Propagator for NogoodPropagator {
                 let propagating_predicate_id =
                     PredicateId::create_from_index(reason.unit_propagation_index() as usize);
 
-                self.temp_nogood_reason = self
-                    .nogood_predicates
-                    .get_nogood(id)
-                    .iter()
-                    .filter(|&&predicate_id| predicate_id != propagating_predicate_id)
-                    .map(|&predicate_id| context.get_predicate(predicate_id))
-                    .collect::<Vec<_>>();
+                self.temp_nogood_reason.extend(
+                    self.nogood_predicates
+                        .get_nogood(id)
+                        .iter()
+                        .filter(|&&predicate_id| predicate_id != propagating_predicate_id)
+                        .map(|&predicate_id| context.get_predicate(predicate_id)),
+                );
             } else {
                 match predicate_to_be_explained.get_predicate_type() {
                     PredicateType::UpperBound => {
-                        self.temp_nogood_reason = nogood
-                            .iter()
-                            .filter_map(|predicate_id| {
+                        self.temp_nogood_reason
+                            .extend(nogood.iter().filter_map(|predicate_id| {
                                 let predicate = context.get_predicate(*predicate_id);
 
                                 (context.evaluate_predicate_at_trail_position(
@@ -574,13 +574,11 @@ impl Propagator for NogoodPropagator {
                                         || (predicate.is_not_equal_predicate()
                                             && predicate.get_right_hand_side() > rhs)))
                                     .then_some(predicate)
-                            })
-                            .collect();
+                            }));
                     }
                     PredicateType::LowerBound => {
-                        self.temp_nogood_reason = nogood
-                            .iter()
-                            .filter_map(|predicate_id| {
+                        self.temp_nogood_reason
+                            .extend(nogood.iter().filter_map(|predicate_id| {
                                 let predicate = context.get_predicate(*predicate_id);
 
                                 (context.evaluate_predicate_at_trail_position(
@@ -592,18 +590,15 @@ impl Propagator for NogoodPropagator {
                                         || (predicate.is_not_equal_predicate()
                                             && predicate.get_right_hand_side() < rhs)))
                                     .then_some(predicate)
-                            })
-                            .collect();
+                            }));
                     }
                     PredicateType::NotEqual => {
-                        self.temp_nogood_reason = nogood
-                            .iter()
-                            .filter_map(|predicate_id| {
+                        self.temp_nogood_reason
+                            .extend(nogood.iter().filter_map(|predicate_id| {
                                 let predicate = context.get_predicate(*predicate_id);
 
                                 (predicate.get_domain() != propagated_domain).then_some(predicate)
-                            })
-                            .collect();
+                            }));
                     }
                     PredicateType::Equal => unreachable!(),
                 }
@@ -614,10 +609,11 @@ impl Propagator for NogoodPropagator {
                 inference_code: self.inference_codes[info_id].clone(),
             }
         } else {
-            self.temp_nogood_reason = self.nogood_predicates.get_nogood(id)[1..]
-                .iter()
-                .map(|predicate_id| context.get_predicate(*predicate_id))
-                .collect::<Vec<_>>();
+            self.temp_nogood_reason.extend(
+                self.nogood_predicates.get_nogood(id)[1..]
+                    .iter()
+                    .map(|predicate_id| context.get_predicate(*predicate_id)),
+            );
 
             let info_id = self.nogood_predicates.get_nogood_index(&id);
 
@@ -796,14 +792,12 @@ impl NogoodPropagator {
                 .iter()
                 .fold((None, None), |(min_exception, max_exception), exception| {
                     (
-                        min_exception.map_or_else(
-                            || Some(*exception),
-                            |min_exception: i32| Some(min_exception.min(*exception)),
-                        ),
-                        max_exception.map_or_else(
-                            || Some(*exception),
-                            |max_exception: i32| Some(max_exception.max(*exception)),
-                        ),
+                        min_exception.map_or(Some(*exception), |min_exception: i32| {
+                            Some(min_exception.min(*exception))
+                        }),
+                        max_exception.map_or(Some(*exception), |max_exception: i32| {
+                            Some(max_exception.max(*exception))
+                        }),
                     )
                 });
 
@@ -1282,8 +1276,7 @@ impl NogoodPropagator {
                 &mut self.nogood_info,
                 &mut self.inference_codes,
                 &mut self.watch_lists,
-                &mut self.permanent_nogood_ids,
-                &mut self.statistics,
+                &self.statistics,
                 &mut self.propagation_buffer,
             )
         }
@@ -1419,7 +1412,7 @@ impl NogoodPropagator {
     fn clean_up_learned_nogoods_if_needed(
         &mut self,
         assignments: &Assignments,
-        reason_store: &mut ReasonStore,
+        reason_store: &ReasonStore,
         notification_engine: &mut NotificationEngine,
     ) {
         // The clean-up procedure is divided into four stages (for simplicity of implementation).
@@ -1525,7 +1518,7 @@ impl NogoodPropagator {
     fn has_a_watched_predicate_falsified_at_root_level(
         nogood: &[PredicateId],
         assignments: &Assignments,
-        notification_engine: &mut NotificationEngine,
+        notification_engine: &NotificationEngine,
     ) -> bool {
         let watcher1 = notification_engine.get_predicate(nogood[0]);
         let watcher2 = notification_engine.get_predicate(nogood[1]);
@@ -1669,7 +1662,7 @@ impl NogoodPropagator {
         nogood_info: &mut KeyedVec<NogoodIndex, NogoodInfo>,
         nogoods: &ArenaAllocator,
         assignments: &Assignments,
-        reason_store: &mut ReasonStore,
+        reason_store: &ReasonStore,
         notification_engine: &mut NotificationEngine,
         propagation_mode: PropagationMode,
     ) -> bool {
@@ -2051,10 +2044,17 @@ mod tests {
     use super::NogoodPropagator;
     use crate::conjunction;
     use crate::containers::StorageKey;
+    use crate::engine::constraint_satisfaction_solver::NogoodLabel;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
     use crate::proof::ConstraintTag;
     use crate::proof::InferenceCode;
+    use crate::propagation::Priority;
+    use crate::propagators::nogoods::LearningOptions;
+    use crate::propagators::nogoods::NogoodChecker;
+    use crate::propagators::nogoods::NogoodPropagatorConstructor;
+    use crate::propagators::nogoods::PropagationMode;
+    use crate::state::State;
 
     #[test]
     fn ternary_nogood_propagate() {
@@ -2120,5 +2120,78 @@ mod tests {
 
         let result = solver.propagate_until_fixed_point(id);
         assert!(result.is_err());
+    }
+    /// The first two predicates of the nogood hold at the root. Without `check-propagations` the
+    /// nogood is preprocessed and such predicates are removed, so this only fails with
+    /// `check-propagations`, under which the input nogood is stored: a watcher on a predicate that
+    /// is already true is never notified.
+    #[test]
+    fn nogood_with_root_satisfied_predicates_propagates() {
+        assert_root_satisfied_predicates_do_not_prevent_propagation(
+            PropagationMode::UnitPropagation,
+        );
+    }
+
+    /// As [`nogood_with_root_satisfied_predicates_propagates`], under extended nogood propagation.
+    #[test]
+    fn nogood_with_root_satisfied_predicates_propagates_under_extended_propagation() {
+        assert_root_satisfied_predicates_do_not_prevent_propagation(
+            PropagationMode::ExtendedNogoodPropagation,
+        );
+    }
+
+    fn assert_root_satisfied_predicates_do_not_prevent_propagation(
+        propagation_mode: PropagationMode,
+    ) {
+        let mut state = State::default();
+        let nogood_handle = state.add_propagator(NogoodPropagatorConstructor::new(
+            0,
+            LearningOptions::default(),
+            propagation_mode,
+            Priority::High,
+        ));
+        let x1 = state.new_interval_variable(1, 4, None);
+        let x2 = state.new_interval_variable(1, 4, None);
+        let x3 = state.new_interval_variable(1, 4, None);
+        let x4 = state.new_interval_variable(1, 4, None);
+
+        let _ = state
+            .post(predicate!(x1 == 4))
+            .expect("the value is in the domain");
+        let _ = state
+            .post(predicate!(x2 == 3))
+            .expect("the value is in the domain");
+        state
+            .propagate_to_fixed_point()
+            .expect("no conflict at the root");
+
+        // The predicates that hold at the root come first.
+        let nogood = vec![
+            predicate!(x1 == 4),
+            predicate!(x2 == 3),
+            predicate!(x3 == 1),
+            predicate!(x4 == 2),
+        ];
+        let constraint_tag = state.new_constraint_tag();
+        let inference_code = state.add_inference_checker(
+            constraint_tag,
+            NogoodLabel,
+            NogoodChecker {
+                nogood: nogood.clone().into(),
+            },
+        );
+        let (nogood_propagator, mut context) = state.get_propagator_mut_with_context(nogood_handle);
+        nogood_propagator
+            .expect("the handle refers to the nogood propagator")
+            .add_nogood(nogood, inference_code, &mut context);
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.new_checkpoint();
+        let _ = state
+            .post(predicate!(x3 == 1))
+            .expect("the value is in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        assert!(!state.contains(x4, 2));
     }
 }

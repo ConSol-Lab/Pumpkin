@@ -20,7 +20,7 @@ pub(crate) struct ProofAtomics {
 impl ProofAtomics {
     /// Convert a predicate to the [`IntAtomic`] that is used in the proof.
     pub(crate) fn map_predicate_to_proof_atomic<'names>(
-        &mut self,
+        &self,
         predicate: Predicate,
         variable_names: &'names VariableNames,
     ) -> IntAtomic<&'names str, i32> {
@@ -56,7 +56,7 @@ impl ProofAtomics {
 
     /// The given predicate is a predicate over a literal. This function gets the associated
     /// predicate that was reified with [`Self::reify_predicate`] if it exists.
-    fn get_underlying_predicate(&self, predicate: Predicate) -> Option<Predicate> {
+    pub(crate) fn get_underlying_predicate(&self, predicate: Predicate) -> Option<Predicate> {
         let domain_id = predicate.get_domain();
         let rhs = predicate.get_right_hand_side();
 
