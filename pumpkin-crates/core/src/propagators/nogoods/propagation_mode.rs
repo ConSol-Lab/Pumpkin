@@ -149,6 +149,7 @@ impl PropagationMode {
         inference_code: &InferenceCode,
         nogood_id: NogoodId,
         statistics: &mut NogoodPropagatorStatistics,
+        extended_exceptions: &mut Vec<i32>,
     ) -> PropagationStatusCP {
         match self {
             PropagationMode::ExtendedNogoodPropagation => {
@@ -160,6 +161,7 @@ impl PropagationMode {
                     inference_code,
                     statistics,
                     Some(nogood_id),
+                    extended_exceptions,
                 )?;
             }
             PropagationMode::UnitPropagation => {

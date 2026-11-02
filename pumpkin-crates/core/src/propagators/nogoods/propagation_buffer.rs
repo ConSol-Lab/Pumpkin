@@ -37,6 +37,7 @@ impl PropagationBuffer {
         &mut self,
         context: &mut PropagationContext,
         statistics: &mut NogoodPropagatorStatistics,
+        extended_exceptions: &mut Vec<i32>,
     ) -> Result<(), Conflict> {
         let result_unit = self
             .to_propagate
@@ -60,6 +61,7 @@ impl PropagationBuffer {
                     &inference_code,
                     statistics,
                     None,
+                    extended_exceptions,
                 )
             })
     }
