@@ -136,6 +136,15 @@ impl State {
         log_statistic("failures", self.statistics.num_conflicts);
         log_statistic("propagations", self.statistics.num_propagators_called);
         log_statistic("nogoods", self.statistics.num_conflicts);
+        let predicate_notifier_statistics = self.notification_engine.predicate_notifier.statistics;
+        log_statistic(
+            "numPredicateTrackerCleanups",
+            predicate_notifier_statistics.num_cleanups,
+        );
+        log_statistic(
+            "numUntrackedValues",
+            predicate_notifier_statistics.num_untracked_values,
+        );
         if verbose {
             log_statistic(
                 "numAtomicConstraintsPropagated",

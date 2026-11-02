@@ -181,6 +181,7 @@ impl NotificationEngine {
         &mut self,
         predicate_id: PredicateId,
         propagator_to_unwatch: PropagatorId,
+        trailed_values: &TrailedValues,
     ) {
         let watch_list = &mut self.watch_list_predicate_id[predicate_id];
 
@@ -193,7 +194,11 @@ impl NotificationEngine {
 
         let _ = watch_list.swap_remove(index);
 
-        // TODO: Can we remove the predicate from being tracked if it does not have watchers?
+        if watch_list.is_empty() {
+            // The predicate can be removed from the scope of its tracker
+            self.predicate_notifier
+                .mark_as_untrack_candidate(predicate_id, trailed_values);
+        }
     }
 
     pub(crate) fn watch_all_backtrack(

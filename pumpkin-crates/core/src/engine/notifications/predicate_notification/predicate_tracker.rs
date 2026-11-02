@@ -211,6 +211,32 @@ impl PredicateTracker {
         }
     }
 
+    /// Returns the initial [`AssignedIndices`], in which the minimum indices point to the
+    /// lower-bound sentinel (at index 0) and the maximum indices point to the upper-bound sentinel
+    /// (at index 1).
+    ///
+    /// Since the bounds can never be equal to the sentinel values, the indices are not tight.
+    fn initial_assigned_indices() -> AssignedIndices {
+        AssignedIndices::new()
+            .with_min_assigned(0)
+            .with_min_assigned_is_tight(false)
+            .with_max_assigned(1)
+            .with_max_assigned_is_tight(false)
+    }
+
+    /// Returns whether the [`AssignedIndices`] currently point to the sentinels (i.e., whether
+    /// none of the tracked values have been passed by the bounds).
+    ///
+    /// Since the bounds can only become tighter when moving to a higher checkpoint, this also
+    /// means that all of the [`AssignedIndices`] which are stored on the trail point to the
+    /// sentinels; the nodes can thus be safely moved (see
+    /// [`PredicateTracker::remove_untracked_predicates`]).
+    pub(super) fn are_assigned_indices_at_sentinels(&self, trailed_values: &TrailedValues) -> bool {
+        self.nodes.is_empty()
+            || self.read_assigned_indices(trailed_values).into_bits()
+                == Self::initial_assigned_indices().into_bits()
+    }
+
     pub(super) fn initialise(
         &mut self,
         initial_lower_bound: i32,
@@ -222,16 +248,8 @@ impl PredicateTracker {
             return;
         }
 
-        // Initially, the minimum indices point to the lower-bound sentinel (at index 0) and the
-        // maximum indices point to the upper-bound sentinel (at index 1)
-        //
-        // Since the bounds are not equal to the sentinel values, the indices are not tight
-        let initial_assigned_indices = AssignedIndices::new()
-            .with_min_assigned(0)
-            .with_min_assigned_is_tight(false)
-            .with_max_assigned(1)
-            .with_max_assigned_is_tight(false);
-        self.assigned_indices = trailed_values.grow(initial_assigned_indices.into_bits() as i64);
+        self.assigned_indices =
+            trailed_values.grow(Self::initial_assigned_indices().into_bits() as i64);
 
         // Then we place some sentinels for simplicity's sake which are always true; these do not
         // track any predicate types.
@@ -427,6 +445,76 @@ impl PredicateTracker {
         self.nodes[index_smallest_value_larger_than as usize].smaller = new_index as u32;
 
         true
+    }
+
+    /// Stops tracking the [`Predicate`]s whose [`PredicateId`] is not contained in `is_tracked`,
+    /// and removes the nodes which no longer track any [`PredicateType`]; returns the number of
+    /// removed nodes.
+    ///
+    /// The remaining nodes are compacted in-place (preserving their relative order in
+    /// [`PredicateTracker::nodes`]), such that the sentinels remain at indices 0 and 1.
+    ///
+    /// This method should only be called when the [`AssignedIndices`] point to the sentinels (see
+    /// [`PredicateTracker::are_assigned_indices_at_sentinels`]), since the sentinels are the only
+    /// nodes which are not moved.
+    pub(super) fn remove_untracked_predicates(
+        &mut self,
+        is_tracked: &BitSet,
+        trailed_values: &TrailedValues,
+    ) -> usize {
+        pumpkin_assert_simple!(
+            self.are_assigned_indices_at_sentinels(trailed_values),
+            "Nodes can only be removed if the assigned indices point to the sentinels"
+        );
+
+        // First, we stop tracking the predicate types of which the predicate is not tracked
+        // anymore, and we unlink the nodes which do not track any predicate type anymore
+        let mut num_removed = 0;
+        self.tracked = EnumSet::empty();
+        for index in 2..self.nodes.len() {
+            let node = &mut self.nodes[index];
+            for predicate_type in node.flags {
+                if !is_tracked.contains(node.ids[predicate_type as usize].index()) {
+                    let _ = node.flags.remove(predicate_type);
+                    node.ids[predicate_type as usize] = PLACEHOLDER_PREDICATE_ID;
+                }
+            }
+            self.tracked |= node.flags;
+
+            if node.flags.is_empty() {
+                num_removed += 1;
+                let (smaller, greater) = (node.smaller, node.greater);
+                self.nodes[smaller as usize].greater = greater;
+                self.nodes[greater as usize].smaller = smaller;
+            }
+        }
+
+        if num_removed == 0 {
+            return 0;
+        }
+
+        // Then we move the remaining nodes to the front (in order of their index).
+        //
+        // When a node is moved, its neighbours are updated to point to its new index; hence, the
+        // links of a node always point to the current index of its neighbours (a neighbour is
+        // either moved already, in which case it has updated the link, or it has not been moved
+        // yet).
+        let mut new_index = 2;
+        for index in 2..self.nodes.len() {
+            if self.nodes[index].flags.is_empty() {
+                continue;
+            }
+
+            let node = self.nodes[index];
+            self.nodes[new_index] = node;
+            self.nodes[node.smaller as usize].greater = new_index as u32;
+            self.nodes[node.greater as usize].smaller = new_index as u32;
+
+            new_index += 1;
+        }
+        self.nodes.truncate(new_index);
+
+        num_removed
     }
 
     /// Moves `min_assigned` past all tracked values which are `<=` the provided lower-bound
@@ -681,6 +769,7 @@ mod tests {
     use bit_set::BitSet;
 
     use crate::basic_types::PredicateId;
+    use crate::containers::StorageKey;
     use crate::engine::Assignments;
     use crate::engine::TrailedValues;
     use crate::engine::notifications::predicate_notification::PredicateIdAssignments;
@@ -769,6 +858,68 @@ mod tests {
             &assignments,
             &id_generator
         ));
+    }
+
+    #[test]
+    fn untracked_predicates_are_removed() {
+        let mut assignments = Assignments::default();
+        let mut id_generator = PredicateIdGenerator::default();
+        let mut trailed_values = TrailedValues::default();
+        let mut predicate_id_assignments = PredicateIdAssignments::default();
+
+        let x = assignments.grow(0, 10);
+
+        let mut tracker = PredicateTracker::new();
+        tracker.initialise(0, 10, &mut trailed_values);
+
+        let lower_bound_3 = id_generator.get_id(predicate!(x >= 3));
+        let lower_bound_5 = id_generator.get_id(predicate!(x >= 5));
+        let upper_bound_7 = id_generator.get_id(predicate!(x <= 7));
+        let _ = tracker.track(predicate!(x >= 5), lower_bound_5);
+        let _ = tracker.track(predicate!(x <= 7), upper_bound_7);
+        let _ = tracker.track(predicate!(x >= 3), lower_bound_3);
+
+        let mut is_tracked: BitSet = (0..id_generator.num_predicate_ids()).collect();
+        let _ = is_tracked.remove(lower_bound_5.index());
+        assert!(tracker.are_assigned_indices_at_sentinels(&trailed_values));
+        let num_removed = tracker.remove_untracked_predicates(&is_tracked, &trailed_values);
+        assert_eq!(num_removed, 1);
+
+        // The sentinels remain at the start, followed by the remaining nodes in order of insertion
+        let values = tracker
+            .nodes
+            .iter()
+            .map(|node| node.value)
+            .collect::<Vec<_>>();
+        assert_eq!(values, vec![-1, 11, 7, 3]);
+        assert_eq!(
+            (
+                tracker.nodes[0].greater,
+                tracker.nodes[3].greater,
+                tracker.nodes[2].greater
+            ),
+            (3, 2, 1)
+        );
+        assert_eq!(
+            (
+                tracker.nodes[1].smaller,
+                tracker.nodes[2].smaller,
+                tracker.nodes[3].smaller
+            ),
+            (2, 3, 0)
+        );
+
+        // The remaining predicates are still updated
+        tracker.on_update(
+            predicate!(x >= 8),
+            &mut trailed_values,
+            &id_generator,
+            &is_tracked,
+            &mut predicate_id_assignments,
+        );
+        assert!(predicate_id_assignments.is_satisfied(lower_bound_3, &assignments, &id_generator));
+        assert!(predicate_id_assignments.is_falsified(upper_bound_7, &assignments, &id_generator));
+        assert!(!tracker.are_assigned_indices_at_sentinels(&trailed_values));
     }
 
     #[test]

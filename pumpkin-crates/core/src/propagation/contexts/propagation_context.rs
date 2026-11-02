@@ -138,8 +138,11 @@ impl<'a> PropagationContext<'a> {
 
     /// Stop being enqueued for the given predicate.
     pub fn unregister_predicate(&mut self, predicate_id: PredicateId) {
-        self.notification_engine
-            .unwatch_predicate(predicate_id, self.propagator_id);
+        self.notification_engine.unwatch_predicate(
+            predicate_id,
+            self.propagator_id,
+            self.trailed_values,
+        );
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`].
