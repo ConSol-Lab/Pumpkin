@@ -318,17 +318,14 @@ impl Propagator for NogoodPropagator {
     )]
     fn propagate(&mut self, mut context: PropagationContext) -> Result<(), Conflict> {
         pumpkin_assert_moderate!(self.debug_is_properly_watched());
+        pumpkin_assert_moderate!(self.debug_is_properly_registered(&context));
 
         self.propagation_buffer
             .propagate_buffer(&mut context, &mut self.statistics)?;
 
         // First we perform nogood management to ensure that the database does not grow excessively
         // large with "bad" nogoods
-        self.clean_up_learned_nogoods_if_needed(
-            context.assignments,
-            context.reason_store,
-            context.notification_engine,
-        );
+        self.clean_up_learned_nogoods_if_needed(&mut context);
 
         if self.watch_lists.len() <= context.num_predicate_ids() {
             self.watch_lists
@@ -1409,12 +1406,7 @@ impl NogoodPropagator {
     /// - \[2\] Kochemazov, S. (2020). Improving implementation of SAT competitions 2017--2019
     ///   winners. International Conference on Theory and Applications of Satisfiability Testing,
     ///   139–148. Springer.
-    fn clean_up_learned_nogoods_if_needed(
-        &mut self,
-        assignments: &Assignments,
-        reason_store: &ReasonStore,
-        notification_engine: &mut NotificationEngine,
-    ) {
+    fn clean_up_learned_nogoods_if_needed(&mut self, context: &mut PropagationContext) {
         // The clean-up procedure is divided into four stages (for simplicity of implementation).
         //
         // For each tier, if the number of nogoods exceeds the predefined threshold for that tier:
@@ -1457,9 +1449,9 @@ impl NogoodPropagator {
                 &mut self.learned_nogood_ids.high_lbd,
                 &mut self.nogood_info,
                 &self.nogood_predicates,
-                assignments,
-                reason_store,
-                notification_engine,
+                context.assignments,
+                context.reason_store,
+                context.notification_engine,
                 self.propagation_mode,
             );
         }
@@ -1481,9 +1473,9 @@ impl NogoodPropagator {
                 &mut self.learned_nogood_ids.mid_lbd,
                 &mut self.nogood_info,
                 &self.nogood_predicates,
-                assignments,
-                reason_store,
-                notification_engine,
+                context.assignments,
+                context.reason_store,
+                context.notification_engine,
                 self.propagation_mode,
             );
         }
@@ -1503,15 +1495,15 @@ impl NogoodPropagator {
                 &mut self.learned_nogood_ids.low_lbd,
                 &mut self.nogood_info,
                 &self.nogood_predicates,
-                assignments,
-                reason_store,
-                notification_engine,
+                context.assignments,
+                context.reason_store,
+                context.notification_engine,
                 self.propagation_mode,
             );
         }
 
         if removed_at_least_one_nogood {
-            self.remove_deleted_nogoods_from_watchers(assignments, notification_engine);
+            self.remove_deleted_nogoods_from_watchers(context);
         }
     }
 
@@ -1543,11 +1535,11 @@ impl NogoodPropagator {
     /// Note: the function is implemented as going through all watchers. If we only store few
     /// learned nogoods, but have many permanent nogoods, then this function will be called often
     /// and may be a bottleneck.
-    fn remove_deleted_nogoods_from_watchers(
-        &mut self,
-        assignments: &Assignments,
-        notification_engine: &mut NotificationEngine,
-    ) {
+    ///
+    /// If all of the watchers of a predicate are removed, then the predicate is unregistered (see
+    /// [`PropagationContext::unregister_predicate`]), mirroring
+    /// [`NogoodPropagator::remove_watcher`].
+    fn remove_deleted_nogoods_from_watchers(&mut self, context: &mut PropagationContext) {
         // The idea is to go through the watchers and remove watchers that contain deleted nogoods.
         //
         // On the way, if we detect that a nogood is trivially falsified at the root level, or if
@@ -1576,6 +1568,9 @@ impl NogoodPropagator {
         // We now go over all of the watchers
         for i in 0..self.watch_lists.len() {
             let index = PredicateId::create_from_index(i);
+            let was_watched = !self.watch_lists[index].is_empty();
+            let assignments = &*context.assignments;
+            let notification_engine = &mut *context.notification_engine;
             self.watch_lists[index].retain(|watcher| {
                 let info_index = self.nogood_predicates.get_nogood_index(&watcher.nogood_id);
                 // If the nogood has been deleted, do not keep this watcher
@@ -1611,6 +1606,10 @@ impl NogoodPropagator {
                     true
                 }
             });
+
+            if was_watched && self.watch_lists[index].is_empty() {
+                context.unregister_predicate(index);
+            }
         }
 
         // If another pass is needed, then we go over all of the watch lists and ensure that the
@@ -1618,11 +1617,16 @@ impl NogoodPropagator {
         if another_pass_needed {
             for i in 0..self.watch_lists.len() {
                 let index = PredicateId::create_from_index(i);
+                let was_watched = !self.watch_lists[index].is_empty();
                 self.watch_lists[index].retain(|watcher| {
                     let info_index = self.nogood_predicates.get_nogood_index(&watcher.nogood_id);
                     // If the nogood has been deleted, do not keep this watcher
                     !self.nogood_info[info_index].is_deleted
                 });
+
+                if was_watched && self.watch_lists[index].is_empty() {
+                    context.unregister_predicate(index);
+                }
             }
         }
 
@@ -1994,6 +1998,29 @@ impl NogoodPropagator {
     }
 
     /// Checks for each nogood whether the first two predicates in the nogood are being watched
+    /// Checks that each predicate which is watched by a nogood is registered exactly once with the
+    /// notification engine, and that the other predicates are not registered.
+    fn debug_is_properly_registered(&self, context: &PropagationContext) -> bool {
+        let registered_watch_lists = &context.notification_engine.watch_list_predicate_id;
+        for index in 0..self.watch_lists.len() {
+            let predicate_id = PredicateId::create_from_index(index);
+            let num_registrations = if index < registered_watch_lists.len() {
+                registered_watch_lists[predicate_id]
+                    .iter()
+                    .filter(|&&propagator_id| propagator_id == self.handle.propagator_id())
+                    .count()
+            } else {
+                0
+            };
+            let expected = usize::from(!self.watch_lists[predicate_id].is_empty());
+            assert_eq!(
+                num_registrations, expected,
+                "Expected {predicate_id:?} to be registered {expected} times"
+            );
+        }
+        true
+    }
+
     fn debug_is_properly_watched(&self) -> bool {
         let is_watching = |predicate_id: PredicateId, nogood_id: NogoodId| -> bool {
             self.watch_lists[predicate_id]
