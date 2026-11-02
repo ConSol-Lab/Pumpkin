@@ -82,8 +82,8 @@ pub struct NogoodPropagator {
     bumped_nogoods: Vec<NogoodId>,
     /// Used to return lazy reasons
     temp_nogood_reason: Vec<Predicate>,
-    /// Buffer for the disequality values of a nogood during extended nogood propagation.
-    extended_exceptions: Vec<i32>,
+    /// Describes the domain of the nogood which is propagated by extended nogood propagation.
+    domain_description: DomainDescription,
     /// The handle of this instance inside the solver.
     ///
     /// Used during nogood cleanup. A nogood can only be removed if it is not propagated in the
@@ -193,7 +193,7 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             lbd_helper: Default::default(),
             bumped_nogoods: Default::default(),
             temp_nogood_reason: Default::default(),
-            extended_exceptions: Default::default(),
+            domain_description: Default::default(),
             propagation_mode: self.propagation_mode,
             semantic_minimiser: Default::default(),
             priority: self.priority,
@@ -325,7 +325,7 @@ impl Propagator for NogoodPropagator {
         self.propagation_buffer.propagate_buffer(
             &mut context,
             &mut self.statistics,
-            &mut self.extended_exceptions,
+            &mut self.domain_description,
         )?;
 
         // First we perform nogood management to ensure that the database does not grow excessively
@@ -407,9 +407,9 @@ impl Propagator for NogoodPropagator {
                 // that once).
                 let mut falsified_zeroth = None;
 
-                // The domain of the 0-th predicate, which is computed on demand by the extended
-                // nogood propagation.
-                let mut zeroth_domain = None;
+                // The description of the domain of the 0-th predicate, which is filled in by the
+                // extended nogood propagation while looking for a new watcher.
+                self.domain_description.reset();
 
                 // We start from the index of the last-traversed watcher and circle around after
                 // reaching the end of the nogood to ensure that all possible watcher are
@@ -422,7 +422,7 @@ impl Propagator for NogoodPropagator {
                         &mut context,
                         nogood_predicates,
                         i,
-                        &mut zeroth_domain,
+                        &mut self.domain_description,
                     ) {
                         WatcherProcessingStatus::Continue => continue,
                         WatcherProcessingStatus::FoundNewWatch => {
@@ -501,14 +501,32 @@ impl Propagator for NogoodPropagator {
                     .nogood_id_to_index
                     .get(&watcher.nogood_id)
                     .expect("Expected nogood predicate to exist");
-                self.propagation_mode.perform_propagation(
-                    &mut context,
-                    nogood_predicates,
-                    &self.inference_codes[nogood_index],
-                    watcher.nogood_id,
-                    &mut self.statistics,
-                    &mut self.extended_exceptions,
-                )?;
+                match self.propagation_mode {
+                    PropagationMode::ExtendedNogoodPropagation => {
+                        // The search for a new watcher has visited all predicates except the
+                        // watched ones; hence, we only need to add those to the description.
+                        self.domain_description
+                            .complete_with_watched_predicates(&mut context, nogood_predicates);
+                        Self::propagate_domain_description(
+                            &mut context,
+                            nogood_predicates,
+                            &self.inference_codes[nogood_index],
+                            &mut self.statistics,
+                            Some(watcher.nogood_id),
+                            &self.domain_description,
+                        )?;
+                    }
+                    PropagationMode::UnitPropagation => {
+                        self.propagation_mode.perform_propagation(
+                            &mut context,
+                            nogood_predicates,
+                            &self.inference_codes[nogood_index],
+                            watcher.nogood_id,
+                            &mut self.statistics,
+                            &mut self.domain_description,
+                        )?;
+                    }
+                }
 
                 index += 1;
             }
@@ -707,10 +725,6 @@ impl NogoodPropagator {
     /// For this nogood to be satisfied, we can see that [x <= 5] \/ [x >= 16] \/ [x == 12].
     /// Based on this reasoning, we can remove the values {6, 7, 8, 9, 10, 11, 13, 14, 15} from the
     /// domain of `x`.
-    #[allow(
-        clippy::filter_map_bool_then,
-        reason = "Otherwise leads to borrow issues."
-    )]
     pub(crate) fn extended_nogood_propagation(
         context: &mut PropagationContext,
         nogood: &[PredicateId],
@@ -718,24 +732,56 @@ impl NogoodPropagator {
         inference_code: &InferenceCode,
         statistics: &mut NogoodPropagatorStatistics,
         nogood_id: Option<NogoodId>,
-        exceptions: &mut Vec<i32>,
+        domain_description: &mut DomainDescription,
+    ) -> Result<(), Conflict> {
+        let is_falsified = get_domain_info(context, nogood, propagated_domain, domain_description);
+
+        if is_falsified {
+            statistics
+                .extended_propagation_statistics
+                .num_extended_propagation_calls += 1;
+            // The nogood is already falsified
+            return Ok(());
+        }
+
+        Self::propagate_domain_description(
+            context,
+            nogood,
+            inference_code,
+            statistics,
+            nogood_id,
+            domain_description,
+        )
+    }
+
+    /// Performs extended nogood propagation based on the provided [`DomainDescription`] of the
+    /// unassigned predicates in the nogood; see [`NogoodPropagator::extended_nogood_propagation`].
+    ///
+    /// It is assumed that no predicate in the nogood is falsified, that all predicates over other
+    /// domains than the described one are satisfied, and that the description is complete.
+    #[allow(
+        clippy::filter_map_bool_then,
+        reason = "Otherwise leads to borrow issues."
+    )]
+    fn propagate_domain_description(
+        context: &mut PropagationContext,
+        nogood: &[PredicateId],
+        inference_code: &InferenceCode,
+        statistics: &mut NogoodPropagatorStatistics,
+        nogood_id: Option<NogoodId>,
+        domain_description: &DomainDescription,
     ) -> Result<(), Conflict> {
         statistics
             .extended_propagation_statistics
             .num_extended_propagation_calls += 1;
 
-        let (
-            lower_bound,
-            upper_bound,
-            num_describing_domain,
-            last_describing_predicate_id,
-            is_falsified,
-        ) = get_domain_info(context, nogood, propagated_domain, exceptions);
-
-        if is_falsified {
-            // The nogood is already falsified
-            return Ok(());
-        }
+        let propagated_domain = domain_description
+            .domain
+            .expect("Expected the described domain to be known");
+        let lower_bound = domain_description.lower_bound;
+        let upper_bound = domain_description.upper_bound;
+        let num_describing_domain = domain_description.num_describing_domain;
+        let exceptions = &domain_description.exceptions;
 
         if num_describing_domain == 0 {
             // We could not find another watcher (i.e., all predicats over other variables are
@@ -768,6 +814,9 @@ impl NogoodPropagator {
         if num_describing_domain == 1 {
             statistics.num_unit_propagations += 1;
 
+            let last_describing_predicate_id = domain_description
+                .last_describing_predicate_id
+                .expect("Expected a predicate describing the domain");
             let last_describing_predicate = context.get_predicate(last_describing_predicate_id);
 
             let reason = if let Some(nogood_id) = nogood_id {
@@ -1090,7 +1139,7 @@ impl NogoodPropagator {
             self.add_permanent_nogood(nogood, inference_code, context);
 
             self.propagation_buffer
-                .propagate_buffer(context, &mut self.statistics, &mut self.extended_exceptions)
+                .propagate_buffer(context, &mut self.statistics, &mut self.domain_description)
                 .expect("Adding asserting nogood should not lead to conflict");
 
             return;
@@ -1144,7 +1193,7 @@ impl NogoodPropagator {
                 inference_code,
                 nogood_id,
                 &mut self.statistics,
-                &mut self.extended_exceptions,
+                &mut self.domain_description,
             )
             .expect("Asserting nogood cannot fail");
 
@@ -1293,55 +1342,125 @@ impl NogoodPropagator {
     }
 }
 
-/// Returns the following information about the unassigned predicates concerning the provided
-/// domain:
-/// 1. The lower-bound predicate, if present.
-/// 2. The upper-bound predicate, if present
-/// 3. The number of elements describing the domain.
-/// 4. The index of the last processed predicate of the domain.
-/// 5. Whether any predicates in the nogood are falsified; if this is the case, then the other
-///    returned values are incomplete.
-///
-/// The disequality values which are present in the nogood are stored in `exceptions` in
-/// strictly increasing order.
+/// Describes the unassigned predicates of a nogood which reason over a single domain; this is the
+/// information required by extended nogood propagation.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct DomainDescription {
+    /// The described domain; `None` if no description has been started.
+    domain: Option<DomainId>,
+    /// The unassigned lower-bound predicate, if present.
+    lower_bound: Option<Predicate>,
+    /// The unassigned upper-bound predicate, if present.
+    upper_bound: Option<Predicate>,
+    /// The values of the unassigned disequality predicates; these are strictly increasing once
+    /// the description is complete.
+    exceptions: Vec<i32>,
+    /// The number of unassigned predicates describing the domain.
+    num_describing_domain: usize,
+    /// The last added unassigned predicate describing the domain.
+    last_describing_predicate_id: Option<PredicateId>,
+}
+
+impl DomainDescription {
+    /// Marks the description as not started; the remaining fields are only cleared once a new
+    /// description is started using [`DomainDescription::start`].
+    pub(crate) fn reset(&mut self) {
+        self.domain = None;
+    }
+
+    /// Returns the described domain, starting an empty description of the domain of
+    /// `nogood[0]` if no description has been started.
+    pub(crate) fn get_or_start(
+        &mut self,
+        context: &mut PropagationContext,
+        nogood: &[PredicateId],
+    ) -> DomainId {
+        match self.domain {
+            Some(domain) => domain,
+            None => {
+                let domain = context.get_predicate(nogood[0]).get_domain();
+                self.start(domain);
+                domain
+            }
+        }
+    }
+
+    /// Starts an empty description of the provided `domain`.
+    fn start(&mut self, domain: DomainId) {
+        self.domain = Some(domain);
+        self.lower_bound = None;
+        self.upper_bound = None;
+        self.exceptions.clear();
+        self.num_describing_domain = 0;
+        self.last_describing_predicate_id = None;
+    }
+
+    /// Adds the provided unassigned predicate over the described domain to the description.
+    pub(crate) fn add_unassigned_predicate(
+        &mut self,
+        predicate_id: PredicateId,
+        predicate: Predicate,
+    ) {
+        pumpkin_assert_moderate!(Some(predicate.get_domain()) == self.domain);
+
+        self.num_describing_domain += 1;
+        self.last_describing_predicate_id = Some(predicate_id);
+        match predicate.get_predicate_type() {
+            PredicateType::UpperBound => {
+                pumpkin_assert_simple!(self.upper_bound.is_none());
+                self.upper_bound = Some(predicate)
+            }
+            PredicateType::LowerBound => {
+                pumpkin_assert_simple!(self.lower_bound.is_none());
+                self.lower_bound = Some(predicate)
+            }
+            PredicateType::NotEqual => self.exceptions.push(predicate.get_right_hand_side()),
+            PredicateType::Equal => {}
+        }
+    }
+
+    /// Completes a description which was created while looking for a new watcher for the watched
+    /// predicate at index 1, which is satisfied; all predicates except the watched ones have been
+    /// processed, so only the predicate at index 0 still needs to be added.
+    fn complete_with_watched_predicates(
+        &mut self,
+        context: &mut PropagationContext,
+        nogood: &[PredicateId],
+    ) {
+        pumpkin_assert_moderate!(context.is_predicate_id_satisfied(nogood[1]));
+
+        let _ = self.get_or_start(context, nogood);
+        if context.evaluate_predicate_id(nogood[0]).is_none() {
+            let predicate = context.get_predicate(nogood[0]);
+            self.add_unassigned_predicate(nogood[0], predicate);
+        }
+        self.complete();
+    }
+
+    /// Completes the description by sorting the exceptions and removing duplicates.
+    fn complete(&mut self) {
+        self.exceptions.sort_unstable();
+        self.exceptions.dedup();
+    }
+}
+
+/// Fills `domain_description` with the unassigned predicates concerning the provided domain and
+/// returns whether any predicate in the nogood is falsified; if this is the case, then the
+/// description is incomplete.
 fn get_domain_info(
     context: &mut PropagationContext<'_>,
     nogood: &[PredicateId],
     propagated_domain: DomainId,
-    exceptions: &mut Vec<i32>,
-) -> (
-    Option<Predicate>,
-    Option<Predicate>,
-    usize,
-    PredicateId,
-    bool,
-) {
-    // We keep track of the holes in the domains which are posted; these can be seen as
-    // "exceptions" to the removals of the domain
-    exceptions.clear();
-
-    // We need to keep track of whether there is a lower-bound and/or upper-bound predicate in
-    // the nogood.
-    let mut lower_bound = None;
-    let mut upper_bound = None;
-
-    let mut num_describing_domain = 0;
-    let mut last_describing_predicate_id = PredicateId::create_from_index(u32::MAX as usize);
+    domain_description: &mut DomainDescription,
+) -> bool {
+    domain_description.start(propagated_domain);
 
     for predicate_id in nogood.iter().copied() {
         // First, we filter out all of the predicates which are currently satisfied; if a
         // predicate is falsified, then no propagation can take place.
         match context.evaluate_predicate_id(predicate_id) {
             Some(true) => continue,
-            Some(false) => {
-                return (
-                    lower_bound,
-                    upper_bound,
-                    num_describing_domain,
-                    last_describing_predicate_id,
-                    true,
-                );
-            }
+            Some(false) => return true,
             None => {}
         }
 
@@ -1358,33 +1477,12 @@ fn get_domain_info(
             continue;
         }
 
-        // Then we add the information of the predicates to our structures
-        num_describing_domain += 1;
-        last_describing_predicate_id = predicate_id;
-        match predicate.get_predicate_type() {
-            PredicateType::UpperBound => {
-                pumpkin_assert_simple!(upper_bound.is_none());
-                upper_bound = Some(predicate)
-            }
-            PredicateType::LowerBound => {
-                pumpkin_assert_simple!(lower_bound.is_none());
-                lower_bound = Some(predicate)
-            }
-            PredicateType::NotEqual => exceptions.push(predicate.get_right_hand_side()),
-            PredicateType::Equal => {}
-        }
+        domain_description.add_unassigned_predicate(predicate_id, predicate);
     }
 
-    exceptions.sort_unstable();
-    exceptions.dedup();
+    domain_description.complete();
 
-    (
-        lower_bound,
-        upper_bound,
-        num_describing_domain,
-        last_describing_predicate_id,
-        false,
-    )
+    false
 }
 
 /// Methods concerning the watchers and watch lists
@@ -1949,7 +2047,7 @@ impl NogoodPropagator {
                         inference_code,
                         &mut NogoodPropagatorStatistics::default(),
                         Some(nogood_id),
-                        &mut Vec::new(),
+                        &mut DomainDescription::default(),
                     )?;
                 }
             }

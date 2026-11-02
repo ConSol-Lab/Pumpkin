@@ -10,6 +10,7 @@ use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
 use crate::propagation::PropagationContext;
 use crate::propagation::ReadDomains;
+use crate::propagators::nogoods::DomainDescription;
 use crate::propagators::nogoods::NogoodId;
 use crate::propagators::nogoods::NogoodInfo;
 use crate::propagators::nogoods::NogoodPropagator;
@@ -61,15 +62,16 @@ impl PropagationMode {
     /// Returns a [`WatcherProcessingStatus`] based on the [`Predicate`] pointed to by `index` in
     /// `nogood_predicates`.
     ///
-    /// `zeroth_domain` caches the [`DomainId`] of the 0-th predicate during a single search for a
-    /// new watcher; it should be `None` at the start of the search. Note that the 0-th predicate
-    /// is only replaced by a predicate over the same domain, so the cache remains valid.
+    /// When using extended nogood propagation, the unassigned predicates over the domain of the
+    /// 0-th predicate are added to `domain_description`; it should be reset at the start of the
+    /// search for a new watcher. Note that the 0-th predicate is only replaced by a predicate over
+    /// the same domain, so the description remains valid.
     pub(crate) fn process_potential_watcher(
         &self,
         context: &mut PropagationContext,
         nogood_predicates: &[PredicateId],
         index: usize,
-        zeroth_domain: &mut Option<DomainId>,
+        domain_description: &mut DomainDescription,
     ) -> WatcherProcessingStatus {
         match self {
             PropagationMode::ExtendedNogoodPropagation => {
@@ -83,13 +85,10 @@ impl PropagationMode {
                     return WatcherProcessingStatus::Continue;
                 }
 
-                let zeroth_domain = *zeroth_domain.get_or_insert_with(|| {
-                    context.get_predicate(nogood_predicates[0]).get_domain()
-                });
-                let reasons_over_same_domain =
-                    context.get_predicate(nogood_predicates[index]).get_domain() == zeroth_domain;
+                let zeroth_domain = domain_description.get_or_start(context, nogood_predicates);
+                let predicate = context.get_predicate(nogood_predicates[index]);
 
-                if !reasons_over_same_domain {
+                if predicate.get_domain() != zeroth_domain {
                     // If the predicate is unassigned or falsified and does not reason over the
                     // same domain as the 0-th predicate, then we have found a new watch.
                     WatcherProcessingStatus::FoundNewWatch
@@ -98,6 +97,10 @@ impl PropagationMode {
                     // need to update the zero-th predicate with this predicate.
                     WatcherProcessingStatus::FalsifiedZeroth
                 } else {
+                    // The predicate is unassigned and reasons over the same domain, which is
+                    // required in case extended nogood propagation takes place.
+                    domain_description
+                        .add_unassigned_predicate(nogood_predicates[index], predicate);
                     WatcherProcessingStatus::Continue
                 }
             }
@@ -156,7 +159,7 @@ impl PropagationMode {
         inference_code: &InferenceCode,
         nogood_id: NogoodId,
         statistics: &mut NogoodPropagatorStatistics,
-        extended_exceptions: &mut Vec<i32>,
+        domain_description: &mut DomainDescription,
     ) -> PropagationStatusCP {
         match self {
             PropagationMode::ExtendedNogoodPropagation => {
@@ -168,7 +171,7 @@ impl PropagationMode {
                     inference_code,
                     statistics,
                     Some(nogood_id),
-                    extended_exceptions,
+                    domain_description,
                 )?;
             }
             PropagationMode::UnitPropagation => {

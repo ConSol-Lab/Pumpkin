@@ -3,6 +3,7 @@ use crate::engine::Reason;
 use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
 use crate::propagation::PropagationContext;
+use crate::propagators::nogoods::DomainDescription;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorStatistics;
 use crate::state::Conflict;
@@ -37,7 +38,7 @@ impl PropagationBuffer {
         &mut self,
         context: &mut PropagationContext,
         statistics: &mut NogoodPropagatorStatistics,
-        extended_exceptions: &mut Vec<i32>,
+        domain_description: &mut DomainDescription,
     ) -> Result<(), Conflict> {
         let result_unit = self
             .to_propagate
@@ -61,7 +62,7 @@ impl PropagationBuffer {
                     &inference_code,
                     statistics,
                     None,
-                    extended_exceptions,
+                    domain_description,
                 )
             })
     }
