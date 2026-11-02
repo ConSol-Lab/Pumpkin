@@ -1230,12 +1230,11 @@ impl NogoodPropagator {
                             || nogood[0].is_upper_bound_predicate())
                         && p.get_right_hand_side() == nogood[0].get_right_hand_side()
                     {
-                        let domain = p.get_domain();
                         let rhs = p.get_right_hand_side();
                         if nogood[0].is_lower_bound_predicate() {
-                            Some(predicate!(domain <= rhs))
+                            Some(predicate!(p.get_domain() <= rhs))
                         } else if nogood[0].is_upper_bound_predicate() {
-                            Some(predicate!(domain >= rhs))
+                            Some(predicate!(p.get_domain() >= rhs))
                         } else {
                             unreachable!()
                         }

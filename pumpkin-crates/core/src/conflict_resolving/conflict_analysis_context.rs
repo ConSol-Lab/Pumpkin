@@ -378,10 +378,10 @@ impl ConflictAnalysisContext<'_> {
                     // It could be the case that we attempt to get the reason for the predicate
                     // [x >= v] but that the corresponding unit nogood idea is the one for the
                     // predicate [x == v]
-                    let domain_id = predicate.get_domain();
                     let right_hand_side = predicate.get_right_hand_side();
 
-                    unit_nogood_inference_codes.get(&predicate!(domain_id == right_hand_side))
+                    unit_nogood_inference_codes
+                        .get(&predicate!(predicate.get_domain() == right_hand_side))
                 });
 
                 if let Some(unit_ic) = unit_ic {

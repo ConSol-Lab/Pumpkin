@@ -276,17 +276,16 @@ where
     ) -> PropagationStatusCP {
         let rhs_lb = context.lower_bound(&self.rhs);
         let rhs_ub = context.upper_bound(&self.rhs);
-        let lhs = &self.array[index as usize];
 
         context.post(
-            predicate![lhs >= rhs_lb],
+            predicate![self.array[index as usize] >= rhs_lb],
             (
                 conjunction!([self.rhs >= rhs_lb] & [self.index == index]),
                 &self.inference_code,
             ),
         )?;
         context.post(
-            predicate![lhs <= rhs_ub],
+            predicate![self.array[index as usize] <= rhs_ub],
             (
                 conjunction!([self.rhs <= rhs_ub] & [self.index == index]),
                 &self.inference_code,

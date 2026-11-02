@@ -337,12 +337,11 @@ fn split_equalities(learned_nogood: &mut Vec<Predicate>) {
             // If it is, then we remove it from the learned nogood.
             let _ = learned_nogood.swap_remove(i);
 
-            let domain = predicate.get_domain();
             let rhs = predicate.get_right_hand_side();
 
             // And then add [x >= v] and [x <= v]
-            learned_nogood.push(predicate!(domain >= rhs));
-            learned_nogood.push(predicate!(domain <= rhs));
+            learned_nogood.push(predicate!(predicate.get_domain() >= rhs));
+            learned_nogood.push(predicate!(predicate.get_domain() <= rhs));
 
             expected_len += 1;
         } else {
@@ -375,17 +374,16 @@ fn merge_equalities(learned_nogood: &mut Vec<Predicate>) {
             // First, we preemptively remove the element from the nogood.
             let _ = learned_nogood.swap_remove(i);
 
-            let domain = predicate.get_domain();
             let rhs = predicate.get_right_hand_side();
 
             // We check whether we have already seen the upper-bound which would make this an
             // equality.
-            if upper_bounds.contains(&predicate!(domain <= rhs)) {
+            if upper_bounds.contains(&predicate!(predicate.get_domain() <= rhs)) {
                 // If we have, then we remove it from the upper-bounds.
-                let _ = upper_bounds.remove(&predicate!(domain <= rhs));
+                let _ = upper_bounds.remove(&predicate!(predicate.get_domain() <= rhs));
 
                 // And we add the equality to the learned nogood
-                learned_nogood.push(predicate!(domain == rhs));
+                learned_nogood.push(predicate!(predicate.get_domain() == rhs));
 
                 expected_len -= 1;
 
@@ -399,17 +397,16 @@ fn merge_equalities(learned_nogood: &mut Vec<Predicate>) {
             // First, we preemptively remove the element from the nogood.
             let _ = learned_nogood.swap_remove(i);
 
-            let domain = predicate.get_domain();
             let rhs = predicate.get_right_hand_side();
 
             // We check whether we have already seen the lower-bound which would make this an
             // equality.
-            if lower_bounds.contains(&predicate!(domain >= rhs)) {
+            if lower_bounds.contains(&predicate!(predicate.get_domain() >= rhs)) {
                 // If we have, then we remove it from the upper-bounds.
-                let _ = lower_bounds.remove(&predicate!(domain >= rhs));
+                let _ = lower_bounds.remove(&predicate!(predicate.get_domain() >= rhs));
 
                 // And we add the equality to the learned nogood
-                learned_nogood.push(predicate!(domain == rhs));
+                learned_nogood.push(predicate!(predicate.get_domain() == rhs));
 
                 expected_len -= 1;
 
