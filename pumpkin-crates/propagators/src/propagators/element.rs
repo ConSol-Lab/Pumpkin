@@ -247,9 +247,9 @@ where
             let element_lb = context.lower_bound(element);
 
             let reason = if rhs_lb > element_ub {
-                conjunction!([element <= rhs_lb - 1] & [self.rhs >= rhs_lb])
+                conjunction!([element < rhs_lb] & [self.rhs >= rhs_lb])
             } else if rhs_ub < element_lb {
-                conjunction!([element >= rhs_ub + 1] & [self.rhs <= rhs_ub])
+                conjunction!([element > rhs_ub] & [self.rhs <= rhs_ub])
             } else {
                 continue;
             };

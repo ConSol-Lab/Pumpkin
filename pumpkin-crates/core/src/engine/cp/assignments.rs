@@ -1293,7 +1293,6 @@ impl IntegerDomain {
         // Perhaps the recursion could be done in a cleaner way,
         // e.g., separate functions dependibng on the type of predicate.
         // For the initial version, the current version is okay.
-        let domain_id = predicate.get_domain();
         let value = predicate.get_right_hand_side();
 
         match predicate.get_predicate_type() {
@@ -1349,7 +1348,7 @@ impl IntegerDomain {
 
                     // Check the lower bound first.
                     if let Some(trail_position) =
-                        self.get_update_info(&predicate!(domain_id > value))
+                        self.get_update_info(&predicate!(predicate.get_domain() > value))
                     {
                         // The lower bound removed the value from the domain,
                         // report the trail position of the lower bound.
@@ -1357,7 +1356,7 @@ impl IntegerDomain {
                     } else {
                         // The lower bound did not surpass the value,
                         // now check the upper bound.
-                        self.get_update_info(&predicate!(domain_id < value))
+                        self.get_update_info(&predicate!(predicate.get_domain() < value))
                     }
                 }
             }
@@ -1365,7 +1364,7 @@ impl IntegerDomain {
                 // For equality to hold, both the lower and upper bound predicates must hold.
                 // Check lower bound first.
                 if let Some(lb_trail_position) =
-                    self.get_update_info(&predicate!(domain_id >= value))
+                    self.get_update_info(&predicate!(predicate.get_domain() >= value))
                 {
                     // The lower bound found,
                     // now the check depends on the upper bound.
@@ -1373,7 +1372,7 @@ impl IntegerDomain {
                     // If both the lower and upper bounds are present,
                     // report the trail position of the bound that was set last.
                     // Otherwise, return that the predicate is not on the trail.
-                    self.get_update_info(&predicate!(domain_id <= value))
+                    self.get_update_info(&predicate!(predicate.get_domain() <= value))
                         .map(|ub_trail_position| {
                             if lb_trail_position.trail_position > ub_trail_position.trail_position {
                                 lb_trail_position
