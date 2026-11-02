@@ -706,7 +706,7 @@ impl State {
     ///
     /// Panics when the inference checker rejects the conflict.
     #[cfg(feature = "check-propagations")]
-    fn check_conflict(&mut self, conflict: &Conflict) {
+    fn check_conflict(&self, conflict: &Conflict) {
         if let Conflict::Propagator(propagator_conflict) = conflict {
             self.run_checker(
                 propagator_conflict.conjunction.clone(),

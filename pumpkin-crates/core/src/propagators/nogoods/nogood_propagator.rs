@@ -792,14 +792,12 @@ impl NogoodPropagator {
                 .iter()
                 .fold((None, None), |(min_exception, max_exception), exception| {
                     (
-                        min_exception.map_or_else(
-                            || Some(*exception),
-                            |min_exception: i32| Some(min_exception.min(*exception)),
-                        ),
-                        max_exception.map_or_else(
-                            || Some(*exception),
-                            |max_exception: i32| Some(max_exception.max(*exception)),
-                        ),
+                        min_exception.map_or(Some(*exception), |min_exception: i32| {
+                            Some(min_exception.min(*exception))
+                        }),
+                        max_exception.map_or(Some(*exception), |max_exception: i32| {
+                            Some(max_exception.max(*exception))
+                        }),
                     )
                 });
 
