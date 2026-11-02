@@ -1013,10 +1013,17 @@ impl NogoodPropagator {
         // The reason consists of:
         // 1) All predicates which reason over a different domain than the propagated predicate
         //    (which are all guaranteed to be satisfied)
+
+        // Since the exceptions are sorted and contain no duplicates, we keep track of the next
+        // exception which can be encountered in the range, rather than searching for each value.
+        let mut next_exception_index = exceptions.partition_point(|&exception| exception < lb);
         for value_in_domain in lb..=ub {
-            if exceptions.binary_search(&value_in_domain).is_err()
-                && context.contains(&propagated_domain, value_in_domain)
-            {
+            if exceptions.get(next_exception_index) == Some(&value_in_domain) {
+                next_exception_index += 1;
+                continue;
+            }
+
+            if context.contains(&propagated_domain, value_in_domain) {
                 propagated = true;
                 statistics
                     .extended_propagation_statistics
@@ -1291,7 +1298,7 @@ impl NogoodPropagator {
 ///    returned values are incomplete.
 ///
 /// The disequality values which are present in the nogood are stored in `exceptions` in
-/// increasing order.
+/// strictly increasing order.
 fn get_domain_info(
     context: &mut PropagationContext<'_>,
     nogood: &[PredicateId],
@@ -1364,6 +1371,7 @@ fn get_domain_info(
     }
 
     exceptions.sort_unstable();
+    exceptions.dedup();
 
     (
         lower_bound,
