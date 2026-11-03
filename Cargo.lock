@@ -1084,6 +1084,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpkin-optimisation"
+version = "0.5.0"
+dependencies = [
+ "clap",
+ "pumpkin-core",
+]
+
+[[package]]
 name = "pumpkin-proof-processor"
 version = "0.5.0"
 dependencies = [
@@ -1133,6 +1141,7 @@ dependencies = [
  "pumpkin-constraints",
  "pumpkin-core",
  "pumpkin-macros",
+ "pumpkin-optimisation",
  "pumpkin-propagators",
  "regex",
  "serde_json",

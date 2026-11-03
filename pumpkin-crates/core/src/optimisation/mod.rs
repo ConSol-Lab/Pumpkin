@@ -1,4 +1,10 @@
-//! Contains structures related to optimissation.
+//! Contains the [`OptimisationProcedure`] trait which defines how an optimisation procedure
+//! should operate, and the [`SolutionCallback`] which is called with every encountered solution.
+//!
+//! Implementations of [`OptimisationProcedure`] (e.g. linear SAT-UNSAT search) are provided by the
+//! `pumpkin-optimisation` crate.
+//!
+//! An [`OptimisationProcedure`] is expected to be passed to [`Solver::optimise`].
 
 use solution_callback::SolutionCallback;
 
@@ -8,12 +14,16 @@ use crate::conflict_resolving::ConflictResolver;
 use crate::results::OptimisationResult;
 use crate::termination::TerminationCondition;
 
-pub mod linear_sat_unsat;
-pub mod linear_unsat_sat;
 pub mod solution_callback;
 
+/// A procedure which solves the model in a [`Solver`] to optimality.
 pub trait OptimisationProcedure<B: Brancher, R: ConflictResolver, Callback: SolutionCallback<B, R>>
 {
+    /// Solves the model currently in the [`Solver`] to optimality (or until the provided
+    /// [`TerminationCondition`] triggers).
+    ///
+    /// It returns an [`OptimisationResult`] which can be used to retrieve the optimal solution if
+    /// it exists.
     fn optimise(
         &mut self,
         brancher: &mut B,
@@ -21,28 +31,4 @@ pub trait OptimisationProcedure<B: Brancher, R: ConflictResolver, Callback: Solu
         resolver: &mut R,
         solver: &mut Solver,
     ) -> OptimisationResult<Callback::Stop>;
-}
-
-/// The type of search which is performed by the solver.
-#[derive(Debug, Clone, Copy, Default)]
-#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
-pub enum OptimisationStrategy {
-    /// Linear SAT-UNSAT - Starts with a satisfiable solution and tightens the bound on the
-    /// objective variable until an UNSAT result is reached.
-    ///
-    /// Can be seen as upper-bounding search.
-    #[default]
-    LinearSatUnsat,
-    /// Linear UNSAT-SAT - Starts with an unsatisfiable solution and tightens the bound on the
-    /// objective variable until a SAT result is reached.
-    ///
-    /// Can be seen as lower-bounding search.
-    LinearUnsatSat,
-}
-
-/// The direction of the optimisation, either maximising or minimising.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum OptimisationDirection {
-    Maximise,
-    Minimise,
 }

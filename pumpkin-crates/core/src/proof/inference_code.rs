@@ -26,7 +26,7 @@ impl ConstraintTag {
     ///
     /// *Note*: Be careful when doing this. Regular construction should only be done through the
     /// state. It is important that constraint tags remain unique.
-    pub(crate) fn from_non_zero(non_zero: NonZero<u32>) -> ConstraintTag {
+    pub fn from_non_zero(non_zero: NonZero<u32>) -> ConstraintTag {
         ConstraintTag(non_zero)
     }
 }

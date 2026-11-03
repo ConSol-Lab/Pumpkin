@@ -1,21 +1,22 @@
 use std::num::NonZero;
 use std::ops::ControlFlow;
 
-use super::OptimisationProcedure;
-use super::solution_callback::SolutionCallback;
-use crate::Solver;
-use crate::branching::Brancher;
-use crate::conflict_resolving::ConflictResolver;
-use crate::optimisation::OptimisationDirection;
-use crate::predicate;
-use crate::proof::ConstraintTag;
-use crate::results::OptimisationResult;
-use crate::results::ProblemSolution;
-use crate::results::SatisfactionResult;
-use crate::results::SatisfactionResultUnderAssumptions;
-use crate::results::Solution;
-use crate::termination::TerminationCondition;
-use crate::variables::IntegerVariable;
+use pumpkin_core::Solver;
+use pumpkin_core::branching::Brancher;
+use pumpkin_core::conflict_resolving::ConflictResolver;
+use pumpkin_core::optimisation::OptimisationProcedure;
+use pumpkin_core::optimisation::solution_callback::SolutionCallback;
+use pumpkin_core::predicate;
+use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::results::OptimisationResult;
+use pumpkin_core::results::ProblemSolution;
+use pumpkin_core::results::SatisfactionResult;
+use pumpkin_core::results::SatisfactionResultUnderAssumptions;
+use pumpkin_core::results::Solution;
+use pumpkin_core::termination::TerminationCondition;
+use pumpkin_core::variables::IntegerVariable;
+
+use crate::OptimisationDirection;
 
 /// Implements the linear UNSAT-SAT (LUS) optimisation procedure.
 #[derive(Debug, Clone, Copy)]
