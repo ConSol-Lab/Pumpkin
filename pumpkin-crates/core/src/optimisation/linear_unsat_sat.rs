@@ -121,7 +121,7 @@ where
                     // Optimisation will stop regardless of the result of the callback.
                     let _ = self.solution_callback.on_solution_callback(
                         solver,
-                        primal_solution.as_reference(),
+                        solution.as_reference(),
                         brancher,
                         resolver,
                     );
