@@ -139,7 +139,7 @@ where
             }
 
             solver.add_clause(
-                [predicate![objective >= objective_lower_bound + 1]],
+                [predicate![objective > objective_lower_bound]],
                 ConstraintTag::from_non_zero(NonZero::<u32>::MAX),
             );
 

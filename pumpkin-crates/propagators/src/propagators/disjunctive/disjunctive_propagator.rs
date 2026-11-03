@@ -223,8 +223,7 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
                 // lower-bound to be after `ECT_{Theta}`
                 if new_bound > context.lower_bound(&tasks[i.index()].start_time) {
                     // Propagate
-                    let propagated_variable = &tasks[i.index()].start_time;
-                    let propagated_predicate = predicate!(propagated_variable >= new_bound);
+                    let propagated_predicate = predicate!(tasks[i.index()].start_time >= new_bound);
                     context.post(
                         propagated_predicate,
                         (
