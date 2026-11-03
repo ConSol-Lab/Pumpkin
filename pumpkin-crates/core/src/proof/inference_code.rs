@@ -26,8 +26,20 @@ impl ConstraintTag {
     ///
     /// *Note*: Be careful when doing this. Regular construction should only be done through the
     /// state. It is important that constraint tags remain unique.
-    pub fn from_non_zero(non_zero: NonZero<u32>) -> ConstraintTag {
+    pub(crate) fn from_non_zero(non_zero: NonZero<u32>) -> ConstraintTag {
         ConstraintTag(non_zero)
+    }
+
+    /// Create the tag with the maximum possible value ([`u32::MAX`]).
+    ///
+    /// Used as a sentinel for clauses which do not originate from a model constraint (e.g. the
+    /// objective bounds added by optimisation procedures).
+    #[deprecated(
+        note = "sentinel tag for clauses without a model constraint; inferences using it are not \
+                justified in the proof"
+    )]
+    pub fn max_value() -> ConstraintTag {
+        ConstraintTag(NonZero::<u32>::MAX)
     }
 }
 

@@ -1,4 +1,3 @@
-use std::num::NonZero;
 use std::ops::ControlFlow;
 
 use pumpkin_core::Solver;
@@ -139,9 +138,13 @@ where
                 None => {}
             }
 
+            #[allow(
+                deprecated,
+                reason = "clause does not originate from a model constraint"
+            )]
             solver.add_clause(
                 [predicate![objective > objective_lower_bound]],
-                ConstraintTag::from_non_zero(NonZero::<u32>::MAX),
+                ConstraintTag::max_value(),
             );
 
             // Next, we perform root-level propagation to ensure that the lower-bound is as tight
