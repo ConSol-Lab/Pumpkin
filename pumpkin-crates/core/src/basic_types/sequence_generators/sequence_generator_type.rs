@@ -16,9 +16,9 @@ pub enum SequenceGeneratorType {
     /// When `multiplicative_factor` is not an integer, then the above formula is **not** the same
     /// as the formula `f(i) = a * m^i` since intermediate values are founded down.
     Geometric,
-    /// Indicates that the restart strategy should use Luby restarts \[1\].
+    /// Indicates that the restart strategy should use Luby restarts.
     ///
-    ///  The Luby sequence is a recursive sequence of the form:
+    /// The Luby sequence \[1\] is a recursive sequence of the form:
     /// 1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8, 1, 1, 2....
     ///
     /// # Bibliography
