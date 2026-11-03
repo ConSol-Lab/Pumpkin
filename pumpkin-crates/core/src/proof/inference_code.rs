@@ -29,6 +29,18 @@ impl ConstraintTag {
     pub(crate) fn from_non_zero(non_zero: NonZero<u32>) -> ConstraintTag {
         ConstraintTag(non_zero)
     }
+
+    /// Create the tag with the maximum possible value ([`u32::MAX`]).
+    ///
+    /// Used as a sentinel for clauses which do not originate from a model constraint (e.g. the
+    /// objective bounds added by optimisation procedures).
+    #[deprecated(
+        note = "sentinel tag for clauses without a model constraint; inferences using it are not \
+                justified in the proof"
+    )]
+    pub fn max_value() -> ConstraintTag {
+        ConstraintTag(NonZero::<u32>::MAX)
+    }
 }
 
 impl StorageKey for ConstraintTag {

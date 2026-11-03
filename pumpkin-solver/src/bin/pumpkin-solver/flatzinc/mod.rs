@@ -22,10 +22,6 @@ use pumpkin_solver::Solver;
 use pumpkin_solver::core::branching::Brancher;
 #[cfg(doc)]
 use pumpkin_solver::core::constraints::cumulative;
-use pumpkin_solver::core::optimisation::OptimisationDirection;
-use pumpkin_solver::core::optimisation::OptimisationStrategy;
-use pumpkin_solver::core::optimisation::linear_sat_unsat::LinearSatUnsat;
-use pumpkin_solver::core::optimisation::linear_unsat_sat::LinearUnsatSat;
 use pumpkin_solver::core::results::OptimisationResult;
 use pumpkin_solver::core::results::ProblemSolution;
 use pumpkin_solver::core::results::SatisfactionResult;
@@ -35,6 +31,10 @@ use pumpkin_solver::core::termination::Combinator;
 use pumpkin_solver::core::termination::TerminationCondition;
 use pumpkin_solver::core::termination::TimeBudget;
 use pumpkin_solver::core::variables::DomainId;
+use pumpkin_solver::optimisation::OptimisationDirection;
+use pumpkin_solver::optimisation::OptimisationStrategy;
+use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
+use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;
 
 use self::instance::FlatZincInstance;
 use self::instance::Output;

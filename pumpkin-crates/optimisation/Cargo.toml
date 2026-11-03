@@ -1,0 +1,18 @@
+[package]
+name = "pumpkin-optimisation"
+version.workspace = true
+repository.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "The optimisation procedures of the Pumpkin constraint programming solver."
+
+[lints]
+workspace = true
+
+[dependencies]
+pumpkin-core = { version = "0.5.0", path = "../core" }
+clap = { version = "4.5.40", optional = true, features=["derive"] }
+
+[features]
+clap = ["dep:clap"]

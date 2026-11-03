@@ -143,8 +143,8 @@
 //! # use pumpkin_solver::core::results::ProblemSolution;
 //! # use pumpkin_solver::core::constraints;
 //! # use pumpkin_solver::core::constraints::Constraint;
-//! # use pumpkin_solver::core::optimisation::OptimisationDirection;
-//! # use pumpkin_solver::core::optimisation::linear_sat_unsat::LinearSatUnsat;
+//! # use pumpkin_solver::optimisation::OptimisationDirection;
+//! # use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
 //! # use std::cmp::max;
 //! # use crate::pumpkin_solver::core::optimisation::OptimisationProcedure;
 //! # use pumpkin_solver::core::results::SolutionReference;
@@ -361,6 +361,13 @@ pub mod branching {
     pub use pumpkin_branching::*;
     #[cfg(doc)]
     use pumpkin_core::branching::Brancher;
+}
+
+pub mod optimisation {
+    //! Contains the implementations of [`OptimisationProcedure`]s.
+    #[cfg(doc)]
+    use pumpkin_core::optimisation::OptimisationProcedure;
+    pub use pumpkin_optimisation::*;
 }
 
 pub mod checking {

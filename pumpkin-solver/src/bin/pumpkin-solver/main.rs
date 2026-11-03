@@ -35,7 +35,6 @@ use pumpkin_propagators::cumulative::options::CumulativePropagationMethod;
 use pumpkin_propagators::cumulative::time_table::CumulativeExplanationType;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::convert_case::Case;
-use pumpkin_solver::core::optimisation::OptimisationStrategy;
 use pumpkin_solver::core::options::*;
 use pumpkin_solver::core::proof::ProofLog;
 use pumpkin_solver::core::pumpkin_assert_simple;
@@ -46,6 +45,7 @@ use pumpkin_solver::core::results::SatisfactionResult;
 use pumpkin_solver::core::results::SolutionReference;
 use pumpkin_solver::core::statistics::configure_statistic_logging;
 use pumpkin_solver::core::termination::TimeBudget;
+use pumpkin_solver::optimisation::OptimisationStrategy;
 use result::PumpkinError;
 use result::PumpkinResult;
 
