@@ -598,6 +598,7 @@ impl NotificationEngine {
         );
         self.predicate_notifier
             .predicate_id_assignments
-            .synchronise(backtrack_level)
+            .synchronise(backtrack_level);
+        self.predicate_notifier.synchronise(backtrack_level);
     }
 }

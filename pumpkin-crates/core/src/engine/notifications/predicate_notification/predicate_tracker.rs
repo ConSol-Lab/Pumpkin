@@ -224,17 +224,25 @@ impl PredicateTracker {
             .with_max_assigned_is_tight(false)
     }
 
-    /// Returns whether the [`AssignedIndices`] currently point to the sentinels (i.e., whether
-    /// none of the tracked values have been passed by the bounds).
-    ///
-    /// Since the bounds can only become tighter when moving to a higher checkpoint, this also
-    /// means that all of the [`AssignedIndices`] which are stored on the trail point to the
-    /// sentinels; the nodes can thus be safely moved (see
+    /// Returns whether a [`Predicate`] with the provided right-hand side `value` can be removed
+    /// from the scope of this [`PredicateTracker`] (see
     /// [`PredicateTracker::remove_untracked_predicates`]).
-    pub(super) fn are_assigned_indices_at_sentinels(&self, trailed_values: &TrailedValues) -> bool {
-        self.nodes.is_empty()
-            || self.read_assigned_indices(trailed_values).into_bits()
-                == Self::initial_assigned_indices().into_bits()
+    ///
+    /// This is the case if its value has not been passed by the bounds, i.e., if it lies strictly
+    /// between the values of `min_assigned` and `max_assigned`; note that if `min_assigned` (or
+    /// `max_assigned`) is tight, then its value is equal to the bound and it is thus excluded.
+    ///
+    /// Since the bounds can only become tighter when moving to a higher checkpoint, none of the
+    /// [`AssignedIndices`] which are stored on the trail point to such a node either; hence, its
+    /// neighbours can be linked to each other without invalidating any of the trailed indices.
+    pub(super) fn can_untrack(&self, value: i32, trailed_values: &TrailedValues) -> bool {
+        if self.nodes.is_empty() {
+            return true;
+        }
+
+        let assigned_indices = self.read_assigned_indices(trailed_values);
+        self.nodes[assigned_indices.min_assigned() as usize].get_value() < value
+            && value < self.nodes[assigned_indices.max_assigned() as usize].get_value()
     }
 
     pub(super) fn initialise(
@@ -331,9 +339,15 @@ impl PredicateTracker {
         self.nodes[index]
     }
 
-    /// Returns all of the nodes currently present.
+    /// Returns all of the nodes which are currently linked (i.e., the sentinels and the nodes
+    /// which track at least one [`PredicateType`]; see
+    /// [`PredicateTracker::remove_untracked_predicates`]).
     fn get_all_nodes(&self) -> impl Iterator<Item = TrackedValueNode> {
-        self.nodes.iter().copied()
+        self.nodes
+            .iter()
+            .enumerate()
+            .filter(|(index, node)| *index < 2 || !node.flags.is_empty())
+            .map(|(_, node)| *node)
     }
 
     /// Allows the [`PredicateTracker`] to indicate that a tracked [`Predicate`] has been satisfied.
@@ -448,31 +462,28 @@ impl PredicateTracker {
     }
 
     /// Stops tracking the [`Predicate`]s whose [`PredicateId`] is not contained in `is_tracked`,
-    /// and removes the nodes which no longer track any [`PredicateType`]; returns the number of
-    /// removed nodes.
+    /// and unlinks the nodes which no longer track any [`PredicateType`] (i.e., their neighbours
+    /// are linked to each other); returns the number of unlinked nodes.
     ///
-    /// The remaining nodes are compacted in-place (preserving their relative order in
-    /// [`PredicateTracker::nodes`]), such that the sentinels remain at indices 0 and 1.
+    /// The unlinked nodes remain in [`PredicateTracker::nodes`], but they are not reachable from
+    /// the sentinels anymore.
     ///
-    /// This method should only be called when the [`AssignedIndices`] point to the sentinels (see
-    /// [`PredicateTracker::are_assigned_indices_at_sentinels`]), since the sentinels are the only
-    /// nodes which are not moved.
+    /// This method should only be called if all of the untracked [`Predicate`]s satisfy
+    /// [`PredicateTracker::can_untrack`].
     pub(super) fn remove_untracked_predicates(
         &mut self,
         is_tracked: &BitSet,
         trailed_values: &TrailedValues,
     ) -> usize {
-        pumpkin_assert_simple!(
-            self.are_assigned_indices_at_sentinels(trailed_values),
-            "Nodes can only be removed if the assigned indices point to the sentinels"
-        );
-
-        // First, we stop tracking the predicate types of which the predicate is not tracked
-        // anymore, and we unlink the nodes which do not track any predicate type anymore
         let mut num_removed = 0;
         self.tracked = EnumSet::empty();
         for index in 2..self.nodes.len() {
             let node = &mut self.nodes[index];
+            if node.flags.is_empty() {
+                // The node has been unlinked previously
+                continue;
+            }
+
             for predicate_type in node.flags {
                 if !is_tracked.contains(node.ids[predicate_type as usize].index()) {
                     let _ = node.flags.remove(predicate_type);
@@ -483,36 +494,15 @@ impl PredicateTracker {
 
             if node.flags.is_empty() {
                 num_removed += 1;
-                let (smaller, greater) = (node.smaller, node.greater);
+                let (value, smaller, greater) = (node.value, node.smaller, node.greater);
+                pumpkin_assert_simple!(
+                    self.can_untrack(value, trailed_values),
+                    "Only nodes which have not been passed by the bounds can be unlinked"
+                );
                 self.nodes[smaller as usize].greater = greater;
                 self.nodes[greater as usize].smaller = smaller;
             }
         }
-
-        if num_removed == 0 {
-            return 0;
-        }
-
-        // Then we move the remaining nodes to the front (in order of their index).
-        //
-        // When a node is moved, its neighbours are updated to point to its new index; hence, the
-        // links of a node always point to the current index of its neighbours (a neighbour is
-        // either moved already, in which case it has updated the link, or it has not been moved
-        // yet).
-        let mut new_index = 2;
-        for index in 2..self.nodes.len() {
-            if self.nodes[index].flags.is_empty() {
-                continue;
-            }
-
-            let node = self.nodes[index];
-            self.nodes[new_index] = node;
-            self.nodes[node.smaller as usize].greater = new_index as u32;
-            self.nodes[node.greater as usize].smaller = new_index as u32;
-
-            new_index += 1;
-        }
-        self.nodes.truncate(new_index);
 
         num_removed
     }
@@ -881,32 +871,32 @@ mod tests {
 
         let mut is_tracked: BitSet = (0..id_generator.num_predicate_ids()).collect();
         let _ = is_tracked.remove(lower_bound_5.index());
-        assert!(tracker.are_assigned_indices_at_sentinels(&trailed_values));
+        assert!(tracker.can_untrack(5, &trailed_values));
         let num_removed = tracker.remove_untracked_predicates(&is_tracked, &trailed_values);
         assert_eq!(num_removed, 1);
 
-        // The sentinels remain at the start, followed by the remaining nodes in order of insertion
+        // The unlinked node remains in place, but its neighbours now point to each other
         let values = tracker
-            .nodes
-            .iter()
+            .get_all_nodes()
             .map(|node| node.value)
             .collect::<Vec<_>>();
         assert_eq!(values, vec![-1, 11, 7, 3]);
+        assert_eq!(tracker.nodes[2].value, 5);
         assert_eq!(
             (
                 tracker.nodes[0].greater,
-                tracker.nodes[3].greater,
-                tracker.nodes[2].greater
+                tracker.nodes[4].greater,
+                tracker.nodes[3].greater
             ),
-            (3, 2, 1)
+            (4, 3, 1)
         );
         assert_eq!(
             (
                 tracker.nodes[1].smaller,
-                tracker.nodes[2].smaller,
-                tracker.nodes[3].smaller
+                tracker.nodes[3].smaller,
+                tracker.nodes[4].smaller
             ),
-            (2, 3, 0)
+            (3, 4, 0)
         );
 
         // The remaining predicates are still updated
@@ -919,7 +909,8 @@ mod tests {
         );
         assert!(predicate_id_assignments.is_satisfied(lower_bound_3, &assignments, &id_generator));
         assert!(predicate_id_assignments.is_falsified(upper_bound_7, &assignments, &id_generator));
-        assert!(!tracker.are_assigned_indices_at_sentinels(&trailed_values));
+        assert!(!tracker.can_untrack(3, &trailed_values));
+        assert!(!tracker.can_untrack(7, &trailed_values));
     }
 
     #[test]

@@ -201,6 +201,17 @@ impl PredicateNotifier {
         pumpkin_assert_simple!(added, "Expected {predicate:?} to not be tracked yet");
     }
 
+    /// Called when backtracking to the provided `backtrack_level`.
+    ///
+    /// At the root level, the bounds are as loose as they can be, so the candidates which were
+    /// blocked during the last cleanup (see [`PredicateNotifier::untrack_unwatched_predicates`])
+    /// could now be removable; hence, they again count towards triggering a cleanup.
+    pub(crate) fn synchronise(&mut self, backtrack_level: usize) {
+        if backtrack_level == 0 {
+            self.num_blocked_untrack_candidates = 0;
+        }
+    }
+
     /// Indicates that the provided [`PredicateId`] is not watched by any propagator anymore, and
     /// can thus be removed from the scope of its [`PredicateTracker`].
     ///
@@ -227,18 +238,18 @@ impl PredicateNotifier {
     /// [`PredicateNotifier::mark_as_untrack_candidate`] (and which have not been watched since)
     /// from the scope of their [`PredicateTracker`].
     ///
-    /// The nodes of a [`PredicateTracker`] can only be moved if its assigned indices point to the
-    /// sentinels (see [`PredicateTracker::are_assigned_indices_at_sentinels`]); the candidates of
-    /// the other [`PredicateTracker`]s remain candidates and are considered in a later cleanup.
+    /// A [`Predicate`] can only be removed if its value has not been passed by the bounds (see
+    /// [`PredicateTracker::can_untrack`]); the other candidates remain candidates and are
+    /// considered in a later cleanup.
     fn untrack_unwatched_predicates(&mut self, trailed_values: &TrailedValues) {
         let mut updated_domains = Vec::new();
         for index in self.untrack_candidates.iter() {
-            let domain = self
+            let predicate = self
                 .predicate_to_id
-                .get_predicate(PredicateId::create_from_index(index))
-                .get_domain();
+                .get_predicate(PredicateId::create_from_index(index));
+            let domain = predicate.get_domain();
             if self.domain_id_to_predicate_tracker[domain]
-                .are_assigned_indices_at_sentinels(trailed_values)
+                .can_untrack(predicate.get_right_hand_side(), trailed_values)
             {
                 let removed = self.is_tracked.remove(index);
                 pumpkin_assert_simple!(removed, "Expected an untrack candidate to be tracked");
@@ -311,7 +322,7 @@ mod tests {
     }
 
     #[test]
-    fn blocked_candidates_are_untracked_once_their_tracker_is_at_the_sentinels() {
+    fn passed_candidates_are_untracked_once_they_are_not_passed_anymore() {
         let mut assignments = Assignments::default();
         let mut trailed_values = TrailedValues::default();
         let mut notifier = PredicateNotifier::default();
@@ -324,7 +335,8 @@ mod tests {
             notifier.track_predicate(id, &mut trailed_values, &assignments);
         }
 
-        // The lower-bound passes some of the tracked values, so the nodes cannot be moved
+        // The lower-bound passes the values 1 to 5 (where `min_assigned` is tight for 5), so those
+        // nodes cannot be unlinked
         trailed_values.new_checkpoint();
         notifier.domain_id_to_predicate_tracker[x].on_update(
             predicate!(x >= 5),
@@ -335,29 +347,41 @@ mod tests {
         );
 
         // The cleanup is attempted, but the candidates are blocked
-        notifier.mark_as_untrack_candidate(ids[10], &trailed_values);
-        notifier.mark_as_untrack_candidate(ids[11], &trailed_values);
+        notifier.mark_as_untrack_candidate(ids[0], &trailed_values);
+        notifier.mark_as_untrack_candidate(ids[4], &trailed_values);
         assert_eq!(notifier.statistics.num_cleanups, 0);
-        assert!(notifier.is_tracked.contains(ids[10].index()));
-        assert!(notifier.is_tracked.contains(ids[11].index()));
+        assert!(notifier.is_tracked.contains(ids[0].index()));
+        assert!(notifier.is_tracked.contains(ids[4].index()));
         assert_eq!(notifier.num_untrack_candidates, 2);
         assert_eq!(notifier.num_blocked_untrack_candidates, 2);
 
         // The blocked candidates do not count towards triggering another cleanup
-        notifier.mark_as_untrack_candidate(ids[12], &trailed_values);
+        notifier.mark_as_untrack_candidate(ids[1], &trailed_values);
         assert_eq!(notifier.num_blocked_untrack_candidates, 2);
-        assert!(notifier.is_tracked.contains(ids[12].index()));
+        assert!(notifier.is_tracked.contains(ids[1].index()));
 
-        // After backtracking, the tracker is at the sentinels again, and all of the candidates are
+        // A candidate which has not been passed is untracked, even though the bounds have moved
+        notifier.mark_as_untrack_candidate(ids[10], &trailed_values);
+        assert_eq!(notifier.statistics.num_cleanups, 1);
+        assert_eq!(notifier.statistics.num_untracked_values, 1);
+        assert!(!notifier.is_tracked.contains(ids[10].index()));
+        assert_eq!(notifier.num_untrack_candidates, 3);
+        assert_eq!(notifier.num_blocked_untrack_candidates, 3);
+
+        // After backtracking to the root, none of the values are passed anymore and the blocked
+        // candidates count towards triggering a cleanup again; all of the candidates are thus
         // removed by the next cleanup
         trailed_values.synchronise(0);
-        notifier.mark_as_untrack_candidate(ids[13], &trailed_values);
-        assert_eq!(notifier.statistics.num_cleanups, 1);
-        assert_eq!(notifier.statistics.num_untracked_values, 4);
-        assert_eq!(notifier.num_tracked, 16);
+        notifier.synchronise(0);
+        assert_eq!(notifier.num_blocked_untrack_candidates, 0);
+        notifier.mark_as_untrack_candidate(ids[2], &trailed_values);
+        assert_eq!(notifier.statistics.num_cleanups, 2);
+        assert_eq!(notifier.statistics.num_untracked_values, 5);
+        assert_eq!(notifier.num_tracked, 15);
         assert_eq!(notifier.num_untrack_candidates, 0);
         assert_eq!(notifier.num_blocked_untrack_candidates, 0);
-        for id in &ids[10..14] {
+        assert!(notifier.is_tracked.contains(ids[3].index()));
+        for id in ids[0..3].iter().chain(&ids[4..5]).chain(&ids[10..11]) {
             assert!(!notifier.is_tracked.contains(id.index()));
         }
     }
