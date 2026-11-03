@@ -66,6 +66,10 @@ pub(crate) struct FlatZincOptions {
     /// the solver to print intermediate solutions.
     pub(crate) all_solutions: bool,
 
+    /// For optimisation problems, print intermediate solutions. Has no effect on satisfaction
+    /// problems.
+    pub(crate) intermediate_solutions: bool,
+
     /// If set, the solver stops after reporting this many solutions. For optimisation problems,
     /// this means that this many intermediate solutions are reported.
     pub(crate) num_solutions: Option<u64>,
@@ -84,10 +88,14 @@ pub(crate) struct FlatZincOptions {
 }
 
 impl FlatZincOptions {
-    /// Returns `true` if more than one solution can be reported (all solutions for satisfaction
-    /// problems or intermediate solutions for optimisation problems).
-    fn report_multiple_solutions(&self) -> bool {
+    /// Returns `true` if all solutions of a satisfaction problem should be reported.
+    fn report_all_solutions(&self) -> bool {
         self.all_solutions || self.num_solutions.is_some()
+    }
+
+    /// Returns `true` if intermediate solutions of an optimisation problem should be reported.
+    fn report_intermediate_solutions(&self) -> bool {
+        self.all_solutions || self.intermediate_solutions || self.num_solutions.is_some()
     }
 }
 
@@ -208,7 +216,7 @@ pub(crate) fn solve<R: ConflictResolver>(
             brancher,
             resolver,
             Some(objective),
-            options.report_multiple_solutions(),
+            options.report_intermediate_solutions(),
             &outputs,
             solver,
             solution,
@@ -240,7 +248,7 @@ pub(crate) fn solve<R: ConflictResolver>(
         }
         OptimisationResult::Optimal(optimal_solution) => {
             let objective_value = optimal_solution.get_integer_value(objective) as i64;
-            if !options.report_multiple_solutions() {
+            if !options.report_intermediate_solutions() {
                 log_statistics(
                     &solver,
                     &brancher,
@@ -309,7 +317,7 @@ fn satisfy(
     init_time: Duration,
     mut resolver: impl ConflictResolver,
 ) {
-    if options.report_multiple_solutions() {
+    if options.report_all_solutions() {
         let mut solution_iterator =
             solver.get_solution_iterator(&mut brancher, &mut termination, &mut resolver);
         let mut has_found_solution = false;
