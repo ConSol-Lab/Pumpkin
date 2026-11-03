@@ -1,4 +1,5 @@
 use super::TerminationCondition;
+use crate::basic_types::SolutionReference;
 
 /// A [`TerminationCondition`] which triggers once the solver has found the specified number of
 /// solutions.
@@ -25,7 +26,7 @@ impl TerminationCondition for SolutionLimit {
         self.num_solutions_found >= self.limit
     }
 
-    fn on_solution_found(&mut self) {
+    fn on_solution(&mut self, _solution: SolutionReference) {
         self.num_solutions_found += 1;
     }
 }
@@ -33,15 +34,17 @@ impl TerminationCondition for SolutionLimit {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::Assignments;
 
     #[test]
     fn stops_once_limit_is_reached() {
+        let assignments = Assignments::default();
         let mut termination = SolutionLimit::new(2);
 
         assert!(!termination.should_stop());
-        termination.on_solution_found();
+        termination.on_solution(SolutionReference::new(&assignments));
         assert!(!termination.should_stop());
-        termination.on_solution_found();
+        termination.on_solution(SolutionReference::new(&assignments));
         assert!(termination.should_stop());
     }
 }

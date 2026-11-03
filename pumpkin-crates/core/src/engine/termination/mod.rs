@@ -5,6 +5,8 @@
 
 use std::ops::DerefMut;
 
+use crate::basic_types::SolutionReference;
+
 pub(crate) mod combinator;
 pub(crate) mod indefinite;
 pub(crate) mod solution_limit;
@@ -20,7 +22,7 @@ pub trait TerminationCondition {
     fn should_stop(&mut self) -> bool;
 
     /// Called by the solver whenever it finds a solution.
-    fn on_solution_found(&mut self) {}
+    fn on_solution(&mut self, _solution: SolutionReference) {}
 }
 
 impl<T: TerminationCondition> TerminationCondition for Option<T> {
@@ -31,9 +33,9 @@ impl<T: TerminationCondition> TerminationCondition for Option<T> {
         }
     }
 
-    fn on_solution_found(&mut self) {
+    fn on_solution(&mut self, solution: SolutionReference) {
         if let Some(t) = self {
-            t.on_solution_found();
+            t.on_solution(solution);
         }
     }
 }
@@ -43,7 +45,7 @@ impl TerminationCondition for Box<dyn TerminationCondition> {
         self.deref_mut().should_stop()
     }
 
-    fn on_solution_found(&mut self) {
-        self.deref_mut().on_solution_found();
+    fn on_solution(&mut self, solution: SolutionReference) {
+        self.deref_mut().on_solution(solution);
     }
 }

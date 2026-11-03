@@ -1,4 +1,5 @@
 use super::TerminationCondition;
+use crate::basic_types::SolutionReference;
 
 /// A [`TerminationCondition`] which triggers when one of two given [`TerminationCondition`]s
 /// triggers.
@@ -22,8 +23,8 @@ impl<T1: TerminationCondition, T2: TerminationCondition> TerminationCondition
         self.t1.should_stop() || self.t2.should_stop()
     }
 
-    fn on_solution_found(&mut self) {
-        self.t1.on_solution_found();
-        self.t2.on_solution_found();
+    fn on_solution(&mut self, solution: SolutionReference) {
+        self.t1.on_solution(solution);
+        self.t2.on_solution(solution);
     }
 }
