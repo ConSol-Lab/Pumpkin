@@ -21,4 +21,9 @@ impl<T1: TerminationCondition, T2: TerminationCondition> TerminationCondition
     fn should_stop(&mut self) -> bool {
         self.t1.should_stop() || self.t2.should_stop()
     }
+
+    fn on_solution_found(&mut self) {
+        self.t1.on_solution_found();
+        self.t2.on_solution_found();
+    }
 }

@@ -577,6 +577,11 @@ impl ConstraintSatisfactionSolver {
                         return CSPSolverExecutionFlag::Infeasible;
                     }
 
+                    Err(CSPSolverExecutionFlag::Feasible) => {
+                        termination.on_solution_found();
+                        return CSPSolverExecutionFlag::Feasible;
+                    }
+
                     Err(flag) => return flag,
                     Ok(()) => {}
                 }

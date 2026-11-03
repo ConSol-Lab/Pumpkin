@@ -7,6 +7,7 @@ use std::ops::DerefMut;
 
 pub(crate) mod combinator;
 pub(crate) mod indefinite;
+pub(crate) mod solution_limit;
 pub(crate) mod time_budget;
 
 /// The central trait that defines a termination condition. A termination condition determines when
@@ -17,6 +18,9 @@ pub(crate) mod time_budget;
 pub trait TerminationCondition {
     /// Returns `true` when the solver should stop, `false` otherwise.
     fn should_stop(&mut self) -> bool;
+
+    /// Called by the solver whenever it finds a solution.
+    fn on_solution_found(&mut self) {}
 }
 
 impl<T: TerminationCondition> TerminationCondition for Option<T> {
@@ -26,10 +30,20 @@ impl<T: TerminationCondition> TerminationCondition for Option<T> {
             None => false,
         }
     }
+
+    fn on_solution_found(&mut self) {
+        if let Some(t) = self {
+            t.on_solution_found();
+        }
+    }
 }
 
 impl TerminationCondition for Box<dyn TerminationCondition> {
     fn should_stop(&mut self) -> bool {
         self.deref_mut().should_stop()
+    }
+
+    fn on_solution_found(&mut self) {
+        self.deref_mut().on_solution_found();
     }
 }
