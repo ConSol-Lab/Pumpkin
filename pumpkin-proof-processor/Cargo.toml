@@ -27,5 +27,8 @@ escargot = "1.0.1"
 pumpkin-checker = { path = "../pumpkin-checker" }
 regex = "1.12.3"
 
+[features]
+debug-checks = ["pumpkin-core/debug-checks"]
+
 [lints]
 workspace = true
