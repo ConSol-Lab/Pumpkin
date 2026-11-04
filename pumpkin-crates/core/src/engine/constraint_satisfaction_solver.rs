@@ -149,6 +149,11 @@ pub enum ConflictResolverType {
     /// current decision level).
     #[default]
     OneUIP,
+    /// 1-UIP conflict analysis where learned nogoods are only watched by a single predicate (the
+    /// asserting predicate is not watched), similar to Chuffed.
+    ///
+    /// This reduces the number of watchers at the cost of weaker propagation of learned nogoods.
+    OneUIPOneWatcher,
     /// An alternative to 1-UIP which stops as soon as the learned nogood only creates decision
     /// predicates.
     AllDecision,
@@ -279,6 +284,9 @@ impl ConstraintSatisfactionSolver {
                 }
                 ConflictResolverType::ExtendedCPIP | ConflictResolverType::BoundsExtendedCPIP => {
                     PropagationMode::ExtendedNogoodPropagation
+                }
+                ConflictResolverType::OneUIPOneWatcher => {
+                    PropagationMode::UnitPropagationOneWatcher
                 }
                 ConflictResolverType::NoLearning => PropagationMode::default(),
             },

@@ -766,30 +766,32 @@ fn run() -> PumpkinResult<()> {
                 },
                 NoLearningResolver,
             )?,
-            ConflictResolverType::OneUIP => flatzinc::solve(
-                Solver::with_options(solver_options),
-                instance_path,
-                time_limit,
-                FlatZincOptions {
-                    free_search: args.free_search,
-                    all_solutions: args.all_solutions,
-                    cumulative_options: CumulativeOptions::new(
-                        args.cumulative_allow_holes,
-                        args.cumulative_explanation_type,
-                        !args.cumulative_single_profiles,
-                        args.cumulative_propagation_method,
-                        args.cumulative_incremental_backtracking,
+            ConflictResolverType::OneUIP | ConflictResolverType::OneUIPOneWatcher => {
+                flatzinc::solve(
+                    Solver::with_options(solver_options),
+                    instance_path,
+                    time_limit,
+                    FlatZincOptions {
+                        free_search: args.free_search,
+                        all_solutions: args.all_solutions,
+                        cumulative_options: CumulativeOptions::new(
+                            args.cumulative_allow_holes,
+                            args.cumulative_explanation_type,
+                            !args.cumulative_single_profiles,
+                            args.cumulative_propagation_method,
+                            args.cumulative_incremental_backtracking,
+                        ),
+                        optimisation_strategy: args.optimisation_strategy,
+                        proof_type: args.proof_path.map(|_| args.proof_type),
+                        verbose: args.verbose,
+                    },
+                    ResolutionResolver::new(
+                        AnalysisMode::OneUIP,
+                        recursive_minimisation,
+                        iterative_minimisation,
                     ),
-                    optimisation_strategy: args.optimisation_strategy,
-                    proof_type: args.proof_path.map(|_| args.proof_type),
-                    verbose: args.verbose,
-                },
-                ResolutionResolver::new(
-                    AnalysisMode::OneUIP,
-                    recursive_minimisation,
-                    iterative_minimisation,
-                ),
-            )?,
+                )?
+            }
             ConflictResolverType::ExtendedCPIP => flatzinc::solve(
                 Solver::with_options(solver_options),
                 instance_path,

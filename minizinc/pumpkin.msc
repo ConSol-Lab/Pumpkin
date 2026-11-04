@@ -33,8 +33,8 @@
     ],
     [
       "--conflict-resolver",
-      "Determines the conflict resolver. [default: one-uip] [possible values: no-learning, one-uip, all-decision, extended-cpip, bounds-extended-cpip]",
-      "opt:no-learning:one-uip:all-decision:extended-cpip:bounds-extended-cpip",
+      "Determines the conflict resolver. [default: one-uip] [possible values: no-learning, one-uip, one-uip-one-watcher, all-decision, extended-cpip, bounds-extended-cpip]",
+      "opt:no-learning:one-uip:one-uip-one-watcher:all-decision:extended-cpip:bounds-extended-cpip",
       "one-uip"
     ],
     [

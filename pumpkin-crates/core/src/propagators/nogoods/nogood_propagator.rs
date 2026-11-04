@@ -1112,12 +1112,16 @@ impl NogoodPropagator {
 
         // Now we add two watchers to the first two predicates in the nogood; we are
         // guaranteed that these are different predicates
-        NogoodPropagator::add_watcher(
-            context,
-            self.nogood_predicates.get_nogood(nogood_id)[0],
-            watcher,
-            &mut self.watch_lists,
-        );
+        //
+        // With the one-watcher scheme, the asserting predicate at position 0 is not watched.
+        if self.propagation_mode != PropagationMode::UnitPropagationOneWatcher {
+            NogoodPropagator::add_watcher(
+                context,
+                self.nogood_predicates.get_nogood(nogood_id)[0],
+                watcher,
+                &mut self.watch_lists,
+            );
+        }
         NogoodPropagator::add_watcher(
             context,
             self.nogood_predicates.get_nogood(nogood_id)[1],
@@ -1892,6 +1896,17 @@ impl NogoodPropagator {
             return Ok(());
         }
 
+        // With the one-watcher scheme, a learned nogood only propagates the predicate at position
+        // 0, which requires all other predicates to be satisfied.
+        if self.propagation_mode == PropagationMode::UnitPropagationOneWatcher
+            && self.nogood_info[info_id].is_learned
+            && !nogood[1..]
+                .iter()
+                .all(|predicate_id| context.is_predicate_id_satisfied(*predicate_id))
+        {
+            return Ok(());
+        }
+
         match self.propagation_mode {
             PropagationMode::ExtendedNogoodPropagation => {
                 // We find all of the unasssigned predicates and get their domains
@@ -1927,7 +1942,7 @@ impl NogoodPropagator {
                     )?;
                 }
             }
-            PropagationMode::UnitPropagation => {}
+            PropagationMode::UnitPropagation | PropagationMode::UnitPropagationOneWatcher => {}
         }
 
         let num_satisfied_predicates = nogood
@@ -2013,9 +2028,13 @@ impl NogoodPropagator {
                 continue;
             }
 
-            if !(is_watching(nogood_predicates[0], nogood_id)
-                && is_watching(nogood_predicates[1], nogood_id))
-            {
+            // With the one-watcher scheme, learned nogoods are only watched at position 1.
+            let is_watched_at_zeroth = is_watching(nogood_predicates[0], nogood_id)
+                || (self.propagation_mode == PropagationMode::UnitPropagationOneWatcher
+                    && self.nogood_info[self.nogood_predicates.get_nogood_index(&nogood_id)]
+                        .is_learned);
+
+            if !(is_watched_at_zeroth && is_watching(nogood_predicates[1], nogood_id)) {
                 eprintln!("Nogood id: {}", nogood_id.id);
                 eprintln!("Nogood: {nogood_predicates:?}");
                 eprintln!(
@@ -2028,10 +2047,7 @@ impl NogoodPropagator {
                 );
             }
 
-            assert!(
-                is_watching(nogood_predicates[0], nogood_id)
-                    && is_watching(nogood_predicates[1], nogood_id)
-            );
+            assert!(is_watched_at_zeroth && is_watching(nogood_predicates[1], nogood_id));
         }
         true
     }
@@ -2192,5 +2208,73 @@ mod tests {
         state.propagate_to_fixed_point().expect("no conflict");
 
         assert!(!state.contains(x4, 2));
+    }
+
+    #[test]
+    fn one_watcher_learned_nogood_only_propagates_asserting_predicate() {
+        let mut state = State::default();
+        let nogood_handle = state.add_propagator(NogoodPropagatorConstructor::new(
+            0,
+            LearningOptions::default(),
+            PropagationMode::UnitPropagationOneWatcher,
+            Priority::High,
+        ));
+        let x1 = state.new_interval_variable(1, 4, None);
+        let x2 = state.new_interval_variable(1, 4, None);
+        let x3 = state.new_interval_variable(1, 4, None);
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.new_checkpoint();
+        let _ = state
+            .post(predicate!(x2 >= 2))
+            .expect("the value is in the domain");
+        let _ = state
+            .post(predicate!(x3 >= 2))
+            .expect("the value is in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        // The asserting predicate comes first.
+        let nogood = vec![
+            predicate!(x1 >= 2),
+            predicate!(x3 >= 2),
+            predicate!(x2 >= 2),
+        ];
+        let constraint_tag = state.new_constraint_tag();
+        let inference_code = state.add_inference_checker(
+            constraint_tag,
+            NogoodLabel,
+            NogoodChecker {
+                nogood: nogood.clone().into(),
+            },
+        );
+        let (nogood_propagator, mut context) = state.get_propagator_mut_with_context(nogood_handle);
+        let nogood_propagator =
+            nogood_propagator.expect("the handle refers to the nogood propagator");
+        nogood_propagator.add_asserting_nogood(nogood, inference_code, &mut context);
+
+        // Only the predicate at position 1 is watched.
+        let num_watchers: usize = nogood_propagator.watch_lists.iter().map(Vec::len).sum();
+        assert_eq!(num_watchers, 1);
+        state.propagate_to_fixed_point().expect("no conflict");
+        assert!(!state.contains(x1, 2));
+
+        // Satisfying the asserting predicate does not propagate the other predicates.
+        let _ = state.restore_to(0);
+        state.propagate_to_fixed_point().expect("no conflict");
+        state.new_checkpoint();
+        let _ = state
+            .post(predicate!(x1 >= 2))
+            .expect("the value is in the domain");
+        let _ = state
+            .post(predicate!(x3 >= 2))
+            .expect("the value is in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+        assert!(state.contains(x2, 2));
+
+        // The conflict is still detected once all predicates are satisfied.
+        let _ = state
+            .post(predicate!(x2 >= 2))
+            .expect("the value is in the domain");
+        assert!(state.propagate_to_fixed_point().is_err());
     }
 }

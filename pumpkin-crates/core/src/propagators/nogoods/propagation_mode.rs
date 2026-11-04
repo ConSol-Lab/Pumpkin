@@ -37,6 +37,16 @@ pub enum PropagationMode {
     /// If both of these conditions hold, then the unassigned predicate is propagated to be false.
     #[default]
     UnitPropagation,
+    /// Uses unit propagation, but learned nogoods are only watched by a single predicate (the
+    /// predicate at position 1), similar to Chuffed.
+    ///
+    /// The predicate at position 0 (the asserting predicate) of a learned nogood is not watched.
+    /// This means that a learned nogood only propagates the predicate at position 0; if that
+    /// predicate is satisfied while the others are not yet all satisfied, then no propagation takes
+    /// place. This is sound since learned nogoods are implied by the other constraints.
+    ///
+    /// Permanent nogoods are still watched by two predicates.
+    UnitPropagationOneWatcher,
     /// Uses the extended nogood propagation algorithm \[1\].
     ///
     /// Extended nogood propagation occurs under the following two conditions:
@@ -94,7 +104,7 @@ impl PropagationMode {
                     _ => WatcherProcessingStatus::Continue,
                 }
             }
-            PropagationMode::UnitPropagation => {
+            PropagationMode::UnitPropagation | PropagationMode::UnitPropagationOneWatcher => {
                 // Standard case, we check whether the atomic constraint is not satisfied and
                 // replace it if we have found such a predicate.
                 if !context.is_predicate_id_satisfied(nogood_predicates[index]) {
@@ -162,7 +172,7 @@ impl PropagationMode {
                     Some(nogood_id),
                 )?;
             }
-            PropagationMode::UnitPropagation => {
+            PropagationMode::UnitPropagation | PropagationMode::UnitPropagationOneWatcher => {
                 statistics.num_unit_propagations += 1;
 
                 // There are two scenarios:
@@ -222,7 +232,7 @@ impl PropagationMode {
                     return true;
                 }
             }
-            PropagationMode::UnitPropagation => {}
+            PropagationMode::UnitPropagation | PropagationMode::UnitPropagationOneWatcher => {}
         }
 
         false
@@ -244,7 +254,7 @@ impl PropagationMode {
                     .collect::<Vec<_>>(),
                 context,
             ),
-            PropagationMode::UnitPropagation => {
+            PropagationMode::UnitPropagation | PropagationMode::UnitPropagationOneWatcher => {
                 // Skip the zero-th predicate since it is unassigned,
                 // but will be assigned at the level of the predicate at index one.
                 lbd_helper.compute_lbd(&nogood[1..], context)
@@ -284,7 +294,7 @@ impl PropagationMode {
                 }
                 true
             }
-            PropagationMode::UnitPropagation => {
+            PropagationMode::UnitPropagation | PropagationMode::UnitPropagationOneWatcher => {
                 if notification_engine.is_predicate_id_falsified(nogood[0], assignments) {
                     let trail_position = assignments
                         .get_trail_position(&!notification_engine.get_predicate(nogood[0]))
@@ -415,7 +425,7 @@ impl PropagationMode {
                     propagation_buffer.buffer_extended_nogood_propagation(nogood, inference_code);
                 }
             }
-            PropagationMode::UnitPropagation => {
+            PropagationMode::UnitPropagation | PropagationMode::UnitPropagationOneWatcher => {
                 // Add the nogood to the database.
                 //
                 // Currently we always allocate a fresh ID
