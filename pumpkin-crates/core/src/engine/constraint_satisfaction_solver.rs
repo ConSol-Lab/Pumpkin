@@ -715,12 +715,6 @@ impl ConstraintSatisfactionSolver {
             return;
         }
 
-        if brancher.is_restart_pointless() {
-            // If the brancher is static then there is no point in restarting as it would make the
-            // exact same decision
-            return;
-        }
-
         self.solver_statistics.engine_statistics.num_restarts += 1;
 
         ConstraintSatisfactionSolver::backtrack(

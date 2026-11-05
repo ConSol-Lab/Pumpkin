@@ -40,6 +40,19 @@ pub struct LearningOptions {
     pub activity_bump_increment: f32,
     /// The priority of the nogood propagator.
     pub nogood_propagator_priority: Priority,
+    /// Whether to remove the learned nogoods which were explained since the previous conflict and
+    /// which are subsumed by the newly learned nogood (as `subsumption_during_conflict_analysis`
+    /// in OR-tools CP-SAT).
+    pub subsume_explained_nogoods: bool,
+    /// The number of most recently learned nogoods which are removed if they are subsumed by the
+    /// newly learned nogood (as `eagerly_subsume_last_n_conflicts` in OR-tools CP-SAT).
+    ///
+    /// A value of 0 disables this.
+    pub eagerly_subsume_last_n_nogoods: usize,
+    /// Whether subsumption is checked semantically (every predicate of the learned nogood is
+    /// implied by a predicate of the subsumed nogood) instead of syntactically (every predicate of
+    /// the learned nogood occurs in the subsumed nogood).
+    pub semantic_subsumption: bool,
 }
 impl Default for LearningOptions {
     fn default() -> Self {
@@ -53,6 +66,9 @@ impl Default for LearningOptions {
             lbd_threshold_low: 3,
             activity_bump_increment: 1.0,
             nogood_propagator_priority: Priority::High,
+            subsume_explained_nogoods: true,
+            eagerly_subsume_last_n_nogoods: 4,
+            semantic_subsumption: true,
         }
     }
 }

@@ -321,6 +321,36 @@ struct Args {
     )]
     nogood_propagator_priority: Priority,
 
+    /// Disables removing learned nogoods which were explained during conflict analysis and are
+    /// subsumed by the learned nogood (as `subsumption_during_conflict_analysis` in OR-tools).
+    #[arg(
+        help_heading = "Nogood Database",
+        long = "learning-no-explained-nogood-subsumption",
+        verbatim_doc_comment
+    )]
+    learning_no_explained_nogood_subsumption: bool,
+
+    /// The number of most recently learned nogoods which are removed when subsumed by a newly
+    /// learned nogood (as `eagerly_subsume_last_n_conflicts` in OR-tools); 0 disables this.
+    #[arg(
+        help_heading = "Nogood Database",
+        long = "learning-eagerly-subsume-last-n-nogoods",
+        default_value_t = 4,
+        verbatim_doc_comment,
+        value_name = "usize"
+    )]
+    learning_eagerly_subsume_last_n_nogoods: usize,
+
+    /// Checks nogood subsumption syntactically (every predicate of the learned nogood occurs in
+    /// the subsumed nogood, as in OR-tools) instead of semantically (every predicate of the
+    /// learned nogood is implied by a predicate of the subsumed nogood).
+    #[arg(
+        help_heading = "Nogood Database",
+        long = "learning-syntactic-subsumption",
+        verbatim_doc_comment
+    )]
+    learning_syntactic_subsumption: bool,
+
     /// Determines that no restarts are allowed by the solver.
     #[arg(
         help_heading = "Restarts",
@@ -717,6 +747,9 @@ fn run() -> PumpkinResult<()> {
         lbd_threshold_high: args.learning_high_lbd_threshold,
         activity_bump_increment: 1.0,
         nogood_propagator_priority: args.nogood_propagator_priority,
+        subsume_explained_nogoods: !args.learning_no_explained_nogood_subsumption,
+        eagerly_subsume_last_n_nogoods: args.learning_eagerly_subsume_last_n_nogoods,
+        semantic_subsumption: !args.learning_syntactic_subsumption,
     };
 
     let solver_options = SolverOptions {

@@ -1,6 +1,8 @@
 use std::cmp::max;
+use std::collections::VecDeque;
 use std::ops::Not;
 
+use bit_set::BitSet;
 use bitfield_struct::bitfield;
 use log::warn;
 
@@ -101,11 +103,33 @@ pub struct NogoodPropagator {
     /// The priority of the nogood propagator.
     priority: Priority,
     propagation_buffer: PropagationBuffer,
+    /// The nogoods which have been explained since the last learned nogood was added.
+    ///
+    /// These are the candidates for being subsumed by the next learned nogood (see
+    /// [`LearningOptions::subsume_explained_nogoods`]).
+    explained_nogoods: Vec<NogoodId>,
+    /// The most recently learned nogoods; at most
+    /// [`LearningOptions::eagerly_subsume_last_n_nogoods`] are stored.
+    recently_learned_nogoods: VecDeque<NogoodId>,
+    /// Marks the [`PredicateId`]s of the learned nogood when checking for syntactic subsumption.
+    subsumption_marks: BitSet,
+    /// The predicates of the learned nogood sorted by domain, used when checking for semantic
+    /// subsumption.
+    subsumption_learned_predicates: Vec<Predicate>,
+    /// For each predicate in `subsumption_learned_predicates`, whether it is implied by a
+    /// predicate of the candidate nogood.
+    subsumption_is_implied: Vec<bool>,
 }
 
 create_statistics_struct!(NogoodPropagatorStatistics {
     /// Records the number of unit propagations.
     num_unit_propagations: usize,
+    /// Records the number of explained nogoods which were removed because they were subsumed by
+    /// a learned nogood.
+    num_deleted_subsumed_explained_nogoods: usize,
+    /// Records the number of recently learned nogoods which were removed because they were
+    /// subsumed by a learned nogood.
+    num_deleted_subsumed_recently_learned_nogoods: usize,
     extended_propagation_statistics: ExtendedPropagationStatistics
 });
 
@@ -195,6 +219,11 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             semantic_minimiser: Default::default(),
             priority: self.priority,
             propagation_buffer: Default::default(),
+            explained_nogoods: Default::default(),
+            recently_learned_nogoods: Default::default(),
+            subsumption_marks: Default::default(),
+            subsumption_learned_predicates: Default::default(),
+            subsumption_is_implied: Default::default(),
         };
 
         PropagatorSpec {
@@ -304,6 +333,19 @@ impl Propagator for NogoodPropagator {
         self.statistics
             .num_unit_propagations
             .log(statistic_logger.clone());
+        (self.statistics.num_deleted_subsumed_explained_nogoods
+            + self
+                .statistics
+                .num_deleted_subsumed_recently_learned_nogoods)
+            .log(statistic_logger.attach_to_prefix("num_deleted_subsumed_nogoods"));
+        self.statistics
+            .num_deleted_subsumed_explained_nogoods
+            .log(statistic_logger.attach_to_prefix("num_deleted_subsumed_explained_nogoods"));
+        self.statistics
+            .num_deleted_subsumed_recently_learned_nogoods
+            .log(
+                statistic_logger.attach_to_prefix("num_deleted_subsumed_recently_learned_nogoods"),
+            );
 
         if self.propagation_mode == PropagationMode::ExtendedNogoodPropagation {
             self.statistics
@@ -537,6 +579,10 @@ impl Propagator for NogoodPropagator {
         let id = reason.nogood_id();
         self.temp_nogood_reason.clear();
 
+        if self.parameters.subsume_explained_nogoods {
+            self.explained_nogoods.push(id);
+        }
+
         let result = if reason.explains_extended_propagation() {
             // The lazy explanations explains a propagation using extended nogood propagation.
             let nogood = &self.nogood_predicates.get_nogood(id);
@@ -678,6 +724,158 @@ impl Propagator for NogoodPropagator {
         }
 
         result
+    }
+}
+
+/// Functions for removing nogoods which are subsumed by a newly learned nogood.
+impl NogoodPropagator {
+    /// Removes the learned nogoods which are subsumed by the provided (newly learned) `nogood`,
+    /// following the strategy of OR-tools CP-SAT. The candidates are:
+    /// - the nogoods explained since the previous learned nogood (if
+    ///   [`LearningOptions::subsume_explained_nogoods`] is enabled), and
+    /// - the last [`LearningOptions::eagerly_subsume_last_n_nogoods`] learned nogoods.
+    ///
+    /// A candidate is subsumed if it contains every predicate of `nogood` or, if
+    /// [`LearningOptions::semantic_subsumption`] is enabled, if every predicate of `nogood` is
+    /// implied by a predicate of the candidate. Only learned nogoods are removed, and nogoods
+    /// which are currently propagating are kept.
+    ///
+    /// Returns the minimum LBD of the removed nogoods (or [`u32::MAX`] if none were removed).
+    fn remove_nogoods_subsumed_by(
+        &mut self,
+        nogood: &[Predicate],
+        context: &mut PropagationContext,
+    ) -> u32 {
+        let mut min_lbd = u32::MAX;
+        if self.explained_nogoods.is_empty() && self.recently_learned_nogoods.is_empty() {
+            return min_lbd;
+        }
+
+        let mut num_marked = 0;
+        if self.parameters.semantic_subsumption {
+            self.subsumption_learned_predicates.clear();
+            self.subsumption_learned_predicates
+                .extend_from_slice(nogood);
+            self.subsumption_learned_predicates
+                .sort_unstable_by_key(|predicate| predicate.get_domain());
+        } else {
+            self.subsumption_marks.make_empty();
+            for predicate in nogood {
+                if self
+                    .subsumption_marks
+                    .insert(context.get_id(*predicate).index())
+                {
+                    num_marked += 1;
+                }
+            }
+        }
+
+        let num_explained = self.explained_nogoods.len();
+        let mut candidates = std::mem::take(&mut self.explained_nogoods);
+        candidates.extend(self.recently_learned_nogoods.iter().copied());
+
+        for (position, &id) in candidates.iter().enumerate() {
+            let info_index = self.nogood_predicates.get_nogood_index(&id);
+            let info = &self.nogood_info[info_index];
+            if !info.is_learned || info.is_deleted {
+                continue;
+            }
+
+            let candidate = self.nogood_predicates.get_nogood(id);
+            let is_subsumed = if self.parameters.semantic_subsumption {
+                Self::is_semantically_subsumed(
+                    candidate,
+                    &self.subsumption_learned_predicates,
+                    &mut self.subsumption_is_implied,
+                    context,
+                )
+            } else {
+                candidate.len() >= num_marked
+                    && candidate
+                        .iter()
+                        .filter(|predicate_id| {
+                            self.subsumption_marks.contains(predicate_id.index())
+                        })
+                        .count()
+                        >= num_marked
+            };
+            if !is_subsumed {
+                continue;
+            }
+
+            if self.propagation_mode.is_nogood_propagating(
+                self.handle,
+                candidate,
+                context.assignments,
+                context.reason_store,
+                id,
+                context.notification_engine,
+            ) {
+                continue;
+            }
+
+            // The candidate is subsumed; it is deleted and its watchers are removed. It is removed
+            // from its tier during the next clean up of that tier.
+            self.nogood_info[info_index].is_deleted = true;
+            min_lbd = min_lbd.min(self.nogood_info[info_index].lbd);
+            if position < num_explained {
+                self.statistics.num_deleted_subsumed_explained_nogoods += 1;
+            } else {
+                self.statistics
+                    .num_deleted_subsumed_recently_learned_nogoods += 1;
+            }
+
+            let watcher = Watcher {
+                nogood_id: id,
+                cached_predicate: candidate[0],
+            };
+            let watched_predicates = [candidate[0], candidate[1]];
+            for predicate_id in watched_predicates {
+                Self::remove_watcher(context, watcher, predicate_id, &mut self.watch_lists);
+            }
+        }
+
+        candidates.clear();
+        self.explained_nogoods = candidates;
+
+        min_lbd
+    }
+
+    /// Returns whether every predicate in `learned_predicates` (sorted by domain) is implied by a
+    /// predicate of `candidate`.
+    fn is_semantically_subsumed(
+        candidate: &[PredicateId],
+        learned_predicates: &[Predicate],
+        is_implied: &mut Vec<bool>,
+        context: &mut PropagationContext,
+    ) -> bool {
+        is_implied.clear();
+        is_implied.resize(learned_predicates.len(), false);
+        let mut num_implied = 0;
+
+        for &predicate_id in candidate {
+            let predicate = context.get_predicate(predicate_id);
+            let domain = predicate.get_domain();
+            let start = learned_predicates.partition_point(|learned| learned.get_domain() < domain);
+
+            for (index, learned) in learned_predicates
+                .iter()
+                .enumerate()
+                .skip(start)
+                .take_while(|(_, learned)| learned.get_domain() == domain)
+            {
+                if !is_implied[index] && predicate.implies(*learned) {
+                    is_implied[index] = true;
+                    num_implied += 1;
+                }
+            }
+
+            if num_implied == learned_predicates.len() {
+                return true;
+            }
+        }
+
+        false
     }
 }
 
@@ -1074,6 +1272,8 @@ impl NogoodPropagator {
         inference_code: InferenceCode,
         context: &mut PropagationContext,
     ) {
+        let min_lbd_of_subsumed_nogoods = self.remove_nogoods_subsumed_by(&nogood, context);
+
         if self
             .propagation_mode
             .can_be_added_as_permanent(context, &nogood)
@@ -1087,9 +1287,12 @@ impl NogoodPropagator {
             return;
         }
 
+        // As in OR-tools CP-SAT, the learned nogood inherits the best LBD of the nogoods it
+        // subsumes.
         let lbd = self
             .propagation_mode
-            .calculate_lbd(context, &nogood, &mut self.lbd_helper);
+            .calculate_lbd(context, &nogood, &mut self.lbd_helper)
+            .min(min_lbd_of_subsumed_nogoods);
 
         let nogood = nogood
             .iter()
@@ -1137,6 +1340,14 @@ impl NogoodPropagator {
                 &mut self.statistics,
             )
             .expect("Asserting nogood cannot fail");
+
+        if self.parameters.eagerly_subsume_last_n_nogoods > 0 {
+            if self.recently_learned_nogoods.len() == self.parameters.eagerly_subsume_last_n_nogoods
+            {
+                let _ = self.recently_learned_nogoods.pop_front();
+            }
+            self.recently_learned_nogoods.push_back(nogood_id);
+        }
 
         // We then assign the nogood to the correct tier based on its LBD
         if lbd >= self.parameters.lbd_threshold_high {
@@ -1440,7 +1651,12 @@ impl NogoodPropagator {
         let mut removed_at_least_one_nogood = false;
 
         // Process high-lbd nogoods.
-        if self.learned_nogood_ids.high_lbd.len() > self.parameters.max_num_high_lbd_nogoods {
+        if NogoodPropagator::exceeds_limit_after_removing_deleted(
+            &mut self.learned_nogood_ids.high_lbd,
+            self.parameters.max_num_high_lbd_nogoods,
+            &self.nogood_info,
+            &self.nogood_predicates,
+        ) {
             self.promote_high_lbd_nogoods();
 
             // Sort the "high" LBD nogood by activity
@@ -1464,7 +1680,12 @@ impl NogoodPropagator {
         }
 
         // Process mid-lbd nogoods.
-        if self.learned_nogood_ids.mid_lbd.len() > self.parameters.max_num_mid_lbd_nogoods {
+        if NogoodPropagator::exceeds_limit_after_removing_deleted(
+            &mut self.learned_nogood_ids.mid_lbd,
+            self.parameters.max_num_mid_lbd_nogoods,
+            &self.nogood_info,
+            &self.nogood_predicates,
+        ) {
             self.promote_mid_lbd_nogoods();
 
             // Sort the "mid" LBD nogood by activity
@@ -1488,7 +1709,12 @@ impl NogoodPropagator {
         }
 
         // Process low-lbd nogoods.
-        if self.learned_nogood_ids.low_lbd.len() > self.parameters.max_num_low_lbd_nogoods {
+        if NogoodPropagator::exceeds_limit_after_removing_deleted(
+            &mut self.learned_nogood_ids.low_lbd,
+            self.parameters.max_num_low_lbd_nogoods,
+            &self.nogood_info,
+            &self.nogood_predicates,
+        ) {
             // Sort the "low" LBD nogood by LBD while tie-breaking based on size
             NogoodPropagator::sort_nogoods_by_increasing_lbd_and_size(
                 &mut self.learned_nogood_ids.low_lbd,
@@ -1640,6 +1866,23 @@ impl NogoodPropagator {
                 !self.nogood_info[self.nogood_predicates.get_nogood_index(nogood_id)].is_deleted
             });
         }
+    }
+
+    /// Returns whether the tier `nogood_ids` holds more than `limit` nogoods.
+    ///
+    /// If the limit is exceeded, then the nogoods which have already been deleted (e.g., because
+    /// they were subsumed) are first removed from the tier.
+    fn exceeds_limit_after_removing_deleted(
+        nogood_ids: &mut Vec<NogoodId>,
+        limit: usize,
+        nogood_info: &KeyedVec<NogoodIndex, NogoodInfo>,
+        nogoods: &ArenaAllocator,
+    ) -> bool {
+        if nogood_ids.len() <= limit {
+            return false;
+        }
+        nogood_ids.retain(|id| !nogood_info[nogoods.get_nogood_index(id)].is_deleted);
+        nogood_ids.len() > limit
     }
 
     // Attempts to remove the worst half of the provided `nogood_ids` and returns true if at least
