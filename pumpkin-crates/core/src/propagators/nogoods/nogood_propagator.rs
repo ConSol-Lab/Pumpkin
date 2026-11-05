@@ -73,6 +73,9 @@ pub struct NogoodPropagator {
     watch_lists: KeyedVec<PredicateId, Vec<Watcher>>,
     /// Keep track of the events which the propagator has been notified of.
     updated_predicate_ids: Vec<PredicateId>,
+    /// Learned nogoods which are only watched once and have been promoted to the "low" LBD tier
+    /// during nogood management; these should also be watched at position 0.
+    nogoods_to_watch_twice: Vec<NogoodId>,
     /// A helper for calculating the LBD for the nogoods.
     lbd_helper: Lbd,
     /// The parameters which influence the learning of the propagator and aspects such as clause
@@ -188,6 +191,7 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             learned_nogood_ids: Default::default(),
             watch_lists: Default::default(),
             updated_predicate_ids: Default::default(),
+            nogoods_to_watch_twice: Default::default(),
             lbd_helper: Default::default(),
             bumped_nogoods: Default::default(),
             temp_nogood_reason: Default::default(),
@@ -329,6 +333,7 @@ impl Propagator for NogoodPropagator {
             context.reason_store,
             context.notification_engine,
         );
+        self.watch_promoted_nogoods_twice(&mut context);
 
         if self.watch_lists.len() <= context.num_predicate_ids() {
             self.watch_lists
@@ -1096,13 +1101,18 @@ impl NogoodPropagator {
             .map(|predicate| context.get_id(*predicate))
             .collect::<Vec<_>>();
 
+        // With the one-watcher scheme, only nogoods outside of the "low" LBD tier are watched
+        // once.
+        let is_watched_once = self.propagation_mode == PropagationMode::UnitPropagationOneWatcher
+            && lbd > self.parameters.lbd_threshold_low;
+
         // Add the nogood to the database.
         //
         // Currently we always allocate a fresh ID
         let nogood_id = self.nogood_predicates.insert(nogood);
         let _ = self
             .nogood_info
-            .push(NogoodInfo::new_learned_nogood_info(lbd));
+            .push(NogoodInfo::new_learned_nogood_info(lbd, is_watched_once));
         let _ = self.inference_codes.push(inference_code);
 
         let watcher = Watcher {
@@ -1113,8 +1123,9 @@ impl NogoodPropagator {
         // Now we add two watchers to the first two predicates in the nogood; we are
         // guaranteed that these are different predicates
         //
-        // With the one-watcher scheme, the asserting predicate at position 0 is not watched.
-        if self.propagation_mode != PropagationMode::UnitPropagationOneWatcher {
+        // If the nogood is watched once, then the asserting predicate at position 0 is not
+        // watched.
+        if !is_watched_once {
             NogoodPropagator::add_watcher(
                 context,
                 self.nogood_predicates.get_nogood(nogood_id)[0],
@@ -1738,6 +1749,9 @@ impl NogoodPropagator {
             } else if self.nogood_info[info_index].lbd <= self.parameters.lbd_threshold_low {
                 // If the LBD is low then the nogood is moved to the low LBD category
                 self.learned_nogood_ids.low_lbd.push(*id);
+                if self.nogood_info[info_index].is_watched_once {
+                    self.nogoods_to_watch_twice.push(*id);
+                }
                 false
             } else {
                 // Otherwise, if has neither high nor low LBD, the nogood is placed in the mid LBD
@@ -1763,9 +1777,43 @@ impl NogoodPropagator {
             } else {
                 // If the LBD is low then the nogood is moved to the low LBD category
                 self.learned_nogood_ids.low_lbd.push(*id);
+                if self.nogood_info[info_index].is_watched_once {
+                    self.nogoods_to_watch_twice.push(*id);
+                }
                 false
             }
         })
+    }
+
+    /// Adds a watcher to the predicate at position 0 for the nogoods which were watched once and
+    /// have been promoted to the "low" LBD tier.
+    ///
+    /// If the predicate at position 0 is already satisfied, then it is treated as if it was just
+    /// satisfied, ensuring that the nogood is processed as if it had always been watched twice.
+    fn watch_promoted_nogoods_twice(&mut self, context: &mut PropagationContext) {
+        for nogood_id in self.nogoods_to_watch_twice.drain(..) {
+            let info_id = self.nogood_predicates.get_nogood_index(&nogood_id);
+            if self.nogood_info[info_id].is_deleted {
+                // The watchers of deleted nogoods have been removed
+                continue;
+            }
+            self.nogood_info[info_id].is_watched_once = false;
+
+            let zeroth_predicate = self.nogood_predicates.get_nogood(nogood_id)[0];
+            NogoodPropagator::add_watcher(
+                context,
+                zeroth_predicate,
+                Watcher {
+                    nogood_id,
+                    cached_predicate: self.nogood_predicates.get_nogood(nogood_id)[1],
+                },
+                &mut self.watch_lists,
+            );
+
+            if context.is_predicate_id_satisfied(zeroth_predicate) {
+                self.updated_predicate_ids.push(zeroth_predicate);
+            }
+        }
     }
 
     fn sort_nogoods_by_decreasing_activity(
@@ -1896,10 +1944,9 @@ impl NogoodPropagator {
             return Ok(());
         }
 
-        // With the one-watcher scheme, a learned nogood only propagates the predicate at position
-        // 0, which requires all other predicates to be satisfied.
-        if self.propagation_mode == PropagationMode::UnitPropagationOneWatcher
-            && self.nogood_info[info_id].is_learned
+        // A nogood which is watched once only propagates the predicate at position 0, which
+        // requires all other predicates to be satisfied.
+        if self.nogood_info[info_id].is_watched_once
             && !nogood[1..]
                 .iter()
                 .all(|predicate_id| context.is_predicate_id_satisfied(*predicate_id))
@@ -2031,11 +2078,10 @@ impl NogoodPropagator {
                 continue;
             }
 
-            // With the one-watcher scheme, learned nogoods are only watched at position 1.
+            // Nogoods which are watched once are only watched at position 1.
             let is_watched_at_zeroth = is_watching(nogood_predicates[0], nogood_id)
-                || (self.propagation_mode == PropagationMode::UnitPropagationOneWatcher
-                    && self.nogood_info[self.nogood_predicates.get_nogood_index(&nogood_id)]
-                        .is_learned);
+                || self.nogood_info[self.nogood_predicates.get_nogood_index(&nogood_id)]
+                    .is_watched_once;
 
             if !(is_watched_at_zeroth && is_watching(nogood_predicates[1], nogood_id)) {
                 eprintln!("Nogood id: {}", nogood_id.id);
@@ -2072,6 +2118,7 @@ mod tests {
     use crate::propagators::nogoods::NogoodChecker;
     use crate::propagators::nogoods::NogoodPropagatorConstructor;
     use crate::propagators::nogoods::PropagationMode;
+    use crate::propagators::nogoods::arena_allocator::NogoodIndex;
     use crate::state::State;
 
     #[test]
@@ -2216,9 +2263,14 @@ mod tests {
     #[test]
     fn one_watcher_learned_nogood_only_propagates_asserting_predicate() {
         let mut state = State::default();
+        // The learned nogood has an LBD of 1; we lower the threshold such that it is not placed in
+        // the "low" LBD tier (which is watched twice).
         let nogood_handle = state.add_propagator(NogoodPropagatorConstructor::new(
             0,
-            LearningOptions::default(),
+            LearningOptions {
+                lbd_threshold_low: 0,
+                ..Default::default()
+            },
             PropagationMode::UnitPropagationOneWatcher,
             Priority::High,
         ));
@@ -2279,5 +2331,87 @@ mod tests {
             .post(predicate!(x2 >= 2))
             .expect("the value is in the domain");
         assert!(state.propagate_to_fixed_point().is_err());
+    }
+
+    #[test]
+    fn one_watcher_nogood_promoted_to_low_lbd_tier_is_watched_twice() {
+        let mut state = State::default();
+        // The learned nogood has an LBD of 1, which places it in the "mid" LBD tier; since the tier
+        // may not contain any nogoods, it is promoted during the next nogood management once its
+        // LBD is low.
+        let nogood_handle = state.add_propagator(NogoodPropagatorConstructor::new(
+            0,
+            LearningOptions {
+                lbd_threshold_low: 0,
+                max_num_mid_lbd_nogoods: 0,
+                ..Default::default()
+            },
+            PropagationMode::UnitPropagationOneWatcher,
+            Priority::High,
+        ));
+        let x1 = state.new_interval_variable(1, 4, None);
+        let x2 = state.new_interval_variable(1, 4, None);
+        let x3 = state.new_interval_variable(1, 4, None);
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.new_checkpoint();
+        let _ = state
+            .post(predicate!(x2 >= 2))
+            .expect("the value is in the domain");
+        let _ = state
+            .post(predicate!(x3 >= 2))
+            .expect("the value is in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        let nogood = vec![
+            predicate!(x1 >= 2),
+            predicate!(x3 >= 2),
+            predicate!(x2 >= 2),
+        ];
+        let constraint_tag = state.new_constraint_tag();
+        let inference_code = state.add_inference_checker(
+            constraint_tag,
+            NogoodLabel,
+            NogoodChecker {
+                nogood: nogood.clone().into(),
+            },
+        );
+        let (nogood_propagator, mut context) = state.get_propagator_mut_with_context(nogood_handle);
+        let nogood_propagator =
+            nogood_propagator.expect("the handle refers to the nogood propagator");
+        nogood_propagator.add_asserting_nogood(nogood, inference_code, &mut context);
+        let num_watchers: usize = nogood_propagator.watch_lists.iter().map(Vec::len).sum();
+        assert_eq!(num_watchers, 1);
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        let _ = state.restore_to(0);
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        // Simulate that the LBD has been lowered during conflict analysis.
+        let (nogood_propagator, _) = state.get_propagator_mut_with_context(nogood_handle);
+        nogood_propagator
+            .expect("the handle refers to the nogood propagator")
+            .nogood_info[NogoodIndex::create_from_index(0)]
+        .lbd = 0;
+
+        // The asserting predicate is satisfied (and its domain event processed) before the nogood
+        // propagator is called (which promotes the nogood); the nogood should still propagate.
+        state.new_checkpoint();
+        let _ = state
+            .post(predicate!(x1 >= 2))
+            .expect("the value is in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+        let _ = state
+            .post(predicate!(x3 >= 2))
+            .expect("the value is in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+        assert!(!state.contains(x2, 2));
+
+        let nogood_propagator = state
+            .get_propagator(nogood_handle)
+            .expect("the handle refers to the nogood propagator");
+        assert!(!nogood_propagator.nogood_info[NogoodIndex::create_from_index(0)].is_watched_once);
+        let num_watchers: usize = nogood_propagator.watch_lists.iter().map(Vec::len).sum();
+        assert_eq!(num_watchers, 2);
     }
 }

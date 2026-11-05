@@ -22,16 +22,22 @@ pub(crate) struct NogoodInfo {
     pub(crate) block_bumps: bool,
     /// The activity score of the nogood.
     pub(crate) activity: f32,
+    /// Whether only the predicate at position 1 is watched (see
+    /// [`PropagationMode::UnitPropagationOneWatcher`]).
+    ///
+    /// [`PropagationMode::UnitPropagationOneWatcher`]: super::PropagationMode::UnitPropagationOneWatcher
+    pub(crate) is_watched_once: bool,
 }
 
 impl NogoodInfo {
-    pub(crate) fn new_learned_nogood_info(lbd: u32) -> Self {
+    pub(crate) fn new_learned_nogood_info(lbd: u32, is_watched_once: bool) -> Self {
         NogoodInfo {
             is_learned: true,
             lbd,
             is_deleted: false,
             block_bumps: false,
             activity: 0.0,
+            is_watched_once,
         }
     }
 
@@ -42,6 +48,7 @@ impl NogoodInfo {
             is_deleted: false,
             block_bumps: false,
             activity: 0.0,
+            is_watched_once: false,
         }
     }
 }

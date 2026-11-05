@@ -37,15 +37,16 @@ pub enum PropagationMode {
     /// If both of these conditions hold, then the unassigned predicate is propagated to be false.
     #[default]
     UnitPropagation,
-    /// Uses unit propagation, but learned nogoods are only watched by a single predicate (the
-    /// predicate at position 1), similar to Chuffed.
+    /// Uses unit propagation, but learned nogoods in the "mid" and "high" LBD tiers are only
+    /// watched by a single predicate (the predicate at position 1).
     ///
-    /// The predicate at position 0 (the asserting predicate) of a learned nogood is not watched.
-    /// This means that a learned nogood only propagates the predicate at position 0; if that
-    /// predicate is satisfied while the others are not yet all satisfied, then no propagation takes
-    /// place. This is sound since learned nogoods are implied by the other constraints.
+    /// The predicate at position 0 (the asserting predicate) of such a nogood is not watched.
+    /// This means that the nogood only propagates the predicate at position 0; if that predicate
+    /// is satisfied while the others are not yet all satisfied, then no propagation takes place.
+    /// This is sound since learned nogoods are implied by the other constraints.
     ///
-    /// Permanent nogoods are still watched by two predicates.
+    /// Learned nogoods in the "low" LBD tier (including those promoted to it during nogood
+    /// management) and permanent nogoods are watched by two predicates.
     UnitPropagationOneWatcher,
     /// Uses the extended nogood propagation algorithm \[1\].
     ///

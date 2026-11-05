@@ -149,8 +149,8 @@ pub enum ConflictResolverType {
     /// current decision level).
     #[default]
     OneUIP,
-    /// 1-UIP conflict analysis where learned nogoods are only watched by a single predicate (the
-    /// asserting predicate is not watched), similar to Chuffed.
+    /// 1-UIP conflict analysis where learned nogoods outside of the "low" LBD tier are only
+    /// watched by a single predicate (the asserting predicate is not watched).
     ///
     /// This reduces the number of watchers at the cost of weaker propagation of learned nogoods.
     OneUIPOneWatcher,
