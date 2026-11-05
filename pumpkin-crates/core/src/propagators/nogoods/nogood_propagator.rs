@@ -45,6 +45,7 @@ use crate::propagators::nogoods::WatcherProcessingStatus;
 use crate::propagators::nogoods::arena_allocator::ArenaAllocator;
 use crate::propagators::nogoods::arena_allocator::NogoodIndex;
 use crate::propagators::nogoods::semantic_minimiser::SemanticMinimiser;
+use crate::propagators::nogoods::semantic_subsumption::SemanticSubsumption;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
@@ -113,12 +114,8 @@ pub struct NogoodPropagator {
     recently_learned_nogoods: VecDeque<NogoodId>,
     /// Marks the [`PredicateId`]s of the learned nogood when checking for syntactic subsumption.
     subsumption_marks: BitSet,
-    /// The predicates of the learned nogood sorted by domain, used when checking for semantic
-    /// subsumption.
-    subsumption_learned_predicates: Vec<Predicate>,
-    /// For each predicate in `subsumption_learned_predicates`, whether it is implied by a
-    /// predicate of the candidate nogood.
-    subsumption_is_implied: Vec<bool>,
+    /// Checks semantic subsumption against the learned nogood.
+    semantic_subsumption: SemanticSubsumption,
 }
 
 create_statistics_struct!(NogoodPropagatorStatistics {
@@ -222,8 +219,7 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             explained_nogoods: Default::default(),
             recently_learned_nogoods: Default::default(),
             subsumption_marks: Default::default(),
-            subsumption_learned_predicates: Default::default(),
-            subsumption_is_implied: Default::default(),
+            semantic_subsumption: Default::default(),
         };
 
         PropagatorSpec {
@@ -753,11 +749,7 @@ impl NogoodPropagator {
 
         let mut num_marked = 0;
         if self.parameters.semantic_subsumption {
-            self.subsumption_learned_predicates.clear();
-            self.subsumption_learned_predicates
-                .extend_from_slice(nogood);
-            self.subsumption_learned_predicates
-                .sort_unstable_by_key(|predicate| predicate.get_domain());
+            self.semantic_subsumption.set_learned(nogood);
         } else {
             self.subsumption_marks.make_empty();
             for predicate in nogood {
@@ -783,12 +775,7 @@ impl NogoodPropagator {
 
             let candidate = self.nogood_predicates.get_nogood(id);
             let is_subsumed = if self.parameters.semantic_subsumption {
-                Self::is_semantically_subsumed(
-                    candidate,
-                    &self.subsumption_learned_predicates,
-                    &mut self.subsumption_is_implied,
-                    context,
-                )
+                self.semantic_subsumption.is_subsumed(candidate, context)
             } else {
                 candidate.len() >= num_marked
                     && candidate
@@ -839,43 +826,6 @@ impl NogoodPropagator {
         self.explained_nogoods = candidates;
 
         min_lbd
-    }
-
-    /// Returns whether every predicate in `learned_predicates` (sorted by domain) is implied by a
-    /// predicate of `candidate`.
-    fn is_semantically_subsumed(
-        candidate: &[PredicateId],
-        learned_predicates: &[Predicate],
-        is_implied: &mut Vec<bool>,
-        context: &mut PropagationContext,
-    ) -> bool {
-        is_implied.clear();
-        is_implied.resize(learned_predicates.len(), false);
-        let mut num_implied = 0;
-
-        for &predicate_id in candidate {
-            let predicate = context.get_predicate(predicate_id);
-            let domain = predicate.get_domain();
-            let start = learned_predicates.partition_point(|learned| learned.get_domain() < domain);
-
-            for (index, learned) in learned_predicates
-                .iter()
-                .enumerate()
-                .skip(start)
-                .take_while(|(_, learned)| learned.get_domain() == domain)
-            {
-                if !is_implied[index] && predicate.implies(*learned) {
-                    is_implied[index] = true;
-                    num_implied += 1;
-                }
-            }
-
-            if num_implied == learned_predicates.len() {
-                return true;
-            }
-        }
-
-        false
     }
 }
 

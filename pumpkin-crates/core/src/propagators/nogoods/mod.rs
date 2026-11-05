@@ -7,6 +7,7 @@ mod nogood_propagator;
 mod propagation_buffer;
 mod propagation_mode;
 mod semantic_minimiser;
+mod semantic_subsumption;
 
 pub use checker::*;
 pub use learning_options::*;
