@@ -2009,11 +2009,14 @@ impl NogoodPropagator {
 
     /// Checks for each nogood whether the first two predicates in the nogood are being watched
     fn debug_is_properly_watched(&self) -> bool {
+        // Note that the watch list of an unwatched predicate (e.g., the asserting predicate of a
+        // learned nogood when using the one-watcher scheme) might not exist yet.
         let is_watching = |predicate_id: PredicateId, nogood_id: NogoodId| -> bool {
-            self.watch_lists[predicate_id]
-                .iter()
-                .copied()
-                .any(|watcher| watcher.nogood_id == nogood_id)
+            self.watch_lists.get(predicate_id).is_some_and(|watchers| {
+                watchers
+                    .iter()
+                    .any(|watcher| watcher.nogood_id == nogood_id)
+            })
         };
 
         for nogood_id in self.nogood_predicates.nogoods_ids() {
