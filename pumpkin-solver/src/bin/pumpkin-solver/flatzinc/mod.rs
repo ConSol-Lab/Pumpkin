@@ -32,6 +32,7 @@ use pumpkin_solver::core::results::SatisfactionResult;
 use pumpkin_solver::core::results::SolutionReference;
 use pumpkin_solver::core::results::solution_iterator::IteratedSolution;
 use pumpkin_solver::core::termination::Combinator;
+use pumpkin_solver::core::termination::SolutionLimit;
 use pumpkin_solver::core::termination::TerminationCondition;
 use pumpkin_solver::core::termination::TimeBudget;
 use pumpkin_solver::core::variables::DomainId;
@@ -65,6 +66,14 @@ pub(crate) struct FlatZincOptions {
     /// the solver to print intermediate solutions.
     pub(crate) all_solutions: bool,
 
+    /// For optimisation problems, print intermediate solutions. Has no effect on satisfaction
+    /// problems.
+    pub(crate) intermediate_solutions: bool,
+
+    /// If set, the solver stops after reporting this many solutions. For optimisation problems,
+    /// this means that this many intermediate solutions are reported.
+    pub(crate) num_solutions: Option<u64>,
+
     /// Options used for the cumulative constraint (see [`cumulative`]).
     pub(crate) cumulative_options: CumulativeOptions,
 
@@ -76,6 +85,18 @@ pub(crate) struct FlatZincOptions {
 
     /// Indicates that the solver should perform verbose logging
     pub(crate) verbose: bool,
+}
+
+impl FlatZincOptions {
+    /// Returns `true` if all solutions of a satisfaction problem should be reported.
+    fn report_all_solutions(&self) -> bool {
+        self.all_solutions || self.num_solutions.is_some()
+    }
+
+    /// Returns `true` if intermediate solutions of an optimisation problem should be reported.
+    fn report_intermediate_solutions(&self) -> bool {
+        self.all_solutions || self.intermediate_solutions || self.num_solutions.is_some()
+    }
 }
 
 fn log_statistics(
@@ -134,8 +155,11 @@ pub(crate) fn solve<R: ConflictResolver>(
     let instance = File::open(instance)?;
 
     let mut termination = Combinator::new(
-        OsSignal::install(),
-        time_limit.map(TimeBudget::starting_now),
+        Combinator::new(
+            OsSignal::install(),
+            time_limit.map(TimeBudget::starting_now),
+        ),
+        options.num_solutions.map(SolutionLimit::new),
     );
 
     let instance = parse_and_compile(&mut solver, instance, options)?;
@@ -192,7 +216,7 @@ pub(crate) fn solve<R: ConflictResolver>(
             brancher,
             resolver,
             Some(objective),
-            options.all_solutions,
+            options.report_intermediate_solutions(),
             &outputs,
             solver,
             solution,
@@ -224,7 +248,7 @@ pub(crate) fn solve<R: ConflictResolver>(
         }
         OptimisationResult::Optimal(optimal_solution) => {
             let objective_value = optimal_solution.get_integer_value(objective) as i64;
-            if !options.all_solutions {
+            if !options.report_intermediate_solutions() {
                 log_statistics(
                     &solver,
                     &brancher,
@@ -293,7 +317,7 @@ fn satisfy(
     init_time: Duration,
     mut resolver: impl ConflictResolver,
 ) {
-    if options.all_solutions {
+    if options.report_all_solutions() {
         let mut solution_iterator =
             solver.get_solution_iterator(&mut brancher, &mut termination, &mut resolver);
         let mut has_found_solution = false;
@@ -305,7 +329,7 @@ fn satisfy(
                         brancher,
                         resolver,
                         None,
-                        options.all_solutions,
+                        true,
                         &outputs,
                         solver,
                         solution.as_reference(),
@@ -361,7 +385,7 @@ fn satisfy(
                 satisfiable.brancher(),
                 satisfiable.conflict_resolver(),
                 None,
-                options.all_solutions,
+                false,
                 &outputs,
                 satisfiable.solver(),
                 satisfiable.solution(),
