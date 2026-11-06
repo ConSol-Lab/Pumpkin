@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use pumpkin_core::Solver;
 use pumpkin_core::branching::Brancher;
 use pumpkin_core::branching::BrancherEvent;
@@ -356,6 +357,8 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
         ]
         .into_iter()
         .chain(self.backup_brancher.subscribe_to_events())
+        // The backup brancher could subscribe to the same events
+        .unique()
         .collect()
     }
 }
@@ -368,7 +371,21 @@ mod tests {
     use pumpkin_core::state::State;
 
     use super::AutonomousSearch;
+    use crate::DefaultBrancher;
     use crate::testing::TestRandom;
+
+    #[test]
+    fn subscribed_events_are_unique() {
+        let state = State::default();
+        let brancher = DefaultBrancher::new_from_domains(state.get_domain_ids());
+
+        let events = brancher.subscribe_to_events();
+        let unique_events = events
+            .iter()
+            .copied()
+            .collect::<pumpkin_core::containers::HashSet<_>>();
+        assert_eq!(events.len(), unique_events.len());
+    }
 
     #[test]
     fn brancher_picks_bumped_values() {

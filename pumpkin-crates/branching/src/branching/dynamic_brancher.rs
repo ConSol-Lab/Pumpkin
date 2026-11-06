@@ -7,6 +7,8 @@ use std::cmp::min;
 use std::fmt::Debug;
 
 use enum_map::EnumMap;
+use itertools::Itertools;
+use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::branching::Brancher;
 use pumpkin_core::branching::BrancherEvent;
 use pumpkin_core::branching::SelectionContext;
@@ -49,7 +51,13 @@ impl DynamicBrancher {
         let _ = relevant_events.insert(BrancherEvent::Conflict);
 
         branchers.iter().enumerate().for_each(|(index, brancher)| {
-            for event in brancher.subscribe_to_events() {
+            let events = brancher.subscribe_to_events();
+            pumpkin_assert_advanced!(
+                events.iter().all_unique(),
+                "The events subscribed to by a brancher should be unique, but found {events:?} for {brancher:?}"
+            );
+
+            for event in events {
                 relevant_event_to_index[event].push(index);
                 let _ = relevant_events.insert(event);
             }
@@ -64,7 +72,13 @@ impl DynamicBrancher {
     }
 
     pub fn add_brancher(&mut self, brancher: Box<dyn Brancher>) {
-        for event in brancher.subscribe_to_events() {
+        let events = brancher.subscribe_to_events();
+        pumpkin_assert_advanced!(
+            events.iter().all_unique(),
+            "The events subscribed to by a brancher should be unique, but found {events:?} for {brancher:?}"
+        );
+
+        for event in events {
             self.relevant_event_to_index[event].push(self.branchers.len());
             if !self.relevant_events.contains(&event) {
                 self.relevant_events.push(event);
