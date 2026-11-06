@@ -31,11 +31,10 @@ impl EveryXRestarts {
 impl AlternatingStrategy for EveryXRestarts {
     fn next_decision(&mut self, _context: &mut SelectionContext) -> BrancherToUse {
         if self.restart_considered {
-            // Only switch at the moment a new restart is registered; otherwise, every decision
-            // after the `x`th restart would cause a switch.
             self.restart_considered = false;
             self.num_restarts_considered += 1;
 
+            // Since we have restarted, we consider whether to switch the default brancher.
             if self.num_restarts_considered.is_multiple_of(self.x) {
                 self.use_default_brancher = !self.use_default_brancher
             }
