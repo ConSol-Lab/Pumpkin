@@ -41,7 +41,7 @@ impl AlternatingStrategy for EveryXSolutions {
 
     fn on_solution(&mut self, _solution: SolutionReference) {
         self.num_solutions += 1;
-        if self.num_solutions > 0 && self.num_solutions.is_multiple_of(self.x) {
+        if self.num_solutions.is_multiple_of(self.x) {
             self.use_default_brancher = !self.use_default_brancher
         }
     }
