@@ -730,6 +730,7 @@ impl ConstraintSatisfactionSolver {
             &mut self.internal_parameters.random_generator,
         );
 
+        brancher.on_restart();
         self.restart_strategy.notify_restart();
     }
 
