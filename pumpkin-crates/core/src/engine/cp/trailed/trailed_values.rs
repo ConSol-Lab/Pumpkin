@@ -33,11 +33,15 @@ impl TrailedValues {
         if old_value == value {
             return;
         }
-        let entry = TrailedChange {
-            old_value,
-            reference: trailed_integer,
-        };
-        self.trail.push(entry);
+
+        // There is no need to record any elements on the trail that are at the root level, since
+        // they will never be undone anyways.
+        if self.trail.get_checkpoint() > 0 {
+            self.trail.push(TrailedChange {
+                old_value,
+                reference: trailed_integer,
+            });
+        }
         self.values[trailed_integer] = value;
     }
 
@@ -94,5 +98,23 @@ mod tests {
 
         assignments.synchronise(0);
         assert_eq!(assignments.read(trailed_integer), 0);
+    }
+
+    #[test]
+    fn root_level_writes_are_not_trailed() {
+        let mut trailed_values = TrailedValues::default();
+        let trailed_integer = trailed_values.grow(0);
+
+        trailed_values.assign(trailed_integer, 5);
+        assert_eq!(trailed_values.read(trailed_integer), 5);
+        assert!(trailed_values.trail.is_empty());
+
+        trailed_values.new_checkpoint();
+        trailed_values.assign(trailed_integer, 7);
+        assert_eq!(trailed_values.trail.len(), 1);
+
+        trailed_values.synchronise(0);
+        assert_eq!(trailed_values.read(trailed_integer), 5);
+        assert!(trailed_values.trail.is_empty());
     }
 }
