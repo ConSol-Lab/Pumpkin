@@ -130,6 +130,11 @@ impl<Strategy: AlternatingStrategy, OtherBrancher: Brancher> Brancher
 
     fn on_restart(&mut self) {
         self.strategy.on_restart();
+
+        self.default_brancher.on_restart();
+        if !self.strategy.will_always_use_default() {
+            self.other_brancher.on_restart();
+        }
     }
 
     fn is_restart_pointless(&mut self) -> bool {
@@ -169,8 +174,15 @@ impl<Strategy: AlternatingStrategy, OtherBrancher: Brancher> Brancher
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
     use pumpkin_core::branching::Brancher;
+    use pumpkin_core::branching::BrancherEvent;
+    use pumpkin_core::branching::SelectionContext;
     use pumpkin_core::containers::HashSet;
+    use pumpkin_core::predicates::Predicate;
+    use pumpkin_core::results::Solution;
     use pumpkin_core::state::State;
 
     use crate::DefaultBrancher;
@@ -190,5 +202,64 @@ mod tests {
         let events = brancher.subscribe_to_events();
         let unique_events = events.iter().copied().collect::<HashSet<_>>();
         assert_eq!(events.len(), unique_events.len());
+    }
+
+    /// A [`Brancher`] which counts how often it is notified of a restart.
+    #[derive(Debug, Default)]
+    struct RestartCountingBrancher {
+        num_restarts: Rc<Cell<u32>>,
+    }
+
+    impl Brancher for RestartCountingBrancher {
+        fn next_decision(&mut self, _context: &mut SelectionContext) -> Option<Predicate> {
+            None
+        }
+
+        fn on_restart(&mut self) {
+            self.num_restarts.set(self.num_restarts.get() + 1);
+        }
+
+        fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+            vec![BrancherEvent::Restart]
+        }
+    }
+
+    #[test]
+    fn restart_is_forwarded_to_other_brancher() {
+        let state = State::default();
+        let other_brancher = RestartCountingBrancher::default();
+        let num_restarts = Rc::clone(&other_brancher.num_restarts);
+        let mut brancher = AlternatingBrancher::new_from_domains(
+            state.get_domain_ids(),
+            other_brancher,
+            EveryXRestarts::new(1),
+        );
+
+        brancher.on_restart();
+        assert_eq!(num_restarts.get(), 1);
+
+        brancher.on_restart();
+        assert_eq!(num_restarts.get(), 2);
+    }
+
+    #[test]
+    fn restart_is_not_forwarded_to_other_brancher_if_always_using_default() {
+        let state = State::default();
+        let other_brancher = RestartCountingBrancher::default();
+        let num_restarts = Rc::clone(&other_brancher.num_restarts);
+        let mut brancher = AlternatingBrancher::new_from_domains(
+            state.get_domain_ids(),
+            other_brancher,
+            UntilSolution::new(EveryXRestarts::new(1)),
+        );
+
+        brancher.on_restart();
+        assert_eq!(num_restarts.get(), 1);
+
+        // After the first solution, only the default brancher is used
+        brancher.on_solution(Solution::default().as_reference());
+
+        brancher.on_restart();
+        assert_eq!(num_restarts.get(), 1);
     }
 }
