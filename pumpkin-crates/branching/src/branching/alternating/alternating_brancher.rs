@@ -1,7 +1,9 @@
 //! A [`Brancher`] which alternates between the [`DefaultBrancher`] and another [`Brancher`] based
 //! on the strategy specified in [`AlternatingStrategy`].
 
+use itertools::Itertools;
 use pumpkin_core::Solver;
+use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::branching::Brancher;
 use pumpkin_core::branching::BrancherEvent;
 use pumpkin_core::branching::SelectionContext;
@@ -47,9 +49,27 @@ impl<Strategy: AlternatingStrategy, OtherBrancher: Brancher>
         other_brancher: OtherBrancher,
         strategy: Strategy,
     ) -> Self {
+        let default_brancher = DefaultBrancher::new_from_domains(domains);
+
+        let strategy_events = strategy.subscribe_to_events();
+        pumpkin_assert_advanced!(
+            strategy_events.iter().all_unique(),
+            "The events subscribed to by the strategy should be unique, but found {strategy_events:?} for {strategy:?}"
+        );
+        let default_events = default_brancher.subscribe_to_events();
+        pumpkin_assert_advanced!(
+            default_events.iter().all_unique(),
+            "The events subscribed to by the default brancher should be unique, but found {default_events:?}"
+        );
+        let other_events = other_brancher.subscribe_to_events();
+        pumpkin_assert_advanced!(
+            other_events.iter().all_unique(),
+            "The events subscribed to by the other brancher should be unique, but found {other_events:?} for {other_brancher:?}"
+        );
+
         Self {
             other_brancher,
-            default_brancher: DefaultBrancher::new_from_domains(domains),
+            default_brancher,
             strategy,
         }
     }
@@ -141,6 +161,34 @@ impl<Strategy: AlternatingStrategy, OtherBrancher: Brancher> Brancher
             .into_iter()
             .chain(self.default_brancher.subscribe_to_events())
             .chain(self.other_brancher.subscribe_to_events())
+            // The strategy and sub-branchers could subscribe to the same events
+            .unique()
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_core::branching::Brancher;
+    use pumpkin_core::containers::HashSet;
+    use pumpkin_core::state::State;
+
+    use crate::DefaultBrancher;
+    use crate::branching::alternating::AlternatingBrancher;
+    use crate::branching::alternating::every_x_restarts::EveryXRestarts;
+    use crate::branching::alternating::until_solution::UntilSolution;
+
+    #[test]
+    fn subscribed_events_are_unique() {
+        let state = State::default();
+        let brancher = AlternatingBrancher::new_from_domains(
+            state.get_domain_ids(),
+            DefaultBrancher::new_from_domains(state.get_domain_ids()),
+            UntilSolution::new(EveryXRestarts::new(1)),
+        );
+
+        let events = brancher.subscribe_to_events();
+        let unique_events = events.iter().copied().collect::<HashSet<_>>();
+        assert_eq!(events.len(), unique_events.len());
     }
 }

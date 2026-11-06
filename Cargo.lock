@@ -987,6 +987,7 @@ name = "pumpkin-branching"
 version = "0.5.0"
 dependencies = [
  "enum-map",
+ "itertools",
  "log",
  "pumpkin-core",
 ]
