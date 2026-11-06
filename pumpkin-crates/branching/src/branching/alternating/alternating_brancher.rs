@@ -51,20 +51,17 @@ impl<Strategy: AlternatingStrategy, OtherBrancher: Brancher>
     ) -> Self {
         let default_brancher = DefaultBrancher::new_from_domains(domains);
 
-        let strategy_events = strategy.subscribe_to_events();
         pumpkin_assert_advanced!(
-            strategy_events.iter().all_unique(),
-            "The events subscribed to by the strategy should be unique, but found {strategy_events:?} for {strategy:?}"
+            strategy.subscribe_to_events().iter().all_unique(),
+            "The events subscribed to by the strategy should be unique."
         );
-        let default_events = default_brancher.subscribe_to_events();
         pumpkin_assert_advanced!(
-            default_events.iter().all_unique(),
-            "The events subscribed to by the default brancher should be unique, but found {default_events:?}"
+            default_brancher.subscribe_to_events().iter().all_unique(),
+            "The events subscribed to by the default brancher should be unique."
         );
-        let other_events = other_brancher.subscribe_to_events();
         pumpkin_assert_advanced!(
-            other_events.iter().all_unique(),
-            "The events subscribed to by the other brancher should be unique, but found {other_events:?} for {other_brancher:?}"
+            other_brancher.subscribe_to_events().iter().all_unique(),
+            "The events subscribed to by the other brancher should be unique."
         );
 
         Self {
