@@ -121,7 +121,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 
         let mut checkers = RuntimeCheckers::builder();
         self.inference_code = Some(
-            checkers.add_inference_checker(
+            checkers.add_conflict_checker(
                 self.constraint_tag,
                 TimeTable,
                 TimeTableChecker {

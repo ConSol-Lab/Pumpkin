@@ -1,4 +1,4 @@
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::VariableState;
 use pumpkin_propagators::cumulative::time_table::CheckerTask;
 use pumpkin_propagators::cumulative::time_table::TimeTableChecker;

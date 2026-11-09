@@ -1,6 +1,6 @@
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 use pumpkin_core::asserts::pumpkin_assert_simple;
@@ -72,10 +72,10 @@ where
         let lower_bound_left_hand_side = context.new_trailed_integer(lower_bound_left_hand_side);
 
         let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
+        let inference_code = checkers.add_conflict_checker(
             constraint_tag,
             LinearBounds,
-            LinearLessOrEqualInferenceChecker::new(x.clone(), c),
+            LinearLessOrEqualConflictChecker::new(x.clone(), c),
         );
 
         let propagator = LinearLessOrEqualPropagator {
@@ -298,18 +298,18 @@ where
 }
 
 #[derive(Debug, Clone)]
-pub struct LinearLessOrEqualInferenceChecker<Var> {
+pub struct LinearLessOrEqualConflictChecker<Var> {
     terms: Box<[Var]>,
     bound: i32,
 }
 
-impl<Var> LinearLessOrEqualInferenceChecker<Var> {
+impl<Var> LinearLessOrEqualConflictChecker<Var> {
     pub fn new(terms: Box<[Var]>, bound: i32) -> Self {
-        LinearLessOrEqualInferenceChecker { terms, bound }
+        LinearLessOrEqualConflictChecker { terms, bound }
     }
 }
 
-impl<Var, Atomic> InferenceChecker<Atomic> for LinearLessOrEqualInferenceChecker<Var>
+impl<Var, Atomic> ConflictChecker<Atomic> for LinearLessOrEqualConflictChecker<Var>
 where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,

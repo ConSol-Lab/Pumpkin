@@ -3,7 +3,7 @@ use std::rc::Rc;
 use enumset::enum_set;
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 use pumpkin_core::asserts::pumpkin_assert_extreme;
@@ -73,7 +73,7 @@ where
         }
 
         let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
+        let inference_code = checkers.add_conflict_checker(
             constraint_tag,
             LinearNotEquals,
             LinearNotEqualChecker {
@@ -376,7 +376,7 @@ pub struct LinearNotEqualChecker<Var> {
     pub bound: i32,
 }
 
-impl<Var, Atomic> InferenceChecker<Atomic> for LinearNotEqualChecker<Var>
+impl<Var, Atomic> ConflictChecker<Atomic> for LinearNotEqualChecker<Var>
 where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,

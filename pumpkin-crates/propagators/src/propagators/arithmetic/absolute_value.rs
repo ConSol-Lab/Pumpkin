@@ -1,6 +1,6 @@
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::IntExt;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
@@ -50,7 +50,7 @@ where
             .build();
 
         let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
+        let inference_code = checkers.add_conflict_checker(
             constraint_tag,
             AbsoluteValue,
             AbsoluteValueChecker {
@@ -188,7 +188,7 @@ pub struct AbsoluteValueChecker<VA, VB> {
     absolute: VB,
 }
 
-impl<VA, VB, Atomic> InferenceChecker<Atomic> for AbsoluteValueChecker<VA, VB>
+impl<VA, VB, Atomic> ConflictChecker<Atomic> for AbsoluteValueChecker<VA, VB>
 where
     VA: CheckerVariable<Atomic>,
     VB: CheckerVariable<Atomic>,

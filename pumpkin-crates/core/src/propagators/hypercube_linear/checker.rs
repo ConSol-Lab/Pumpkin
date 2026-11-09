@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 
@@ -13,7 +13,7 @@ pub struct HypercubeLinearChecker<Atomic, Var> {
     pub bound: i32,
 }
 
-impl<Atomic, Var> InferenceChecker<Atomic> for HypercubeLinearChecker<Atomic, Var>
+impl<Atomic, Var> ConflictChecker<Atomic> for HypercubeLinearChecker<Atomic, Var>
 where
     Atomic: AtomicConstraint + Clone + Debug,
     Var: CheckerVariable<Atomic>,

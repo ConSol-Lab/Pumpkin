@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::VariableState;
 use pumpkin_propagators::arithmetic::BinaryEqualsChecker;
 

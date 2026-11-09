@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 use pumpkin_core::containers::KeyedVec;
@@ -20,7 +20,7 @@ pub struct DisjunctiveEdgeFindingChecker<Var> {
     pub tasks: Box<[ArgDisjunctiveTask<Var>]>,
 }
 
-impl<Var, Atomic> InferenceChecker<Atomic> for DisjunctiveEdgeFindingChecker<Var>
+impl<Var, Atomic> ConflictChecker<Atomic> for DisjunctiveEdgeFindingChecker<Var>
 where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,

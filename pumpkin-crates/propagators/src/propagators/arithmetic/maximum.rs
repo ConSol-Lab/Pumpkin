@@ -1,6 +1,6 @@
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::IntExt;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
@@ -57,7 +57,7 @@ where
         );
 
         let mut checkers = RuntimeCheckers::builder();
-        let inference_code = checkers.add_inference_checker(
+        let inference_code = checkers.add_conflict_checker(
             constraint_tag,
             Maximum,
             MaximumChecker {
@@ -197,7 +197,7 @@ pub struct MaximumChecker<ElementVar, Rhs> {
     pub rhs: Rhs,
 }
 
-impl<ElementVar, Rhs, Atomic> InferenceChecker<Atomic> for MaximumChecker<ElementVar, Rhs>
+impl<ElementVar, Rhs, Atomic> ConflictChecker<Atomic> for MaximumChecker<ElementVar, Rhs>
 where
     Atomic: AtomicConstraint,
     ElementVar: CheckerVariable<Atomic>,

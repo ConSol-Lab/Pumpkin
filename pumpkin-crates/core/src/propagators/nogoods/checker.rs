@@ -1,14 +1,14 @@
 use std::fmt::Debug;
 
 use pumpkin_checking::AtomicConstraint;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 
 #[derive(Debug, Clone)]
 pub struct NogoodChecker<Atomic> {
     pub nogood: Box<[Atomic]>,
 }
 
-impl<Atomic> InferenceChecker<Atomic> for NogoodChecker<Atomic>
+impl<Atomic> ConflictChecker<Atomic> for NogoodChecker<Atomic>
 where
     Atomic: AtomicConstraint + Clone + Debug,
 {

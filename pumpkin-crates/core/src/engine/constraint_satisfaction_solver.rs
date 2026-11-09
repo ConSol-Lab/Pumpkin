@@ -902,7 +902,7 @@ impl ConstraintSatisfactionSolver {
         pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
 
         let inference_code = if cfg!(feature = "check-propagations") {
-            self.state.add_inference_checker(
+            self.state.add_conflict_checker(
                 constraint_tag,
                 NogoodLabel,
                 NogoodChecker {
