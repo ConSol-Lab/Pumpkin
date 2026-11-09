@@ -356,15 +356,18 @@ impl Propagator for NogoodPropagator {
                 // We retrieve the index of the last-traversed watcher and the nogood itself.
                 //
                 // We do it in this convoluted way to avoid borrow issues later.
-                let (last_traversed_watcher, nogood_predicates) = {
+                let (nogood_index, last_traversed_watcher, nogood_predicates) = {
                     let nogood_id = watcher.nogood_id;
+                    let nogood_index = self.nogood_predicates.get_nogood_index(&nogood_id);
                     let nogood_range = self
                         .nogood_predicates
                         .calculate_range_of_nogood_including_last_traversed(nogood_id);
 
                     self.nogood_predicates.nogoods[nogood_range]
                         .split_first_mut()
-                        .map(|(last_traversed, nogood)| (&mut last_traversed.id, nogood))
+                        .map(|(last_traversed, nogood)| {
+                            (nogood_index, &mut last_traversed.id, nogood)
+                        })
                         .expect("Expected nogood to be at least of length two")
                 };
 
@@ -485,11 +488,6 @@ impl Propagator for NogoodPropagator {
                 }
 
                 // Now we perform the propagation
-                let nogood_index = *self
-                    .nogood_predicates
-                    .nogood_id_to_index
-                    .get(&watcher.nogood_id)
-                    .expect("Expected nogood predicate to exist");
                 self.propagation_mode.perform_propagation(
                     &mut context,
                     nogood_predicates,

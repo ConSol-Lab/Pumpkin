@@ -1,7 +1,6 @@
 use std::ops::Range;
 
 use crate::basic_types::PredicateId;
-use crate::containers::HashMap;
 use crate::containers::StorageKey;
 use crate::propagators::nogoods::NogoodId;
 
@@ -15,16 +14,13 @@ pub(crate) struct ArenaAllocator {
     /// A list of [`PredicateId`]s representing the nogoods.
     ///
     /// If there is a [`NogoodId`] with value `i`, then the [`PredicateId`] at position `i` will
-    /// contain the length `x` of the nogood and the [`PredicateId`] at position `i + 1` will
-    /// contain the last-traversed watcher index. The next `i + 2 + x` elements are then the nogood
-    /// pointed to by the [`NogoodId`] with value `i`.
+    /// contain the length `x` of the nogood, the [`PredicateId`] at position `i + 1` will contain
+    /// its [`NogoodIndex`], and the [`PredicateId`] at position `i + 2` will contain the
+    /// last-traversed watcher index. The next `x` elements are then the nogood pointed to by the
+    /// [`NogoodId`] with value `i`.
     pub(crate) nogoods: Vec<PredicateId>,
-    /// Maps each [`NogoodId`] to an index; this is to prevent unnecessary allocations for other
-    /// structures such as the [`NogoodInfo`] which use direct hashing for storing information
-    /// about nogoods.
-    pub(crate) nogood_id_to_index: HashMap<NogoodId, NogoodIndex>,
-    /// The current index for the next [`NogoodId`] which is entered; see
-    /// [`ArenaAllocator::nogood_id_to_index`].
+    /// The [`NogoodIndex`] of the next nogood which is inserted; see
+    /// [`ArenaAllocator::get_nogood_index`].
     current_index: u32,
     /// The number of elements (i.e., [`PredicateId`]s), that are created when the arena is
     /// initialised.
@@ -38,7 +34,7 @@ pub(crate) struct ArenaAllocator {
 /// begin.
 ///
 /// See [`ArenaAllocator::nogoods`] for more information.
-const OFFSET: usize = 2;
+const OFFSET: usize = 3;
 
 #[derive(Clone, Copy, Debug, Hash)]
 pub(crate) struct NogoodIndex(u32);
@@ -57,7 +53,6 @@ impl ArenaAllocator {
     pub(crate) fn new(capacity: usize) -> Self {
         Self {
             nogoods: Vec::default(),
-            nogood_id_to_index: HashMap::default(),
             current_index: 0,
             initial_capacity: capacity,
         }
@@ -72,15 +67,14 @@ impl ArenaAllocator {
 
         let nogood_id = NogoodId::create_from_index(self.nogoods.len());
 
-        // We store the NogoodId with its index.
-        let _ = self
-            .nogood_id_to_index
-            .insert(nogood_id, NogoodIndex(self.current_index));
-        self.current_index += 1;
-
         // We push a PredicateId which stores the length of the nogood
         self.nogoods
             .push(PredicateId::create_from_index(nogood.len()));
+        // We push a PredicateId which stores the index of the nogood
+        self.nogoods.push(PredicateId {
+            id: self.current_index,
+        });
+        self.current_index += 1;
         // We also push a PredicateId which stores the last-traversed watcher (defaults to the
         // first non-watcher element)
         self.nogoods.push(PredicateId::create_from_index(2));
@@ -94,10 +88,7 @@ impl ArenaAllocator {
     /// In other words, if the nogood with ID [`NogoodId`] was the `n`th nogood to be inserted then
     /// this method will return `n`.
     pub(crate) fn get_nogood_index(&self, nogood_id: &NogoodId) -> NogoodIndex {
-        *self
-            .nogood_id_to_index
-            .get(nogood_id)
-            .expect("Expected nogood predicate to exist")
+        NogoodIndex(self.nogoods[nogood_id.index() + 1].id)
     }
 
     /// Returns a list of all the present [`NogoodId`]s.
@@ -180,5 +171,25 @@ impl Iterator for NogoodIdIterator<'_> {
         self.current_index += self.nogoods[self.current_index].id as usize + OFFSET;
 
         Some(id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nogood_index_is_stored_in_header() {
+        let mut arena = ArenaAllocator::new(10);
+        let first = arena.insert(vec![PredicateId { id: 1 }, PredicateId { id: 2 }]);
+        let second = arena.insert(vec![PredicateId { id: 3 }, PredicateId { id: 4 }]);
+
+        assert_eq!(arena.get_nogood_index(&first).index(), 0);
+        assert_eq!(arena.get_nogood_index(&second).index(), 1);
+        assert_eq!(
+            arena.get_nogood(second),
+            [PredicateId { id: 3 }, PredicateId { id: 4 }]
+        );
+        assert_eq!(arena.nogoods_ids().collect::<Vec<_>>(), [first, second]);
     }
 }
