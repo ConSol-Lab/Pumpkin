@@ -11,7 +11,12 @@ impl StorageKey for NogoodId {
     }
 
     fn create_from_index(index: usize) -> Self {
-        NogoodId { id: index as u32 }
+        // The ID is the offset of the nogood in the arena; silently truncating it would make the
+        // ID point to a different nogood.
+        NogoodId {
+            id: u32::try_from(index)
+                .expect("nogood arena exceeded the maximum number of predicates"),
+        }
     }
 }
 
