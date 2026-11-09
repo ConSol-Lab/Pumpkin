@@ -713,7 +713,7 @@ impl State {
     ///
     /// Panics when the inference checker rejects the conflict.
     #[cfg(feature = "check-propagations")]
-    fn check_conflict(&mut self, conflict: &Conflict) {
+    fn check_conflict(&self, conflict: &Conflict) {
         if let Conflict::Propagator(propagator_conflict) = conflict {
             self.run_checker(
                 propagator_conflict.conjunction.clone(),
@@ -1003,7 +1003,6 @@ impl State {
                     reason_buffer.extend(std::iter::once(trail_entry.predicate));
                 }
                 (PredicateType::LowerBound, PredicateType::Equal) => {
-                    let domain_id = predicate.get_domain();
                     let equality_constant = predicate.get_right_hand_side();
                     // The input predicate is an equality predicate, and the trail predicate
                     // is a lower bound predicate. This means that the time of posting the
@@ -1017,14 +1016,13 @@ impl State {
                     // For example, {1, 2, 3, 10}, then posting [x >= 5] will raise the
                     // lower bound to x >= 10.
 
-                    let predicate_lb = predicate!(domain_id >= equality_constant);
-                    let predicate_ub = predicate!(domain_id <= equality_constant);
+                    let predicate_lb = predicate!(predicate.get_domain() >= equality_constant);
+                    let predicate_ub = predicate!(predicate.get_domain() <= equality_constant);
                     reason_buffer.extend(std::iter::once(predicate_lb));
                     reason_buffer.extend(std::iter::once(predicate_ub));
                 }
                 (PredicateType::UpperBound, PredicateType::UpperBound) => {
                     let trail_upper_bound = trail_entry.predicate.get_right_hand_side();
-                    let domain_id = predicate.get_domain();
                     let input_upper_bound = predicate.get_right_hand_side();
                     // Both the input and trail predicates are upper bound predicates.
                     // There are two scenarios to consider:
@@ -1047,8 +1045,10 @@ impl State {
                         // The reason of the input predicate [x <= a] is computed recursively as
                         // the reason for [x <= a + 1] & [x != a + 1].
 
-                        let new_ub_predicate = predicate!(domain_id <= input_upper_bound + 1);
-                        let not_equal_predicate = predicate!(domain_id != input_upper_bound + 1);
+                        let new_ub_predicate =
+                            predicate!(predicate.get_domain() <= input_upper_bound + 1);
+                        let not_equal_predicate =
+                            predicate!(predicate.get_domain() != input_upper_bound + 1);
                         reason_buffer.extend(std::iter::once(new_ub_predicate));
                         reason_buffer.extend(std::iter::once(not_equal_predicate));
                     }
@@ -1067,7 +1067,6 @@ impl State {
                     reason_buffer.extend(std::iter::once(trail_entry.predicate));
                 }
                 (PredicateType::UpperBound, PredicateType::Equal) => {
-                    let domain_id = predicate.get_domain();
                     let equality_constant = predicate.get_right_hand_side();
                     // The input predicate is an equality predicate, and the trail predicate
                     // is an upper bound predicate. This means that the time of posting the
@@ -1084,14 +1083,13 @@ impl State {
                     // Note that it could be that one of the two predicates are decision
                     // predicates, so we need to use the substitute functions.
 
-                    let predicate_lb = predicate!(domain_id >= equality_constant);
-                    let predicate_ub = predicate!(domain_id <= equality_constant);
+                    let predicate_lb = predicate!(predicate.get_domain() >= equality_constant);
+                    let predicate_ub = predicate!(predicate.get_domain() <= equality_constant);
                     reason_buffer.extend(std::iter::once(predicate_lb));
                     reason_buffer.extend(std::iter::once(predicate_ub));
                 }
                 (PredicateType::NotEqual, PredicateType::LowerBound) => {
                     let not_equal_constant = trail_entry.predicate.get_right_hand_side();
-                    let domain_id = predicate.get_domain();
                     let input_lower_bound = predicate.get_right_hand_side();
                     // The trail predicate is not equals, but the input predicate is a lower
                     // bound predicate. This means that creating the hole in the domain resulted
@@ -1106,15 +1104,16 @@ impl State {
 
                     // The reason for the input predicate [x >= a] is computed recursively as
                     // the reason for [x >= a - 1] & [x != a - 1].
-                    let new_lb_predicate = predicate!(domain_id >= input_lower_bound - 1);
-                    let new_not_equals_predicate = predicate!(domain_id != input_lower_bound - 1);
+                    let new_lb_predicate =
+                        predicate!(predicate.get_domain() >= input_lower_bound - 1);
+                    let new_not_equals_predicate =
+                        predicate!(predicate.get_domain() != input_lower_bound - 1);
 
                     reason_buffer.extend(std::iter::once(new_lb_predicate));
                     reason_buffer.extend(std::iter::once(new_not_equals_predicate));
                 }
                 (PredicateType::NotEqual, PredicateType::UpperBound) => {
                     let not_equal_constant = trail_entry.predicate.get_right_hand_side();
-                    let domain_id = predicate.get_domain();
                     let input_upper_bound = predicate.get_right_hand_side();
                     // The trail predicate is not equals, but the input predicate is an upper
                     // bound predicate. This means that creating the hole in the domain resulted
@@ -1129,14 +1128,15 @@ impl State {
 
                     // The reason for the input predicate [x <= a] is computed recursively as
                     // the reason for [x <= a + 1] & [x != a + 1].
-                    let new_ub_predicate = predicate!(domain_id <= input_upper_bound + 1);
-                    let new_not_equals_predicate = predicate!(domain_id != input_upper_bound + 1);
+                    let new_ub_predicate =
+                        predicate!(predicate.get_domain() <= input_upper_bound + 1);
+                    let new_not_equals_predicate =
+                        predicate!(predicate.get_domain() != input_upper_bound + 1);
 
                     reason_buffer.extend(std::iter::once(new_ub_predicate));
                     reason_buffer.extend(std::iter::once(new_not_equals_predicate));
                 }
                 (PredicateType::NotEqual, PredicateType::Equal) => {
-                    let domain_id = predicate.get_domain();
                     let equality_constant = predicate.get_right_hand_side();
                     // The trail predicate is not equals, but the input predicate is
                     // equals. The only time this could is when the not equals forces the
@@ -1146,8 +1146,8 @@ impl State {
                     // Note that it could be that one of the two predicates are decision
                     // predicates, so we need to use the substitute functions.
 
-                    let predicate_lb = predicate!(domain_id >= equality_constant);
-                    let predicate_ub = predicate!(domain_id <= equality_constant);
+                    let predicate_lb = predicate!(predicate.get_domain() >= equality_constant);
+                    let predicate_ub = predicate!(predicate.get_domain() <= equality_constant);
 
                     reason_buffer.extend(std::iter::once(predicate_lb));
                     reason_buffer.extend(std::iter::once(predicate_ub));

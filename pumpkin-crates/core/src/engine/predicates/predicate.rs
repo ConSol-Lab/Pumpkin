@@ -328,14 +328,13 @@ impl std::ops::Not for Predicate {
     type Output = Predicate;
 
     fn not(self) -> Self::Output {
-        let domain_id = self.get_domain();
         let value = self.get_right_hand_side();
 
         match self.get_predicate_type() {
-            PredicateType::LowerBound => predicate!(domain_id <= value - 1),
-            PredicateType::UpperBound => predicate!(domain_id >= value + 1),
-            PredicateType::NotEqual => predicate!(domain_id == value),
-            PredicateType::Equal => predicate!(domain_id != value),
+            PredicateType::LowerBound => predicate!(self.get_domain() < value),
+            PredicateType::UpperBound => predicate!(self.get_domain() > value),
+            PredicateType::NotEqual => predicate!(self.get_domain() == value),
+            PredicateType::Equal => predicate!(self.get_domain() != value),
         }
     }
 }

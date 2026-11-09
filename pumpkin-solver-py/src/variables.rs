@@ -93,13 +93,11 @@ impl Predicate {
 
 impl Predicate {
     pub(crate) fn into_solver_predicate(self) -> pumpkin_solver::core::predicates::Predicate {
-        let affine_view = self.variable.0;
-
         match self.comparator {
-            Comparator::NotEqual => predicate![affine_view != self.value],
-            Comparator::Equal => predicate![affine_view == self.value],
-            Comparator::LessThanOrEqual => predicate![affine_view <= self.value],
-            Comparator::GreaterThanOrEqual => predicate![affine_view >= self.value],
+            Comparator::NotEqual => predicate![self.variable.0 != self.value],
+            Comparator::Equal => predicate![self.variable.0 == self.value],
+            Comparator::LessThanOrEqual => predicate![self.variable.0 <= self.value],
+            Comparator::GreaterThanOrEqual => predicate![self.variable.0 >= self.value],
         }
     }
 }

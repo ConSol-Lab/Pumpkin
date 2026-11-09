@@ -16,7 +16,7 @@ impl ValueSelector<DomainId> for OutDomainMax {
         context: &mut SelectionContext,
         decision_variable: DomainId,
     ) -> Predicate {
-        predicate!(decision_variable <= context.upper_bound(decision_variable) - 1)
+        predicate!(decision_variable < context.upper_bound(decision_variable))
     }
 
     fn subscribe_to_events(&self) -> Vec<BrancherEvent> {

@@ -69,17 +69,20 @@ pub(crate) trait PseudoBooleanConstraintEncoderInterface {
 /// [`PseudoBooleanConstraintEncoder`].
 #[derive(Default, Clone, Copy, Debug, ValueEnum)]
 pub(crate) enum PseudoBooleanEncoding {
-    /// Specifies the usage of the generalized totalizer encoding for pseudo-boolean constraints
-    /// \[1\].
+    /// Specifies the usage of the generalized totalizer encoding for pseudo-boolean constraints.
+    ///
+    /// See \[1\] for more information.
     ///
     /// # Bibliography
     /// \[1] "Generalized totalizer encoding for pseudo-boolean constraints.", Joshi Saurabh, Ruben
     /// Martins, Vasco Manquinho; CP '15
     #[default]
     GeneralizedTotalizer,
-    /// Specifies the usage of the cardinality network \[1\] encoding for unweighted cardinality
-    /// constraints in the form `x1 + ... + xn <= k`. The encoding is arc-consistent and
-    /// supports incremental strengthening of the upper bound.
+    /// Specifies the usage of the cardinality network encoding for unweighted cardinality
+    /// constraints in the form `x1 + ... + xn <= k`.
+    ///
+    /// The encoding \[1\] is arc-consistent and supports incremental strengthening of the upper
+    /// bound.
     ///
     /// # Bibliography
     /// \[1\] R. Asín, R. Nieuwenhuis, A. Oliveras, and E. Rodríguez-Carbonell, ‘Cardinality

@@ -792,14 +792,12 @@ impl NogoodPropagator {
                 .iter()
                 .fold((None, None), |(min_exception, max_exception), exception| {
                     (
-                        min_exception.map_or_else(
-                            || Some(*exception),
-                            |min_exception: i32| Some(min_exception.min(*exception)),
-                        ),
-                        max_exception.map_or_else(
-                            || Some(*exception),
-                            |max_exception: i32| Some(max_exception.max(*exception)),
-                        ),
+                        min_exception.map_or(Some(*exception), |min_exception: i32| {
+                            Some(min_exception.min(*exception))
+                        }),
+                        max_exception.map_or(Some(*exception), |max_exception: i32| {
+                            Some(max_exception.max(*exception))
+                        }),
                     )
                 });
 
@@ -1230,12 +1228,11 @@ impl NogoodPropagator {
                             || nogood[0].is_upper_bound_predicate())
                         && p.get_right_hand_side() == nogood[0].get_right_hand_side()
                     {
-                        let domain = p.get_domain();
                         let rhs = p.get_right_hand_side();
                         if nogood[0].is_lower_bound_predicate() {
-                            Some(predicate!(domain <= rhs))
+                            Some(predicate!(p.get_domain() <= rhs))
                         } else if nogood[0].is_upper_bound_predicate() {
-                            Some(predicate!(domain >= rhs))
+                            Some(predicate!(p.get_domain() >= rhs))
                         } else {
                             unreachable!()
                         }

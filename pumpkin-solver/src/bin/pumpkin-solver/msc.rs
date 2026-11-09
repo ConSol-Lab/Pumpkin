@@ -39,12 +39,20 @@ const CONFIGURATIONS: [(&str, &str, &str, &str); 2] = [
 /// <https://docs.minizinc.dev/en/stable/fzn-spec.html#solver-configuration-files>).
 const MINIZINC_STD_FLAGS: [char; 9] = ['a', 'f', 'i', 'n', 'p', 'r', 's', 't', 'v'];
 
+/// The help headings of arguments which are not applicable to MiniZinc models, and are therefore
+/// not exposed.
+const EXCLUDED_HEADINGS: [&str; 1] = ["Max(SAT)"];
+
 fn generate_msc(name: &str, id: &str, mznlib: &str) -> String {
     let command = Args::command();
     let arguments = command
         .get_arguments()
         .filter(|arg| !arg.is_positional() && !arg.is_hide_set())
-        .filter(|arg| !matches!(arg.get_action(), ArgAction::Help | ArgAction::Version));
+        .filter(|arg| !matches!(arg.get_action(), ArgAction::Help | ArgAction::Version))
+        .filter(|arg| {
+            arg.get_help_heading()
+                .is_none_or(|heading| !EXCLUDED_HEADINGS.contains(&heading))
+        });
 
     // Arguments whose short flag is a standard flag of MiniZinc (e.g. `-a`) are exposed as such;
     // all other arguments are exposed as extra flags.
@@ -82,10 +90,10 @@ fn extra_flag(arg: &Arg) -> Value {
         (None, Some(short)) => format!("-{short}"),
         (None, None) => unreachable!("non-positional arguments have a long or short flag"),
     };
-    let description = arg
+    let summary = arg
         .get_long_help()
         .or(arg.get_help())
-        .map(|help| help.to_string())
+        .map(|help| summary(&help.to_string()))
         .unwrap_or_default();
 
     let default = arg
@@ -95,8 +103,8 @@ fn extra_flag(arg: &Arg) -> Value {
         .collect::<Vec<_>>()
         .join(",");
 
-    let (flag_type, default) = if matches!(arg.get_action(), ArgAction::SetTrue) {
-        ("bool".to_owned(), "false".to_owned())
+    let (flag_type, default, description) = if matches!(arg.get_action(), ArgAction::SetTrue) {
+        ("bool".to_owned(), "false".to_owned(), summary)
     } else if !arg.get_possible_values().is_empty() {
         let values = arg
             .get_possible_values()
@@ -104,12 +112,39 @@ fn extra_flag(arg: &Arg) -> Value {
             .filter(|value| !value.is_hide_set())
             .map(|value| value.get_name().to_owned())
             .collect::<Vec<_>>();
-        (format!("opt:{}", values.join(":")), default)
+        let description = format!(
+            "{summary} [default: {default}] [possible values: {}]",
+            values.join(", ")
+        );
+        (format!("opt:{}", values.join(":")), default, description)
     } else {
-        (value_type(arg), default)
+        let flag_type = value_type(arg);
+        // Strip the bounds from the type, e.g. `int:0:4294967295` is shown as `int`.
+        let type_name = flag_type
+            .split(':')
+            .next()
+            .expect("split yields at least one item");
+        let description = if default.is_empty() {
+            format!("{summary} [possible values: {type_name}]")
+        } else {
+            format!("{summary} [default: {default}] [possible values: {type_name}]")
+        };
+        (flag_type, default, description)
     };
 
     json!([flag, description, flag_type, default])
+}
+
+/// Condenses the help of an argument into a single line, such that it is displayed nicely by
+/// `minizinc --help`, which does not indent the continuation lines of a description.
+///
+/// The summary is the first paragraph of the help, up to the start of any list.
+fn summary(help: &str) -> String {
+    help.lines()
+        .map(str::trim)
+        .take_while(|line| !line.is_empty() && !line.starts_with("- "))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Returns the MiniZinc type corresponding to the type of value which is parsed for `arg`.

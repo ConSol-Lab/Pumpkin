@@ -481,18 +481,17 @@ fn compile_set_in_reif(
             context
                 .solver
                 .add_clause([!reif, predicate![variable >= lower_bound]], constraint_tag);
-            context.solver.add_clause(
-                [!reif, !predicate![variable >= upper_bound + 1]],
-                constraint_tag,
-            );
+            context
+                .solver
+                .add_clause([!reif, predicate![variable <= upper_bound]], constraint_tag);
 
             // `!reif -> x \notin S`
             // Decomposed to `!reif -> (x < lb \/ x > ub)`
             context.solver.add_clause(
                 [
                     reif,
-                    !predicate![variable >= lower_bound],
-                    predicate![variable >= upper_bound + 1],
+                    predicate![variable < lower_bound],
+                    predicate![variable > upper_bound],
                 ],
                 constraint_tag,
             );

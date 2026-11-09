@@ -378,10 +378,10 @@ impl ConflictAnalysisContext<'_> {
                     // It could be the case that we attempt to get the reason for the predicate
                     // [x >= v] but that the corresponding unit nogood idea is the one for the
                     // predicate [x == v]
-                    let domain_id = predicate.get_domain();
                     let right_hand_side = predicate.get_right_hand_side();
 
-                    unit_nogood_inference_codes.get(&predicate!(domain_id == right_hand_side))
+                    unit_nogood_inference_codes
+                        .get(&predicate!(predicate.get_domain() == right_hand_side))
                 });
 
                 if let Some(unit_ic) = unit_ic {
@@ -463,7 +463,7 @@ impl ConflictAnalysisContext<'_> {
                 // We lift so that it is the most general upper-bound possible while still causing
                 // the empty domain
                 empty_domain_reason.push(predicate!(
-                    conflict_domain <= conflict.trigger_predicate.get_right_hand_side() - 1
+                    conflict_domain < conflict.trigger_predicate.get_right_hand_side()
                 ));
             }
             PredicateType::UpperBound => {
@@ -473,7 +473,7 @@ impl ConflictAnalysisContext<'_> {
                 // We lift so that it is the most general lower-bound possible while still causing
                 // the empty domain
                 empty_domain_reason.push(predicate!(
-                    conflict_domain >= conflict.trigger_predicate.get_right_hand_side() + 1
+                    conflict_domain > conflict.trigger_predicate.get_right_hand_side()
                 ));
             }
             PredicateType::NotEqual => {
@@ -491,7 +491,7 @@ impl ConflictAnalysisContext<'_> {
                     // We lift so that it is the most general lower-bound possible while still
                     // causing the empty domain
                     empty_domain_reason.push(predicate!(
-                        conflict_domain >= conflict.trigger_predicate.get_right_hand_side() + 1
+                        conflict_domain > conflict.trigger_predicate.get_right_hand_side()
                     ));
                 } else if conflict.trigger_predicate.get_right_hand_side() > old_upper_bound {
                     // 2) The assigned value was larger than the upper-bound
@@ -499,7 +499,7 @@ impl ConflictAnalysisContext<'_> {
                     // We lift so that it is the most general upper-bound possible while still
                     // causing the empty domain
                     empty_domain_reason.push(predicate!(
-                        conflict_domain <= conflict.trigger_predicate.get_right_hand_side() - 1
+                        conflict_domain < conflict.trigger_predicate.get_right_hand_side()
                     ));
                 } else {
                     // 3) The assigned value was equal to a hole in the domain

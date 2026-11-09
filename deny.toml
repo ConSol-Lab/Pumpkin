@@ -203,6 +203,8 @@ skip = [
     #"ansi_term@0.11.0",
     #{ crate = "ansi_term@0.11.0", reason = "you can specify a reason why it can't be updated/removed" },
     {name = "syn"},
+    { crate = "hashbrown@0.15.5", reason = "chumsky 0.13 (latest stable) requires hashbrown 0.15, while indexmap requires 0.17" },
+    { crate = "foldhash@0.1.5", reason = "pulled in by hashbrown 0.15, see above" },
 ]
 # Similarly to `skip` allows you to skip certain crates during duplicate
 # detection. Unlike skip, it also includes the entire tree of transitive
