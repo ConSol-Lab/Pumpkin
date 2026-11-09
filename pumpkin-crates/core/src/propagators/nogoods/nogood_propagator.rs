@@ -1409,7 +1409,7 @@ impl NogoodPropagator {
     fn clean_up_learned_nogoods_if_needed(
         &mut self,
         assignments: &Assignments,
-        reason_store: &ReasonStore,
+        reason_store: &mut ReasonStore,
         notification_engine: &mut NotificationEngine,
     ) {
         // The clean-up procedure is divided into four stages (for simplicity of implementation).
@@ -1422,7 +1422,8 @@ impl NogoodPropagator {
         //    - Criteria for low-lbd nogoods: LBD, and tie-break on size (lower LBD and size better)
         //  3. Remove the "worst" half of the nogoods, skipping nogoods which are currently
         //     propagating. This only removes the nogood IDs from their respective tier.
-        //  4. Finally, after all of the previous stages, remove deleted nogoods from the watchers.
+        //  4. Finally, after all of the previous stages, remove deleted nogoods from the watchers,
+        //     and reclaim their space by compacting the nogood database.
         //
         // Note: in other works, instead of deleting nogoods, they get demoted to the previous tier.
         // The rational for our choice is that demoting many nogoods will likely trigger clean up
@@ -1509,7 +1510,74 @@ impl NogoodPropagator {
 
         if removed_at_least_one_nogood {
             self.remove_deleted_nogoods_from_watchers(assignments, notification_engine);
+            self.compact_nogood_database(reason_store);
         }
+    }
+
+    /// Removes the deleted nogoods from the nogood database and moves the remaining nogoods to the
+    /// front of the [`ArenaAllocator`] (similar to the garbage collection of kissat); all
+    /// references to the moved nogoods are updated accordingly, including the lazy reasons in the
+    /// [`ReasonStore`].
+    ///
+    /// A deleted nogood which is still the reason for a propagation is kept (but stays deleted),
+    /// since its explanation could still be required (e.g., for proof logging); it can be removed
+    /// by a later compaction once it is not a reason anymore.
+    ///
+    /// Assumes that the deleted nogoods have been removed from the watchers and the tiers.
+    fn compact_nogood_database(&mut self, reason_store: &mut ReasonStore) {
+        let propagator_id = self.handle.propagator_id();
+
+        let mut keep = KeyedVec::default();
+        for nogood_info in self.nogood_info.iter() {
+            let _ = keep.push(!nogood_info.is_deleted);
+        }
+        // Note that the lazy codes of both unit propagation and extended nogood propagation can
+        // be interpreted as a `LazyNogoodExplanation`.
+        for code in reason_store.lazy_codes(propagator_id) {
+            let nogood_id = LazyNogoodExplanation::from_bits(code).nogood_id();
+            keep[self.nogood_predicates.get_nogood_index(&nogood_id)] = true;
+        }
+
+        let compacted_ids = self.nogood_predicates.compute_compacted_ids(&keep);
+        let compacted_id = |nogood_id: NogoodId| {
+            compacted_ids[self.nogood_predicates.get_nogood_index(&nogood_id)]
+                .expect("Referenced nogoods should be kept")
+        };
+
+        for watcher in self.watch_lists.iter_mut().flatten() {
+            watcher.nogood_id = compacted_id(watcher.nogood_id);
+        }
+        for nogood_id in self
+            .learned_nogood_ids
+            .low_lbd
+            .iter_mut()
+            .chain(self.learned_nogood_ids.mid_lbd.iter_mut())
+            .chain(self.learned_nogood_ids.high_lbd.iter_mut())
+        {
+            *nogood_id = compacted_id(*nogood_id);
+        }
+        // A bumped nogood could have been deleted; it then does not need to be unblocked anymore.
+        self.bumped_nogoods.retain_mut(|nogood_id| {
+            match compacted_ids[self.nogood_predicates.get_nogood_index(nogood_id)] {
+                Some(compacted_id) => {
+                    *nogood_id = compacted_id;
+                    true
+                }
+                None => false,
+            }
+        });
+        reason_store.update_lazy_codes(propagator_id, |code| {
+            let reason = LazyNogoodExplanation::from_bits(*code);
+            *code = reason
+                .with_nogood_id(compacted_id(reason.nogood_id()))
+                .into_bits();
+        });
+
+        self.nogood_predicates.compact(&compacted_ids);
+        self.nogood_info
+            .retain_keys(|nogood_index| compacted_ids[nogood_index].is_some());
+        self.inference_codes
+            .retain_keys(|nogood_index| compacted_ids[nogood_index].is_some());
     }
 
     fn has_a_watched_predicate_falsified_at_root_level(

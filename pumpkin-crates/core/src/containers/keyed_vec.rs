@@ -133,6 +133,17 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
     pub(crate) fn swap(&mut self, a: usize, b: usize) {
         self.elements.swap(a, b)
     }
+
+    /// Retains only the values whose key satisfies `keep`; the retained values keep their relative
+    /// order, and are thus stored at the next free keys.
+    pub(crate) fn retain_keys(&mut self, mut keep: impl FnMut(Key) -> bool) {
+        let mut index = 0;
+        self.elements.retain(|_| {
+            let is_kept = keep(Key::create_from_index(index));
+            index += 1;
+            is_kept
+        });
+    }
 }
 
 impl<Key: StorageKey, Value: Clone> KeyedVec<Key, Value> {
