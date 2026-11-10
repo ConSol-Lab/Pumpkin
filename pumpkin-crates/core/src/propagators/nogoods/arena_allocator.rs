@@ -153,11 +153,11 @@ impl ArenaAllocator {
             if let Some(compacted_id) = compacted_ids[self.get_nogood_index(&nogood_id)] {
                 pumpkin_assert_eq_simple!(compacted_id.index(), compacted_len);
 
-                // And copy over the next nogood into the arena.
-                self.nogoods.copy_within(start..end, compacted_len);
-                self.nogoods[compacted_len + 1] = PredicateId {
+                // Update its NogoodIndex in place, and copy over the nogood into the arena.
+                self.nogoods[start + 1] = PredicateId {
                     id: compacted_index,
                 };
+                self.nogoods.copy_within(start..end, compacted_len);
 
                 compacted_len += end - start;
                 compacted_index += 1;
