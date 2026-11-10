@@ -279,8 +279,12 @@ impl WorkingNogood {
             "If the heap is empty when extracting the final nogood then we should be performing all decision learning"
         );
         pumpkin_assert_simple!(
-            !matches!(mode, AnalysisMode::OneUIP | AnalysisMode::AllDecision)
-                || self.num_current_checkpoint() == 1
+            !matches!(mode, AnalysisMode::OneUIP) || self.num_current_checkpoint() == 1,
+            "1UIP analysis should stop when a single predicate is left to be processed"
+        );
+        pumpkin_assert_simple!(
+            !matches!(mode, AnalysisMode::AllDecision) || self.num_current_checkpoint() == 0,
+            "All-decision analysis should stop when no predicates are left to be processed"
         );
 
         // We need to add all of the remaining predicates to the nogood; due to the way in
@@ -485,11 +489,17 @@ impl WorkingNogood {
                 self.remove_redundant_predicates(removed, predicate_id_generator, mode);
 
                 // We split into two cases:
-                // 1. The new predicate is of the current decision level.
-                // 2. The new predicate is of a previous decision level.
-                if context.get_checkpoint_for_predicate(new_predicate).unwrap()
-                    == context.get_checkpoint()
-                {
+                // 1. The new predicate would be processed further (e.g., it is of the current
+                //    decision level when using 1UIP).
+                // 2. The new predicate would not be processed further (e.g., it is of a previous
+                //    decision level when using 1UIP).
+                let new_predicate_checkpoint =
+                    context.get_checkpoint_for_predicate(new_predicate).unwrap();
+                if mode.predicate_should_be_processed(
+                    new_predicate,
+                    new_predicate_checkpoint,
+                    context,
+                ) {
                     // Next, we check whether we can replace the elements with `new_predicate`.
                     if self.was_replaced(
                         context,
@@ -512,8 +522,8 @@ impl WorkingNogood {
                         false
                     }
                 } else {
-                    // If `new_predicate` is from a previous decision level, then we can always
-                    // replace the elements, so we do this directly.
+                    // If `new_predicate` is not processed further, then we can always replace the
+                    // elements, so we do this directly.
                     self.replace_previous_level(
                         context,
                         previous,
@@ -547,17 +557,28 @@ impl WorkingNogood {
         for removed_predicate in removed {
             self.iterative_minimisation_statistics.num_removed += 1;
 
-            let removed_id = predicate_id_generator.get_id(removed_predicate);
-            // We differentiate between two cases:
-            // 1. The removed predicate is from the current decision level and we need to remove it
-            //    from the heap.
-            // 2. The removed predicate is from the previous decision level, and we remove it from
-            //    there.
-            if self.to_process_heap.is_key_present(removed_id) {
-                self.remove_predicate_from_current_checkpoint(removed_predicate, removed_id, mode);
-            } else {
-                self.remove_predicate_previous_checkpoint(removed_predicate);
-            }
+            self.remove_predicate(removed_predicate, predicate_id_generator, mode);
+        }
+    }
+
+    /// Removes the provided predicate from the predicates to be resolved upon, or the ones
+    /// already in the nogood.
+    fn remove_predicate(
+        &mut self,
+        predicate: Predicate,
+        predicate_id_generator: &mut PredicateIdGenerator,
+        mode: AnalysisMode,
+    ) {
+        let predicate_id = predicate_id_generator.get_id(predicate);
+        // We differentiate between two cases:
+        // 1. The predicate is still to be processed (e.g., from the current decision level when
+        //    using 1UIP), and we need to remove it from the heap.
+        // 2. The predicate is not processed further (e.g., from a previous decision level when
+        //    using 1UIP), and we remove it from the processed predicates.
+        if self.to_process_heap.is_key_present(predicate_id) {
+            self.remove_predicate_from_current_checkpoint(predicate, predicate_id, mode);
+        } else {
+            self.remove_predicate_previous_checkpoint(predicate);
         }
     }
 
@@ -583,13 +604,7 @@ impl WorkingNogood {
             // We can safely replace `element` with `new_predicate`.
             //
             // First, we remove `element`.
-            if context.get_checkpoint_for_predicate(element).unwrap() == context.get_checkpoint() {
-                let element_id = predicate_id_generator.get_id(element);
-
-                self.remove_predicate_from_current_checkpoint(element, element_id, mode);
-            } else {
-                self.remove_predicate_previous_checkpoint(element);
-            }
+            self.remove_predicate(element, predicate_id_generator, mode);
 
             // Then we add it to the current nogood.
             self.add_predicate_to_conflict_nogood(
@@ -618,25 +633,16 @@ impl WorkingNogood {
         mode: AnalysisMode,
     ) {
         pumpkin_assert_simple!(
-            get_heap_value(new_predicate, context)
-                < self
-                    .to_process_heap
-                    .peek_max()
-                    .map(|(_, value)| *value)
-                    .unwrap_or(u32::MAX)
+            !mode.predicate_should_be_processed(
+                new_predicate,
+                context.get_checkpoint_for_predicate(new_predicate).unwrap(),
+                context
+            ),
+            "Expected {new_predicate} to not be processed further"
         );
 
-        // We remove `element` from the previous decision level.
-        if let Some(index) = self
-            .processed_nogood_predicates
-            .iter()
-            .position(|predicate| *predicate == element)
-        {
-            let _ = self.processed_nogood_predicates.remove(index);
-        }
-
-        // And we remove `element` from the iterative minimiser.
-        self.iterative_minimiser.remove_predicate(element);
+        // We remove `element`.
+        self.remove_predicate(element, predicate_id_generator, mode);
 
         // Next, we add the `new_predicate` to the nogood.
         self.add_predicate_to_conflict_nogood(new_predicate, mode, context, predicate_id_generator);
