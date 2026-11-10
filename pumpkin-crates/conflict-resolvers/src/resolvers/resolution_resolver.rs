@@ -1,5 +1,6 @@
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::asserts::pumpkin_assert_eq_simple;
+use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_core::containers::HashSet;
@@ -196,10 +197,11 @@ impl ResolutionResolver {
         // When posting the decision [x = v], it gets decomposed into two decisions ([x >= v] & [x
         // <= v]). In this case there will be two predicates left from the current decision
         // level, and both will be decisions. This is accounted for below.
-        while self
-            .mode
-            .should_continue_resolving(&self.predicate_id_generator, &self.working_nogood)
-        {
+        while self.mode.should_continue_resolving(
+            &self.predicate_id_generator,
+            &self.working_nogood,
+            context,
+        ) {
             // Replace the predicate from the nogood that has been assigned last on the trail.
             //
             // This is done in two steps:
@@ -267,7 +269,13 @@ impl ResolutionResolver {
         context: &mut ConflictAnalysisContext<'_>,
         learned_nogood: &mut Vec<Predicate>,
     ) {
-        if self.working_nogood.iterative_minimisation() {
+        // When using bounds CPIP, the learned nogood should be semantically minimal for it to
+        // propagate a bound (see `AnalysisMode::should_continue_resolving`). However, iterative
+        // minimisation does not merge predicates if the merged predicate would be the next to be
+        // resolved upon, so we also apply semantic minimisation in that case.
+        if self.working_nogood.iterative_minimisation()
+            && !matches!(self.mode, AnalysisMode::BoundsCPIP)
+        {
             // If we have performed iterative minimisation, then we do not need to do semantic
             // minimisation.
 
@@ -278,8 +286,8 @@ impl ResolutionResolver {
                 split_equalities(learned_nogood);
             }
         } else {
-            // If iterative minimisation is not active, then we will first use semantic
-            // minimisation to remove duplicates and semantically redundant predicates.
+            // Otherwise, we will first use semantic minimisation to remove duplicates and
+            // semantically redundant predicates.
             self.semantic_minimiser
                 .set_mode(if !self.recursive_minimisation {
                     // If we do not use recursive minimisation then we merge `[x == v]` predicates
@@ -300,6 +308,25 @@ impl ResolutionResolver {
             // Then we merge `[x >= v]` and `[x <= v]` into `[x == v]`
             merge_equalities(learned_nogood);
         }
+
+        pumpkin_assert_moderate!(
+            !matches!(self.mode, AnalysisMode::BoundsCPIP)
+                || learned_nogood
+                    .iter()
+                    .find(|predicate| {
+                        context.get_checkpoint_for_predicate(**predicate)
+                            == Some(context.get_checkpoint())
+                    })
+                    .is_none_or(|asserting_predicate| {
+                        self.mode.stops_with(
+                            learned_nogood.iter().copied().filter(|predicate| {
+                                predicate.get_domain() == asserting_predicate.get_domain()
+                            }),
+                            context,
+                        )
+                    }),
+            "Expected the learned nogood {learned_nogood:?} to propagate a bound"
+        );
 
         pumpkin_assert_advanced!(
             learned_nogood

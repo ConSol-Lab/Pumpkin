@@ -4,6 +4,8 @@ use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::containers::HashMap;
+use pumpkin_core::containers::HashSet;
+use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateIdGenerator;
 use pumpkin_core::predicates::PredicateType;
@@ -73,6 +75,7 @@ impl AnalysisMode {
         &self,
         predicate_id_generator: &PredicateIdGenerator,
         working_nogood: &WorkingNogood,
+        context: &ConflictAnalysisContext,
     ) -> bool {
         match self {
             AnalysisMode::OneUIP => {
@@ -89,12 +92,21 @@ impl AnalysisMode {
                 working_nogood.num_unique_variables_current_checkpoint() > 1
             }
             AnalysisMode::BoundsCPIP => {
-                working_nogood.num_unique_variables_current_checkpoint() > 1
-                    || !self.stops_with(
-                        working_nogood
-                            .predicate_ids_current_checkpoint()
-                            .map(|predicate_id| predicate_id_generator.get_predicate(predicate_id)),
-                    )
+                // We wait until there are only elements over a single variable left, and the
+                // learned nogood can propagate a bound of that variable.
+                if working_nogood.num_unique_variables_current_checkpoint() > 1 {
+                    return true;
+                }
+
+                working_nogood
+                    .unique_variables_current_checkpoint()
+                    .next()
+                    .is_some_and(|domain| {
+                        !self.stops_with(
+                            working_nogood.predicates_over(domain, predicate_id_generator),
+                            context,
+                        )
+                    })
             }
         }
     }
@@ -202,51 +214,94 @@ impl AnalysisMode {
                 // Note that adding `new_predicate` could still lead to further predicates over the
                 // same variable being removed by the minimiser, which is not taken into account.
                 let predicates_after_replacement = working_nogood
-                    .predicate_ids_current_checkpoint()
-                    .map(|predicate_id| predicate_id_generator.get_predicate(predicate_id))
+                    .predicates_over(new_predicate.get_domain(), predicate_id_generator)
                     .filter(|&predicate| predicate != element)
                     .chain([new_predicate]);
-                self.stops_with(predicates_after_replacement)
+                self.stops_with(predicates_after_replacement, context)
             }
         }
     }
 
-    /// Returns whether CPIP-based analysis stops if `predicates` are the predicates from the
-    /// current checkpoint in the nogood, assuming that they are over a single variable.
+    /// Returns whether CPIP-based analysis stops if `predicates` are the predicates over the single
+    /// variable from the current checkpoint in the nogood, together with the predicates over that
+    /// variable from previous checkpoints.
     ///
     /// Should only be called for CPIP-based analysis modes.
-    fn stops_with(&self, predicates: impl IntoIterator<Item = Predicate>) -> bool {
+    pub(crate) fn stops_with(
+        &self,
+        predicates: impl IntoIterator<Item = Predicate>,
+        context: &ConflictAnalysisContext,
+    ) -> bool {
         match self {
             AnalysisMode::BoundsCPIP => {
-                // We wait until extended nogood propagation can propagate a bound.
+                // We wait until extended nogood propagation can propagate a bound upon learning.
                 //
-                // We calculate the number of predicate types from the current decision level (note
-                // that they are necessarily over a single variable) to determine when bound
-                // propagation can take place.
-                let (mut lower_bounds, mut upper_bounds, mut equalities) = (0, 0, 0);
-                let mut domain = None;
+                // Extended nogood propagation assumes that the nogood is semantically minimal, so
+                // we determine this based on the semantically minimal form of the predicates (e.g.,
+                // `[x >= 4] /\ [x != 4] /\ [x != 5]` becomes `[x >= 6]`). Note that the predicates
+                // in the nogood are not necessarily minimal, since the iterative minimiser does not
+                // merge predicates if the merged predicate would be the next to be resolved upon.
+                let mut predicates = predicates.into_iter().peekable();
+                let Some(domain) = predicates.peek().map(|predicate| predicate.get_domain()) else {
+                    return true;
+                };
+
+                // First, we compute the bounds described by the predicates, where the holes
+                // adjacent to the bounds are merged into them.
+                let initial_lower_bound = context.initial_lower_bound(domain);
+                let initial_upper_bound = context.initial_upper_bound(domain);
+                let mut lower_bound = initial_lower_bound;
+                let mut upper_bound = initial_upper_bound;
+                let mut holes: HashSet<i32> = context.initial_holes(domain).into_iter().collect();
                 for predicate in predicates {
                     pumpkin_assert_moderate!(
-                        *domain.get_or_insert(predicate.get_domain()) == predicate.get_domain(),
+                        predicate.get_domain() == domain,
                         "Expected the predicates to be over a single variable"
                     );
+                    let value = predicate.get_right_hand_side();
                     match predicate.get_predicate_type() {
-                        PredicateType::LowerBound => lower_bounds += 1,
-                        PredicateType::NotEqual => {}
-                        PredicateType::Equal => equalities += 1,
-                        PredicateType::UpperBound => upper_bounds += 1,
+                        PredicateType::LowerBound => lower_bound = lower_bound.max(value),
+                        PredicateType::UpperBound => upper_bound = upper_bound.min(value),
+                        PredicateType::NotEqual => {
+                            let _ = holes.insert(value);
+                        }
+                        PredicateType::Equal => {
+                            lower_bound = lower_bound.max(value);
+                            upper_bound = upper_bound.min(value);
+                        }
                     }
                 }
-                // We can propagate bounds in the following situations:
-                // - There is a lower-bound present but no upper-bound OR there is an upper-bound
-                //   present but no lower-bound
-                // - There are only holes present
-                // - There is an equality present (would necessarily lead to a single predicate due
-                //   to semantic minimisation)
-                (lower_bounds > 0 && upper_bounds == 0)
-                    || (lower_bounds == 0 && upper_bounds > 0)
-                    || (lower_bounds == 0 && upper_bounds == 0)
-                    || equalities > 0
+                while holes.contains(&lower_bound) {
+                    lower_bound += 1;
+                }
+                while holes.contains(&upper_bound) {
+                    upper_bound -= 1;
+                }
+                pumpkin_assert_moderate!(
+                    lower_bound <= upper_bound,
+                    "Expected the predicates in the nogood to be consistent"
+                );
+
+                // An equality can always propagate a bound.
+                if lower_bound == upper_bound {
+                    return true;
+                }
+
+                // Then we check which of the bounds are described by a predicate from the current
+                // checkpoint; the holes do not influence whether a bound can be propagated.
+                let is_current = |predicate: Predicate| {
+                    context.get_checkpoint_for_predicate(predicate)
+                        == Some(context.get_checkpoint())
+                };
+                let has_lower_bound = lower_bound > initial_lower_bound
+                    && is_current(predicate!(domain >= lower_bound));
+                let has_upper_bound = upper_bound < initial_upper_bound
+                    && is_current(predicate!(domain <= upper_bound));
+
+                // We can propagate a bound unless both a lower-bound and an upper-bound are
+                // present; if there are only holes, then the minimum and maximum hole are
+                // propagated as bounds.
+                !(has_lower_bound && has_upper_bound)
             }
             // CPIP stops when there are only elements over a single variable left.
             AnalysisMode::CPIP => true,

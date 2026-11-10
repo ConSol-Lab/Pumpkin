@@ -224,6 +224,20 @@ impl WorkingNogood {
             .map(|(&predicate_id, &value)| (predicate_id, value))
     }
 
+    /// Returns the predicates over `domain` in the [`WorkingNogood`], both from the current
+    /// checkpoint and from previous checkpoints.
+    pub(crate) fn predicates_over<'a>(
+        &'a self,
+        domain: DomainId,
+        predicate_id_generator: &'a PredicateIdGenerator,
+    ) -> impl Iterator<Item = Predicate> + 'a {
+        self.to_process_heap
+            .keys()
+            .map(|predicate_id| predicate_id_generator.get_predicate(predicate_id))
+            .chain(self.processed_nogood_predicates.iter().copied())
+            .filter(move |predicate| predicate.get_domain() == domain)
+    }
+
     /// Returns the unique variables in the [`WorkingNogood`] from the current checkpoint.
     pub(crate) fn unique_variables_current_checkpoint(&self) -> impl Iterator<Item = DomainId> {
         self.unique_variable_helper.keys().copied()
@@ -733,6 +747,53 @@ mod tests {
                 learned_nogood,
                 HashSet::from_iter([predicate!(x >= 8), predicate!(x != 9)]),
                 "{mode:?}"
+            );
+        }
+    }
+
+    /// With `[x >= 4]` (previous level) and `[x <= 8] /\ [x != 5] /\ [x != 4]` (current level),
+    /// the minimal form of the current-level predicates is `[x >= 6] /\ [x <= 8]`, which cannot
+    /// propagate a bound; so, bounds CPIP analysis should continue resolving.
+    #[test]
+    fn bounds_cpip_continues_when_minimal_form_cannot_propagate_bound() {
+        for iterative_minimisation in [true, false] {
+            let mut solver = Solver::default();
+            let x = solver.new_bounded_integer(0, 10);
+            let _ = solver.propagate_to_fixpoint();
+            let mut brancher = DummyBrancher;
+            #[allow(deprecated, reason = "test")]
+            let mut context = solver.conflict_analysis_context(&mut brancher);
+
+            context.new_checkpoint();
+            let _ = context.post(predicate!(x >= 4)).unwrap();
+            context.new_checkpoint();
+            let _ = context.post(predicate!(x <= 8)).unwrap();
+            let _ = context.post(predicate!(x != 5)).unwrap();
+            let _ = context.post(predicate!(x != 4)).unwrap();
+
+            let mut working_nogood = WorkingNogood::new(iterative_minimisation);
+            let mut predicate_id_generator = PredicateIdGenerator::default();
+            for predicate in [
+                predicate!(x >= 4),
+                predicate!(x <= 8),
+                predicate!(x != 5),
+                predicate!(x != 4),
+            ] {
+                working_nogood.add_predicate_to_conflict_nogood(
+                    predicate,
+                    AnalysisMode::BoundsCPIP,
+                    &mut context,
+                    &mut predicate_id_generator,
+                );
+            }
+
+            assert!(
+                AnalysisMode::BoundsCPIP.should_continue_resolving(
+                    &predicate_id_generator,
+                    &working_nogood,
+                    &context
+                ),
+                "iterative minimisation: {iterative_minimisation}"
             );
         }
     }
