@@ -99,15 +99,17 @@ impl ArenaAllocator {
         NogoodIndex(self.nogoods[nogood_id.index() + 1].id)
     }
 
-    /// Returns the [`NogoodId`] which each nogood will have after compacting the arena (see
-    /// [`ArenaAllocator::compact`]), indexed by its current [`NogoodIndex`]. A nogood is only kept
-    /// if `keep` is true for its [`NogoodIndex`]; otherwise, its new [`NogoodId`] is [`None`].
+    /// Returns the [`NogoodId`] which each nogood will have *after* compacting the arena (see
+    /// [`ArenaAllocator::compact`]), indexed by its current [`NogoodIndex`].
+    ///
+    /// A nogood is only kept if `keep` returns true for its [`NogoodIndex`]; otherwise, its new
+    /// [`NogoodId`] is [`None`].
     ///
     /// Note that this does not change the arena; this allows the references to the nogoods to be
     /// updated before the nogoods are moved.
     pub(crate) fn compute_compacted_ids(
         &self,
-        keep: &KeyedVec<NogoodIndex, bool>,
+        keep: impl Fn(NogoodIndex) -> bool,
     ) -> KeyedVec<NogoodIndex, Option<NogoodId>> {
         let mut compacted_ids = KeyedVec::default();
         let mut compacted_len = 0;
@@ -116,7 +118,7 @@ impl ArenaAllocator {
             let nogood_index = self.get_nogood_index(&nogood_id);
             pumpkin_assert_eq_simple!(nogood_index.index(), compacted_ids.len());
 
-            let compacted_id = keep[nogood_index].then(|| {
+            let compacted_id = keep(nogood_index).then(|| {
                 let compacted_id = NogoodId::create_from_index(compacted_len);
                 compacted_len += OFFSET + self.len_of_nogood(nogood_id);
                 compacted_id
@@ -138,16 +140,21 @@ impl ArenaAllocator {
         let mut compacted_len = 0;
         let mut compacted_index = 0;
 
+        // We go over each nogood in the arena.
         let mut start = 0;
         while start < self.nogoods.len() {
+            // Calculate its new NogoodId
             let nogood_id = NogoodId::create_from_index(start);
             let end = start + OFFSET + self.len_of_nogood(nogood_id);
 
+            // Next, we check that it has not been removed.
+            //
             // Note that the nogood is only moved towards the front, so the nogoods after it have
             // not been overwritten yet.
             if let Some(compacted_id) = compacted_ids[self.get_nogood_index(&nogood_id)] {
                 pumpkin_assert_eq_simple!(compacted_id.index(), compacted_len);
 
+                // And copy over the next nogood into the arena.
                 self.nogoods.copy_within(start..end, compacted_len);
                 self.nogoods[compacted_len + 1] = PredicateId {
                     id: compacted_index,
@@ -283,12 +290,9 @@ mod tests {
             PredicateId { id: 8 },
             PredicateId { id: 9 },
         ]);
-        let mut keep = KeyedVec::default();
-        for is_kept in [false, true, false, true] {
-            let _ = keep.push(is_kept);
-        }
+        let keep = [false, true, false, true];
 
-        let compacted_ids = arena.compute_compacted_ids(&keep);
+        let compacted_ids = arena.compute_compacted_ids(|nogood_index| keep[nogood_index.index()]);
         let new_second = compacted_ids[arena.get_nogood_index(&second)].unwrap();
         let new_fourth = compacted_ids[arena.get_nogood_index(&fourth)].unwrap();
         arena.compact(&compacted_ids);

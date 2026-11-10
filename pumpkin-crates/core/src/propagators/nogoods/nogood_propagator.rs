@@ -1527,26 +1527,50 @@ impl NogoodPropagator {
     fn compact_nogood_database(&mut self, reason_store: &mut ReasonStore) {
         let propagator_id = self.handle.propagator_id();
 
-        let mut keep = KeyedVec::default();
-        for nogood_info in self.nogood_info.iter() {
-            let _ = keep.push(!nogood_info.is_deleted);
-        }
+        // First, protect the nogoods which are reasons; these should be kept, even if deleted.
+        //
         // Note that the lazy codes of both unit propagation and extended nogood propagation can
         // be interpreted as a `LazyNogoodExplanation`.
         for code in reason_store.lazy_codes(propagator_id) {
             let nogood_id = LazyNogoodExplanation::from_bits(code).nogood_id();
-            keep[self.nogood_predicates.get_nogood_index(&nogood_id)] = true;
+            self.nogood_info[self.nogood_predicates.get_nogood_index(&nogood_id)].is_protected =
+                true;
         }
 
-        let compacted_ids = self.nogood_predicates.compute_compacted_ids(&keep);
+        // We compute the new ids for each nogood.
+        //
+        // The provided function checks whether the nogood should be kept, based on:
+        // 1. Is it deleted?
+        // 2. Is it a reason for a propagation?
+        let compacted_ids = self
+            .nogood_predicates
+            .compute_compacted_ids(|nogood_index| {
+                let nogood_info = &self.nogood_info[nogood_index];
+                !nogood_info.is_deleted || nogood_info.is_protected
+            });
         let compacted_id = |nogood_id: NogoodId| {
             compacted_ids[self.nogood_predicates.get_nogood_index(&nogood_id)]
                 .expect("Referenced nogoods should be kept")
         };
 
+        // The new ids depend on all kept nogoods, so the reasons can only be updated after
+        // computing them. Once a reason is updated, it does not need to be protected anymore.
+        reason_store.update_lazy_codes(propagator_id, |code| {
+            let reason = LazyNogoodExplanation::from_bits(*code);
+            let nogood_index = self.nogood_predicates.get_nogood_index(&reason.nogood_id());
+            self.nogood_info[nogood_index].is_protected = false;
+
+            *code = reason
+                .with_nogood_id(compacted_id(reason.nogood_id()))
+                .into_bits();
+        });
+
+        // We update the watchers to use the new ids.
         for watcher in self.watch_lists.iter_mut().flatten() {
             watcher.nogood_id = compacted_id(watcher.nogood_id);
         }
+
+        // We update the nogood ids in the tier to point to the correct nogood.
         for nogood_id in self
             .learned_nogood_ids
             .low_lbd
@@ -1556,6 +1580,7 @@ impl NogoodPropagator {
         {
             *nogood_id = compacted_id(*nogood_id);
         }
+
         // A bumped nogood could have been deleted; it then does not need to be unblocked anymore.
         self.bumped_nogoods.retain_mut(|nogood_id| {
             match compacted_ids[self.nogood_predicates.get_nogood_index(nogood_id)] {
@@ -1566,14 +1591,11 @@ impl NogoodPropagator {
                 None => false,
             }
         });
-        reason_store.update_lazy_codes(propagator_id, |code| {
-            let reason = LazyNogoodExplanation::from_bits(*code);
-            *code = reason
-                .with_nogood_id(compacted_id(reason.nogood_id()))
-                .into_bits();
-        });
 
+        // Next, we compact the nogood predicates
         self.nogood_predicates.compact(&compacted_ids);
+
+        // And finally, we update the retained nogood info and inference codes.
         self.nogood_info
             .retain_keys(|nogood_index| compacted_ids[nogood_index].is_some());
         self.inference_codes
