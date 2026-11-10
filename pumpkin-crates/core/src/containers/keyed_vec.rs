@@ -136,6 +136,8 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
 
     /// Retains only the values whose key satisfies `keep`; the retained values keep their relative
     /// order, and are thus stored at the next free keys.
+    ///
+    /// Note that this changes the order of the keys, so it should be used carefully.
     pub(crate) fn retain_keys(&mut self, mut keep: impl FnMut(Key) -> bool) {
         let mut index = 0;
         self.elements.retain(|_| {

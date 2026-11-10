@@ -15,8 +15,7 @@ use crate::pumpkin_assert_eq_simple;
 /// by compacting the arena (see [`ArenaAllocator::compact`]), which moves the remaining nogoods
 /// to the front of the arena.
 ///
-/// The nogoods are stored in the arena in the order of their [`NogoodIndex`]; this order is
-/// maintained when compacting the arena.
+/// The nogoods are stored in the arena in the order of their [`NogoodIndex`].
 #[derive(Clone, Default, Debug)]
 pub(crate) struct ArenaAllocator {
     /// A list of [`PredicateId`]s representing the nogoods.
