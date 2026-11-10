@@ -216,6 +216,19 @@ impl WorkingNogood {
         self.unique_variable_helper.len()
     }
 
+    /// Returns the [`PredicateId`] with the maximum value in the heap of the [`WorkingNogood`],
+    /// together with that value.
+    pub(crate) fn peek_max_current_checkpoint(&self) -> Option<(PredicateId, u32)> {
+        self.to_process_heap
+            .peek_max()
+            .map(|(&predicate_id, &value)| (predicate_id, value))
+    }
+
+    /// Returns the unique variables in the [`WorkingNogood`] from the current checkpoint.
+    pub(crate) fn unique_variables_current_checkpoint(&self) -> impl Iterator<Item = DomainId> {
+        self.unique_variable_helper.keys().copied()
+    }
+
     /// Returns the [`PredicateId`]s in the [`WorkingNogood`] from the current_checkpoint.
     pub(crate) fn predicate_ids_current_checkpoint(&self) -> impl Iterator<Item = PredicateId> {
         self.to_process_heap.keys()
@@ -560,32 +573,14 @@ impl WorkingNogood {
         predicate_id_generator: &mut PredicateIdGenerator,
         mode: AnalysisMode,
     ) -> bool {
-        // We first calculate the value in the heap of the new_predicate.
-        let heap_value = get_heap_value(new_predicate, context);
-
-        // Then we check whether this is a lower value than the current maximum in the heap.
-        //
-        // If it has a higher value than the current maximum in the heap, then we check whether
-        // there is only a single element in the heap, and it is the `element` that we are trying
-        // to replace (i.e., replacing `element` with `new_predicate` would make `new_predicate`
-        // the asserting atomic constraint).
-        if heap_value
-            < self
-                .to_process_heap
-                .peek_max()
-                .map(|(_, value)| *value)
-                .unwrap_or_default()
-            || self.to_process_heap.num_nonremoved_elements() == 0
-            || (self.to_process_heap.num_nonremoved_elements() == 1
-                && self
-                    .to_process_heap
-                    .peek_max()
-                    .map(|(&predicate_id, _)| {
-                        predicate_id == predicate_id_generator.get_id(element)
-                    })
-                    .unwrap())
-        {
-            // If it is, then we can safely replace `element` with `new_predicate`
+        if mode.can_replace(
+            element,
+            new_predicate,
+            context,
+            predicate_id_generator,
+            self,
+        ) {
+            // We can safely replace `element` with `new_predicate`.
             //
             // First, we remove `element`.
             if context.get_checkpoint_for_predicate(element).unwrap() == context.get_checkpoint() {
@@ -654,7 +649,7 @@ impl WorkingNogood {
 /// should be resolved upon before the predicates which are explicitly on the trail.
 ///
 /// Panics if the provided [`Predicate`] is not currently true on the trail.
-fn get_heap_value(predicate: Predicate, context: &ConflictAnalysisContext<'_>) -> u32 {
+pub(crate) fn get_heap_value(predicate: Predicate, context: &ConflictAnalysisContext<'_>) -> u32 {
     if context.get_state().is_on_trail(predicate) {
         context
             .get_state()
@@ -668,5 +663,71 @@ fn get_heap_value(predicate: Predicate, context: &ConflictAnalysisContext<'_>) -
             .expect("Predicate should be true during conflict analysis") as u32
             * 2
             + 1
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_core::Solver;
+    use pumpkin_core::branching::Brancher;
+    use pumpkin_core::branching::BrancherEvent;
+    use pumpkin_core::branching::SelectionContext;
+    use pumpkin_core::containers::HashSet;
+    use pumpkin_core::predicate;
+
+    use super::*;
+
+    #[derive(Debug)]
+    struct DummyBrancher;
+
+    impl Brancher for DummyBrancher {
+        fn next_decision(&mut self, _: &mut SelectionContext) -> Option<Predicate> {
+            unreachable!()
+        }
+
+        fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+            unreachable!()
+        }
+    }
+
+    /// `[x >= 7]` (previous level) and `[x != 7]` (current level) should be merged into `[x >= 8]`,
+    /// even though `[x >= 8]` would be the next predicate to resolve upon, since CPIP analysis
+    /// stops after the merge.
+    #[test]
+    fn merges_when_analysis_stops_after_replacement() {
+        for mode in [AnalysisMode::CPIP, AnalysisMode::BoundsCPIP] {
+            let mut solver = Solver::default();
+            let x = solver.new_bounded_integer(0, 10);
+            let _ = solver.propagate_to_fixpoint();
+            let mut brancher = DummyBrancher;
+            #[allow(deprecated, reason = "test")]
+            let mut context = solver.conflict_analysis_context(&mut brancher);
+
+            context.new_checkpoint();
+            let _ = context.post(predicate!(x >= 7)).unwrap();
+            context.new_checkpoint();
+            let _ = context.post(predicate!(x != 9)).unwrap();
+            let _ = context.post(predicate!(x != 7)).unwrap();
+
+            let mut working_nogood = WorkingNogood::new(true);
+            let mut predicate_id_generator = PredicateIdGenerator::default();
+            for predicate in [predicate!(x != 9), predicate!(x != 7), predicate!(x >= 7)] {
+                working_nogood.add_predicate_to_conflict_nogood(
+                    predicate,
+                    mode,
+                    &mut context,
+                    &mut predicate_id_generator,
+                );
+            }
+
+            let learned_nogood = working_nogood
+                .drain_learned_nogood(&predicate_id_generator, mode, &mut Default::default())
+                .collect::<HashSet<_>>();
+            assert_eq!(
+                learned_nogood,
+                HashSet::from_iter([predicate!(x >= 8), predicate!(x != 9)]),
+                "{mode:?}"
+            );
+        }
     }
 }

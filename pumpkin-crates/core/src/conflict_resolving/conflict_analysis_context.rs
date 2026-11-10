@@ -75,6 +75,11 @@ impl ConflictAnalysisContext<'_> {
         self.state.post(predicate)
     }
 
+    /// Create a new checkpoint (see [`State::new_checkpoint`]).
+    pub fn new_checkpoint(&mut self) {
+        self.state.new_checkpoint()
+    }
+
     /// Restore to the given checkpoint.
     ///
     /// If the provided checkpoint is equal to the current checkpoint, this is a no-op. If
