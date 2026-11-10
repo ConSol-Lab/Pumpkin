@@ -133,7 +133,9 @@ impl AnalysisMode {
         // 3. The only predicate from the current checkpoint is `element` itself; similar to the
         //    previous case, `new_predicate` then replaces it as the only predicate from the current
         //    checkpoint.
-        let not_next_resolved = heap_value < max.map(|(_, value)| value).unwrap_or_default()
+        let resolved_after_other_predicate =
+            heap_value < max.map(|(_, value)| value).unwrap_or_default();
+        let not_next_resolved = resolved_after_other_predicate
             || working_nogood.num_current_checkpoint() == 0
             || (working_nogood.num_current_checkpoint() == 1
                 && max.is_some_and(|(predicate_id, _)| {
@@ -145,11 +147,21 @@ impl AnalysisMode {
         );
 
         match self {
-            AnalysisMode::OneUIP | AnalysisMode::AllDecision => {
-                // The stopping criteria of these analysis modes do not depend on the variables of
-                // the predicates; so, it only depends on whether `new_predicate` would be the next
+            AnalysisMode::OneUIP => {
+                // The stopping criterion of 1UIP does not depend on the variables of the
+                // predicates; so, it only depends on whether `new_predicate` would be the next
                 // predicate to be resolved upon.
                 not_next_resolved
+            }
+            AnalysisMode::AllDecision => {
+                // All-decision analysis continues while any predicate is left to be processed, so
+                // `new_predicate` would still be resolved upon in cases 2 and 3. It could even
+                // have been resolved upon already, in which case it is not added again, and both
+                // `element` and `new_predicate` would be missing from the learned nogood.
+                //
+                // Since the heap values only decrease during conflict analysis, a predicate with a
+                // lower value than the current maximum cannot have been resolved upon yet.
+                resolved_after_other_predicate
             }
             AnalysisMode::CPIP | AnalysisMode::BoundsCPIP => {
                 // If `new_predicate` would not be the next predicate to be resolved upon, then we
