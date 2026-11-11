@@ -44,7 +44,8 @@ impl IntegerMultiplicationExplainer {
     ) -> LazyExplanation<'_> {
         let bound = payload.bound();
 
-        let trail_position = context.get_trail_position();
+        // We explain using the bounds which were used to perform the propagation.
+        let trail_position = payload.bounds_trail_position() as usize;
         let a_min = context.lower_bound_at_trail_position(a, trail_position);
         let a_max = context.upper_bound_at_trail_position(a, trail_position);
         let b_min = context.lower_bound_at_trail_position(b, trail_position);
@@ -155,6 +156,18 @@ fn minimize_reason(
 
     let mut values = bounds.each_ref().map(|bound| IntExt::Int(bound.exact));
 
+    // The bounds are the ones which were used to perform the propagation, so recomputing the
+    // propagated value from them yields the value that was propagated (saturated to `i32` in the
+    // same way as by the propagator).
+    let propagated_value = match bound_fn(values[0], values[1], values[2], values[3]) {
+        Some((lo, _)) if is_lower => lo,
+        Some((_, hi)) => hi,
+        None => unreachable!("a propagation took place using these bounds"),
+    }
+    .as_int()
+    .expect("all bounds are finite, so the propagated value is finite too")
+    .clamp(i32::MIN as i64, i32::MAX as i64);
+
     // Iterate through the values, and determine which ones can be removed. Results in a subset
     // minimal explanation, not a minimum explanation.
     for i in 0..4 {
@@ -170,9 +183,9 @@ fn minimize_reason(
             };
 
         let propagates_weaker = if is_lower {
-            propagated_value_with_relaxed_bound >= IntExt::Int(payload.value() as i64)
+            propagated_value_with_relaxed_bound >= IntExt::Int(propagated_value)
         } else {
-            propagated_value_with_relaxed_bound <= IntExt::Int(payload.value() as i64)
+            propagated_value_with_relaxed_bound <= IntExt::Int(propagated_value)
         };
 
         if !propagates_weaker {
@@ -220,18 +233,23 @@ impl PropagatedBound {
 }
 
 /// The payload carried by a [`pumpkin_core::engine::cp::reason::Reason::DynamicLazy`] reason for
-/// the integer multiplication propagator: which propagation is being explained, and the value
-/// that was propagated.
+/// the integer multiplication propagator: which propagation is being explained, and the trail
+/// position of the bounds used for the propagation.
+///
+/// The propagated value is not stored; it is recomputed from the bounds at the stored trail
+/// position. Note that it cannot be read back off the trail predicate: `a`, `b`, `c` may be
+/// `AffineView`s, and the predicate that actually lands on the trail is stated in terms of the
+/// underlying `DomainId`, not the view's own logical space that the rest of this propagator
+/// reasons in.
 #[bitfield(u64)]
 pub(super) struct MultiplicationPropagation {
-    #[bits(8)]
+    #[bits(3)]
     pub(super) bound: PropagatedBound,
-    // The value has to be carried explicitly rather than read back off the trail predicate in
-    // `IntegerMultiplicationExplainer::explain`: `a`, `b`, `c` may be `AffineView`s, and the
-    // predicate that actually lands on the trail is stated in terms of the underlying `DomainId`,
-    // not the view's own logical space that the rest of this propagator reasons in — its
-    // right-hand side would generally not equal the value this propagator computed and posted.
-    pub(super) value: i32,
-    #[bits(24)]
-    __: u32,
+    /// The trail position of the bounds which were used to perform the propagation.
+    ///
+    /// The bounds at the trail position of the propagated predicate can be more general than the
+    /// bounds used for the propagation, since other propagations can take place in the same call
+    /// to the propagator.
+    #[bits(61)]
+    pub(super) bounds_trail_position: u64,
 }
