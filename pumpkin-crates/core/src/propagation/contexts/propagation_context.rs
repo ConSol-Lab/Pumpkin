@@ -201,6 +201,11 @@ impl<'a> PropagationContext<'a> {
         self.assignments.get_checkpoint()
     }
 
+    /// Returns the position of the last entry on the trail.
+    pub fn trail_position(&self) -> usize {
+        self.assignments.num_trail_entries().saturating_sub(1)
+    }
+
     /// Returns whether the [`Predicate`] corresponding to the provided [`PredicateId`] is
     /// satisfied.
     pub(crate) fn is_predicate_id_falsified(&mut self, predicate_id: PredicateId) -> bool {
