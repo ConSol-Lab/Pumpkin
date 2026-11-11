@@ -455,6 +455,7 @@ where
 #[cfg(test)]
 mod tests {
     use pumpkin_core::state::State;
+    use pumpkin_core::variables::TransformableVariable;
 
     use crate::StateExt;
     use crate::propagators::arithmetic::BinaryEqualsPropagatorArgs;
@@ -475,6 +476,25 @@ mod tests {
 
         state.assert_bounds(a, 3, 5);
         state.assert_bounds(b, 3, 5);
+    }
+
+    #[test]
+    fn checker_handles_scaled_view() {
+        let mut state = State::default();
+        let a = state.new_interval_variable(1, 7, None);
+        let x = state.new_interval_variable(0, 5, None);
+        let b = x.scaled(2);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.assert_bounds(a, 2, 6);
+        state.assert_bounds(x, 1, 3);
     }
 
     #[test]
