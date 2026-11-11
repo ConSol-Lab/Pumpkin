@@ -515,6 +515,98 @@ mod tests {
     }
 
     #[test]
+    fn negatively_scaled_view_as_lhs() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 5, None);
+        let a = x.scaled(-2);
+        let b = state.new_interval_variable(-7, -1, None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.assert_bounds(x, 1, 3);
+        let b_domain = (-7..=-1)
+            .filter(|&value| state.contains(b, value))
+            .collect::<Vec<_>>();
+        assert_eq!(b_domain, vec![-6, -4, -2]);
+    }
+
+    #[test]
+    fn negatively_scaled_and_offset_view_as_rhs() {
+        let mut state = State::default();
+        let a = state.new_interval_variable(-10, 10, None);
+        let x = state.new_interval_variable(0, 3, None);
+        let b = x.scaled(-3).offset(2);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.assert_bounds(x, 0, 3);
+        let a_domain = (-10..=10)
+            .filter(|&value| state.contains(a, value))
+            .collect::<Vec<_>>();
+        assert_eq!(a_domain, vec![-7, -4, -1, 2]);
+    }
+
+    #[test]
+    fn negated_view_propagates_holes() {
+        let mut state = State::default();
+        let x = state.new_sparse_variable(vec![1, 3, 4], None);
+        let a = x.scaled(-1);
+        let b = state.new_interval_variable(-5, 0, None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        let b_domain = (-5..=0)
+            .filter(|&value| state.contains(b, value))
+            .collect::<Vec<_>>();
+        assert_eq!(b_domain, vec![-4, -3, -1]);
+    }
+
+    #[test]
+    fn two_scaled_views_only_keep_common_multiples() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(-6, 6, None);
+        let y = state.new_interval_variable(-4, 4, None);
+        let a = x.scaled(2);
+        let b = y.scaled(-3);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        // `2x == -3y` only holds for multiples of 6.
+        let x_domain = (-6..=6)
+            .filter(|&value| state.contains(x, value))
+            .collect::<Vec<_>>();
+        assert_eq!(x_domain, vec![-6, -3, 0, 3, 6]);
+        let y_domain = (-4..=4)
+            .filter(|&value| state.contains(y, value))
+            .collect::<Vec<_>>();
+        assert_eq!(y_domain, vec![-4, -2, 0, 2, 4]);
+    }
+
+    #[test]
     fn test_propagation_of_holes() {
         let mut state = State::default();
         let a = state.new_sparse_variable(vec![2, 4, 6, 9], None);

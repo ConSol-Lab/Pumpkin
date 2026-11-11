@@ -525,4 +525,70 @@ mod tests {
         holes.sort();
         assert_eq!(holes, vec![2, 3, 4, 6]);
     }
+
+    #[test]
+    fn get_holes_of_a_negatively_scaled_view_includes_unrepresentable_values() {
+        let mut state = crate::state::State::default();
+        let domain = state.new_interval_variable(0, 3, None);
+        let _ = state
+            .post(predicate!(domain != 1))
+            .expect("non-empty domain");
+        let view = domain.scaled(-2).offset(1);
+
+        // The view takes the values -5, -3 and 1.
+        let mut holes = view.get_holes(&state.assignments).collect::<Vec<_>>();
+        holes.sort();
+        assert_eq!(holes, vec![-4, -2, -1, 0]);
+    }
+
+    #[test]
+    fn get_holes_of_a_scaled_view_over_negative_values_includes_unrepresentable_values() {
+        let mut state = crate::state::State::default();
+        let domain = state.new_interval_variable(-2, 1, None);
+        let view = domain.scaled(3).offset(-1);
+
+        // The view takes the values -7, -4, -1 and 2.
+        let mut holes = view.get_holes(&state.assignments).collect::<Vec<_>>();
+        holes.sort();
+        assert_eq!(holes, vec![-6, -5, -3, -2, 0, 1]);
+    }
+
+    #[test]
+    fn get_holes_of_a_negated_view_are_the_negated_holes() {
+        let mut state = crate::state::State::default();
+        let domain = state.new_interval_variable(0, 3, None);
+        let _ = state
+            .post(predicate!(domain != 1))
+            .expect("non-empty domain");
+        let view = domain.scaled(-1).offset(2);
+
+        // The view takes the values -1, 0 and 2.
+        assert_eq!(
+            view.get_holes(&state.assignments).collect::<Vec<_>>(),
+            vec![1]
+        );
+    }
+
+    #[test]
+    fn the_holes_of_a_negatively_scaled_view_are_the_values_it_skips() {
+        let mut state = crate::state::State::default();
+        let domain = state.new_interval_variable(0, 3, None);
+        let view = domain.scaled(-2).offset(1);
+
+        let domains = pumpkin_checking::VariableState::prepare_for_conflict_check(
+            [
+                predicate!(domain >= 0),
+                predicate!(domain <= 3),
+                predicate!(domain != 1),
+            ],
+            None,
+        )
+        .expect("the predicates are consistent");
+
+        // The view takes the values -5, -3 and 1.
+        assert_eq!(
+            view.induced_holes(&domains).collect::<Vec<_>>(),
+            vec![-4, -2, -1, 0]
+        );
+    }
 }
