@@ -216,6 +216,33 @@ impl WorkingNogood {
         self.unique_variable_helper.len()
     }
 
+    /// Returns the [`PredicateId`] with the maximum value in the heap of the [`WorkingNogood`],
+    /// together with that value.
+    pub(crate) fn peek_max_current_checkpoint(&self) -> Option<(PredicateId, u32)> {
+        self.to_process_heap
+            .peek_max()
+            .map(|(&predicate_id, &value)| (predicate_id, value))
+    }
+
+    /// Returns the predicates over `domain` in the [`WorkingNogood`], both from the current
+    /// checkpoint and from previous checkpoints.
+    pub(crate) fn predicates_over<'a>(
+        &'a self,
+        domain: DomainId,
+        predicate_id_generator: &'a PredicateIdGenerator,
+    ) -> impl Iterator<Item = Predicate> + 'a {
+        self.to_process_heap
+            .keys()
+            .map(|predicate_id| predicate_id_generator.get_predicate(predicate_id))
+            .chain(self.processed_nogood_predicates.iter().copied())
+            .filter(move |predicate| predicate.get_domain() == domain)
+    }
+
+    /// Returns the unique variables in the [`WorkingNogood`] from the current checkpoint.
+    pub(crate) fn unique_variables_current_checkpoint(&self) -> impl Iterator<Item = DomainId> {
+        self.unique_variable_helper.keys().copied()
+    }
+
     /// Returns the [`PredicateId`]s in the [`WorkingNogood`] from the current_checkpoint.
     pub(crate) fn predicate_ids_current_checkpoint(&self) -> impl Iterator<Item = PredicateId> {
         self.to_process_heap.keys()
@@ -266,8 +293,12 @@ impl WorkingNogood {
             "If the heap is empty when extracting the final nogood then we should be performing all decision learning"
         );
         pumpkin_assert_simple!(
-            !matches!(mode, AnalysisMode::OneUIP | AnalysisMode::AllDecision)
-                || self.num_current_checkpoint() == 1
+            !matches!(mode, AnalysisMode::OneUIP) || self.num_current_checkpoint() == 1,
+            "1UIP analysis should stop when a single predicate is left to be processed"
+        );
+        pumpkin_assert_simple!(
+            !matches!(mode, AnalysisMode::AllDecision) || self.num_current_checkpoint() == 0,
+            "All-decision analysis should stop when no predicates are left to be processed"
         );
 
         // We need to add all of the remaining predicates to the nogood; due to the way in
@@ -472,11 +503,17 @@ impl WorkingNogood {
                 self.remove_redundant_predicates(removed, predicate_id_generator, mode);
 
                 // We split into two cases:
-                // 1. The new predicate is of the current decision level.
-                // 2. The new predicate is of a previous decision level.
-                if context.get_checkpoint_for_predicate(new_predicate).unwrap()
-                    == context.get_checkpoint()
-                {
+                // 1. The new predicate would be processed further (e.g., it is of the current
+                //    decision level when using 1UIP).
+                // 2. The new predicate would not be processed further (e.g., it is of a previous
+                //    decision level when using 1UIP).
+                let new_predicate_checkpoint =
+                    context.get_checkpoint_for_predicate(new_predicate).unwrap();
+                if mode.predicate_should_be_processed(
+                    new_predicate,
+                    new_predicate_checkpoint,
+                    context,
+                ) {
                     // Next, we check whether we can replace the elements with `new_predicate`.
                     if self.was_replaced(
                         context,
@@ -499,8 +536,8 @@ impl WorkingNogood {
                         false
                     }
                 } else {
-                    // If `new_predicate` is from a previous decision level, then we can always
-                    // replace the elements, so we do this directly.
+                    // If `new_predicate` is not processed further, then we can always replace the
+                    // elements, so we do this directly.
                     self.replace_previous_level(
                         context,
                         previous,
@@ -534,17 +571,28 @@ impl WorkingNogood {
         for removed_predicate in removed {
             self.iterative_minimisation_statistics.num_removed += 1;
 
-            let removed_id = predicate_id_generator.get_id(removed_predicate);
-            // We differentiate between two cases:
-            // 1. The removed predicate is from the current decision level and we need to remove it
-            //    from the heap.
-            // 2. The removed predicate is from the previous decision level, and we remove it from
-            //    there.
-            if self.to_process_heap.is_key_present(removed_id) {
-                self.remove_predicate_from_current_checkpoint(removed_predicate, removed_id, mode);
-            } else {
-                self.remove_predicate_previous_checkpoint(removed_predicate);
-            }
+            self.remove_predicate(removed_predicate, predicate_id_generator, mode);
+        }
+    }
+
+    /// Removes the provided predicate from the predicates to be resolved upon, or the ones
+    /// already in the nogood.
+    fn remove_predicate(
+        &mut self,
+        predicate: Predicate,
+        predicate_id_generator: &mut PredicateIdGenerator,
+        mode: AnalysisMode,
+    ) {
+        let predicate_id = predicate_id_generator.get_id(predicate);
+        // We differentiate between two cases:
+        // 1. The predicate is still to be processed (e.g., from the current decision level when
+        //    using 1UIP), and we need to remove it from the heap.
+        // 2. The predicate is not processed further (e.g., from a previous decision level when
+        //    using 1UIP), and we remove it from the processed predicates.
+        if self.to_process_heap.is_key_present(predicate_id) {
+            self.remove_predicate_from_current_checkpoint(predicate, predicate_id, mode);
+        } else {
+            self.remove_predicate_previous_checkpoint(predicate);
         }
     }
 
@@ -560,41 +608,17 @@ impl WorkingNogood {
         predicate_id_generator: &mut PredicateIdGenerator,
         mode: AnalysisMode,
     ) -> bool {
-        // We first calculate the value in the heap of the new_predicate.
-        let heap_value = get_heap_value(new_predicate, context);
-
-        // Then we check whether this is a lower value than the current maximum in the heap.
-        //
-        // If it has a higher value than the current maximum in the heap, then we check whether
-        // there is only a single element in the heap, and it is the `element` that we are trying
-        // to replace (i.e., replacing `element` with `new_predicate` would make `new_predicate`
-        // the asserting atomic constraint).
-        if heap_value
-            < self
-                .to_process_heap
-                .peek_max()
-                .map(|(_, value)| *value)
-                .unwrap_or_default()
-            || self.to_process_heap.num_nonremoved_elements() == 0
-            || (self.to_process_heap.num_nonremoved_elements() == 1
-                && self
-                    .to_process_heap
-                    .peek_max()
-                    .map(|(&predicate_id, _)| {
-                        predicate_id == predicate_id_generator.get_id(element)
-                    })
-                    .unwrap())
-        {
-            // If it is, then we can safely replace `element` with `new_predicate`
+        if mode.can_replace(
+            element,
+            new_predicate,
+            context,
+            predicate_id_generator,
+            self,
+        ) {
+            // We can safely replace `element` with `new_predicate`.
             //
             // First, we remove `element`.
-            if context.get_checkpoint_for_predicate(element).unwrap() == context.get_checkpoint() {
-                let element_id = predicate_id_generator.get_id(element);
-
-                self.remove_predicate_from_current_checkpoint(element, element_id, mode);
-            } else {
-                self.remove_predicate_previous_checkpoint(element);
-            }
+            self.remove_predicate(element, predicate_id_generator, mode);
 
             // Then we add it to the current nogood.
             self.add_predicate_to_conflict_nogood(
@@ -623,25 +647,16 @@ impl WorkingNogood {
         mode: AnalysisMode,
     ) {
         pumpkin_assert_simple!(
-            get_heap_value(new_predicate, context)
-                < self
-                    .to_process_heap
-                    .peek_max()
-                    .map(|(_, value)| *value)
-                    .unwrap_or(u32::MAX)
+            !mode.predicate_should_be_processed(
+                new_predicate,
+                context.get_checkpoint_for_predicate(new_predicate).unwrap(),
+                context
+            ),
+            "Expected {new_predicate} to not be processed further"
         );
 
-        // We remove `element` from the previous decision level.
-        if let Some(index) = self
-            .processed_nogood_predicates
-            .iter()
-            .position(|predicate| *predicate == element)
-        {
-            let _ = self.processed_nogood_predicates.remove(index);
-        }
-
-        // And we remove `element` from the iterative minimiser.
-        self.iterative_minimiser.remove_predicate(element);
+        // We remove `element`.
+        self.remove_predicate(element, predicate_id_generator, mode);
 
         // Next, we add the `new_predicate` to the nogood.
         self.add_predicate_to_conflict_nogood(new_predicate, mode, context, predicate_id_generator);
@@ -654,7 +669,7 @@ impl WorkingNogood {
 /// should be resolved upon before the predicates which are explicitly on the trail.
 ///
 /// Panics if the provided [`Predicate`] is not currently true on the trail.
-fn get_heap_value(predicate: Predicate, context: &ConflictAnalysisContext<'_>) -> u32 {
+pub(crate) fn get_heap_value(predicate: Predicate, context: &ConflictAnalysisContext<'_>) -> u32 {
     if context.get_state().is_on_trail(predicate) {
         context
             .get_state()
@@ -668,5 +683,118 @@ fn get_heap_value(predicate: Predicate, context: &ConflictAnalysisContext<'_>) -
             .expect("Predicate should be true during conflict analysis") as u32
             * 2
             + 1
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_core::Solver;
+    use pumpkin_core::branching::Brancher;
+    use pumpkin_core::branching::BrancherEvent;
+    use pumpkin_core::branching::SelectionContext;
+    use pumpkin_core::containers::HashSet;
+    use pumpkin_core::predicate;
+
+    use super::*;
+
+    #[derive(Debug)]
+    struct DummyBrancher;
+
+    impl Brancher for DummyBrancher {
+        fn next_decision(&mut self, _: &mut SelectionContext) -> Option<Predicate> {
+            unreachable!()
+        }
+
+        fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+            unreachable!()
+        }
+    }
+
+    /// `[x >= 7]` (previous level) and `[x != 7]` (current level) should be merged into `[x >= 8]`,
+    /// even though `[x >= 8]` would be the next predicate to resolve upon, since CPIP analysis
+    /// stops after the merge.
+    #[test]
+    fn merges_when_analysis_stops_after_replacement() {
+        for mode in [AnalysisMode::CPIP, AnalysisMode::BoundsCPIP] {
+            let mut solver = Solver::default();
+            let x = solver.new_bounded_integer(0, 10);
+            let _ = solver.propagate_to_fixpoint();
+            let mut brancher = DummyBrancher;
+            #[allow(deprecated, reason = "test")]
+            let mut context = solver.conflict_analysis_context(&mut brancher);
+
+            context.new_checkpoint();
+            let _ = context.post(predicate!(x >= 7)).unwrap();
+            context.new_checkpoint();
+            let _ = context.post(predicate!(x != 9)).unwrap();
+            let _ = context.post(predicate!(x != 7)).unwrap();
+
+            let mut working_nogood = WorkingNogood::new(true);
+            let mut predicate_id_generator = PredicateIdGenerator::default();
+            for predicate in [predicate!(x != 9), predicate!(x != 7), predicate!(x >= 7)] {
+                working_nogood.add_predicate_to_conflict_nogood(
+                    predicate,
+                    mode,
+                    &mut context,
+                    &mut predicate_id_generator,
+                );
+            }
+
+            let learned_nogood = working_nogood
+                .drain_learned_nogood(&predicate_id_generator, mode, &mut Default::default())
+                .collect::<HashSet<_>>();
+            assert_eq!(
+                learned_nogood,
+                HashSet::from_iter([predicate!(x >= 8), predicate!(x != 9)]),
+                "{mode:?}"
+            );
+        }
+    }
+
+    /// With `[x >= 4]` (previous level) and `[x <= 8] /\ [x != 5] /\ [x != 4]` (current level),
+    /// the minimal form of the current-level predicates is `[x >= 6] /\ [x <= 8]`, which cannot
+    /// propagate a bound; so, bounds CPIP analysis should continue resolving.
+    #[test]
+    fn bounds_cpip_continues_when_minimal_form_cannot_propagate_bound() {
+        for iterative_minimisation in [true, false] {
+            let mut solver = Solver::default();
+            let x = solver.new_bounded_integer(0, 10);
+            let _ = solver.propagate_to_fixpoint();
+            let mut brancher = DummyBrancher;
+            #[allow(deprecated, reason = "test")]
+            let mut context = solver.conflict_analysis_context(&mut brancher);
+
+            context.new_checkpoint();
+            let _ = context.post(predicate!(x >= 4)).unwrap();
+            context.new_checkpoint();
+            let _ = context.post(predicate!(x <= 8)).unwrap();
+            let _ = context.post(predicate!(x != 5)).unwrap();
+            let _ = context.post(predicate!(x != 4)).unwrap();
+
+            let mut working_nogood = WorkingNogood::new(iterative_minimisation);
+            let mut predicate_id_generator = PredicateIdGenerator::default();
+            for predicate in [
+                predicate!(x >= 4),
+                predicate!(x <= 8),
+                predicate!(x != 5),
+                predicate!(x != 4),
+            ] {
+                working_nogood.add_predicate_to_conflict_nogood(
+                    predicate,
+                    AnalysisMode::BoundsCPIP,
+                    &mut context,
+                    &mut predicate_id_generator,
+                );
+            }
+
+            assert!(
+                AnalysisMode::BoundsCPIP.should_continue_resolving(
+                    &predicate_id_generator,
+                    &working_nogood,
+                    &context
+                ),
+                "iterative minimisation: {iterative_minimisation}"
+            );
+        }
     }
 }

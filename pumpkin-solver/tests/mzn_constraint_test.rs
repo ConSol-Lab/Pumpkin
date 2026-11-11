@@ -15,15 +15,30 @@ macro_rules! mzn_test {
     ($name:ident, $file:expr, $options:expr) => {
         #[test]
         fn $name() {
-            let output = run_mzn_test_with_options::<false>(
-                $file,
-                "mzn_constraints",
-                false,
-                TestType::SolutionEnumeration,
-                $options,
-                stringify!($name),
-            );
-            assert!(output.ends_with("==========\n"));
+            for conflict_resolver in [
+                "one-uip",
+                "all-decision",
+                "extended-cpip",
+                "bounds-extended-cpip",
+            ] {
+                eprintln!("Running with conflict resolver {conflict_resolver}");
+
+                let mut options: Vec<String> = $options;
+                options.extend([
+                    "--conflict-resolver".to_owned(),
+                    conflict_resolver.to_owned(),
+                ]);
+
+                let output = run_mzn_test_with_options::<false>(
+                    $file,
+                    "mzn_constraints",
+                    false,
+                    TestType::SolutionEnumeration,
+                    options,
+                    &format!("{}_{conflict_resolver}", stringify!($name)),
+                );
+                assert!(output.ends_with("==========\n"), "{conflict_resolver}");
+            }
         }
     };
 }
