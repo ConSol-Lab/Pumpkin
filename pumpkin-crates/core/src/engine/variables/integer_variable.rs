@@ -60,12 +60,18 @@ pub trait IntegerVariable:
     /// Decode a domain event for this variable.
     fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent;
 
-    /// Returns all of the holes in the domain which were created at the current decision level
+    /// Returns all of the holes in the domain which were created at the current decision level.
+    ///
+    /// Values which the variable can never take, regardless of the assignment, are not created at
+    /// any decision level and are thus not returned; e.g., the values which are not a multiple of 2
+    /// for the view `2x`. These are only returned by [`IntegerVariable::get_holes`].
     fn get_holes_at_current_checkpoint(
         &self,
         assignments: &Assignments,
     ) -> impl Iterator<Item = i32>;
 
-    /// Returns all of the holes in the domain
+    /// Returns all of the holes in the domain; i.e., every value strictly between the bounds which
+    /// is not in the domain. It can additionally contain removed values which are outside of the
+    /// current bounds.
     fn get_holes(&self, assignments: &Assignments) -> impl Iterator<Item = i32>;
 }

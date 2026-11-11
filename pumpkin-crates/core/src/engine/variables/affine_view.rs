@@ -327,15 +327,28 @@ where
         &self,
         assignments: &Assignments,
     ) -> impl Iterator<Item = i32> {
+        // The values which are not of the form `scale * x + offset` are holes at every decision
+        // level, so they are not created at the current one; only the holes of `inner` are.
         self.inner
             .get_holes_at_current_checkpoint(assignments)
             .map(|value| self.map(value))
     }
 
     fn get_holes(&self, assignments: &Assignments) -> impl Iterator<Item = i32> {
+        // With a scale other than 1 or -1, every value between the bounds that is not of the form
+        // `scale * x + offset` is a hole as well; e.g., if `x \in [1, 3]` then the domain of `2x`
+        // is `{2, 4, 6}` and its holes are `{3, 5}`. These are disjoint from the mapped holes of
+        // the inner variable, which are all of that form.
+        let unrepresentable_values = if self.scale.abs() == 1 {
+            0..0
+        } else {
+            self.lower_bound(assignments) + 1..self.upper_bound(assignments)
+        };
+
         self.inner
             .get_holes(assignments)
             .map(|value| self.map(value))
+            .chain(unrepresentable_values.filter(|&value| (value - self.offset) % self.scale != 0))
     }
 }
 
@@ -496,5 +509,20 @@ mod tests {
             view.induced_holes(&domains).collect::<Vec<_>>(),
             vec![2, 3, 4, 6]
         );
+    }
+
+    #[test]
+    fn get_holes_of_a_scaled_view_includes_unrepresentable_values() {
+        let mut state = crate::state::State::default();
+        let domain = state.new_interval_variable(0, 3, None);
+        let _ = state
+            .post(predicate!(domain != 1))
+            .expect("non-empty domain");
+        let view = domain.scaled(2).offset(1);
+
+        // The view takes the values 1, 5 and 7.
+        let mut holes = view.get_holes(&state.assignments).collect::<Vec<_>>();
+        holes.sort();
+        assert_eq!(holes, vec![2, 3, 4, 6]);
     }
 }

@@ -429,27 +429,40 @@ where
         _: &[Atomic],
         _: Option<&Atomic>,
     ) -> bool {
-        // We apply the domain of variable 2 to variable 1. If the state remains consistent, then
+        // We apply the domain of each variable to the other. If the state remains consistent, then
         // the step is unsound!
-        let mut consistent = true;
-
-        if let IntExt::Int(value) = self.rhs.induced_upper_bound(&state) {
-            let atomic = self.lhs.atomic_less_than(value);
-            consistent &= state.apply(&atomic);
-        }
-
-        if let IntExt::Int(value) = self.rhs.induced_lower_bound(&state) {
-            let atomic = self.lhs.atomic_greater_than(value);
-            consistent &= state.apply(&atomic);
-        }
-
-        for value in self.rhs.induced_holes(&state).collect::<Vec<_>>() {
-            let atomic = self.lhs.atomic_not_equal(value);
-            consistent &= state.apply(&atomic);
-        }
+        //
+        // Both directions are needed since the domain of one of the variables can be unbounded
+        // (and thus have no holes which can be listed) while its holes are implied by the other
+        // variable; e.g., `[a == 3]` with `b = 2x` and no premises.
+        let consistent = apply_domain(&mut state, &self.rhs, &self.lhs)
+            && apply_domain(&mut state, &self.lhs, &self.rhs);
 
         !consistent
     }
+}
+
+/// Applies the domain of `from` to `to` in `state`, returning whether `state` is still consistent.
+fn apply_domain<Atomic: AtomicConstraint>(
+    state: &mut pumpkin_checking::VariableState<Atomic>,
+    from: &impl CheckerVariable<Atomic>,
+    to: &impl CheckerVariable<Atomic>,
+) -> bool {
+    let mut consistent = true;
+
+    if let IntExt::Int(value) = from.induced_upper_bound(state) {
+        consistent &= state.apply(&to.atomic_less_than(value));
+    }
+
+    if let IntExt::Int(value) = from.induced_lower_bound(state) {
+        consistent &= state.apply(&to.atomic_greater_than(value));
+    }
+
+    for value in from.induced_holes(state).collect::<Vec<_>>() {
+        consistent &= state.apply(&to.atomic_not_equal(value));
+    }
+
+    consistent
 }
 
 #[cfg(test)]
@@ -495,6 +508,10 @@ mod tests {
 
         state.assert_bounds(a, 2, 6);
         state.assert_bounds(x, 1, 3);
+
+        // `b = 2x` cannot take odd values, so neither can `a`.
+        assert!(!state.contains(a, 3));
+        assert!(!state.contains(a, 5));
     }
 
     #[test]
