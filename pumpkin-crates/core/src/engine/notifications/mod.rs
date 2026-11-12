@@ -55,10 +55,11 @@ pub(crate) struct NotificationEngine {
     /// The watch list from predicates to the propagator variables which are notified when the
     /// predicate is no longer true after backtracking, together with the event to notify them of.
     backtrack_watch_list_predicate_id: KeyedVec<PredicateId, Vec<(PropagatorVarId, DomainEvent)>>,
-    /// The predicates with backtrack watchers which have become true, per checkpoint.
+    /// The predicates with backtrack watchers which are true, per checkpoint at which they were
+    /// added.
     ///
-    /// Used when backtracking: the predicates which became true at the checkpoints that are
-    /// backtracked over are no longer true, so their backtrack watchers are notified.
+    /// When backtracking over that checkpoint, the backtrack watchers of a predicate which is no
+    /// longer true are notified.
     satisfied_backtrack_watched_predicates: Trail<PredicateId>,
     /// Events which have occurred since the last round of notifications have taken place
     events: EventSink,
@@ -200,8 +201,12 @@ impl NotificationEngine {
         self.watch_list_predicate_id[predicate_id]
             .push(PredicateWatcher::Propagator(propagator_id));
 
-        self.predicate_notifier
-            .track_predicate(predicate_id, trailed_values, assignments);
+        self.predicate_notifier.track_predicate(
+            predicate_id,
+            trailed_values,
+            assignments,
+            self.last_notified_trail_index,
+        );
     }
 
     pub(crate) fn unwatch_predicate(
@@ -233,9 +238,7 @@ impl NotificationEngine {
         assignments: &Assignments,
     ) {
         // A predicate which is assigned at the root never triggers an event, so it does not need
-        // to be watched. Watching it would also be incorrect: the `PredicateNotifier` does not know
-        // whether a predicate is already true when it starts tracking it, so it may report the
-        // predicate as becoming true later on.
+        // to be watched.
         if assignments.is_assigned_at_checkpoint(predicate, 0) {
             return;
         }
@@ -247,8 +250,12 @@ impl NotificationEngine {
             self.watch_list_predicate_id[predicate_id]
                 .push(PredicateWatcher::Variable(propagator_var, event));
 
-            self.predicate_notifier
-                .track_predicate(predicate_id, trailed_values, assignments);
+            self.predicate_notifier.track_predicate(
+                predicate_id,
+                trailed_values,
+                assignments,
+                self.last_notified_trail_index,
+            );
         }
     }
 
@@ -285,12 +292,55 @@ impl NotificationEngine {
 
         for (predicate, event) in predicate_event_watches(predicate, events) {
             let predicate_id = self.get_id(predicate);
+            self.add_if_already_true(predicate_id, predicate, assignments);
             self.backtrack_watch_list_predicate_id
                 .accomodate(predicate_id, vec![]);
             self.backtrack_watch_list_predicate_id[predicate_id].push((propagator_var, event));
 
-            self.predicate_notifier
-                .track_predicate(predicate_id, trailed_values, assignments);
+            self.predicate_notifier.track_predicate(
+                predicate_id,
+                trailed_values,
+                assignments,
+                self.last_notified_trail_index,
+            );
+        }
+    }
+
+    /// Adds `predicate` to [`Self::satisfied_backtrack_watched_predicates`] if it is true and has
+    /// no backtrack watchers yet, so that the backtrack watcher which is added now is notified when
+    /// it is undone.
+    ///
+    /// A predicate which became true by an update that has already been processed is not reported
+    /// as satisfied (see [`PredicateNotifier::track_predicate`]), so it is added here.
+    /// A predicate which became true by an update that has not been processed yet is added when it
+    /// is reported, and a predicate with backtrack watchers is already added.
+    ///
+    /// For example, let `[x >= 6]` be posted at checkpoint 1, and let a propagator watch
+    /// `[x >= 5]` being undone at checkpoint 2.
+    /// Then `[x >= 5]` is added here, and its backtrack watchers are notified only when
+    /// backtracking to the root undoes `[x >= 6]`.
+    fn add_if_already_true(
+        &mut self,
+        predicate_id: PredicateId,
+        predicate: Predicate,
+        assignments: &Assignments,
+    ) {
+        let has_backtrack_watchers = self
+            .backtrack_watch_list_predicate_id
+            .get(predicate_id)
+            .is_some_and(|watch_list| !watch_list.is_empty());
+        let is_processed = assignments
+            .get_trail_position(&predicate)
+            .is_none_or(|trail_position| trail_position < self.last_notified_trail_index);
+
+        // The predicate is added at the current checkpoint, which can be later than the checkpoint
+        // at which it became true; `process_backtrack_events` handles this when backtracking.
+        if !has_backtrack_watchers
+            && assignments.evaluate_predicate(predicate) == Some(true)
+            && is_processed
+        {
+            self.satisfied_backtrack_watched_predicates
+                .push(predicate_id);
         }
     }
 
@@ -456,12 +506,30 @@ impl NotificationEngine {
         trailed_values: &mut TrailedValues,
         propagators: &mut PropagatorStore,
     ) {
-        // A predicate is undone exactly when backtracking past the checkpoint at which it became
-        // true, so its backtrack watchers are notified once.
-        for predicate_id in self
+        // Whether a predicate is still true is read from the assignments, so they must be
+        // backtracked first.
+        pumpkin_assert_simple!(
+            assignments.get_checkpoint() == new_checkpoint,
+            "Expected the assignments to have been backtracked previously"
+        );
+
+        // The predicates are collected, since predicates which are still true are added to the
+        // trail again.
+        let backtracked_predicates = self
             .satisfied_backtrack_watched_predicates
             .synchronise(new_checkpoint)
-        {
+            .collect::<Vec<_>>();
+
+        for predicate_id in backtracked_predicates {
+            let predicate = self.predicate_notifier.get_predicate(predicate_id);
+            if assignments.evaluate_predicate(predicate) == Some(true) {
+                // The predicate was assigned before the checkpoint at which it was added, which
+                // happens when it was already true when it was first watched.
+                self.satisfied_backtrack_watched_predicates
+                    .push(predicate_id);
+                continue;
+            }
+
             for &(propagator_var, event) in &self.backtrack_watch_list_predicate_id[predicate_id] {
                 let propagator = &mut propagators[propagator_var.propagator];
                 let context = Domains::new(assignments, trailed_values);
@@ -530,6 +598,8 @@ impl NotificationEngine {
                 }
             }
 
+            // The predicate becomes true at the current checkpoint, so it is undone when
+            // backtracking over this checkpoint.
             if self
                 .backtrack_watch_list_predicate_id
                 .get(predicate_id)
@@ -726,7 +796,11 @@ impl NotificationEngine {
         );
         self.predicate_notifier
             .predicate_id_assignments
-            .synchronise(backtrack_level)
+            .synchronise(
+                backtrack_level,
+                assignments,
+                &self.predicate_notifier.predicate_to_id,
+            )
     }
 }
 
@@ -750,4 +824,151 @@ fn predicate_event_watches(
     ]
     .into_iter()
     .filter(move |&(_, event)| events.contains(event))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::basic_types::PredicateId;
+    use crate::engine::PropagationStatusCP;
+    use crate::engine::State;
+    use crate::predicate;
+    use crate::predicates::Predicate;
+    use crate::propagation::EnqueueDecision;
+    use crate::propagation::EventsToRegister;
+    use crate::propagation::NotificationContext;
+    use crate::propagation::PropagationContext;
+    use crate::propagation::Propagator;
+    use crate::propagation::PropagatorConstructor;
+    use crate::propagation::PropagatorConstructorContext;
+    use crate::propagation::PropagatorSpec;
+    use crate::propagation::RuntimeCheckers;
+    use crate::state::PropagatorHandle;
+
+    /// Counts how often it is notified that its predicate is satisfied.
+    #[derive(Clone, Debug)]
+    struct SatisfiedCounter {
+        predicate: Predicate,
+        num_notifications: usize,
+    }
+
+    impl PropagatorConstructor for SatisfiedCounter {
+        type PropagatorImpl = Self;
+
+        fn create(self, mut context: PropagatorConstructorContext) -> PropagatorSpec<Self> {
+            let _ = context.register_predicate(self.predicate);
+
+            PropagatorSpec {
+                registration: EventsToRegister::empty(),
+                checkers: RuntimeCheckers::empty(),
+                propagator: self,
+            }
+        }
+    }
+
+    impl Propagator for SatisfiedCounter {
+        fn name(&self) -> &str {
+            "SatisfiedCounter"
+        }
+
+        fn propagate_from_scratch(&self, _context: PropagationContext) -> PropagationStatusCP {
+            Ok(())
+        }
+
+        fn notify_predicate_id_satisfied(
+            &mut self,
+            _context: NotificationContext,
+            _predicate_id: PredicateId,
+        ) -> EnqueueDecision {
+            self.num_notifications += 1;
+            EnqueueDecision::Skip
+        }
+    }
+
+    #[test]
+    fn predicate_which_is_true_when_watched_is_not_reported_until_it_is_undone() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, None);
+
+        // `[x >= 5]` becomes true at checkpoint 1 and is watched at checkpoint 2.
+        state.new_checkpoint();
+        let _ = state.post(predicate![x >= 6]).expect("non-empty domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.new_checkpoint();
+        let handle: PropagatorHandle<SatisfiedCounter> = state.add_propagator(SatisfiedCounter {
+            predicate: predicate![x >= 5],
+            num_notifications: 0,
+        });
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        // Neither a later update nor a backtrack which keeps `[x >= 5]` true reports it.
+        for lower_bound in [7, 8] {
+            state.new_checkpoint();
+            let _ = state
+                .post(predicate![x >= lower_bound])
+                .expect("non-empty domain");
+            state.propagate_to_fixed_point().expect("no conflict");
+            let _ = state.restore_to(2);
+        }
+        let _ = state.restore_to(1);
+        state.new_checkpoint();
+        let _ = state.post(predicate![x >= 9]).expect("non-empty domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        let counter = state.get_propagator(handle).expect("propagator exists");
+        assert_eq!(counter.num_notifications, 0);
+
+        // Once undone, `[x >= 5]` is reported when it becomes true again.
+        let _ = state.restore_to(0);
+        state.new_checkpoint();
+        let _ = state.post(predicate![x >= 5]).expect("non-empty domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        let counter = state.get_propagator(handle).expect("propagator exists");
+        assert_eq!(counter.num_notifications, 1);
+    }
+
+    #[test]
+    fn predicate_which_is_queried_before_it_is_watched_is_not_reported_until_it_is_undone() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, None);
+
+        // `[x >= 5]` becomes true at checkpoint 1, and is queried and then watched at checkpoint
+        // 3.
+        state.new_checkpoint();
+        let _ = state.post(predicate![x >= 6]).expect("non-empty domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+        state.new_checkpoint();
+        state.new_checkpoint();
+
+        let predicate_id = state.notification_engine.get_id(predicate![x >= 5]);
+        assert!(
+            state
+                .notification_engine
+                .is_predicate_id_satisfied(predicate_id, &state.assignments)
+        );
+        let handle: PropagatorHandle<SatisfiedCounter> = state.add_propagator(SatisfiedCounter {
+            predicate: predicate![x >= 5],
+            num_notifications: 0,
+        });
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        // A backtrack which keeps `[x >= 5]` true does not lead to it being reported.
+        let _ = state.restore_to(2);
+        state.new_checkpoint();
+        let _ = state.post(predicate![x >= 7]).expect("non-empty domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        let counter = state.get_propagator(handle).expect("propagator exists");
+        assert_eq!(counter.num_notifications, 0);
+
+        // Once undone, `[x >= 5]` is reported when it becomes true again.
+        let _ = state.restore_to(0);
+        state.new_checkpoint();
+        let _ = state.post(predicate![x >= 5]).expect("non-empty domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        let counter = state.get_propagator(handle).expect("propagator exists");
+        assert_eq!(counter.num_notifications, 1);
+    }
 }

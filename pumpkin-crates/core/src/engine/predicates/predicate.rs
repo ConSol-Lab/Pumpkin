@@ -1161,4 +1161,61 @@ mod test {
             assert_eq!(events, (vec![], vec![]), "negated: {negate}");
         }
     }
+
+    #[test]
+    fn backtrack_events_for_predicate_which_is_assigned_before_registration_during_search() {
+        // The predicate `[x >= 5]` is assigned at checkpoint 1 and registered at checkpoint 2.
+        for is_true in [true, false] {
+            let mut state = State::default();
+            let x = state.new_interval_variable(0, 10, None);
+            let predicate = predicate![x >= 5];
+            let (assigning_predicate, later_predicate, expected_event) = if is_true {
+                (
+                    predicate![x >= 6],
+                    predicate![x >= 7],
+                    DomainEvent::LowerBound,
+                )
+            } else {
+                (
+                    predicate![x <= 4],
+                    predicate![x <= 3],
+                    DomainEvent::UpperBound,
+                )
+            };
+
+            state.new_checkpoint();
+            let _ = state.post(assigning_predicate).expect("non-empty domain");
+            state.propagate_to_fixed_point().expect("no conflict");
+
+            state.new_checkpoint();
+            let handle: PropagatorHandle<EventRecorder> = state.add_propagator(EventRecorder {
+                predicate,
+                registered_events: DomainEvents::ANY_INT,
+                events: vec![],
+                backtrack_events: vec![],
+            });
+            state.propagate_to_fixed_point().expect("no conflict");
+
+            state.new_checkpoint();
+            let _ = state.post(later_predicate).expect("non-empty domain");
+            state.propagate_to_fixed_point().expect("no conflict");
+
+            // The predicate is still assigned at checkpoint 1.
+            let _ = state.restore_to(1);
+            let recorder = state.get_propagator(handle).expect("propagator exists");
+            assert_eq!(
+                (&recorder.events, &recorder.backtrack_events),
+                (&vec![], &vec![]),
+                "true: {is_true}"
+            );
+
+            let _ = state.restore_to(0);
+            let recorder = state.get_propagator(handle).expect("propagator exists");
+            assert_eq!(
+                (&recorder.events, &recorder.backtrack_events),
+                (&vec![], &vec![expected_event, DomainEvent::Assign]),
+                "true: {is_true}"
+            );
+        }
+    }
 }

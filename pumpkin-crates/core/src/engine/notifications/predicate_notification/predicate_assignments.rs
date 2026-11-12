@@ -1,3 +1,5 @@
+#[cfg(doc)]
+use super::predicate_tracker::PredicateTracker;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::Trail;
@@ -7,6 +9,7 @@ use crate::engine::Assignments;
 #[cfg(doc)]
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_extreme;
+use crate::pumpkin_assert_simple;
 
 /// A structure for (lazily) storing information concerning the value of [`Predicate`]s.
 ///
@@ -22,6 +25,12 @@ pub(crate) struct PredicateIdAssignments {
     /// Note that this structure will not be fully accurate as it is dependent on when a
     /// [`Predicate`] is stored.
     trail: Trail<PredicateId>,
+    /// A trail of the [`PredicateId`]s which were stored after they had been assigned, see
+    /// [`PredicateIdAssignments::store_assigned_predicate`].
+    ///
+    /// Such a predicate can be assigned at an earlier checkpoint than the one at which it is on
+    /// this trail, so it is only reset when backtracking undoes its assignment.
+    assigned_before_stored_trail: Trail<PredicateId>,
     /// The known value for each [`Predicate`] (represented by a [`PredicateId`]).
     predicate_values: KeyedVec<PredicateId, PredicateValue>,
     /// The [`Predicate`]s which are currently known to be satisfied used for notification.
@@ -70,7 +79,41 @@ impl PredicateIdAssignments {
     }
 
     pub(crate) fn new_checkpoint(&mut self) {
-        self.trail.new_checkpoint()
+        self.trail.new_checkpoint();
+        self.assigned_before_stored_trail.new_checkpoint();
+    }
+
+    /// Stores the value of a predicate which was already assigned when it started to be tracked,
+    /// without storing it for notification.
+    ///
+    /// Otherwise, the [`PredicateTracker`] would report the predicate as satisfied at a later
+    /// update, and again after each backtrack which does not undo its assignment.
+    /// If its value was already stored when it was queried, then the notification stored by that
+    /// query is removed as well.
+    ///
+    /// For example, let `[x >= 6]` be posted at checkpoint 1, and let `[x >= 5]` start to be
+    /// tracked at checkpoint 3.
+    /// Then `[x >= 5]` is stored as true, and it stays true until backtracking to the root undoes
+    /// `[x >= 6]`.
+    pub(crate) fn store_assigned_predicate(
+        &mut self,
+        predicate_id: PredicateId,
+        value: PredicateValue,
+    ) {
+        self.predicate_values
+            .accomodate(predicate_id, PredicateValue::Unknown);
+
+        if self.predicate_values[predicate_id].is_unknown() {
+            self.predicate_values[predicate_id] = value;
+        } else {
+            // The value was stored when the predicate was queried, which can be later than when
+            // it was assigned; that store is on `trail` and stored the predicate for notification.
+            pumpkin_assert_simple!(self.predicate_values[predicate_id] == value);
+            self.satisfied_predicates
+                .retain(|&satisfied_predicate| satisfied_predicate != predicate_id);
+        }
+
+        self.assigned_before_stored_trail.push(predicate_id);
     }
 
     /// Stores a predicate in the [`PredicateIdAssignments`] with its corresponding
@@ -177,7 +220,13 @@ impl PredicateIdAssignments {
         }
     }
 
-    pub(crate) fn synchronise(&mut self, new_checkpoint: usize) {
+    /// Backtracks to `new_checkpoint`; `assignments` should already have been backtracked.
+    pub(crate) fn synchronise(
+        &mut self,
+        new_checkpoint: usize,
+        assignments: &Assignments,
+        predicate_id_generator: &PredicateIdGenerator,
+    ) {
         // We also need to clear the stored updated predicates; if this is not done, then it can be
         // the case that a predicate is erroneously said to be satisfied/falsified while it is not
         self.satisfied_predicates.clear();
@@ -189,7 +238,30 @@ impl PredicateIdAssignments {
                 // this is more of a sanity check since it should not be on the trail if it is
                 // unassigned
                 self.predicate_values[predicate_id] = PredicateValue::Unknown
-            })
+            });
+
+        // The predicates are collected, since predicates which are still assigned are added to
+        // the trail again.
+        let backtracked_predicates = self
+            .assigned_before_stored_trail
+            .synchronise(new_checkpoint)
+            .collect::<Vec<_>>();
+        for predicate_id in backtracked_predicates {
+            let predicate = predicate_id_generator.get_predicate(predicate_id);
+            if let Some(is_true) = assignments.evaluate_predicate(predicate) {
+                // The predicate was assigned before the checkpoint at which it was stored.
+                //
+                // Its value is stored again, since backtracking `trail` can have reset it.
+                self.predicate_values[predicate_id] = if is_true {
+                    PredicateValue::AssignedTrue
+                } else {
+                    PredicateValue::AssignedFalse
+                };
+                self.assigned_before_stored_trail.push(predicate_id);
+            } else {
+                self.predicate_values[predicate_id] = PredicateValue::Unknown;
+            }
+        }
     }
 
     /// Returns whether the status of the [`Predicate`] is unknown.
