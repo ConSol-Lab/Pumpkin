@@ -394,7 +394,7 @@ fn print_solution_from_solver(solution: SolutionReference, outputs: &[Output]) {
     for output_specification in outputs {
         match output_specification {
             Output::Bool(output) => {
-                output.print_value(|literal| solution.get_literal_value(*literal))
+                output.print_value(|literal| solution.get_predicate_value(*literal))
             }
 
             Output::Int(output) => {
@@ -402,7 +402,7 @@ fn print_solution_from_solver(solution: SolutionReference, outputs: &[Output]) {
             }
 
             Output::ArrayOfBool(output) => {
-                output.print_value(|literal| solution.get_literal_value(*literal))
+                output.print_value(|literal| solution.get_predicate_value(*literal))
             }
 
             Output::ArrayOfInt(output) => {

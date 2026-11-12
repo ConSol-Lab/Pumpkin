@@ -1,4 +1,4 @@
-//! Compilation phase that processes the array variable declarations into literals/variables.
+//! Compilation phase that processes the array variable declarations into predicates/variables.
 
 use std::rc::Rc;
 
@@ -11,9 +11,9 @@ use flatzinc::Expr;
 use flatzinc::IntExpr;
 use flatzinc::SetExpr;
 use flatzinc::SetLiteralExpr;
-use pumpkin_core::variables::Literal;
 
 use super::context::CompilationContext;
+use super::context::bool_constant;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::ast::VarArrayDecl;
@@ -36,21 +36,10 @@ pub(crate) fn run(
                         ArrayOfBoolExpr::Array(array) => array
                             .iter()
                             .map(|expr| match expr {
-                                BoolExpr::Bool(true) => context.true_literal,
-                                BoolExpr::Bool(false) => context.false_literal,
-                                BoolExpr::VarParIdentifier(identifier) => {
-                                    let other_id = context.identifiers.get_interned(identifier);
-                                    let representative =
-                                        context.equivalences.representative(&other_id);
-
-                                    let domain_id = context
-                                        .variable_map
-                                        .get(&representative)
-                                        .copied()
-                                        .expect("referencing undefined boolean variable");
-
-                                    Literal::new(domain_id)
-                                }
+                                BoolExpr::Bool(value) => bool_constant(*value),
+                                BoolExpr::VarParIdentifier(identifier) => context
+                                    .resolve_bool_variable_from_identifier(identifier)
+                                    .expect("referencing undefined boolean variable"),
                             })
                             .collect(),
 

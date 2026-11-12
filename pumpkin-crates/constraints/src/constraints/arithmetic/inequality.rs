@@ -1,9 +1,9 @@
 use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
-use pumpkin_core::variables::Literal;
 use pumpkin_propagators::arithmetic::LinearLessOrEqualPropagatorArgs;
 
 /// Create the [`NegatableConstraint`] `∑ terms_i <= rhs`.
@@ -115,13 +115,13 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
         .post(solver)
     }
 
-    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
+    fn implied_by(self, solver: &mut Solver, reification_predicate: Predicate) {
         LinearLessOrEqualPropagatorArgs {
             x: self.terms,
             c: self.rhs,
             constraint_tag: self.constraint_tag,
         }
-        .implied_by(solver, reification_literal)
+        .implied_by(solver, reification_predicate)
     }
 }
 

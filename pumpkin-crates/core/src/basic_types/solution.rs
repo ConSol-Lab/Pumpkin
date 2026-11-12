@@ -1,7 +1,7 @@
 use crate::engine::Assignments;
 use crate::engine::variables::DomainGeneratorIterator;
 use crate::engine::variables::DomainId;
-use crate::engine::variables::Literal;
+use crate::predicates::Predicate;
 use crate::propagation::HasAssignments;
 use crate::variables::IntegerVariable;
 
@@ -12,7 +12,7 @@ pub trait ProblemSolution {
 
     fn get_integer_value<Var: IntegerVariable>(&self, var: Var) -> i32;
 
-    fn get_literal_value(&self, literal: Literal) -> bool;
+    fn get_predicate_value(&self, predicate: Predicate) -> bool;
 }
 
 impl<T: HasAssignments> ProblemSolution for T {
@@ -27,9 +27,9 @@ impl<T: HasAssignments> ProblemSolution for T {
             .expect("Expected retrieved integer variable from solution to be assigned")
     }
 
-    fn get_literal_value(&self, literal: Literal) -> bool {
+    fn get_predicate_value(&self, predicate: Predicate) -> bool {
         self.assignments()
-            .evaluate_predicate(literal.get_true_predicate())
+            .evaluate_predicate(predicate)
             .expect("Expected to retrieve concrete truth value from solution to be assigned.")
     }
 }

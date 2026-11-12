@@ -52,6 +52,21 @@ impl<T> Trail<T> {
         self.current_checkpoint
     }
 
+    /// Returns the position of the last entry on the trail at the end of the given checkpoint,
+    /// i.e., the last entry at that checkpoint or at an earlier one. Returns `None` if there is no
+    /// such entry.
+    pub(crate) fn last_position_at_checkpoint(&self, checkpoint: usize) -> Option<usize> {
+        assert!(checkpoint <= self.current_checkpoint);
+
+        let end = if checkpoint == self.current_checkpoint {
+            self.trail.len()
+        } else {
+            self.trail_delimiter[checkpoint]
+        };
+
+        end.checked_sub(1)
+    }
+
     pub(crate) fn synchronise(&mut self, new_checkpoint: usize) -> Rev<Drain<'_, T>> {
         pumpkin_assert_simple!(new_checkpoint < self.current_checkpoint);
 
@@ -158,5 +173,24 @@ mod tests {
         assert_eq!(&[1, 2], trail.values_at_checkpoint(0));
         assert_eq!(&[3], trail.values_at_checkpoint(1));
         assert_eq!(&[4, 5], trail.values_at_checkpoint(2));
+    }
+
+    #[test]
+    fn last_position_at_checkpoint() {
+        let mut trail = Trail::default();
+        assert_eq!(None, trail.last_position_at_checkpoint(0));
+
+        trail.push(1);
+        trail.push(2);
+
+        trail.new_checkpoint();
+        trail.push(3);
+        trail.new_checkpoint();
+        trail.push(4);
+        trail.push(5);
+
+        assert_eq!(Some(1), trail.last_position_at_checkpoint(0));
+        assert_eq!(Some(2), trail.last_position_at_checkpoint(1));
+        assert_eq!(Some(4), trail.last_position_at_checkpoint(2));
     }
 }

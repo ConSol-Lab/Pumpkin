@@ -1,9 +1,9 @@
 use log::debug;
 use pumpkin_solver::core::containers::HashMap;
+use pumpkin_solver::core::predicates::Predicate;
 use pumpkin_solver::core::proof::ConstraintTag;
 use pumpkin_solver::core::pumpkin_assert_moderate;
 use pumpkin_solver::core::pumpkin_assert_simple;
-use pumpkin_solver::core::variables::Literal;
 
 use super::WeightedLiteral;
 use super::pseudo_boolean_constraint_encoder::EncodingError;
@@ -69,10 +69,7 @@ impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
                 self.num_clauses_added += 1;
                 self.index_last_added_weighted_literal = i;
 
-                solver.add_clause(
-                    [(!weighted_literals[i].literal).get_true_predicate()],
-                    self.constraint_tag,
-                )
+                solver.add_clause([!weighted_literals[i].literal], self.constraint_tag)
             } else {
                 // the first time a literal no longer exceeds k, we can stop
                 //  since other literals down the line have smaller weights
@@ -122,7 +119,7 @@ impl GeneralisedTotaliserEncoder {
 
         // these are to be used in the loop below
         //  will be reused to avoid allocating each iteration
-        let mut value_to_literal_map: HashMap<u64, Literal> = HashMap::default();
+        let mut value_to_literal_map: HashMap<u64, Predicate> = HashMap::default();
         let mut partial_sums: Vec<u64> = Vec::new();
 
         //  in each iteration, the literals of the next_layer are created and appropriate clauses
@@ -199,9 +196,8 @@ impl GeneralisedTotaliserEncoder {
                 for weighted_literal in &self.layers[index_current_layer].nodes[index_node1] {
                     solver.add_clause(
                         vec![
-                            (!weighted_literal.literal).get_true_predicate(),
-                            (*value_to_literal_map.get(&weighted_literal.weight).unwrap())
-                                .get_true_predicate(),
+                            !weighted_literal.literal,
+                            *value_to_literal_map.get(&weighted_literal.weight).unwrap(),
                         ],
                         self.constraint_tag,
                     );
@@ -212,9 +208,8 @@ impl GeneralisedTotaliserEncoder {
                 for weighted_literal in &self.layers[index_current_layer].nodes[index_node2] {
                     solver.add_clause(
                         vec![
-                            (!weighted_literal.literal).get_true_predicate(),
-                            (*value_to_literal_map.get(&weighted_literal.weight).unwrap())
-                                .get_true_predicate(),
+                            !weighted_literal.literal,
+                            *value_to_literal_map.get(&weighted_literal.weight).unwrap(),
                         ],
                         self.constraint_tag,
                     );
@@ -229,10 +224,9 @@ impl GeneralisedTotaliserEncoder {
                         if combined_weight <= k {
                             solver.add_clause(
                                 vec![
-                                    (!wl1.literal).get_true_predicate(),
-                                    (!wl2.literal).get_true_predicate(),
-                                    (*value_to_literal_map.get(&combined_weight).unwrap())
-                                        .get_true_predicate(),
+                                    !wl1.literal,
+                                    !wl2.literal,
+                                    *value_to_literal_map.get(&combined_weight).unwrap(),
                                 ],
                                 self.constraint_tag,
                             );
@@ -243,13 +237,8 @@ impl GeneralisedTotaliserEncoder {
                         //  todo check if these clauses are necessary, and see if the trade-off
                         // makes sense      I think it is necessary
                         } else {
-                            solver.add_clause(
-                                vec![
-                                    (!wl1.literal).get_true_predicate(),
-                                    (!wl2.literal).get_true_predicate(),
-                                ],
-                                self.constraint_tag,
-                            );
+                            solver
+                                .add_clause(vec![!wl1.literal, !wl2.literal], self.constraint_tag);
                             self.num_clauses_added += 1;
                         }
                     }

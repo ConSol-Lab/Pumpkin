@@ -1,8 +1,8 @@
 //! Defines the main building blocks of constraints.
 use crate::Solver;
+use crate::predicates::Predicate;
 use crate::propagation::PropagatorConstructor;
 use crate::propagators::reified_propagator::ReifiedPropagatorArgs;
-use crate::variables::Literal;
 
 mod constraint_poster;
 pub use constraint_poster::ConstraintPoster;
@@ -20,11 +20,11 @@ pub trait Constraint {
     fn post(self, solver: &mut Solver);
 
     /// Add the half-reified version of the [`Constraint`] to the [`Solver`]; i.e. post the
-    /// constraint `r -> constraint` where `r` is a reification literal.
+    /// constraint `r -> constraint` where `r` is a reification predicate.
     ///
     /// The `tag` allows inferences to be traced to the constraint that implies them. They will
     /// show up in the proof log.
-    fn implied_by(self, solver: &mut Solver, reification_literal: Literal);
+    fn implied_by(self, solver: &mut Solver, reification_predicate: Predicate);
 }
 
 impl<ConcretePropagator> Constraint for ConcretePropagator
@@ -35,10 +35,10 @@ where
         let _ = solver.add_propagator(self);
     }
 
-    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
+    fn implied_by(self, solver: &mut Solver, reification_predicate: Predicate) {
         let _ = solver.add_propagator(ReifiedPropagatorArgs {
             propagator: self,
-            reification_literal,
+            reification_predicate,
         });
     }
 }
@@ -48,16 +48,16 @@ impl<C: Constraint> Constraint for Vec<C> {
         self.into_iter().for_each(|c| c.post(solver))
     }
 
-    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
+    fn implied_by(self, solver: &mut Solver, reification_predicate: Predicate) {
         self.into_iter()
-            .for_each(|c| c.implied_by(solver, reification_literal))
+            .for_each(|c| c.implied_by(solver, reification_predicate))
     }
 }
 
 /// A [`Constraint`] which has a well-defined negation.
 ///
 /// Having a negation means the [`Constraint`] can be fully reified; i.e., a constraint `C` can be
-/// turned into `r <-> C` where `r` is a reification literal.
+/// turned into `r <-> C` where `r` is a reification predicate.
 ///
 /// For example, the negation of the [`Constraint`] `a = b` is (well-)defined as `a != b`.
 pub trait NegatableConstraint: Constraint {
@@ -66,17 +66,17 @@ pub trait NegatableConstraint: Constraint {
     fn negation(&self) -> Self::NegatedConstraint;
 
     /// Add the reified version of the [`Constraint`] to the [`Solver`]; i.e. post the constraint
-    /// `r <-> constraint` where `r` is a reification literal.
+    /// `r <-> constraint` where `r` is a reification predicate.
     ///
     /// The `tag` allows inferences to be traced to the constraint that implies them. They will
     /// show up in the proof log.
-    fn reify(self, solver: &mut Solver, reification_literal: Literal)
+    fn reify(self, solver: &mut Solver, reification_predicate: Predicate)
     where
         Self: Sized,
     {
         let negation = self.negation();
 
-        self.implied_by(solver, reification_literal);
-        negation.implied_by(solver, !reification_literal)
+        self.implied_by(solver, reification_predicate);
+        negation.implied_by(solver, !reification_predicate)
     }
 }

@@ -1,8 +1,8 @@
 use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
-use pumpkin_core::variables::Literal;
 use pumpkin_core::variables::TransformableVariable;
 use pumpkin_propagators::disjunctive::ArgDisjunctiveTask;
 use pumpkin_propagators::disjunctive::DisjunctiveConstructor;
@@ -54,10 +54,10 @@ impl<Var: IntegerVariable + 'static> Constraint for DisjunctiveConstraint<Var> {
         .post(solver)
     }
 
-    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
+    fn implied_by(self, solver: &mut Solver, reification_predicate: Predicate) {
         // We post both the propagator on the lower-bound and the propagator on the upper-bound.
         DisjunctiveConstructor::new(self.tasks.clone(), self.constraint_tag)
-            .implied_by(solver, reification_literal);
+            .implied_by(solver, reification_predicate);
         DisjunctiveConstructor::new(
             self.tasks.iter().map(|task| ArgDisjunctiveTask {
                 // The propagations on the upper-bound take place by "reversing" the tasks such
@@ -67,6 +67,6 @@ impl<Var: IntegerVariable + 'static> Constraint for DisjunctiveConstraint<Var> {
             }),
             self.constraint_tag,
         )
-        .implied_by(solver, reification_literal)
+        .implied_by(solver, reification_predicate)
     }
 }

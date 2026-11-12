@@ -116,7 +116,12 @@ impl PropagatorConstructorContext<'_> {
             variable: local_id,
         };
 
-        let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
+        let mut watchers = Watchers::new(
+            propagator_var,
+            &mut self.state.notification_engine,
+            &mut self.state.trailed_values,
+            &self.state.assignments,
+        );
         var.watch_all_backtrack(&mut watchers, domain_events.events());
     }
 

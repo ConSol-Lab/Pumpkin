@@ -6,7 +6,6 @@ use crate::predicates::Predicate;
 use crate::propagation::ExplanationContext;
 use crate::variables::DomainId;
 use crate::variables::IntegerVariable;
-use crate::variables::Literal;
 
 /// Provides access to domain information to propagators.
 ///
@@ -65,10 +64,6 @@ pub trait ReadDomains {
         predicate: Predicate,
         trail_position: usize,
     ) -> Option<bool>;
-
-    /// Returns whether the provided [`Literal`] is assigned (either true or false) or is
-    /// currently unassigned.
-    fn evaluate_literal(&self, literal: Literal) -> Option<bool>;
 
     /// Returns the holes in the domain which were created on the current checkpoint.
     fn get_holes_at_current_checkpoint<Var: IntegerVariable>(
@@ -172,10 +167,6 @@ pub trait ReadDomains {
 impl<T: HasAssignments> ReadDomains for T {
     fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
         self.assignments().evaluate_predicate(predicate)
-    }
-
-    fn evaluate_literal(&self, literal: Literal) -> Option<bool> {
-        self.evaluate_predicate(literal.get_true_predicate())
     }
 
     fn get_holes_at_current_checkpoint<Var: IntegerVariable>(

@@ -188,7 +188,7 @@ pub trait Propagator: Downcast + DynClone {
     /// detect an inconsistency (and [`None`] otherwise).
     ///
     /// By implementing this function, if the propagator is reified, it can propagate the
-    /// reification literal based on the detected inconsistency. Yet, an implementation is not
+    /// reification predicate based on the detected inconsistency. Yet, an implementation is not
     /// needed for correctness, as [`Propagator::propagate`] should still check for
     /// inconsistency as well.
     fn detect_inconsistency(&self, _domains: Domains) -> Option<PropagatorConflict> {
