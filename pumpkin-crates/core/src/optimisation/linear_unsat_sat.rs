@@ -121,7 +121,7 @@ where
                     // Optimisation will stop regardless of the result of the callback.
                     let _ = self.solution_callback.on_solution_callback(
                         solver,
-                        primal_solution.as_reference(),
+                        solution.as_reference(),
                         brancher,
                         resolver,
                     );
@@ -139,7 +139,7 @@ where
             }
 
             solver.add_clause(
-                [predicate![objective >= objective_lower_bound + 1]],
+                [predicate![objective > objective_lower_bound]],
                 ConstraintTag::from_non_zero(NonZero::<u32>::MAX),
             );
 

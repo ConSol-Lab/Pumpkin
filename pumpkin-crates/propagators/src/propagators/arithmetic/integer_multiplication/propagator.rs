@@ -76,6 +76,8 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     let b_max = context.upper_bound(b) as i64;
     let c_min = context.lower_bound(c) as i64;
     let c_max = context.upper_bound(c) as i64;
+    // The trail position of the bounds above, which are used to explain the propagations.
+    let trail_position = context.trail_position();
 
     // c = a * b
     //
@@ -88,14 +90,14 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
         predicate![c >= c_lo],
         MultiplicationPropagation::new()
             .with_bound(PropagatedBound::CLower)
-            .with_value(c_lo)
+            .with_bounds_trail_position(trail_position as u64)
             .into_bits(),
     )?;
     context.post(
         predicate![c <= c_hi],
         MultiplicationPropagation::new()
             .with_bound(PropagatedBound::CUpper)
-            .with_value(c_hi)
+            .with_bounds_trail_position(trail_position as u64)
             .into_bits(),
     )?;
 
@@ -106,6 +108,7 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
         (b_min, b_max),
         a,
         (PropagatedBound::ALower, PropagatedBound::AUpper),
+        trail_position,
     )?;
 
     // b = c / a
@@ -115,6 +118,7 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
         (a_min, a_max),
         b,
         (PropagatedBound::BLower, PropagatedBound::BUpper),
+        trail_position,
     )?;
 
     Ok(())
@@ -140,6 +144,7 @@ fn propagate_quotient<VTarget: IntegerVariable>(
     denominator: (i64, i64),
     target: &VTarget,
     codes: (PropagatedBound, PropagatedBound),
+    trail_position: usize,
 ) -> PropagationStatusCP {
     let (num_min, num_max) = numerator;
     let (den_min, den_max) = denominator;
@@ -155,14 +160,14 @@ fn propagate_quotient<VTarget: IntegerVariable>(
         predicate![target >= lo],
         MultiplicationPropagation::new()
             .with_bound(lower_code)
-            .with_value(lo)
+            .with_bounds_trail_position(trail_position as u64)
             .into_bits(),
     )?;
     context.post(
         predicate![target <= hi],
         MultiplicationPropagation::new()
             .with_bound(upper_code)
-            .with_value(hi)
+            .with_bounds_trail_position(trail_position as u64)
             .into_bits(),
     )?;
 
@@ -196,7 +201,7 @@ fn expect_finite(value: IntExt<i64>) -> i64 {
 }
 
 /// Clamps `value` into the range representable by `i32`.
-fn saturate_i64_to_i32(value: i64) -> i32 {
+pub(super) fn saturate_i64_to_i32(value: i64) -> i32 {
     value.clamp(i32::MIN as i64, i32::MAX as i64) as i32
 }
 
@@ -288,6 +293,27 @@ mod tests {
 
         let reason = reason_for(&mut state, predicate![c <= 12]);
         assert_eq!(conjunction!([a <= 3] & [b >= 0] & [b <= 4]), reason);
+    }
+
+    #[test]
+    fn explains_using_the_bounds_used_for_propagation() {
+        // The propagation of `b` uses the bounds of `a` from before `a` was propagated in the
+        // same call; propagating `[a >= -1]` fixes `a` to 0 (due to the hole at -1). The
+        // explanation of `[b <= -1]` should use the bounds that were used for the propagation
+        // (i.e., `a` in [-2, 0]) rather than the bounds at the trail position of `[b <= -1]` (i.e.,
+        // `a` in [0, 0], for which the quotient is undefined).
+        let mut state = State::default();
+        let a = state.new_sparse_variable(vec![-2, 0], None);
+        let b = state.new_sparse_variable(vec![-1, 1], None);
+        let c = state.new_interval_variable(1, 1, None);
+        new_propagator(&mut state, a, b, c);
+
+        let _ = state
+            .propagate_to_fixed_point()
+            .expect_err("a * b = c has no solution");
+
+        let reason = reason_for(&mut state, predicate![b <= -1]);
+        assert_eq!(conjunction!([c >= 1] & [a >= -2] & [a <= 0]), reason);
     }
 
     #[test]

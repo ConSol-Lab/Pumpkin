@@ -20,11 +20,28 @@ pub trait PredicateConstructor {
 
 /// A macro which allows for the creation of a [`Predicate`].
 ///
+/// The left-hand side can be any expression whose type implements [`PredicateConstructor`] (e.g. a
+/// local variable, a field access, an index expression, or a method call), and the right-hand side
+/// can be any expression evaluating to the bound (i32).
+///
+/// The supported comparison operators are:
+/// - `>=`
+/// - `<=`
+/// - `==`
+/// - `!=`
+/// - `>`
+/// - `<`
+///
+/// Note that the left-hand side is split at the first top-level comparison operator; expressions
+/// containing `<` or `>` outside of delimiters (such as a turbofish) should be wrapped in
+/// parentheses.
+///
 /// # Example
 /// ```rust
 /// # use pumpkin_core::Solver;
 /// # use pumpkin_core::predicate;
 /// # use pumpkin_core::predicates::Predicate;
+/// # use pumpkin_core::variables::DomainId;
 /// let mut solver = Solver::default();
 /// let x = solver.new_bounded_integer(0, 10);
 ///
@@ -43,29 +60,66 @@ pub trait PredicateConstructor {
 /// let disequality_predicate = predicate!(x != 5);
 /// assert_eq!(disequality_predicate.get_domain(), x);
 /// assert_eq!(disequality_predicate.get_right_hand_side(), 5);
+///
+/// let strict_lower_bound_predicate = predicate!(x > 5);
+/// assert_eq!(strict_lower_bound_predicate, predicate!(x >= 6));
+///
+/// let strict_upper_bound_predicate = predicate!(x < 5);
+/// assert_eq!(strict_upper_bound_predicate, predicate!(x <= 4));
+///
+/// let variables = vec![x];
+/// let indexed_predicate = predicate!(variables.iter().next().unwrap() >= 5);
+/// assert_eq!(indexed_predicate, predicate!(x >= 5));
+///
+/// // A left-hand side containing generics needs to be wrapped in parentheses.
+/// let generic_predicate = predicate!((std::convert::identity::<DomainId>(x)) >= 5);
+/// assert_eq!(generic_predicate, predicate!(x >= 5));
+/// ```
+///
+/// Without the parentheses, the `<` of the generic arguments is interpreted as the comparison
+/// operator, resulting in a compilation error:
+/// ```rust,compile_fail
+/// # use pumpkin_core::Solver;
+/// # use pumpkin_core::predicate;
+/// # use pumpkin_core::variables::DomainId;
+/// let mut solver = Solver::default();
+/// let x = solver.new_bounded_integer(0, 10);
+///
+/// let generic_predicate = predicate!(std::convert::identity::<DomainId>(x) >= 5);
 /// ```
 #[macro_export]
 macro_rules! predicate {
-    ($($var:ident).+$([$index:expr])? >= $bound:expr) => {{
+    // Once a comparison operator is encountered, all tokens before it form the left-hand side.
+    (@munch [$($lhs:tt)+] >= $bound:expr) => {
+        $crate::predicate!(@construct [$($lhs)+] lower_bound_predicate($bound))
+    };
+    (@munch [$($lhs:tt)+] <= $bound:expr) => {
+        $crate::predicate!(@construct [$($lhs)+] upper_bound_predicate($bound))
+    };
+    (@munch [$($lhs:tt)+] == $value:expr) => {
+        $crate::predicate!(@construct [$($lhs)+] equality_predicate($value))
+    };
+    (@munch [$($lhs:tt)+] != $value:expr) => {
+        $crate::predicate!(@construct [$($lhs)+] disequality_predicate($value))
+    };
+    (@munch [$($lhs:tt)+] > $bound:expr) => {
+        $crate::predicate!(@construct [$($lhs)+] lower_bound_predicate($bound + 1))
+    };
+    (@munch [$($lhs:tt)+] < $bound:expr) => {
+        $crate::predicate!(@construct [$($lhs)+] upper_bound_predicate($bound - 1))
+    };
+    // Otherwise, the next token is moved to the left-hand side.
+    (@munch [$($lhs:tt)*] $next:tt $($rest:tt)*) => {
+        $crate::predicate!(@munch [$($lhs)* $next] $($rest)*)
+    };
+    (@construct [$($lhs:tt)+] $method:ident($rhs:expr)) => {{
         #[allow(unused, reason = "could be imported at call-site")]
         use $crate::predicates::PredicateConstructor;
-        $($var).+$([$index])?.lower_bound_predicate($bound)
+        ($($lhs)+).$method($rhs)
     }};
-    ($($var:ident).+$([$index:expr])? <= $bound:expr) => {{
-        #[allow(unused, reason = "could be imported at call-site")]
-        use $crate::predicates::PredicateConstructor;
-        $($var).+$([$index])?.upper_bound_predicate($bound)
-    }};
-    ($($var:ident).+$([$index:expr])? == $value:expr) => {{
-        #[allow(unused, reason = "could be imported at call-site")]
-        use $crate::predicates::PredicateConstructor;
-        $($var).+$([$index])?.equality_predicate($value)
-    }};
-    ($($var:ident).+$([$index:expr])? != $value:expr) => {{
-        #[allow(unused, reason = "could be imported at call-site")]
-        use $crate::predicates::PredicateConstructor;
-        $($var).+$([$index])?.disequality_predicate($value)
-    }};
+    ($($tokens:tt)+) => {
+        $crate::predicate!(@munch [] $($tokens)+)
+    };
 }
 
 #[cfg(test)]
@@ -141,5 +195,57 @@ mod tests {
         assert_eq!(3, predicate![wrapper[0] <= 3].get_right_hand_side());
         assert_eq!(5, predicate![wrapper[0] == 5].get_right_hand_side());
         assert_eq!(5, predicate![wrapper[0] != 5].get_right_hand_side());
+    }
+
+    #[test]
+    fn macro_strict_comparisons_are_converted() {
+        let x = DomainId::new(0);
+
+        assert_eq!(predicate![x >= 3], predicate![x > 2]);
+        assert_eq!(predicate![x <= 1], predicate![x < 2]);
+        assert_eq!(predicate![x >= 4], predicate![x > 1 + 2]);
+    }
+
+    #[test]
+    fn macro_arbitrary_expressions_are_matched() {
+        struct Wrapper {
+            xs: Vec<DomainId>,
+        }
+
+        impl Wrapper {
+            fn get(&self, index: usize) -> DomainId {
+                self.xs[index]
+            }
+        }
+
+        let wrapper = Wrapper {
+            xs: vec![DomainId::new(0), DomainId::new(1)],
+        };
+        let index = 1;
+
+        assert_eq!(
+            predicate![wrapper.xs[1] >= 2],
+            predicate![wrapper.get(index) >= 2]
+        );
+        assert_eq!(
+            predicate![wrapper.xs[1] <= 2],
+            predicate![wrapper.xs[index - 1 + 1] <= 2]
+        );
+        assert_eq!(
+            predicate![wrapper.xs[1] == 2],
+            predicate![*wrapper.xs.last().unwrap() == 2]
+        );
+        assert_eq!(
+            predicate![wrapper.xs[0] != 2],
+            predicate![wrapper.xs.iter().copied().next().unwrap() != 2]
+        );
+        assert_eq!(
+            predicate![wrapper.xs[0] >= 3],
+            predicate![wrapper.get(0) > index as i32 + 1]
+        );
+        assert_eq!(
+            predicate![wrapper.xs[0] <= 1],
+            predicate![wrapper.get(0) < 2]
+        );
     }
 }

@@ -185,7 +185,7 @@ where
             (conjunction!(), &self.inference_code),
         )?;
         context.post(
-            predicate![self.index <= self.array.len() as i32 - 1],
+            predicate![self.index < self.array.len() as i32],
             (conjunction!(), &self.inference_code),
         )?;
         Ok(())
@@ -247,9 +247,9 @@ where
             let element_lb = context.lower_bound(element);
 
             let reason = if rhs_lb > element_ub {
-                conjunction!([element <= rhs_lb - 1] & [self.rhs >= rhs_lb])
+                conjunction!([element < rhs_lb] & [self.rhs >= rhs_lb])
             } else if rhs_ub < element_lb {
-                conjunction!([element >= rhs_ub + 1] & [self.rhs <= rhs_ub])
+                conjunction!([element > rhs_ub] & [self.rhs <= rhs_ub])
             } else {
                 continue;
             };
@@ -276,17 +276,16 @@ where
     ) -> PropagationStatusCP {
         let rhs_lb = context.lower_bound(&self.rhs);
         let rhs_ub = context.upper_bound(&self.rhs);
-        let lhs = &self.array[index as usize];
 
         context.post(
-            predicate![lhs >= rhs_lb],
+            predicate![self.array[index as usize] >= rhs_lb],
             (
                 conjunction!([self.rhs >= rhs_lb] & [self.index == index]),
                 &self.inference_code,
             ),
         )?;
         context.post(
-            predicate![lhs <= rhs_ub],
+            predicate![self.array[index as usize] <= rhs_ub],
             (
                 conjunction!([self.rhs <= rhs_ub] & [self.index == index]),
                 &self.inference_code,

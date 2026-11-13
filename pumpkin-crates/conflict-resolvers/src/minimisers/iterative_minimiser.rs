@@ -407,9 +407,7 @@ impl IterativeMinimiser {
                             potentially_removed: predicate!(
                                 domain != predicate.get_right_hand_side()
                             ),
-                            new_predicate: predicate!(
-                                domain >= predicate.get_right_hand_side() + 1
-                            ),
+                            new_predicate: predicate!(domain > predicate.get_right_hand_side()),
                             removed: to_remove,
                         }
                     } else {
@@ -463,9 +461,7 @@ impl IterativeMinimiser {
                             potentially_removed: predicate!(
                                 domain != predicate.get_right_hand_side()
                             ),
-                            new_predicate: predicate!(
-                                domain <= predicate.get_right_hand_side() - 1
-                            ),
+                            new_predicate: predicate!(domain < predicate.get_right_hand_side()),
                             removed: to_remove,
                         }
                     } else {
@@ -494,7 +490,7 @@ impl IterativeMinimiser {
                     // [x <= v], [x != v] => [x <= v - 1]
                     ProcessingResult::PossiblyReplacedWithNew {
                         potentially_removed: predicate!(domain <= upper_bound),
-                        new_predicate: predicate!(domain <= upper_bound - 1),
+                        new_predicate: predicate!(domain < upper_bound),
                         removed: vec![],
                     }
                 } else if predicate.get_right_hand_side() > upper_bound {
@@ -506,7 +502,7 @@ impl IterativeMinimiser {
                     // [x >= v], [x != v] => [x <= v + 1]
                     ProcessingResult::PossiblyReplacedWithNew {
                         potentially_removed: predicate!(domain >= lower_bound),
-                        new_predicate: predicate!(domain >= lower_bound + 1),
+                        new_predicate: predicate!(domain > lower_bound),
                         removed: vec![],
                     }
                 } else if predicate.get_right_hand_side() < lower_bound {

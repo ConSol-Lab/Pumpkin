@@ -84,7 +84,7 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVar
             );
 
             context.post(
-                predicate![propagating_task.start_variable >= time_point + 1],
+                predicate![propagating_task.start_variable > time_point],
                 (reason, inference_code),
             )?;
         }

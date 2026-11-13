@@ -169,7 +169,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
                     break;
                 }
             } else {
-                propagation_reason.push(predicate![var <= rhs_lb - 1]);
+                propagation_reason.push(predicate![var < rhs_lb]);
             }
         }
         // If there is exactly one variable UB(a_i) >= LB(rhs, constraint_tag }, then the

@@ -188,7 +188,7 @@ where
             //
             // Note that we lift the conflict
             Some(PropagatorConflict {
-                conjunction: conjunction!([self.a <= b_lb - 1] & [self.b >= b_lb]),
+                conjunction: conjunction!([self.a < b_lb] & [self.b >= b_lb]),
                 inference_code: self.inference_code.clone(),
             })
         } else if b_ub < a_lb {
@@ -196,7 +196,7 @@ where
             //
             // Note that we lift the conflict
             Some(PropagatorConflict {
-                conjunction: conjunction!([self.b <= a_lb - 1] & [self.a >= a_lb]),
+                conjunction: conjunction!([self.b < a_lb] & [self.a >= a_lb]),
                 inference_code: self.inference_code.clone(),
             })
         } else {

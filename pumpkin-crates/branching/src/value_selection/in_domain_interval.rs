@@ -33,7 +33,7 @@ impl ValueSelector<DomainId> for InDomainInterval {
         {
             // We use `first_interval - 1` since `first_interval` is the value of the first value
             // which is not in the domain (and the upper-bound predicate is inclusive)
-            predicate!(decision_variable <= first_interval - 1)
+            predicate!(decision_variable < first_interval)
         } else {
             // There are no holes in the domain, we bisect the domain and exclude the upper-half of
             // the domain

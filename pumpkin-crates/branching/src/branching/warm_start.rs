@@ -41,10 +41,9 @@ impl<Var: IntegerVariable> Brancher for WarmStart<Var> {
         }
 
         while self.index < self.variables.len() {
-            let variable = &self.variables[self.index];
             let value = self.values[self.index];
 
-            let predicate = predicate!(variable == value);
+            let predicate = predicate!(self.variables[self.index] == value);
 
             self.index += 1;
 

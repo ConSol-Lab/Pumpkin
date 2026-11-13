@@ -164,24 +164,28 @@ impl Propagator for DeductionPropagator {
 
         let num_unassigned_predicates = self.nogood.len() - num_assigned_predicates;
 
-        assert!(
-            !(self.propagation_priority > Priority::VeryLow
-                && matches!(
-                    self.propagation_mode,
-                    DeductionPropagationMode::OnlyUnitPropagation
-                )
-                && num_unassigned_predicates == 0),
-            "It should not be possible for an unmarked deduction to unit propagate
-            and cause a conflict, as a failure should have been declared by
-            the `DeductionPropagator` that does conflict detection,
-            which has a higher priority than its unit propagating counterpart."
-        );
+        // The debug checks of the core run this propagator in isolation, so then it also has to
+        // detect conflicts when doing unit propagation.
+        let detects_conflicts = matches!(
+            self.propagation_mode,
+            DeductionPropagationMode::OnlyConflictDetection
+        ) || cfg!(feature = "debug-checks");
+
         match self.propagation_mode {
-            DeductionPropagationMode::OnlyConflictDetection if num_unassigned_predicates == 0 => {
+            _ if detects_conflicts && num_unassigned_predicates == 0 => {
                 return Err(Conflict::Propagator(PropagatorConflict {
                     conjunction: self.nogood.iter().copied().collect(),
                     inference_code: self.inference_code.clone(),
                 }));
+            }
+            DeductionPropagationMode::OnlyUnitPropagation if num_unassigned_predicates == 0 => {
+                assert!(
+                    self.propagation_priority <= Priority::VeryLow,
+                    "It should not be possible for an unmarked deduction to unit propagate
+                    and cause a conflict, as a failure should have been declared by
+                    the `DeductionPropagator` that does conflict detection,
+                    which has a higher priority than its unit propagating counterpart."
+                );
             }
             DeductionPropagationMode::OnlyUnitPropagation if num_unassigned_predicates == 1 => {
                 let unassigned_predicate = self

@@ -476,7 +476,7 @@ fn compile_set_in_reif(
             context.solver.add_clause(
                 [
                     !reif.get_true_predicate(),
-                    !predicate![variable >= upper_bound + 1],
+                    !predicate![variable > upper_bound],
                 ],
                 constraint_tag,
             );
@@ -487,7 +487,7 @@ fn compile_set_in_reif(
                 [
                     reif.get_true_predicate(),
                     !predicate![variable >= lower_bound],
-                    predicate![variable >= upper_bound + 1],
+                    predicate![variable > upper_bound],
                 ],
                 constraint_tag,
             );
