@@ -9,8 +9,11 @@ use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::CurrentNogood;
 use pumpkin_core::state::PredicateHeap;
+use pumpkin_core::statistics::Statistic;
+use pumpkin_core::statistics::StatisticLogger;
 use pumpkin_core::statistics::moving_averages::CumulativeMovingAverage;
 use pumpkin_core::statistics::moving_averages::MovingAverage;
+use pumpkin_core::termination::Instant;
 
 use crate::minimisers::NogoodMinimiser;
 
@@ -42,10 +45,14 @@ pub struct RecursiveMinimiser {
 create_statistics_struct!(RecursiveMinimiserStatistics {
     /// The average number of atomic constraints removed by recursive minimisation during conflict analysis
     average_number_of_removed_atomic_constraints_recursive: CumulativeMovingAverage<u64>,
+    /// The cumulative number of seconds spent performing recursive minimisation.
+    num_seconds_minimising_recursive: f64,
 });
 
 impl NogoodMinimiser for RecursiveMinimiser {
     fn minimise(&mut self, context: &mut ConflictAnalysisContext, nogood: &mut Vec<Predicate>) {
+        let start_time = Instant::now();
+
         let num_literals_before_minimisation = nogood.len();
 
         self.initialise_minimisation_data_structures(nogood, context);
@@ -91,6 +98,13 @@ impl NogoodMinimiser for RecursiveMinimiser {
         self.statistics
             .average_number_of_removed_atomic_constraints_recursive
             .add_term((num_literals_before_minimisation - nogood.len()) as u64);
+
+        self.statistics.num_seconds_minimising_recursive += start_time.elapsed().as_secs_f64();
+    }
+
+    fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        self.statistics
+            .log(statistic_logger.attach_to_prefix("RecursiveMinimiser"));
     }
 }
 

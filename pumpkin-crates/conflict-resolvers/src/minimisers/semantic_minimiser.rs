@@ -10,8 +10,11 @@ use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateType;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::results::ProblemSolution;
+use pumpkin_core::statistics::Statistic;
+use pumpkin_core::statistics::StatisticLogger;
 use pumpkin_core::statistics::moving_averages::CumulativeMovingAverage;
 use pumpkin_core::statistics::moving_averages::MovingAverage;
+use pumpkin_core::termination::Instant;
 use pumpkin_core::variables::DomainId;
 
 use crate::minimisers::NogoodMinimiser;
@@ -38,6 +41,8 @@ pub struct SemanticMinimiser {
 create_statistics_struct!(SemanticMinimiserStatistics {
     /// The average number of atomic constraints removed by semantic minimisation during conflict analysis
     average_number_of_removed_atomic_constraints_semantic: CumulativeMovingAverage<u64>,
+    /// The cumulative number of seconds spent performing semantic minimisation.
+    num_seconds_minimising_semantic: f64,
 });
 
 impl Default for SemanticMinimiser {
@@ -66,6 +71,8 @@ pub enum SemanticMinimisationMode {
 
 impl NogoodMinimiser for SemanticMinimiser {
     fn minimise(&mut self, context: &mut ConflictAnalysisContext, nogood: &mut Vec<Predicate>) {
+        let start_time = Instant::now();
+
         self.accommodate(context);
         self.clean_up();
         self.apply_predicates(nogood);
@@ -74,11 +81,12 @@ impl NogoodMinimiser for SemanticMinimiser {
 
         // Compile the nogood based on the internal state.
         // Add domain description to the helper.
+        let mut is_inconsistent = false;
         for domain_id in self.present_ids.iter() {
             // If at least one domain is inconsistent, we can stop.
             if self.domains[domain_id].inconsistent {
-                *nogood = vec![Predicate::trivially_false()];
-                return;
+                is_inconsistent = true;
+                break;
             }
             self.domains[domain_id].add_domain_description_to_vector(
                 context,
@@ -88,13 +96,25 @@ impl NogoodMinimiser for SemanticMinimiser {
                 self.mode,
             );
         }
-        *nogood = self.helper.clone();
+
+        if is_inconsistent {
+            *nogood = vec![Predicate::trivially_false()];
+        } else {
+            *nogood = self.helper.clone();
+        }
 
         if self.mode == SemanticMinimisationMode::EnableEqualityMerging {
             self.statistics
                 .average_number_of_removed_atomic_constraints_semantic
                 .add_term((len_before - nogood.len()) as u64);
         }
+
+        self.statistics.num_seconds_minimising_semantic += start_time.elapsed().as_secs_f64();
+    }
+
+    fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        self.statistics
+            .log(statistic_logger.attach_to_prefix("SemanticMinimiser"));
     }
 }
 
