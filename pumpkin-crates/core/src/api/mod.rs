@@ -91,6 +91,7 @@ pub mod termination {
     pub use crate::engine::termination::TerminationCondition;
     pub use crate::engine::termination::combinator::*;
     pub use crate::engine::termination::indefinite::*;
+    pub use crate::engine::termination::solution_limit::*;
     pub use crate::engine::termination::time_budget::*;
 }
 
