@@ -113,6 +113,11 @@ pub trait Brancher: Debug {
     ///
     /// This can be used by [`Brancher::subscribe_to_events`] to determine upon which
     /// events which component of the [`Brancher`] should be called.
+    ///
+    /// Note that the returned events should be unique (i.e. no [`BrancherEvent`] should occur more
+    /// than once); otherwise, a [`Brancher`] which dispatches events based on the subscriptions of
+    /// its sub-branchers could notify the [`Brancher`] multiple times of a single event. This is
+    /// especially important for [`Brancher`]s which combine the events of multiple components.
     fn subscribe_to_events(&self) -> Vec<BrancherEvent>;
 }
 

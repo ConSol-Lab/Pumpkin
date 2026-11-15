@@ -4,6 +4,7 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use itertools::Itertools;
 use pumpkin_core::branching::Brancher;
 use pumpkin_core::branching::BrancherEvent;
 use pumpkin_core::branching::SelectionContext;
@@ -101,6 +102,8 @@ where
             .subscribe_to_events()
             .into_iter()
             .chain(self.value_selector.subscribe_to_events())
+            // The variable and value selector could subscribe to the same events
+            .unique()
             .collect()
     }
 }

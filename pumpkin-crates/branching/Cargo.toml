@@ -12,5 +12,6 @@ workspace = true
 
 [dependencies]
 enum-map = "3.1.0"
+itertools = "0.15.0"
 log = "0.4.30"
 pumpkin-core = { version = "0.5.0", path = "../core" }
