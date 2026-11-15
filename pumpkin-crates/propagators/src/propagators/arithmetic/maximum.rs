@@ -105,7 +105,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
         // max(a_0, a_1, ..., a_{n-1}) = rhs
 
         let rhs_ub = context.upper_bound(&self.rhs);
-        let mut max_ub = context.upper_bound(&self.array[0]);
+        let mut max_ub = i32::MIN;
         let mut max_lb = context.lower_bound(&self.array[0]);
         let mut lb_reason = predicate![self.array[0] >= max_lb];
         for var in self.array.iter() {
