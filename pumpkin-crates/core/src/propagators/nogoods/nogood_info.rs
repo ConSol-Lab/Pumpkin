@@ -20,6 +20,12 @@ pub(crate) struct NogoodInfo {
     ///
     /// TODO: not clear whether this is a problem or whether it makes sense.
     pub(crate) block_bumps: bool,
+    /// Whether the nogood is protected from being removed when compacting the nogood database.
+    ///
+    /// During compaction, this is set for the nogoods which are the reason for a propagation on
+    /// the trail, ensuring that their explanation is still available even if they have been
+    /// deleted; outside of compaction, it is always false.
+    pub(crate) is_protected: bool,
     /// The activity score of the nogood.
     pub(crate) activity: f32,
 }
@@ -31,6 +37,7 @@ impl NogoodInfo {
             lbd,
             is_deleted: false,
             block_bumps: false,
+            is_protected: false,
             activity: 0.0,
         }
     }
@@ -41,6 +48,7 @@ impl NogoodInfo {
             lbd: 0,
             is_deleted: false,
             block_bumps: false,
+            is_protected: false,
             activity: 0.0,
         }
     }

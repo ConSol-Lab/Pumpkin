@@ -1,5 +1,6 @@
 use std::iter::Rev;
 use std::ops::Deref;
+use std::ops::DerefMut;
 use std::vec::Drain;
 
 use crate::pumpkin_assert_simple;
@@ -80,6 +81,12 @@ impl<T> Deref for Trail<T> {
 
     fn deref(&self) -> &Self::Target {
         &self.trail
+    }
+}
+
+impl<T> DerefMut for Trail<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.trail
     }
 }
 
