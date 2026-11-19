@@ -44,7 +44,7 @@ use crate::cumulative::util::update_bounds_task;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 
 /// An event storing the start and end of mandatory parts used for creating the time-table
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct Event<Var> {
     /// The time-point at which the [`Event`] took place
     time_stamp: i32,
@@ -71,6 +71,10 @@ pub struct TimeTableOverIntervalPropagator<Var> {
     parameters: CumulativeParameters<Var>,
     /// Stores structures which change during the search; used to store the bounds
     updatable_structures: UpdatableStructures<Var>,
+    /// Buffer for the events used to create the time-table; kept to avoid reallocations
+    events: Vec<Event<Var>>,
+    /// Buffer for the time-table; kept to avoid reallocations
+    time_table: OverIntervalTimeTableType<Var>,
 
     // TODO: Update with propagator constructor.
     constraint_tag: ConstraintTag,
@@ -97,6 +101,8 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
         TimeTableOverIntervalPropagator {
             parameters,
             updatable_structures,
+            events: Vec::new(),
+            time_table: Vec::new(),
             constraint_tag,
             inference_code: None,
         }
@@ -151,17 +157,19 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
             return propagator_conflict(conjunction!(), self.inference_code.as_ref().unwrap());
         }
 
-        let time_table = create_time_table_over_interval_from_scratch(
+        create_time_table_over_interval(
             context.domains(),
             &self.parameters,
             self.inference_code.as_ref().unwrap(),
+            &mut self.events,
+            &mut self.time_table,
         )?;
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
         propagate_based_on_timetable(
             &mut context,
             self.inference_code.as_ref().unwrap(),
-            time_table.iter(),
+            self.time_table.iter(),
             &self.parameters,
             &mut self.updatable_structures,
         )
@@ -232,30 +240,52 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 /// [`OverIntervalTimeTableType`] or the tasks responsible for the
 /// conflict in the form of an [`PropagatorConflict`].
 pub(crate) fn create_time_table_over_interval_from_scratch<Var: IntegerVariable + 'static>(
-    mut context: Domains,
+    context: Domains,
     parameters: &CumulativeParameters<Var>,
     inference_code: &InferenceCode,
 ) -> Result<OverIntervalTimeTableType<Var>, PropagatorConflict> {
+    let mut time_table = Vec::new();
+    create_time_table_over_interval(
+        context,
+        parameters,
+        inference_code,
+        &mut Vec::new(),
+        &mut time_table,
+    )?;
+    Ok(time_table)
+}
+
+/// Creates a time-table in the same way as [`create_time_table_over_interval_from_scratch`], but
+/// stores it in `time_table` and uses `events` as a buffer; this allows the allocations of both to
+/// be reused across calls.
+pub(crate) fn create_time_table_over_interval<Var: IntegerVariable + 'static>(
+    mut context: Domains,
+    parameters: &CumulativeParameters<Var>,
+    inference_code: &InferenceCode,
+    events: &mut Vec<Event<Var>>,
+    time_table: &mut OverIntervalTimeTableType<Var>,
+) -> Result<(), PropagatorConflict> {
     // First we create a list of all the events (i.e. start and ends of mandatory parts)
-    let events = create_events(context.reborrow(), parameters);
+    create_events(context.reborrow(), parameters, events);
 
     // Then we create a time-table using these events
-    create_time_table_from_events(events, context, inference_code, parameters)
+    create_time_table_from_events(events, context, inference_code, parameters, time_table)
 }
 
 /// Creates a list of all the events (for the starts and ends of mandatory parts) of all the
 /// tasks defined in `parameters`.
 ///
-/// The events are returned in chonological order, if a tie between time points occurs then this
-/// is resolved by placing the events which signify the ends of mandatory parts first (if the
-/// tie is between events of the same type then the tie-breaking is done on the id in
-/// non-decreasing order).
+/// The events are stored in `events` (which is cleared first) in chonological order, if a tie
+/// between time points occurs then this is resolved by placing the events which signify the ends of
+/// mandatory parts first (if the tie is between events of the same type then the tie-breaking is
+/// done on the id in non-decreasing order).
 fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains>(
     context: Context,
     parameters: &CumulativeParameters<Var>,
-) -> Vec<Event<Var>> {
-    // First we create a list of events with which we will create the time-table
-    let mut events: Vec<Event<Var>> = Vec::new();
+    events: &mut Vec<Event<Var>>,
+) {
+    // First we clear the list of events with which we will create the time-table
+    events.clear();
     // Then we go over every task
     for task in parameters.tasks.iter() {
         let upper_bound = context.upper_bound(&task.start_variable);
@@ -282,8 +312,11 @@ fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains>(
         }
     }
     // We will go over the events in chronological order (non-decreasing time_stamp);
-    // this allows us to build the time-table in a single pass
-    events.sort_by(|a, b| {
+    // this allows us to build the time-table in a single pass.
+    //
+    // The ordering is total, so the unstable sort (which does not allocate) gives the same result
+    // as a stable sort.
+    events.sort_unstable_by(|a, b| {
         match a.time_stamp.cmp(&b.time_stamp) {
             // If the time_stamps are equal then we first go through the ends of the mandatory
             // parts. This allows us to build smaller explanations by ensuring
@@ -303,19 +336,19 @@ fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains>(
             other_ordering => other_ordering,
         }
     });
-
-    events
 }
 
 /// Creates a time-table based on the provided `events` (which are assumed to be sorted
 /// chronologically, with tie-breaking performed in such a way that the ends of mandatory parts
-/// are before the starts of mandatory parts).
+/// are before the starts of mandatory parts). The time-table is stored in `time_table` (which is
+/// cleared first) and `events` is emptied.
 fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDomains>(
-    events: Vec<Event<Var>>,
+    events: &mut Vec<Event<Var>>,
     context: Context,
     inference_code: &InferenceCode,
     parameters: &CumulativeParameters<Var>,
-) -> Result<OverIntervalTimeTableType<Var>, PropagatorConflict> {
+    time_table: &mut OverIntervalTimeTableType<Var>,
+) -> Result<(), PropagatorConflict> {
     pumpkin_assert_extreme!(
         events.is_empty()
             || (0..events.len() - 1)
@@ -331,7 +364,7 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
         "Events were not ordered in such a way that the ends of mandatory parts occurred first"
     );
 
-    let mut time_table: OverIntervalTimeTableType<Var> = Default::default();
+    time_table.clear();
     // The tasks which are contributing to the current profile under consideration
     let mut current_profile_tasks: Vec<Rc<Task<Var>>> = Vec::new();
     // The cumulative resource usage of the tasks which are contributing to the current profile
@@ -343,7 +376,7 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
     let mut is_conflicting = false;
 
     // We go over all the events and create the time-table
-    for event in events {
+    for event in events.drain(..) {
         if start_of_interval == -1 {
             // A new profile needs to be started
             pumpkin_assert_moderate!(
@@ -437,7 +470,7 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
         }
     }
     pumpkin_assert_simple!(!is_conflicting);
-    Ok(time_table)
+    Ok(())
 }
 
 fn check_starting_new_profile_invariants<Var: IntegerVariable + 'static>(

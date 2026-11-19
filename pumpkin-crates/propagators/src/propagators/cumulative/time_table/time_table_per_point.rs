@@ -60,6 +60,11 @@ pub struct TimeTablePerPointPropagator<Var> {
     parameters: CumulativeParameters<Var>,
     /// Stores structures which change during the search; used to store the bounds
     updatable_structures: UpdatableStructures<Var>,
+    /// Buffer for the mandatory time-points used to create the time-table; kept to avoid
+    /// reallocations
+    mandatory_points: Vec<(i32, usize)>,
+    /// Buffer for the time-table; kept to avoid reallocations
+    time_table: Vec<ResourceProfile<Var>>,
 
     // TODO: Update with proapgator constructor.
     constraint_tag: ConstraintTag,
@@ -89,6 +94,8 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
         TimeTablePerPointPropagator {
             parameters,
             updatable_structures,
+            mandatory_points: Vec::new(),
+            time_table: Vec::new(),
             constraint_tag,
             inference_code: None,
         }
@@ -141,17 +148,19 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
             return propagator_conflict(conjunction!(), self.inference_code.as_ref().unwrap());
         }
 
-        let time_table = create_time_table_per_point_from_scratch(
+        create_time_table_per_point_with_buffers(
             context.domains(),
             self.inference_code.as_ref().unwrap(),
             &self.parameters,
+            &mut self.mandatory_points,
+            &mut self.time_table,
         )?;
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
         propagate_based_on_timetable(
             &mut context,
             self.inference_code.as_ref().unwrap(),
-            time_table.values(),
+            self.time_table.iter(),
             &self.parameters,
             &mut self.updatable_structures,
         )
@@ -268,6 +277,94 @@ pub(crate) fn create_time_table_per_point_from_scratch<
         "The TimeTablePerPointPropagator method should only create profiles where `start == end`"
     );
     Ok(time_table)
+}
+
+/// Creates the same time-table (and reports the same conflict) as
+/// [`create_time_table_per_point_from_scratch`], but stores it in `time_table` as a sorted list of
+/// [`ResourceProfile`]s and uses `mandatory_points` as a buffer; this allows the allocations of
+/// both to be reused across calls.
+pub(crate) fn create_time_table_per_point_with_buffers<
+    Var: IntegerVariable + 'static,
+    Context: ReadDomains,
+>(
+    context: Context,
+    inference_code: &InferenceCode,
+    parameters: &CumulativeParameters<Var>,
+    mandatory_points: &mut Vec<(i32, usize)>,
+    time_table: &mut Vec<ResourceProfile<Var>>,
+) -> Result<(), PropagatorConflict> {
+    mandatory_points.clear();
+    time_table.clear();
+
+    // First we go over all tasks and store (time-point, task index) for every time-point of their
+    // mandatory parts
+    for (task_index, task) in parameters.tasks.iter().enumerate() {
+        let upper_bound = context.upper_bound(&task.start_variable);
+        let lower_bound = context.lower_bound(&task.start_variable);
+
+        if upper_bound < lower_bound + task.processing_time {
+            mandatory_points.extend(
+                (upper_bound..(lower_bound + task.processing_time))
+                    .map(|time_point| (time_point, task_index)),
+            );
+        }
+    }
+
+    // We sort on time-point and then on task index; this ensures that the profiles are sorted and
+    // that the tasks of a profile are in the same order as in `parameters.tasks`
+    mandatory_points.sort_unstable();
+
+    // We report the conflict which `create_time_table_per_point_from_scratch` would find; i.e. the
+    // overflow caused by the task with the smallest index, at the earliest time-point at which it
+    // causes an overflow.
+    //
+    // It is stored as (task index, profile index, number of profile tasks, height) where the last
+    // two describe the profile at the moment that the overflow occurred.
+    let mut conflict: Option<(usize, usize, usize, i32)> = None;
+
+    for &(time_point, task_index) in mandatory_points.iter() {
+        if time_table
+            .last()
+            .is_none_or(|profile| profile.start != time_point)
+        {
+            time_table.push(ResourceProfile::default(time_point));
+        }
+        let profile_index = time_table.len() - 1;
+        let profile = &mut time_table[profile_index];
+
+        let task = &parameters.tasks[task_index];
+        profile.height += task.resource_usage;
+        profile.profile_tasks.push(Rc::clone(task));
+
+        if profile.height > parameters.capacity
+            && conflict
+                .is_none_or(|(conflicting_task_index, ..)| task_index < conflicting_task_index)
+        {
+            conflict = Some((
+                task_index,
+                profile_index,
+                profile.profile_tasks.len(),
+                profile.height,
+            ));
+        }
+    }
+
+    if let Some((_, profile_index, num_profile_tasks, height)) = conflict {
+        // We restore the profile to the moment that the overflow occurred
+        let conflict_profile = &mut time_table[profile_index];
+        conflict_profile.profile_tasks.truncate(num_profile_tasks);
+        conflict_profile.height = height;
+
+        return Err(create_conflict_explanation(
+            context,
+            inference_code,
+            conflict_profile,
+            parameters.options.explanation_type,
+            parameters.capacity,
+        ));
+    }
+
+    Ok(())
 }
 
 pub(crate) fn propagate_from_scratch_time_table_point<Var: IntegerVariable + 'static>(
