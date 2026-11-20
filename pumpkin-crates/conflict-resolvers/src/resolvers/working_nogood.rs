@@ -255,8 +255,9 @@ impl WorkingNogood {
         predicate_id_generator: &PredicateIdGenerator,
         mode: AnalysisMode,
         statistics: &mut CpipStatistics,
+        context: &mut ConflictAnalysisContext,
     ) -> impl Iterator<Item = Predicate> {
-        let num_removed = self.remove_final_predicates(predicate_id_generator, mode);
+        let num_removed = self.remove_final_predicates(predicate_id_generator, mode, context);
 
         pumpkin_assert_eq_simple!(self.num_current_checkpoint(), 0);
 
@@ -285,6 +286,7 @@ impl WorkingNogood {
         &mut self,
         predicate_id_generator: &PredicateIdGenerator,
         mode: AnalysisMode,
+        context: &mut ConflictAnalysisContext,
     ) -> usize {
         let num_removed = self.num_current_checkpoint();
 
@@ -300,6 +302,49 @@ impl WorkingNogood {
             !matches!(mode, AnalysisMode::AllDecision) || self.num_current_checkpoint() == 0,
             "All-decision analysis should stop when no predicates are left to be processed"
         );
+
+        // When learning CPIP nogoods, the predicates over the remaining variable are not
+        // guaranteed to be minimal; iterative minimisation does not replace predicates when the
+        // new predicate would be the next to be resolved upon (see `AnalysisMode::can_replace`),
+        // and this is not revisited when the analysis stops. Hence, we replace the predicates over
+        // the remaining variable with their minimal form.
+        //
+        // Note that the remaining predicates from the current checkpoint are not popped one by one;
+        // they are all replaced, and the internal structures are cleared by the caller.
+        if self.iterative_minimisation && mode.uses_cpip() {
+            pumpkin_assert_eq_simple!(
+                self.num_unique_variables_current_checkpoint(),
+                1,
+                "CPIP-based analysis stops with predicates over a single variable"
+            );
+            let (predicate_id, _) = self
+                .peek_max_current_checkpoint()
+                .expect("CPIP-based analysis stops with predicates from the current checkpoint");
+            let domain = predicate_id_generator
+                .get_predicate(predicate_id)
+                .get_domain();
+            self.to_process_heap.clear();
+            self.unique_variable_helper.clear();
+            self.processed_nogood_predicates
+                .retain(|predicate| predicate.get_domain() != domain);
+
+            let mut num_current_checkpoint = 0;
+            for predicate in self.iterative_minimiser.minimal_predicates(domain, context) {
+                if context.get_checkpoint_for_predicate(predicate) == Some(context.get_checkpoint())
+                {
+                    num_current_checkpoint += 1;
+                }
+                // Note that `add_asserting_predicate` cannot be used since the iterative minimiser
+                // is borrowed.
+                self.processed_nogood_predicates.push(predicate);
+            }
+            pumpkin_assert_simple!(
+                num_current_checkpoint > 0,
+                "Expected the minimal form of {domain} to contain a predicate from the current checkpoint"
+            );
+
+            return num_current_checkpoint;
+        }
 
         // We need to add all of the remaining predicates to the nogood; due to the way in
         // which the extended UIP is calculated, this could be multiple elements.
@@ -741,7 +786,12 @@ mod tests {
             }
 
             let learned_nogood = working_nogood
-                .drain_learned_nogood(&predicate_id_generator, mode, &mut Default::default())
+                .drain_learned_nogood(
+                    &predicate_id_generator,
+                    mode,
+                    &mut Default::default(),
+                    &mut context,
+                )
                 .collect::<HashSet<_>>();
             assert_eq!(
                 learned_nogood,
