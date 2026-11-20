@@ -201,7 +201,18 @@ impl PropagationMode {
         match self {
             PropagationMode::ExtendedNogoodPropagation => {
                 // We maintain the invariant that the first two predicates in a learned clause
-                // point to different variables; if this does not hold, then it is a "unit" nogood
+                // point to different variables; if this does not hold, then it is a "unit" nogood.
+                //
+                // Note that this is checked first since the predicates of a "unit" nogood are
+                // unassigned after backtracking to the root-level.
+                if nogood[0].get_domain() == nogood[1].get_domain() {
+                    pumpkin_assert_moderate!(
+                        context.get_checkpoint() == 0,
+                        "A unit nogood should have backtracked to the root-level"
+                    );
+                    return true;
+                }
+
                 pumpkin_assert_moderate!(
                     context.get_checkpoint_for_predicate(nogood[1]).unwrap()
                         >= nogood
@@ -214,13 +225,6 @@ impl PropagationMode {
                             .max()
                             .unwrap_or(0),
                 );
-                if nogood[0].get_domain() == nogood[1].get_domain() {
-                    pumpkin_assert_moderate!(
-                        context.get_checkpoint() == 0,
-                        "A unit nogood should have backtracked to the root-level"
-                    );
-                    return true;
-                }
             }
             PropagationMode::UnitPropagation => {}
         }

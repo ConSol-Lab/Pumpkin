@@ -135,3 +135,74 @@ impl LearnedNogood {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::Solver;
+    use crate::branching::Brancher;
+    use crate::branching::BrancherEvent;
+    use crate::branching::SelectionContext;
+    use crate::engine::ConflictResolverType;
+    use crate::engine::SatisfactionSolverOptions;
+    use crate::predicate;
+    use crate::predicates::Predicate;
+    use crate::proof::InferenceCode;
+    use crate::propagation::ReadDomains;
+
+    #[derive(Debug)]
+    struct DummyBrancher;
+
+    impl Brancher for DummyBrancher {
+        fn next_decision(&mut self, _: &mut SelectionContext) -> Option<Predicate> {
+            unreachable!()
+        }
+
+        fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+            unreachable!()
+        }
+    }
+
+    /// A CPIP nogood whose predicates are all over one variable (here `[x >= 3] /\ [x != 5]`)
+    /// leads to a backjump to the root, after which those predicates are unassigned. The nogood
+    /// should then be added as a permanent nogood and propagated at the root.
+    #[test]
+    fn cpip_nogood_over_a_single_variable_is_added_after_backjump_to_root() {
+        let mut solver = Solver::with_options(SatisfactionSolverOptions {
+            analysis_mode: ConflictResolverType::ExtendedCPIP,
+            ..Default::default()
+        });
+        let b = solver.new_bounded_integer(0, 1);
+        let x = solver.new_bounded_integer(0, 10);
+        let constraint_tag = solver.new_constraint_tag();
+        let _ = solver.propagate_to_fixpoint();
+        let mut brancher = DummyBrancher;
+        #[allow(deprecated, reason = "test")]
+        let mut context = solver.conflict_analysis_context(&mut brancher);
+
+        context.new_checkpoint();
+        let _ = context.post(predicate!(b == 1)).unwrap();
+        let _ = context.post(predicate!(x >= 3)).unwrap();
+        let _ = context.post(predicate!(x != 5)).unwrap();
+
+        // The nogood is derived by an inference (e.g., of a propagator), which is logged so that
+        // the deduction of the learned nogood can be checked.
+        context.log_inference(
+            InferenceCode::unknown_label(constraint_tag),
+            [predicate!(x >= 3), predicate!(x != 5)],
+            None,
+        );
+
+        let backjump_level =
+            context.process_learned_nogood(vec![predicate!(x >= 3), predicate!(x != 5)], 1, true);
+
+        assert_eq!(backjump_level, 0);
+        // The nogood states that x <= 2 or x == 5.
+        for value in [3, 4, 6, 7, 8, 9, 10] {
+            assert!(
+                !context.contains(&x, value),
+                "{value} should have been removed"
+            );
+        }
+        assert!(context.contains(&x, 5));
+    }
+}
