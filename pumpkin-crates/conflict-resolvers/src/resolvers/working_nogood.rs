@@ -44,6 +44,9 @@ pub(crate) struct WorkingNogood {
     /// The structure used for iterative minimisation.
     iterative_minimiser: IterativeMinimiser,
     iterative_minimisation_statistics: IterativeMinimisationStatistics,
+    /// The predicate which replaced other predicates in the nogood and still needs to be added
+    /// (see [`WorkingNogood::add_predicate_to_conflict_nogood`]).
+    replacing_predicate: Option<Predicate>,
 }
 
 create_statistics_struct!(IterativeMinimisationStatistics {
@@ -64,6 +67,7 @@ impl WorkingNogood {
             iterative_minimisation,
             iterative_minimiser: Default::default(),
             iterative_minimisation_statistics: Default::default(),
+            replacing_predicate: None,
         }
     }
 
@@ -187,8 +191,10 @@ impl WorkingNogood {
             .iter()
             .position(|predicate| *predicate == removed_predicate)
         {
-            // If we can find the position, then we remove it from the processed noogod predicates
-            let _ = self.processed_nogood_predicates.remove(position);
+            // If we can find the position, then we remove it from the processed noogod predicates;
+            // the order of these predicates is irrelevant, so we do not need to shift the elements
+            // after it.
+            let _ = self.processed_nogood_predicates.swap_remove(position);
 
             // If we are performing iterative minimisation, then we also remove it from the
             // iterative minimiser
@@ -408,6 +414,36 @@ impl WorkingNogood {
     /// If a `root_explanation_context` is provided, then root-level assignments are explained as
     /// well in the proof log.
     pub(crate) fn add_predicate_to_conflict_nogood(
+        &mut self,
+        predicate: Predicate,
+        mode: AnalysisMode,
+        context: &mut ConflictAnalysisContext,
+        predicate_id_generator: &mut PredicateIdGenerator,
+    ) {
+        // Adding a predicate can lead to it being replaced by a new predicate (e.g., `[x >= 5]` /\
+        // `[x != 5]` is replaced by `[x >= 6]`), which then needs to be added; this can again lead
+        // to a replacement (e.g., if `[x != 6]` is present), etc. To avoid a recursion depth
+        // proportional to the number of replacements, the new predicate is stored in
+        // `replacing_predicate` and added here.
+        let mut predicate = predicate;
+        loop {
+            self.add_single_predicate_to_conflict_nogood(
+                predicate,
+                mode,
+                context,
+                predicate_id_generator,
+            );
+
+            let Some(replacing_predicate) = self.replacing_predicate.take() else {
+                break;
+            };
+            predicate = replacing_predicate;
+        }
+    }
+
+    /// Adds the predicate to the current conflict nogood if it needs to be added; if it is replaced
+    /// by a new predicate, then this new predicate is stored in `replacing_predicate`.
+    fn add_single_predicate_to_conflict_nogood(
         &mut self,
         predicate: Predicate,
         mode: AnalysisMode,
@@ -647,7 +683,7 @@ impl WorkingNogood {
     /// upon when added.
     fn was_replaced(
         &mut self,
-        context: &mut ConflictAnalysisContext<'_>,
+        context: &ConflictAnalysisContext<'_>,
         element: Predicate,
         new_predicate: Predicate,
         predicate_id_generator: &mut PredicateIdGenerator,
@@ -665,13 +701,10 @@ impl WorkingNogood {
             // First, we remove `element`.
             self.remove_predicate(element, predicate_id_generator, mode);
 
-            // Then we add it to the current nogood.
-            self.add_predicate_to_conflict_nogood(
-                new_predicate,
-                mode,
-                context,
-                predicate_id_generator,
-            );
+            // Then we indicate that `new_predicate` should be added to the current nogood; this
+            // is done by `add_predicate_to_conflict_nogood` to avoid recursion.
+            pumpkin_assert_simple!(self.replacing_predicate.is_none());
+            self.replacing_predicate = Some(new_predicate);
 
             // And we return that `element` was removed.
             return true;
@@ -685,7 +718,7 @@ impl WorkingNogood {
     /// are from the previous checkpoint.
     fn replace_previous_level(
         &mut self,
-        context: &mut ConflictAnalysisContext<'_>,
+        context: &ConflictAnalysisContext<'_>,
         element: Predicate,
         new_predicate: Predicate,
         predicate_id_generator: &mut PredicateIdGenerator,
@@ -703,8 +736,10 @@ impl WorkingNogood {
         // We remove `element`.
         self.remove_predicate(element, predicate_id_generator, mode);
 
-        // Next, we add the `new_predicate` to the nogood.
-        self.add_predicate_to_conflict_nogood(new_predicate, mode, context, predicate_id_generator);
+        // Next, we indicate that `new_predicate` should be added to the nogood; this is done by
+        // `add_predicate_to_conflict_nogood` to avoid recursion.
+        pumpkin_assert_simple!(self.replacing_predicate.is_none());
+        self.replacing_predicate = Some(new_predicate);
     }
 }
 
@@ -846,5 +881,65 @@ mod tests {
                 "iterative minimisation: {iterative_minimisation}"
             );
         }
+    }
+
+    /// Merging a bound with a sequence of consecutive holes (`[x >= 1] /\ [x != 1]` becomes
+    /// `[x >= 2]`, which is merged with `[x != 2]`, and so on) should not use stack space
+    /// proportional to the number of holes.
+    ///
+    /// The test runs on a thread with the default main-thread stack size of 8 MB.
+    #[test]
+    fn merging_a_bound_with_many_consecutive_holes_does_not_overflow_the_stack() {
+        const NUM_HOLES: i32 = 50_000;
+
+        let handle = std::thread::Builder::new()
+            .stack_size(8 * 1024 * 1024)
+            .spawn(|| {
+                let mut solver = Solver::default();
+                let x = solver.new_bounded_integer(0, NUM_HOLES + 10);
+                let _ = solver.propagate_to_fixpoint();
+                let mut brancher = DummyBrancher;
+                #[allow(deprecated, reason = "test")]
+                let mut context = solver.conflict_analysis_context(&mut brancher);
+
+                context.new_checkpoint();
+                for value in 1..=NUM_HOLES {
+                    let _ = context.post(predicate!(x != value)).unwrap();
+                }
+                context.new_checkpoint();
+                let _ = context.post(predicate!(x >= 1)).unwrap();
+
+                let mode = AnalysisMode::CPIP;
+                let mut working_nogood = WorkingNogood::new(true);
+                let mut predicate_id_generator = PredicateIdGenerator::default();
+                for value in 1..=NUM_HOLES {
+                    working_nogood.add_predicate_to_conflict_nogood(
+                        predicate!(x != value),
+                        mode,
+                        &mut context,
+                        &mut predicate_id_generator,
+                    );
+                }
+                working_nogood.add_predicate_to_conflict_nogood(
+                    predicate!(x >= 1),
+                    mode,
+                    &mut context,
+                    &mut predicate_id_generator,
+                );
+
+                let learned_nogood = working_nogood
+                    .drain_learned_nogood(
+                        &predicate_id_generator,
+                        mode,
+                        &mut Default::default(),
+                        &mut context,
+                    )
+                    .collect::<HashSet<_>>();
+                (learned_nogood, predicate!(x >= NUM_HOLES + 1))
+            })
+            .expect("the thread can be created");
+
+        let (learned_nogood, expected) = handle.join().expect("the analysis does not panic");
+        assert_eq!(learned_nogood, HashSet::from_iter([expected]));
     }
 }
