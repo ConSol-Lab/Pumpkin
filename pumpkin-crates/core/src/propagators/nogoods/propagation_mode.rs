@@ -273,16 +273,25 @@ impl PropagationMode {
     ) -> bool {
         match self {
             PropagationMode::ExtendedNogoodPropagation => {
-                let potential_domain = notification_engine.get_predicate(nogood[0]).get_domain();
+                // The nogood can be propagating if all of the predicates which are not true are
+                // over a single variable (i.e., the propagated variable).
+                //
+                // Note that the propagated variable is not necessarily the variable of the
+                // predicate at position 0; when a predicate over the propagated variable becomes
+                // true, the watchers can be updated such that a predicate over another variable is
+                // placed at position 0.
+                let mut propagated_domain = None;
                 for predicate_id in nogood {
-                    let predicate = notification_engine.get_predicate(*predicate_id);
-                    if predicate.get_domain() == potential_domain {
+                    if notification_engine.evaluate_predicate_id(*predicate_id, assignments)
+                        == Some(true)
+                    {
                         continue;
                     }
 
-                    if notification_engine.evaluate_predicate_id(*predicate_id, assignments)
-                        != Some(true)
-                    {
+                    let domain = notification_engine
+                        .get_predicate(*predicate_id)
+                        .get_domain();
+                    if *propagated_domain.get_or_insert(domain) != domain {
                         return false;
                     }
                 }

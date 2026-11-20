@@ -2193,4 +2193,100 @@ mod tests {
 
         assert!(!state.contains(x4, 2));
     }
+
+    /// Under extended nogood propagation, a nogood which is the reason of an entry on the trail
+    /// should be reported as propagating, also when the watchers have moved a predicate of
+    /// another variable to position 0. Otherwise, the database clean-up removes a nogood which
+    /// is still a reason.
+    ///
+    /// Nogood: [x >= 3] /\ [x != 5] /\ [a == 1] /\ [b == 1], x in 0..10.
+    /// - Checkpoint 1: a == 1. Checkpoint 2: b == 1; the nogood removes 3, 4, 6, ..., 10 from x.
+    /// - Checkpoint 3: x >= 3 (so x == 5). The watchers are updated and [b == 1] moves to position
+    ///   0.
+    ///
+    /// The removals of checkpoint 2 are still on the trail with this nogood as their reason, so
+    /// the nogood must be reported as propagating.
+    #[test]
+    fn nogood_which_is_a_reason_is_reported_as_propagating_under_extended_propagation() {
+        let mut state = State::default();
+        let nogood_handle = state.add_propagator(NogoodPropagatorConstructor::new(
+            0,
+            LearningOptions::default(),
+            PropagationMode::ExtendedNogoodPropagation,
+            Priority::High,
+        ));
+        let a = state.new_interval_variable(0, 1, None);
+        let b = state.new_interval_variable(0, 1, None);
+        let x = state.new_interval_variable(0, 10, None);
+
+        let nogood = vec![
+            predicate!(x >= 3),
+            predicate!(x != 5),
+            predicate!(a == 1),
+            predicate!(b == 1),
+        ];
+        let constraint_tag = state.new_constraint_tag();
+        let inference_code = state.add_inference_checker(
+            constraint_tag,
+            NogoodLabel,
+            NogoodChecker {
+                nogood: nogood.clone().into(),
+            },
+        );
+        {
+            let (nogood_propagator, mut context) =
+                state.get_propagator_mut_with_context(nogood_handle);
+            nogood_propagator
+                .expect("the handle refers to the nogood propagator")
+                .add_nogood(nogood, inference_code, &mut context);
+        }
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.new_checkpoint();
+        let _ = state.post(predicate!(a == 1)).expect("in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.new_checkpoint();
+        let _ = state.post(predicate!(b == 1)).expect("in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        // The nogood has removed every value of x from 3 on, except 5.
+        assert!(!state.contains(x, 3) && !state.contains(x, 4) && !state.contains(x, 6));
+        assert!(state.contains(x, 5));
+        assert!(is_propagating(&mut state, nogood_handle));
+
+        state.new_checkpoint();
+        let _ = state.post(predicate!(x >= 3)).expect("in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        // The removals of checkpoint 2 are still on the trail and the nogood is their reason.
+        assert!(
+            is_propagating(&mut state, nogood_handle),
+            "the nogood is the reason of [x != 3], [x != 4], [x != 6], ... on the trail, \
+             but it is reported as not propagating"
+        );
+    }
+
+    fn is_propagating(
+        state: &mut State,
+        nogood_handle: crate::state::PropagatorHandle<NogoodPropagator>,
+    ) -> bool {
+        let (nogood_propagator, context) = state.get_propagator_mut_with_context(nogood_handle);
+        let nogood_propagator: &mut NogoodPropagator =
+            nogood_propagator.expect("the handle refers to the nogood propagator");
+        let id = nogood_propagator
+            .nogood_predicates
+            .nogoods_ids()
+            .next()
+            .expect("one nogood was added");
+        let stored = nogood_propagator.nogood_predicates.get_nogood(id).to_vec();
+        nogood_propagator.propagation_mode.is_nogood_propagating(
+            nogood_propagator.handle,
+            &stored,
+            context.assignments,
+            context.reason_store,
+            id,
+            context.notification_engine,
+        )
+    }
 }
