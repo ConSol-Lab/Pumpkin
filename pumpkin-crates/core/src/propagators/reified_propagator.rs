@@ -1,7 +1,7 @@
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::BoxedChecker;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 
 use crate::engine::PropagationStatusCP;
 use crate::engine::notifications::OpaqueDomainEvent;
@@ -71,7 +71,7 @@ where
 
         let mut wrapped_checkers = RuntimeCheckers::empty();
         for (inference_code, checker) in checkers.into_iter() {
-            let _ = wrapped_checkers.add_inference_checker(
+            let _ = wrapped_checkers.add_conflict_checker(
                 inference_code.tag(),
                 inference_code.label(),
                 ReifiedChecker {
@@ -265,7 +265,7 @@ pub struct ReifiedChecker<Atomic: AtomicConstraint, Var> {
     pub reification_literal: Var,
 }
 
-impl<Atomic: AtomicConstraint + Clone, Var: CheckerVariable<Atomic>> InferenceChecker<Atomic>
+impl<Atomic: AtomicConstraint + Clone, Var: CheckerVariable<Atomic>> ConflictChecker<Atomic>
     for ReifiedChecker<Atomic, Var>
 {
     fn check(

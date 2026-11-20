@@ -296,7 +296,7 @@ impl ConflictAnalysisContext<'_> {
         let constraint_tag = self.log_deduction(learned_nogood.predicates.iter().copied());
 
         let inference_code = if cfg!(feature = "check-propagations") {
-            self.state.add_inference_checker(
+            self.state.add_conflict_checker(
                 constraint_tag,
                 NogoodLabel,
                 NogoodChecker {

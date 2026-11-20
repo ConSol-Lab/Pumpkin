@@ -1,6 +1,6 @@
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::ConflictChecker;
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 
@@ -15,7 +15,7 @@ pub struct IntegerMultiplicationChecker<VA, VB, VC> {
     pub c: VC,
 }
 
-impl<VA, VB, VC, Atomic> InferenceChecker<Atomic> for IntegerMultiplicationChecker<VA, VB, VC>
+impl<VA, VB, VC, Atomic> ConflictChecker<Atomic> for IntegerMultiplicationChecker<VA, VB, VC>
 where
     Atomic: AtomicConstraint,
     VA: CheckerVariable<Atomic>,
