@@ -635,7 +635,7 @@ impl State {
     ///
     /// Once the [`State`] is conflicting, then the only operation that is defined is
     /// [`State::restore_to`]. All other operations and queries on the state are undetermined.
-    fn propagate(&mut self, propagator_id: PropagatorId) -> Result<(), Conflict> {
+    pub fn propagate(&mut self, propagator_id: PropagatorId) -> Result<(), Conflict> {
         self.statistics.num_propagators_called += 1;
 
         let num_trail_entries_before = self.assignments.num_trail_entries();

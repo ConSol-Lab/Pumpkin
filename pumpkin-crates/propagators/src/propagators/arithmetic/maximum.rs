@@ -354,4 +354,28 @@ mod tests {
         state.assert_bounds(*array.last().unwrap(), 45, 51);
         state.assert_bounds(rhs, 45, 51);
     }
+
+    #[test]
+    fn rule_3_propagates_due_to_rule_1_within_one_propagation() {
+        let mut state = State::default();
+
+        let array = (1..=5)
+            .map(|_| state.new_sparse_variable(vec![0, 9, 11], None))
+            .collect::<Box<_>>();
+
+        let rhs = state.new_interval_variable(0, 10, None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let prop = state.add_propagator(MaximumArgs {
+            array: array.clone(),
+            rhs,
+            constraint_tag,
+        });
+
+        state
+            .propagate(prop.propagator_id())
+            .expect("no empty domain");
+        state.assert_bounds(*array.last().unwrap(), 0, 9);
+        state.assert_bounds(rhs, 0, 9);
+    }
 }
