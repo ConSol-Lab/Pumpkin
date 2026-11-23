@@ -4,6 +4,7 @@ use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 use pumpkin_core::asserts::pumpkin_assert_simple;
+use pumpkin_core::constraints::ReifiablePropagatorConstructor;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
@@ -15,8 +16,10 @@ use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::ExplanationContext;
+use pumpkin_core::propagation::ImpliedBy;
 use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
+use pumpkin_core::propagation::NotReified;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
 use pumpkin_core::propagation::Priority;
@@ -25,28 +28,49 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::REIFICATION_LOCAL_ID;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::Reification;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::propagation::TrailedInteger;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
+use pumpkin_core::variables::Literal;
 
 declare_inference_label!(LinearBounds);
 
 /// The [`PropagatorConstructor`] for the [`LinearLessOrEqualPropagator`].
 #[derive(Clone, Debug)]
-pub struct LinearLessOrEqualPropagatorArgs<Var> {
+pub struct LinearLessOrEqualPropagatorArgs<Var, R = NotReified> {
     pub x: Box<[Var]>,
     pub c: i32,
     pub constraint_tag: ConstraintTag,
+    pub reification: R,
 }
 
-impl<Var> PropagatorConstructor for LinearLessOrEqualPropagatorArgs<Var>
+impl<Var> ReifiablePropagatorConstructor for LinearLessOrEqualPropagatorArgs<Var>
 where
     Var: IntegerVariable + 'static,
 {
-    type PropagatorImpl = LinearLessOrEqualPropagator<Var>;
+    type ImpliedBy = LinearLessOrEqualPropagatorArgs<Var, ImpliedBy>;
+
+    fn into_implied_by(self, reification_literal: Literal) -> Self::ImpliedBy {
+        LinearLessOrEqualPropagatorArgs {
+            x: self.x,
+            c: self.c,
+            constraint_tag: self.constraint_tag,
+            reification: ImpliedBy(reification_literal),
+        }
+    }
+}
+
+impl<Var, R> PropagatorConstructor for LinearLessOrEqualPropagatorArgs<Var, R>
+where
+    Var: IntegerVariable + 'static,
+    R: Reification,
+{
+    type PropagatorImpl = LinearLessOrEqualPropagator<Var, R>;
 
     fn create(
         self,
@@ -56,6 +80,7 @@ where
             x,
             c,
             constraint_tag,
+            reification,
         } = self;
 
         let mut lower_bound_left_hand_side = 0_i64;
@@ -85,19 +110,24 @@ where
             current_bounds: current_bounds.into(),
             inference_code,
             reason_buffer: Vec::default(),
+            reification,
         };
 
+        let mut registration = registration.build();
+        reification.register(&mut registration);
+
         PropagatorSpec {
-            registration: registration.build(),
-            checkers: checkers.build(),
+            registration,
+            checkers: checkers.build().reified(reification),
             propagator,
         }
     }
 }
 
-/// Propagator for the constraint `\sum x_i <= c`.
+/// Propagator for the constraint `\sum x_i <= c`, or `r -> \sum x_i <= c` if it is
+/// half-reified.
 #[derive(Clone, Debug)]
-pub struct LinearLessOrEqualPropagator<Var> {
+pub struct LinearLessOrEqualPropagator<Var, R = NotReified> {
     x: Box<[Var]>,
     c: i32,
 
@@ -109,9 +139,12 @@ pub struct LinearLessOrEqualPropagator<Var> {
     reason_buffer: Vec<Predicate>,
 
     inference_code: InferenceCode,
+
+    /// Whether the propagator is half-reified.
+    reification: R,
 }
 
-impl<Var> LinearLessOrEqualPropagator<Var>
+impl<Var, R> LinearLessOrEqualPropagator<Var, R>
 where
     Var: IntegerVariable,
 {
@@ -125,12 +158,7 @@ where
             inference_code: self.inference_code.clone(),
         }
     }
-}
 
-impl<Var: 'static> Propagator for LinearLessOrEqualPropagator<Var>
-where
-    Var: IntegerVariable,
-{
     fn detect_inconsistency(&self, domains: Domains) -> Option<PropagatorConflict> {
         if (self.c as i64) < domains.read_trailed_integer(self.lower_bound_left_hand_side) {
             Some(self.create_conflict(domains))
@@ -138,13 +166,22 @@ where
             None
         }
     }
+}
 
+impl<Var: 'static, R: Reification> Propagator for LinearLessOrEqualPropagator<Var, R>
+where
+    Var: IntegerVariable,
+{
     fn notify(
         &mut self,
         mut context: NotificationContext,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
+        if local_id == REIFICATION_LOCAL_ID {
+            return EnqueueDecision::Enqueue;
+        }
+
         let index = local_id.unpack() as usize;
         let x_i = &self.x[index];
 
@@ -162,7 +199,11 @@ where
         );
         context.write_trailed_integer(self.current_bounds[index], new_bound);
 
-        EnqueueDecision::Enqueue
+        self.reification.filter_enqueue_decision(
+            &mut context,
+            EnqueueDecision::Enqueue,
+            |domains| self.detect_inconsistency(domains),
+        )
     }
 
     fn priority(&self) -> Priority {
@@ -189,6 +230,7 @@ where
                     None
                 }
             }));
+        self.reification.add_to_explanation(&mut self.reason_buffer);
 
         LazyExplanation {
             predicates: self.reason_buffer.as_slice(),
@@ -197,6 +239,35 @@ where
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        if !self
+            .reification
+            .should_propagate(&mut context, |domains| self.detect_inconsistency(domains))?
+        {
+            return Ok(());
+        }
+
+        let reification = self.reification;
+        reification.add_to_conflict(self.propagate_enforced(context))
+    }
+
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+        if !self
+            .reification
+            .should_propagate(&mut context, |domains| self.detect_inconsistency(domains))?
+        {
+            return Ok(());
+        }
+
+        self.reification
+            .add_to_conflict(self.propagate_from_scratch_enforced(context))
+    }
+}
+
+impl<Var: 'static, R: Reification> LinearLessOrEqualPropagator<Var, R>
+where
+    Var: IntegerVariable,
+{
+    fn propagate_enforced(&self, mut context: PropagationContext) -> PropagationStatusCP {
         if let Some(conflict) = self.detect_inconsistency(context.domains()) {
             return Err(conflict.into());
         }
@@ -239,7 +310,10 @@ where
         Ok(())
     }
 
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+    fn propagate_from_scratch_enforced(
+        &self,
+        mut context: PropagationContext,
+    ) -> PropagationStatusCP {
         let lower_bound_left_hand_side = self
             .x
             .iter()
@@ -341,6 +415,8 @@ mod tests {
     use pumpkin_core::predicates::Predicate;
     use pumpkin_core::predicates::PropositionalConjunction;
     use pumpkin_core::propagation::CurrentNogood;
+    use pumpkin_core::propagation::NotReified;
+    use pumpkin_core::state::Conflict;
     use pumpkin_core::state::State;
 
     use super::*;
@@ -358,6 +434,7 @@ mod tests {
             x: [x, y].into(),
             c: 7,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
@@ -376,6 +453,7 @@ mod tests {
             x: [x, y].into(),
             c: 7,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
@@ -402,6 +480,7 @@ mod tests {
             x: [x, y].into(),
             c: i32::MAX,
             constraint_tag,
+            reification: NotReified,
         });
         let _ = state
             .propagate_to_fixed_point()
@@ -420,9 +499,121 @@ mod tests {
             x: [x, y].into(),
             c: i32::MIN,
             constraint_tag,
+            reification: NotReified,
         });
         state
             .propagate_to_fixed_point()
             .expect("Expected no error to be detected");
+    }
+
+    #[test]
+    fn reified_does_not_propagate_while_literal_is_unassigned() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(1, 5, None);
+        let y = state.new_interval_variable(0, 10, None);
+        let r = state.new_literal(None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
+            x: [x, y].into(),
+            c: 7,
+            constraint_tag,
+            reification: ImpliedBy(r),
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
+
+        state.assert_bounds(y, 0, 10);
+        assert_eq!(state.get_literal_value(r), None);
+    }
+
+    #[test]
+    fn reified_adds_literal_to_explanation() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(1, 5, None);
+        let y = state.new_interval_variable(0, 10, None);
+        let r = state.new_literal(None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
+            x: [x, y].into(),
+            c: 7,
+            constraint_tag,
+            reification: ImpliedBy(r),
+        });
+        let _ = state.post(r.get_true_predicate()).expect("no empty domain");
+        state.propagate_to_fixed_point().expect("no empty domains");
+
+        state.assert_bounds(y, 0, 6);
+
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![y <= 6],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
+        );
+        let reason: PropositionalConjunction = reason_buffer.into();
+
+        assert_eq!(
+            PropositionalConjunction::from(vec![predicate![x >= 1], r.get_true_predicate()]),
+            reason
+        );
+    }
+
+    #[test]
+    fn reified_propagates_literal_to_false_on_inconsistency() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(5, 5, None);
+        let y = state.new_interval_variable(3, 10, None);
+        let r = state.new_literal(None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
+            x: [x, y].into(),
+            c: 7,
+            constraint_tag,
+            reification: ImpliedBy(r),
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
+
+        assert_eq!(state.get_literal_value(r), Some(false));
+
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            r.get_false_predicate(),
+            &mut reason_buffer,
+            CurrentNogood::empty(),
+        );
+        let reason: PropositionalConjunction = reason_buffer.into();
+
+        assert_eq!(conjunction!([x >= 5] & [y >= 3]), reason);
+    }
+
+    #[test]
+    fn reified_adds_literal_to_conflict() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(5, 5, None);
+        let y = state.new_interval_variable(3, 10, None);
+        let r = state.new_literal(None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
+            x: [x, y].into(),
+            c: 7,
+            constraint_tag,
+            reification: ImpliedBy(r),
+        });
+        let _ = state.post(r.get_true_predicate()).expect("no empty domain");
+
+        match state.propagate_to_fixed_point() {
+            Err(Conflict::Propagator(conflict)) => assert_eq!(
+                PropositionalConjunction::from(vec![
+                    predicate![x >= 5],
+                    predicate![y >= 3],
+                    r.get_true_predicate()
+                ]),
+                conflict.conjunction
+            ),
+            other => panic!("expected a propagator conflict, got {other:?}"),
+        }
     }
 }

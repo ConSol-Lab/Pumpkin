@@ -7,6 +7,8 @@ use crate::proof::InferenceCode;
 use crate::proof::InferenceLabel;
 #[cfg(doc)]
 use crate::propagation::PropagatorConstructor;
+use crate::propagation::Reification;
+use crate::propagation::ReifiedChecker;
 
 /// Holds the runtime checkers that are added by a propagator.
 ///
@@ -51,6 +53,30 @@ impl RuntimeCheckers {
             .push((inference_code.clone(), BoxedChecker::new(Box::new(checker))));
 
         inference_code
+    }
+
+    /// Wrap all checkers such that they check the inferences of the half-reified propagator
+    /// `r -> C`, where `r` is the literal of the given [`Reification`].
+    ///
+    /// If the [`Reification`] has no literal, the checkers are returned unchanged.
+    pub fn reified(self, reification: impl Reification) -> RuntimeCheckers {
+        let Some(reification_literal) = reification.literal() else {
+            return self;
+        };
+
+        RuntimeCheckers {
+            inference_checkers: self
+                .inference_checkers
+                .into_iter()
+                .map(|(inference_code, inner)| {
+                    let checker = ReifiedChecker {
+                        inner,
+                        reification_literal,
+                    };
+                    (inference_code, BoxedChecker::new(Box::new(checker)))
+                })
+                .collect(),
+        }
     }
 }
 

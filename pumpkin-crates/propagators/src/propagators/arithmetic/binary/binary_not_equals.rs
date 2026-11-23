@@ -2,55 +2,85 @@ use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
 use pumpkin_core::conjunction;
+use pumpkin_core::constraints::ReifiablePropagatorConstructor;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
+use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::EventsToRegister;
+use pumpkin_core::propagation::ImpliedBy;
 use pumpkin_core::propagation::LocalId;
+use pumpkin_core::propagation::NotReified;
+use pumpkin_core::propagation::NotificationContext;
+use pumpkin_core::propagation::OpaqueDomainEvent;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::REIFICATION_LOCAL_ID;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::Reification;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
+use pumpkin_core::variables::Literal;
 
 declare_inference_label!(BinaryNotEquals);
 
 /// The [`PropagatorConstructor`] for the [`BinaryNotEqualsPropagator`].
 #[derive(Clone, Debug)]
-pub struct BinaryNotEqualsPropagatorArgs<AVar, BVar> {
+pub struct BinaryNotEqualsPropagatorArgs<AVar, BVar, R = NotReified> {
     pub a: AVar,
     pub b: BVar,
     pub constraint_tag: ConstraintTag,
+    pub reification: R,
 }
 
-impl<AVar, BVar> PropagatorConstructor for BinaryNotEqualsPropagatorArgs<AVar, BVar>
+impl<AVar, BVar> ReifiablePropagatorConstructor for BinaryNotEqualsPropagatorArgs<AVar, BVar>
 where
     AVar: IntegerVariable + 'static,
     BVar: IntegerVariable + 'static,
 {
-    type PropagatorImpl = BinaryNotEqualsPropagator<AVar, BVar>;
+    type ImpliedBy = BinaryNotEqualsPropagatorArgs<AVar, BVar, ImpliedBy>;
+
+    fn into_implied_by(self, reification_literal: Literal) -> Self::ImpliedBy {
+        BinaryNotEqualsPropagatorArgs {
+            a: self.a,
+            b: self.b,
+            constraint_tag: self.constraint_tag,
+            reification: ImpliedBy(reification_literal),
+        }
+    }
+}
+
+impl<AVar, BVar, R> PropagatorConstructor for BinaryNotEqualsPropagatorArgs<AVar, BVar, R>
+where
+    AVar: IntegerVariable + 'static,
+    BVar: IntegerVariable + 'static,
+    R: Reification,
+{
+    type PropagatorImpl = BinaryNotEqualsPropagator<AVar, BVar, R>;
 
     fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let BinaryNotEqualsPropagatorArgs {
             a,
             b,
             constraint_tag,
+            reification,
         } = self;
 
         // We only care about the case where one of the two is assigned
-        let registration = EventsToRegister::builder()
+        let mut registration = EventsToRegister::builder()
             .add(&a, DomainEvents::ASSIGN, LocalId::from(0))
             .add(&b, DomainEvents::ASSIGN, LocalId::from(1))
             .build();
+        reification.register(&mut registration);
 
         let mut checkers = RuntimeCheckers::builder();
         let inference_code = checkers.add_inference_checker(
@@ -67,29 +97,34 @@ where
             b,
 
             inference_code,
+            reification,
         };
 
         PropagatorSpec {
             registration,
-            checkers: checkers.build(),
+            checkers: checkers.build().reified(reification),
             propagator,
         }
     }
 }
 
-/// Propagator for the constraint `a != b`.
+/// Propagator for the constraint `a != b`, or `r -> a != b` if it is half-reified.
 #[derive(Clone, Debug)]
-pub struct BinaryNotEqualsPropagator<AVar, BVar> {
+pub struct BinaryNotEqualsPropagator<AVar, BVar, R = NotReified> {
     a: AVar,
     b: BVar,
 
     inference_code: InferenceCode,
+
+    /// Whether the propagator is half-reified.
+    reification: R,
 }
 
-impl<AVar, BVar> Propagator for BinaryNotEqualsPropagator<AVar, BVar>
+impl<AVar, BVar, R> BinaryNotEqualsPropagator<AVar, BVar, R>
 where
     AVar: IntegerVariable + 'static,
     BVar: IntegerVariable + 'static,
+    R: Reification,
 {
     fn detect_inconsistency(&self, domains: Domains) -> Option<PropagatorConflict> {
         // We first check whether they are both fixed
@@ -107,6 +142,30 @@ where
             None
         }
     }
+}
+
+impl<AVar, BVar, R> Propagator for BinaryNotEqualsPropagator<AVar, BVar, R>
+where
+    AVar: IntegerVariable + 'static,
+    BVar: IntegerVariable + 'static,
+    R: Reification,
+{
+    fn notify(
+        &mut self,
+        mut context: NotificationContext,
+        local_id: LocalId,
+        _event: OpaqueDomainEvent,
+    ) -> EnqueueDecision {
+        if local_id == REIFICATION_LOCAL_ID {
+            return EnqueueDecision::Enqueue;
+        }
+
+        self.reification.filter_enqueue_decision(
+            &mut context,
+            EnqueueDecision::Enqueue,
+            |domains| self.detect_inconsistency(domains),
+        )
+    }
 
     fn priority(&self) -> Priority {
         Priority::High
@@ -117,6 +176,37 @@ where
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        if !self
+            .reification
+            .should_propagate(&mut context, |domains| self.detect_inconsistency(domains))?
+        {
+            return Ok(());
+        }
+
+        let reification = self.reification;
+        reification.add_to_conflict(self.propagate_enforced(context))
+    }
+
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+        if !self
+            .reification
+            .should_propagate(&mut context, |domains| self.detect_inconsistency(domains))?
+        {
+            return Ok(());
+        }
+
+        self.reification
+            .add_to_conflict(self.propagate_from_scratch_enforced(context))
+    }
+}
+
+impl<AVar, BVar, R> BinaryNotEqualsPropagator<AVar, BVar, R>
+where
+    AVar: IntegerVariable + 'static,
+    BVar: IntegerVariable + 'static,
+    R: Reification,
+{
+    fn propagate_enforced(&self, mut context: PropagationContext) -> PropagationStatusCP {
         if let Some(conflict) = self.detect_inconsistency(context.domains()) {
             return Err(conflict.into());
         }
@@ -151,7 +241,10 @@ where
         Ok(())
     }
 
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+    fn propagate_from_scratch_enforced(
+        &self,
+        mut context: PropagationContext,
+    ) -> PropagationStatusCP {
         if let Some(conflict) = self.detect_inconsistency(context.domains()) {
             return Err(conflict.into());
         }
@@ -210,6 +303,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_core::propagation::NotReified;
     use pumpkin_core::state::State;
 
     use crate::StateExt;
@@ -226,6 +320,7 @@ mod tests {
             a,
             b,
             constraint_tag,
+            reification: NotReified,
         });
         let _ = state
             .propagate_to_fixed_point()
@@ -243,6 +338,7 @@ mod tests {
             a,
             b,
             constraint_tag,
+            reification: NotReified,
         });
         state
             .propagate_to_fixed_point()
@@ -267,6 +363,7 @@ mod tests {
                 a,
                 b,
                 constraint_tag,
+                reification: NotReified,
             })
             .expect("Expected no conflict to be detected");
 
@@ -293,6 +390,7 @@ mod tests {
             a,
             b,
             constraint_tag,
+            reification: NotReified,
         });
         state
             .propagate_to_fixed_point()

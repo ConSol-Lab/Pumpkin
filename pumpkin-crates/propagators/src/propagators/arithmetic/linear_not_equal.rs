@@ -9,6 +9,7 @@ use pumpkin_checking::VariableState;
 use pumpkin_core::asserts::pumpkin_assert_extreme;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
+use pumpkin_core::constraints::ReifiablePropagatorConstructor;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
@@ -19,7 +20,9 @@ use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::EventsToRegister;
+use pumpkin_core::propagation::ImpliedBy;
 use pumpkin_core::propagation::LocalId;
+use pumpkin_core::propagation::NotReified;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
 use pumpkin_core::propagation::Priority;
@@ -28,29 +31,51 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::REIFICATION_LOCAL_ID;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::Reification;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
+use pumpkin_core::variables::Literal;
 declare_inference_label!(LinearNotEquals);
 
 /// The [`PropagatorConstructor`] for the [`LinearNotEqualPropagator`].
 #[derive(Clone, Debug)]
-pub struct LinearNotEqualPropagatorArgs<Var> {
+pub struct LinearNotEqualPropagatorArgs<Var, R = NotReified> {
     /// The terms of the sum
     pub terms: Rc<[Var]>,
     /// The right-hand side of the sum
     pub rhs: i32,
     /// The constraint tag of the constraint this propagator is propagating for.
     pub constraint_tag: ConstraintTag,
+    /// Whether the propagator is half-reified.
+    pub reification: R,
 }
 
-impl<Var> PropagatorConstructor for LinearNotEqualPropagatorArgs<Var>
+impl<Var> ReifiablePropagatorConstructor for LinearNotEqualPropagatorArgs<Var>
 where
     Var: IntegerVariable + 'static,
 {
-    type PropagatorImpl = LinearNotEqualPropagator<Var>;
+    type ImpliedBy = LinearNotEqualPropagatorArgs<Var, ImpliedBy>;
+
+    fn into_implied_by(self, reification_literal: Literal) -> Self::ImpliedBy {
+        LinearNotEqualPropagatorArgs {
+            terms: self.terms,
+            rhs: self.rhs,
+            constraint_tag: self.constraint_tag,
+            reification: ImpliedBy(reification_literal),
+        }
+    }
+}
+
+impl<Var, R> PropagatorConstructor for LinearNotEqualPropagatorArgs<Var, R>
+where
+    Var: IntegerVariable + 'static,
+    R: Reification,
+{
+    type PropagatorImpl = LinearNotEqualPropagator<Var, R>;
 
     fn create(
         self,
@@ -60,6 +85,7 @@ where
             terms,
             rhs,
             constraint_tag,
+            reification,
         } = self;
 
         let mut registration = EventsToRegister::builder();
@@ -90,22 +116,27 @@ where
             unfixed_variable_has_been_updated: false,
             should_recalculate_lhs: false,
             inference_code,
+            reification,
         };
 
         propagator.recalculate_fixed_variables(context.domains());
 
+        let mut registration = registration.build();
+        reification.register(&mut registration);
+
         PropagatorSpec {
-            registration: registration.build(),
-            checkers: checkers.build(),
+            registration,
+            checkers: checkers.build().reified(reification),
             propagator,
         }
     }
 }
 
 /// Propagator for the constraint `\sum x_i != rhs`, where `x_i` are
-/// integer variables and `rhs` is an integer constant.
+/// integer variables and `rhs` is an integer constant. If it is half-reified, the constraint is
+/// `r -> \sum x_i != rhs`.
 #[derive(Clone, Debug)]
-pub struct LinearNotEqualPropagator<Var> {
+pub struct LinearNotEqualPropagator<Var, R = NotReified> {
     /// The terms of the sum
     terms: Rc<[Var]>,
     /// The right-hand side of the sum
@@ -125,11 +156,15 @@ pub struct LinearNotEqualPropagator<Var> {
     /// Indicates whether the value of [`LinearNotEqualPropagator::fixed_lhs`] is invalid and
     /// should be recalculated
     should_recalculate_lhs: bool,
+
+    /// Whether the propagator is half-reified.
+    reification: R,
 }
 
-impl<Var> Propagator for LinearNotEqualPropagator<Var>
+impl<Var, R> Propagator for LinearNotEqualPropagator<Var, R>
 where
     Var: IntegerVariable + 'static,
+    R: Reification,
 {
     fn priority(&self) -> Priority {
         Priority::High
@@ -141,10 +176,14 @@ where
 
     fn notify(
         &mut self,
-        context: NotificationContext,
+        mut context: NotificationContext,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
+        if local_id == REIFICATION_LOCAL_ID {
+            return EnqueueDecision::Enqueue;
+        }
+
         // If the updated term is fixed then we update the number of fixed variables
         self.number_of_fixed_terms += 1;
         // We update the value of the left-hand side with the value of the newly fixed variable
@@ -161,11 +200,14 @@ where
         // - Or the sum of the values of the left-hand side is inaccurate and we should recalculate
         let is_conflicting_or_outdated = self.number_of_fixed_terms == self.terms.len()
             && (self.should_recalculate_lhs || self.fixed_lhs == self.rhs);
-        if can_propagate || is_conflicting_or_outdated {
+        let decision = if can_propagate || is_conflicting_or_outdated {
             EnqueueDecision::Enqueue
         } else {
             EnqueueDecision::Skip
-        }
+        };
+
+        self.reification
+            .filter_enqueue_decision(&mut context, decision, |_| None)
     }
 
     fn notify_backtrack(&mut self, _context: Domains, local_id: LocalId, event: OpaqueDomainEvent) {
@@ -197,6 +239,30 @@ where
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        if !self.reification.should_propagate(&mut context, |_| None)? {
+            return Ok(());
+        }
+
+        let reification = self.reification;
+        reification.add_to_conflict(self.propagate_enforced(context))
+    }
+
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+        if !self.reification.should_propagate(&mut context, |_| None)? {
+            return Ok(());
+        }
+
+        self.reification
+            .add_to_conflict(self.propagate_from_scratch_enforced(context))
+    }
+}
+
+impl<Var, R> LinearNotEqualPropagator<Var, R>
+where
+    Var: IntegerVariable + 'static,
+    R: Reification,
+{
+    fn propagate_enforced(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         // If the left-hand side is out of date then we simply recalculate from scratch; we only do
         // this when we can propagate or check for a conflict
         if self.should_recalculate_lhs && self.number_of_fixed_terms >= self.terms.len() - 1 {
@@ -248,7 +314,10 @@ where
         Ok(())
     }
 
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+    fn propagate_from_scratch_enforced(
+        &self,
+        mut context: PropagationContext,
+    ) -> PropagationStatusCP {
         let num_fixed = self
             .terms
             .iter()
@@ -307,7 +376,7 @@ where
     }
 }
 
-impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
+impl<Var: IntegerVariable + 'static, R: Reification> LinearNotEqualPropagator<Var, R> {
     /// This method is used to calculate the fixed left-hand side of the equation and keep track of
     /// the number of fixed variables.
     ///
@@ -424,6 +493,7 @@ mod tests {
             terms: [x.scaled(1), y.scaled(-1)].into(),
             rhs: 0,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("non-empty domain");
 
@@ -444,6 +514,7 @@ mod tests {
             terms: [x.scaled(1), y.scaled(-1)].into(),
             rhs: 0,
             constraint_tag,
+            reification: NotReified,
         });
         let err = state.propagate_to_fixed_point().expect_err("empty domain");
 
@@ -467,6 +538,7 @@ mod tests {
             terms: [x, y].into(),
             rhs: 0,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("non-empty domain");
 
@@ -493,6 +565,7 @@ mod tests {
             terms: [x.scaled(1), y.scaled(-1)].into(),
             rhs: 0,
             constraint_tag,
+            reification: NotReified,
         });
 
         let _ = state.post(predicate![x != 0]).unwrap();

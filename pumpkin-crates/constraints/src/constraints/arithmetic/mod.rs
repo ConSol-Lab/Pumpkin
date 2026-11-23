@@ -5,6 +5,7 @@ pub use equality::*;
 pub use inequality::*;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::propagation::NotReified;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_propagators::arithmetic::AbsoluteValueArgs;
 use pumpkin_propagators::arithmetic::DivisionArgs;
@@ -33,6 +34,7 @@ pub fn times(
         b,
         c,
         constraint_tag,
+        reification: NotReified,
     }
 }
 
@@ -53,6 +55,7 @@ pub fn division(
         denominator,
         rhs,
         constraint_tag,
+        reification: NotReified,
     }
 }
 
@@ -66,6 +69,7 @@ pub fn absolute(
         signed,
         absolute,
         constraint_tag,
+        reification: NotReified,
     }
 }
 
@@ -79,6 +83,7 @@ pub fn maximum<Var: IntegerVariable + 'static>(
         array: array.into_iter().collect(),
         rhs,
         constraint_tag,
+        reification: NotReified,
     }
 }
 

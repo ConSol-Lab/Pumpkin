@@ -13,7 +13,6 @@ use crate::create_statistics_struct;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::PropagationStatusCP;
-use crate::engine::PropagatorConflict;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
@@ -182,17 +181,6 @@ pub trait Propagator: Downcast + DynClone {
     /// propagator implementations would set this value to some appropriate value.
     fn priority(&self) -> Priority {
         Priority::VeryLow
-    }
-
-    /// A function which returns [`Some`] with a [`PropagatorConflict`] when this propagator can
-    /// detect an inconsistency (and [`None`] otherwise).
-    ///
-    /// By implementing this function, if the propagator is reified, it can propagate the
-    /// reification literal based on the detected inconsistency. Yet, an implementation is not
-    /// needed for correctness, as [`Propagator::propagate`] should still check for
-    /// inconsistency as well.
-    fn detect_inconsistency(&self, _domains: Domains) -> Option<PropagatorConflict> {
-        None
     }
 
     /// Hook which is called when a propagated [`Predicate`] should be explained using a lazy

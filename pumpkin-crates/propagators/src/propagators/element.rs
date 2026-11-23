@@ -11,45 +11,75 @@ use pumpkin_checking::Domain;
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::Union;
 use pumpkin_core::conjunction;
+use pumpkin_core::constraints::ReifiablePropagatorConstructor;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::ExplanationContext;
+use pumpkin_core::propagation::ImpliedBy;
 use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
+use pumpkin_core::propagation::NotReified;
+use pumpkin_core::propagation::NotificationContext;
+use pumpkin_core::propagation::OpaqueDomainEvent;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::REIFICATION_LOCAL_ID;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::Reification;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
+use pumpkin_core::variables::Literal;
 use pumpkin_core::variables::Reason;
 
 #[derive(Clone, Debug)]
-pub struct ElementArgs<VX, VI, VE> {
+pub struct ElementArgs<VX, VI, VE, R = NotReified> {
     pub array: Box<[VX]>,
     pub index: VI,
     pub rhs: VE,
     pub constraint_tag: ConstraintTag,
+    pub reification: R,
 }
 
 declare_inference_label!(Element);
 
-impl<VX, VI, VE> PropagatorConstructor for ElementArgs<VX, VI, VE>
+impl<VX, VI, VE> ReifiablePropagatorConstructor for ElementArgs<VX, VI, VE>
 where
     VX: IntegerVariable + 'static,
     VI: IntegerVariable + 'static,
     VE: IntegerVariable + 'static,
 {
-    type PropagatorImpl = ElementPropagator<VX, VI, VE>;
+    type ImpliedBy = ElementArgs<VX, VI, VE, ImpliedBy>;
+
+    fn into_implied_by(self, reification_literal: Literal) -> Self::ImpliedBy {
+        ElementArgs {
+            array: self.array,
+            index: self.index,
+            rhs: self.rhs,
+            constraint_tag: self.constraint_tag,
+            reification: ImpliedBy(reification_literal),
+        }
+    }
+}
+
+impl<VX, VI, VE, R> PropagatorConstructor for ElementArgs<VX, VI, VE, R>
+where
+    VX: IntegerVariable + 'static,
+    VI: IntegerVariable + 'static,
+    VE: IntegerVariable + 'static,
+    R: Reification,
+{
+    type PropagatorImpl = ElementPropagator<VX, VI, VE, R>;
 
     fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let ElementArgs {
@@ -57,6 +87,7 @@ where
             index,
             rhs,
             constraint_tag,
+            reification,
         } = self;
 
         let mut registration = EventsToRegister::builder();
@@ -84,11 +115,15 @@ where
             rhs,
             inference_code,
             rhs_reason_buffer: vec![],
+            reification,
         };
 
+        let mut registration = registration.build();
+        reification.register(&mut registration);
+
         PropagatorSpec {
-            registration: registration.build(),
-            checkers: checkers.build(),
+            registration,
+            checkers: checkers.build().reified(reification),
             propagator,
         }
     }
@@ -105,21 +140,39 @@ const ID_X_OFFSET: u32 = 2;
 ///
 /// Note that this propagator is 0-indexed
 #[derive(Clone, Debug)]
-pub struct ElementPropagator<VX, VI, VE> {
+pub struct ElementPropagator<VX, VI, VE, R = NotReified> {
     array: Box<[VX]>,
     index: VI,
     rhs: VE,
     inference_code: InferenceCode,
 
     rhs_reason_buffer: Vec<Predicate>,
+
+    /// Whether the propagator is half-reified.
+    reification: R,
 }
 
-impl<VX, VI, VE> Propagator for ElementPropagator<VX, VI, VE>
+impl<VX, VI, VE, R> Propagator for ElementPropagator<VX, VI, VE, R>
 where
     VX: IntegerVariable + 'static,
     VI: IntegerVariable + 'static,
     VE: IntegerVariable + 'static,
+    R: Reification,
 {
+    fn notify(
+        &mut self,
+        mut context: NotificationContext,
+        local_id: LocalId,
+        _event: OpaqueDomainEvent,
+    ) -> EnqueueDecision {
+        if local_id == REIFICATION_LOCAL_ID {
+            return EnqueueDecision::Enqueue;
+        }
+
+        self.reification
+            .filter_enqueue_decision(&mut context, EnqueueDecision::Enqueue, |_| None)
+    }
+
     fn priority(&self) -> Priority {
         Priority::Low
     }
@@ -129,17 +182,12 @@ where
     }
 
     fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
-        self.propagate_index_bounds_within_array(&mut context)?;
-
-        self.propagate_rhs_bounds_based_on_array(&mut context)?;
-
-        self.propagate_index_based_on_domain_intersection_with_rhs(&mut context)?;
-
-        if let Some(idx) = context.fixed_value(&self.index) {
-            self.propagate_equality(&mut context, idx)?;
+        if !self.reification.should_propagate(&mut context, |_| None)? {
+            return Ok(());
         }
 
-        Ok(())
+        self.reification
+            .add_to_conflict(self.propagate_from_scratch_enforced(context))
     }
 
     fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> LazyExplanation<'_> {
@@ -161,6 +209,8 @@ where
                     predicate![self.index != idx as i32]
                 }
             }));
+        self.reification
+            .add_to_explanation(&mut self.rhs_reason_buffer);
 
         LazyExplanation {
             predicates: self.rhs_reason_buffer.as_slice(),
@@ -169,11 +219,37 @@ where
     }
 }
 
-impl<VX, VI, VE> ElementPropagator<VX, VI, VE>
+impl<VX, VI, VE, R> ElementPropagator<VX, VI, VE, R>
 where
     VX: IntegerVariable + 'static,
     VI: IntegerVariable + 'static,
     VE: IntegerVariable + 'static,
+    R: Reification,
+{
+    fn propagate_from_scratch_enforced(
+        &self,
+        mut context: PropagationContext,
+    ) -> PropagationStatusCP {
+        self.propagate_index_bounds_within_array(&mut context)?;
+
+        self.propagate_rhs_bounds_based_on_array(&mut context)?;
+
+        self.propagate_index_based_on_domain_intersection_with_rhs(&mut context)?;
+
+        if let Some(idx) = context.fixed_value(&self.index) {
+            self.propagate_equality(&mut context, idx)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl<VX, VI, VE, R> ElementPropagator<VX, VI, VE, R>
+where
+    VX: IntegerVariable + 'static,
+    VI: IntegerVariable + 'static,
+    VE: IntegerVariable + 'static,
+    R: Reification,
 {
     /// Propagate the bounds of `self.index` to be in the range `[0, self.array.len())`.
     fn propagate_index_bounds_within_array(
@@ -415,6 +491,7 @@ mod tests {
     use pumpkin_core::predicates::Predicate;
     use pumpkin_core::predicates::PropositionalConjunction;
     use pumpkin_core::propagation::CurrentNogood;
+    use pumpkin_core::propagation::NotReified;
     use pumpkin_core::state::State;
 
     use super::*;
@@ -438,6 +515,7 @@ mod tests {
             index,
             rhs,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
@@ -480,6 +558,7 @@ mod tests {
             index,
             rhs,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
@@ -528,6 +607,7 @@ mod tests {
             index,
             rhs,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
@@ -574,6 +654,7 @@ mod tests {
             index,
             rhs,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 

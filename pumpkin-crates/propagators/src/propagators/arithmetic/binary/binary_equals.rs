@@ -1,6 +1,4 @@
 #![allow(clippy::double_parens, reason = "originates inside the bitfield macro")]
-use std::slice;
-
 use bitfield_struct::bitfield;
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
@@ -8,6 +6,7 @@ use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::IntExt;
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::conjunction;
+use pumpkin_core::constraints::ReifiablePropagatorConstructor;
 use pumpkin_core::containers::HashSet;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
@@ -22,8 +21,10 @@ use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::EventsToRegister;
 use pumpkin_core::propagation::ExplanationContext;
+use pumpkin_core::propagation::ImpliedBy;
 use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
+use pumpkin_core::propagation::NotReified;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
 use pumpkin_core::propagation::Priority;
@@ -32,41 +33,65 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::REIFICATION_LOCAL_ID;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::Reification;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::EmptyDomainConflict;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
+use pumpkin_core::variables::Literal;
 
 declare_inference_label!(BinaryEquals);
 
 /// The [`PropagatorConstructor`] for the [`BinaryEqualsPropagator`].
 #[derive(Clone, Debug)]
-pub struct BinaryEqualsPropagatorArgs<AVar, BVar> {
+pub struct BinaryEqualsPropagatorArgs<AVar, BVar, R = NotReified> {
     pub a: AVar,
     pub b: BVar,
     pub constraint_tag: ConstraintTag,
+    pub reification: R,
 }
 
-impl<AVar, BVar> PropagatorConstructor for BinaryEqualsPropagatorArgs<AVar, BVar>
+impl<AVar, BVar> ReifiablePropagatorConstructor for BinaryEqualsPropagatorArgs<AVar, BVar>
 where
     AVar: IntegerVariable + 'static,
     BVar: IntegerVariable + 'static,
 {
-    type PropagatorImpl = BinaryEqualsPropagator<AVar, BVar>;
+    type ImpliedBy = BinaryEqualsPropagatorArgs<AVar, BVar, ImpliedBy>;
+
+    fn into_implied_by(self, reification_literal: Literal) -> Self::ImpliedBy {
+        BinaryEqualsPropagatorArgs {
+            a: self.a,
+            b: self.b,
+            constraint_tag: self.constraint_tag,
+            reification: ImpliedBy(reification_literal),
+        }
+    }
+}
+
+impl<AVar, BVar, R> PropagatorConstructor for BinaryEqualsPropagatorArgs<AVar, BVar, R>
+where
+    AVar: IntegerVariable + 'static,
+    BVar: IntegerVariable + 'static,
+    R: Reification,
+{
+    type PropagatorImpl = BinaryEqualsPropagator<AVar, BVar, R>;
 
     fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let BinaryEqualsPropagatorArgs {
             a,
             b,
             constraint_tag,
+            reification,
         } = self;
 
-        let registration = EventsToRegister::builder()
+        let mut registration = EventsToRegister::builder()
             .add(&a, DomainEvents::ANY_INT, LocalId::from(0))
             .add(&b, DomainEvents::ANY_INT, LocalId::from(1))
             .build();
+        reification.register(&mut registration);
 
         let mut checkers = RuntimeCheckers::builder();
         let inference_code = checkers.add_inference_checker(
@@ -89,20 +114,21 @@ where
 
             has_backtracked: false,
             first_propagation_loop: true,
-            reason: Predicate::trivially_false(),
+            reason_buffer: Vec::with_capacity(2),
+            reification,
         };
 
         PropagatorSpec {
             registration,
-            checkers: checkers.build(),
+            checkers: checkers.build().reified(reification),
             propagator,
         }
     }
 }
 
-/// Propagator for the constraint `a = b`.
+/// Propagator for the constraint `a = b`, or `r -> a = b` if it is half-reified.
 #[derive(Clone, Debug)]
-pub struct BinaryEqualsPropagator<AVar, BVar> {
+pub struct BinaryEqualsPropagator<AVar, BVar, R = NotReified> {
     a: AVar,
     b: BVar,
 
@@ -127,14 +153,17 @@ pub struct BinaryEqualsPropagator<AVar, BVar> {
     inference_code: InferenceCode,
 
     /// A re-usable buffer to store the explanations of propagations. This will always be a single
-    /// [`Predicate`].
+    /// [`Predicate`], plus the reification literal if the propagator is half-reified.
     ///
     /// This field is only written to in the `lazy_explanation` function, as that returns a slice
     /// which needs to be owned somewhere. Hence we put that ownership here.
-    reason: Predicate,
+    reason_buffer: Vec<Predicate>,
+
+    /// Whether the propagator is half-reified.
+    reification: R,
 }
 
-impl<AVar, BVar> BinaryEqualsPropagator<AVar, BVar>
+impl<AVar, BVar, R> BinaryEqualsPropagator<AVar, BVar, R>
 where
     AVar: PredicateConstructor<Value = i32>,
     BVar: PredicateConstructor<Value = i32>,
@@ -171,10 +200,11 @@ where
     }
 }
 
-impl<AVar, BVar> Propagator for BinaryEqualsPropagator<AVar, BVar>
+impl<AVar, BVar, R> BinaryEqualsPropagator<AVar, BVar, R>
 where
     AVar: IntegerVariable + 'static,
     BVar: IntegerVariable + 'static,
+    R: Reification,
 {
     fn detect_inconsistency(&self, domains: Domains) -> Option<PropagatorConflict> {
         let a_lb = domains.lower_bound(&self.a);
@@ -203,13 +233,24 @@ where
             None
         }
     }
+}
 
+impl<AVar, BVar, R> Propagator for BinaryEqualsPropagator<AVar, BVar, R>
+where
+    AVar: IntegerVariable + 'static,
+    BVar: IntegerVariable + 'static,
+    R: Reification,
+{
     fn notify(
         &mut self,
-        context: NotificationContext,
+        mut context: NotificationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
+        if local_id == REIFICATION_LOCAL_ID {
+            return EnqueueDecision::Enqueue;
+        }
+
         match local_id.unpack() {
             0 => {
                 if matches!(self.a.unpack_event(event), DomainEvent::Removal) {
@@ -230,7 +271,11 @@ where
             _ => panic!("Unexpected local id {local_id:?}"),
         }
 
-        EnqueueDecision::Enqueue
+        self.reification.filter_enqueue_decision(
+            &mut context,
+            EnqueueDecision::Enqueue,
+            |domains| self.detect_inconsistency(domains),
+        )
     }
 
     fn synchronise(&mut self, _context: NotificationContext<'_>) {
@@ -247,10 +292,68 @@ where
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        if !self
+            .reification
+            .should_propagate(&mut context, |domains| self.detect_inconsistency(domains))?
+        {
+            return Ok(());
+        }
+
+        let reification = self.reification;
+        reification.add_to_conflict(self.propagate_enforced(context))
+    }
+
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+        if !self
+            .reification
+            .should_propagate(&mut context, |domains| self.detect_inconsistency(domains))?
+        {
+            return Ok(());
+        }
+
+        self.reification
+            .add_to_conflict(self.propagate_from_scratch_enforced(context))
+    }
+
+    fn lazy_explanation(&mut self, code: u64, _: ExplanationContext) -> LazyExplanation<'_> {
+        use PredicateType::*;
+        use Variable::*;
+
+        let propagated = BinaryEqualsPropagation::from_bits(code);
+
+        let explanation = match (propagated.variable(), propagated.predicate_type()) {
+            (A, LowerBound) => predicate![self.b >= propagated.value()],
+            (A, UpperBound) => predicate![self.b <= propagated.value()],
+            (A, NotEqual) => predicate![self.b != propagated.value()],
+            (A, Equal) => predicate![self.b == propagated.value()],
+            (B, LowerBound) => predicate![self.a >= propagated.value()],
+            (B, UpperBound) => predicate![self.a <= propagated.value()],
+            (B, NotEqual) => predicate![self.a != propagated.value()],
+            (B, Equal) => predicate![self.a == propagated.value()],
+        };
+
+        self.reason_buffer.clear();
+        self.reason_buffer.push(explanation);
+        self.reification.add_to_explanation(&mut self.reason_buffer);
+
+        LazyExplanation {
+            predicates: self.reason_buffer.as_slice(),
+            inference_code: self.inference_code.clone(),
+        }
+    }
+}
+
+impl<AVar, BVar, R> BinaryEqualsPropagator<AVar, BVar, R>
+where
+    AVar: IntegerVariable + 'static,
+    BVar: IntegerVariable + 'static,
+    R: Reification,
+{
+    fn propagate_enforced(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         if self.first_propagation_loop {
             // If it is the first propagation loop then we do full propagation
             self.first_propagation_loop = false;
-            return self.propagate_from_scratch(context);
+            return self.propagate_from_scratch_enforced(context);
         }
 
         if let Some(conflict) = self.detect_inconsistency(context.domains()) {
@@ -315,32 +418,10 @@ where
         Ok(())
     }
 
-    fn lazy_explanation(&mut self, code: u64, _: ExplanationContext) -> LazyExplanation<'_> {
-        use PredicateType::*;
-        use Variable::*;
-
-        let propagated = BinaryEqualsPropagation::from_bits(code);
-
-        let explanation = match (propagated.variable(), propagated.predicate_type()) {
-            (A, LowerBound) => predicate![self.b >= propagated.value()],
-            (A, UpperBound) => predicate![self.b <= propagated.value()],
-            (A, NotEqual) => predicate![self.b != propagated.value()],
-            (A, Equal) => predicate![self.b == propagated.value()],
-            (B, LowerBound) => predicate![self.a >= propagated.value()],
-            (B, UpperBound) => predicate![self.a <= propagated.value()],
-            (B, NotEqual) => predicate![self.a != propagated.value()],
-            (B, Equal) => predicate![self.a == propagated.value()],
-        };
-
-        self.reason = explanation;
-
-        LazyExplanation {
-            predicates: slice::from_ref(&self.reason),
-            inference_code: self.inference_code.clone(),
-        }
-    }
-
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+    fn propagate_from_scratch_enforced(
+        &self,
+        mut context: PropagationContext,
+    ) -> PropagationStatusCP {
         let a_lb = context.lower_bound(&self.a);
         let a_ub = context.upper_bound(&self.a);
 
@@ -454,6 +535,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_core::propagation::NotReified;
     use pumpkin_core::state::State;
 
     use crate::StateExt;
@@ -470,6 +552,7 @@ mod tests {
             a,
             b,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("no conflict");
 
@@ -488,6 +571,7 @@ mod tests {
             a,
             b,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("no conflict");
 
@@ -516,6 +600,7 @@ mod tests {
                 a,
                 b,
                 constraint_tag,
+                reification: NotReified,
             })
             .expect("Expected result to be okay");
 
@@ -550,6 +635,7 @@ mod tests {
             a,
             b,
             constraint_tag,
+            reification: NotReified,
         });
         let _ = state
             .propagate_to_fixed_point()

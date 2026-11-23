@@ -182,8 +182,10 @@ impl<'a> PropagationContext<'a> {
         self.notification_engine.get_id(predicate)
     }
 
-    /// Apply a reification literal to all the explanations that are passed to the context.
-    pub(crate) fn with_reification(&mut self, reification_literal: Literal) {
+    /// Apply a reification literal to all the eager explanations that are passed to the context.
+    ///
+    /// Used by half-reified propagators, see [`Reification`](crate::propagation::Reification).
+    pub fn with_reification(&mut self, reification_literal: Literal) {
         pumpkin_assert_simple!(
             self.reification_literal.is_none(),
             "cannot reify an already reified propagation context"

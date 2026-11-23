@@ -21,6 +21,7 @@ use drcp_format::reader::ProofReader;
 use drcp_format::writer::ProofWriter;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::propagation::NotReified;
 use pumpkin_core::state::State;
 use pumpkin_core::variables::TransformableVariable;
 use pumpkin_propagators::arithmetic::BinaryNotEqualsPropagatorArgs;
@@ -148,6 +149,7 @@ fn post_constraint(
                 x: terms.into(),
                 c: *bound,
                 constraint_tag,
+                reification: NotReified,
             });
         }
 
@@ -179,12 +181,14 @@ fn post_constraint(
                 x: negated_terms,
                 c: -*bound,
                 constraint_tag,
+                reification: NotReified,
             });
 
             let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
                 x: terms.into(),
                 c: *bound,
                 constraint_tag,
+                reification: NotReified,
             });
         }
 
@@ -242,6 +246,7 @@ fn post_constraint(
                         a: variables[i],
                         b: variables[j],
                         constraint_tag,
+                        reification: NotReified,
                     });
                 }
             }

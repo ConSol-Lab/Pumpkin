@@ -748,6 +748,7 @@ mod tests {
     use pumpkin_checking::VariableState;
     use pumpkin_core::declare_inference_label;
     use pumpkin_core::propagation::EventsToRegister;
+    use pumpkin_core::propagation::NotReified;
     use pumpkin_core::propagation::PropagationContext;
     use pumpkin_core::propagation::Propagator;
     use pumpkin_core::propagation::PropagatorConstructor;
@@ -802,6 +803,7 @@ mod tests {
             a: x1,
             b: x2,
             constraint_tag,
+            reification: NotReified,
         });
 
         let scaffold = r#"

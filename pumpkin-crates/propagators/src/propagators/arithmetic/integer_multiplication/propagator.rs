@@ -1,12 +1,19 @@
 use pumpkin_checking::IntExt;
 use pumpkin_core::predicate;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::ExplanationContext;
 use pumpkin_core::propagation::LazyExplanation;
+use pumpkin_core::propagation::LocalId;
+use pumpkin_core::propagation::NotReified;
+use pumpkin_core::propagation::NotificationContext;
+use pumpkin_core::propagation::OpaqueDomainEvent;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
+use pumpkin_core::propagation::REIFICATION_LOCAL_ID;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::Reification;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -16,35 +23,59 @@ use super::shared::product_bound_ext;
 use crate::arithmetic::integer_multiplication::explainer::MultiplicationPropagation;
 use crate::arithmetic::integer_multiplication::explainer::PropagatedBound;
 
-/// A bounds(R)-consistent propagator for maintaining the constraint `a * b = c`.
+/// A bounds(R)-consistent propagator for maintaining the constraint `a * b = c`, or
+/// `r -> a * b = c` if it is half-reified.
 ///
 /// # Bibliography
 ///
 /// \[1\] C. Schulte & P. Stuckey, When Do Bounds and Domain Propagation Lead to the Same Search
 /// Space? ACM Transactions of Programming Languages. 2025.
 #[derive(Clone, Debug)]
-pub struct IntegerMultiplicationPropagator<VA, VB, VC> {
+pub struct IntegerMultiplicationPropagator<VA, VB, VC, R = NotReified> {
     a: VA,
     b: VB,
     c: VC,
     explainer: IntegerMultiplicationExplainer,
+    /// Whether the propagator is half-reified.
+    reification: R,
 }
 
-impl<VA, VB, VC> IntegerMultiplicationPropagator<VA, VB, VC> {
-    pub(super) fn new(a: VA, b: VB, c: VC, inference_code: InferenceCode) -> Self {
+impl<VA, VB, VC, R> IntegerMultiplicationPropagator<VA, VB, VC, R> {
+    pub(super) fn new(a: VA, b: VB, c: VC, inference_code: InferenceCode, reification: R) -> Self {
         let explainer = IntegerMultiplicationExplainer::new(inference_code);
 
-        IntegerMultiplicationPropagator { a, b, c, explainer }
+        IntegerMultiplicationPropagator {
+            a,
+            b,
+            c,
+            explainer,
+            reification,
+        }
     }
 }
 
-impl<VA: 'static, VB: 'static, VC: 'static> Propagator
-    for IntegerMultiplicationPropagator<VA, VB, VC>
+impl<VA: 'static, VB: 'static, VC: 'static, R> Propagator
+    for IntegerMultiplicationPropagator<VA, VB, VC, R>
 where
     VA: IntegerVariable,
     VB: IntegerVariable,
     VC: IntegerVariable,
+    R: Reification,
 {
+    fn notify(
+        &mut self,
+        mut context: NotificationContext,
+        local_id: LocalId,
+        _event: OpaqueDomainEvent,
+    ) -> EnqueueDecision {
+        if local_id == REIFICATION_LOCAL_ID {
+            return EnqueueDecision::Enqueue;
+        }
+
+        self.reification
+            .filter_enqueue_decision(&mut context, EnqueueDecision::Enqueue, |_| None)
+    }
+
     fn priority(&self) -> Priority {
         Priority::High
     }
@@ -53,14 +84,25 @@ where
         "IntTimes"
     }
 
-    fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
-        perform_propagation(context, &self.a, &self.b, &self.c)
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+        if !self.reification.should_propagate(&mut context, |_| None)? {
+            return Ok(());
+        }
+
+        self.reification
+            .add_to_conflict(perform_propagation(context, &self.a, &self.b, &self.c))
     }
 
     fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> LazyExplanation<'_> {
         let payload = MultiplicationPropagation::from_bits(code);
-        self.explainer
-            .explain(payload, context, &self.a, &self.b, &self.c)
+        self.explainer.explain(
+            payload,
+            context,
+            &self.a,
+            &self.b,
+            &self.c,
+            self.reification,
+        )
     }
 }
 
@@ -212,6 +254,7 @@ mod tests {
     use pumpkin_core::predicates::Predicate;
     use pumpkin_core::predicates::PropositionalConjunction;
     use pumpkin_core::propagation::CurrentNogood;
+    use pumpkin_core::propagation::NotReified;
     use pumpkin_core::state::State;
     use pumpkin_core::variables::TransformableVariable;
 
@@ -236,6 +279,7 @@ mod tests {
             b,
             c,
             constraint_tag,
+            reification: NotReified,
         });
     }
 
@@ -281,6 +325,7 @@ mod tests {
             b,
             c,
             constraint_tag,
+            reification: NotReified,
         });
 
         state.propagate_to_fixed_point().expect("no empty domains");

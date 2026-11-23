@@ -7,11 +7,14 @@ use std::rc::Rc;
 
 use pumpkin_core::asserts::pumpkin_assert_extreme;
 use pumpkin_core::conjunction;
+use pumpkin_core::constraints::ReifiablePropagatorConstructor;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::EnqueueDecision;
+use pumpkin_core::propagation::ImpliedBy;
 use pumpkin_core::propagation::LocalId;
+use pumpkin_core::propagation::NotReified;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
 use pumpkin_core::propagation::Priority;
@@ -20,12 +23,15 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::REIFICATION_LOCAL_ID;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::Reification;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::state::propagator_conflict;
 use pumpkin_core::variables::IntegerVariable;
+use pumpkin_core::variables::Literal;
 
 use super::TimeTable;
 use super::time_table_util::propagate_based_on_timetable;
@@ -55,7 +61,7 @@ use crate::propagators::cumulative::time_table::propagation_handler::create_conf
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug, Clone)]
-pub struct TimeTablePerPointPropagator<Var> {
+pub struct TimeTablePerPointPropagator<Var, R = NotReified> {
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
     /// Stores structures which change during the search; used to store the bounds
@@ -64,6 +70,9 @@ pub struct TimeTablePerPointPropagator<Var> {
     // TODO: Update with proapgator constructor.
     constraint_tag: ConstraintTag,
     inference_code: Option<InferenceCode>,
+
+    /// Whether the propagator is half-reified.
+    reification: R,
 }
 
 /// The type of the time-table used by propagators which use time-table reasoning per time-point;
@@ -91,11 +100,30 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
             updatable_structures,
             constraint_tag,
             inference_code: None,
+            reification: NotReified,
         }
     }
 }
 
-impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPointPropagator<Var> {
+impl<Var: IntegerVariable + 'static> ReifiablePropagatorConstructor
+    for TimeTablePerPointPropagator<Var>
+{
+    type ImpliedBy = TimeTablePerPointPropagator<Var, ImpliedBy>;
+
+    fn into_implied_by(self, reification_literal: Literal) -> Self::ImpliedBy {
+        TimeTablePerPointPropagator {
+            parameters: self.parameters,
+            updatable_structures: self.updatable_structures,
+            constraint_tag: self.constraint_tag,
+            inference_code: self.inference_code,
+            reification: ImpliedBy(reification_literal),
+        }
+    }
+}
+
+impl<Var: IntegerVariable + 'static, R: Reification> PropagatorConstructor
+    for TimeTablePerPointPropagator<Var, R>
+{
     type PropagatorImpl = Self;
 
     fn create(
@@ -104,7 +132,8 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPoint
     ) -> PropagatorSpec<Self::PropagatorImpl> {
         self.updatable_structures
             .initialise_bounds_and_remove_fixed(context.domains(), &self.parameters);
-        let registration = register_tasks(&self.parameters.tasks, context.reborrow(), false);
+        let mut registration = register_tasks(&self.parameters.tasks, context.reborrow(), false);
+        self.reification.register(&mut registration);
 
         let mut checkers = RuntimeCheckers::builder();
         self.inference_code = Some(
@@ -129,32 +158,31 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPoint
 
         PropagatorSpec {
             registration,
-            checkers: checkers.build(),
+            checkers: checkers.build().reified(self.reification),
             propagator: self,
         }
     }
 }
 
-impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<Var> {
+impl<Var: IntegerVariable + 'static, R: Reification> Propagator
+    for TimeTablePerPointPropagator<Var, R>
+{
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
-        if self.parameters.is_infeasible {
-            return propagator_conflict(conjunction!(), self.inference_code.as_ref().unwrap());
+        if !self.reification.should_propagate(&mut context, |_| None)? {
+            return Ok(());
         }
 
-        let time_table = create_time_table_per_point_from_scratch(
-            context.domains(),
-            self.inference_code.as_ref().unwrap(),
-            &self.parameters,
-        )?;
-        // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
-        // check whether an update can take place)
-        propagate_based_on_timetable(
-            &mut context,
-            self.inference_code.as_ref().unwrap(),
-            time_table.values(),
-            &self.parameters,
-            &mut self.updatable_structures,
-        )
+        let reification = self.reification;
+        reification.add_to_conflict(self.propagate_enforced(context))
+    }
+
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+        if !self.reification.should_propagate(&mut context, |_| None)? {
+            return Ok(());
+        }
+
+        self.reification
+            .add_to_conflict(self.propagate_from_scratch_enforced(context))
     }
 
     fn synchronise(&mut self, mut context: NotificationContext<'_>) {
@@ -168,6 +196,10 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
+        if local_id == REIFICATION_LOCAL_ID {
+            return EnqueueDecision::Enqueue;
+        }
+
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
 
         let result = should_enqueue(
@@ -192,7 +224,8 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
             self.updatable_structures.fix_task(&updated_task)
         }
 
-        result.decision
+        self.reification
+            .filter_enqueue_decision(&mut context, result.decision, |_| None)
     }
 
     fn priority(&self) -> Priority {
@@ -202,8 +235,34 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
     fn name(&self) -> &str {
         "CumulativeTimeTablePerPoint"
     }
+}
 
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+impl<Var: IntegerVariable + 'static, R: Reification> TimeTablePerPointPropagator<Var, R> {
+    fn propagate_enforced(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        if self.parameters.is_infeasible {
+            return propagator_conflict(conjunction!(), self.inference_code.as_ref().unwrap());
+        }
+
+        let time_table = create_time_table_per_point_from_scratch(
+            context.domains(),
+            self.inference_code.as_ref().unwrap(),
+            &self.parameters,
+        )?;
+        // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
+        // check whether an update can take place)
+        propagate_based_on_timetable(
+            &mut context,
+            self.inference_code.as_ref().unwrap(),
+            time_table.values(),
+            &self.parameters,
+            &mut self.updatable_structures,
+        )
+    }
+
+    fn propagate_from_scratch_enforced(
+        &self,
+        mut context: PropagationContext,
+    ) -> PropagationStatusCP {
         propagate_from_scratch_time_table_point(
             &mut context,
             self.inference_code.as_ref().unwrap(),

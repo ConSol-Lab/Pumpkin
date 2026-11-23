@@ -1,7 +1,6 @@
 //! Defines the main building blocks of constraints.
 use crate::Solver;
 use crate::propagation::PropagatorConstructor;
-use crate::propagators::reified_propagator::ReifiedPropagatorArgs;
 use crate::variables::Literal;
 
 mod constraint_poster;
@@ -27,19 +26,30 @@ pub trait Constraint {
     fn implied_by(self, solver: &mut Solver, reification_literal: Literal);
 }
 
+/// A [`PropagatorConstructor`] whose propagator can also propagate the half-reified constraint
+/// `r -> C`.
+///
+/// Half-reification is implemented by each propagator itself (see
+/// [`Reification`](crate::propagation::Reification)), so only propagators which support it
+/// implement this trait. Every such propagator is a [`Constraint`].
+pub trait ReifiablePropagatorConstructor: PropagatorConstructor {
+    /// The constructor of the half-reified propagator.
+    type ImpliedBy: PropagatorConstructor + 'static;
+
+    /// Turn this constructor into the constructor for `reification_literal -> C`.
+    fn into_implied_by(self, reification_literal: Literal) -> Self::ImpliedBy;
+}
+
 impl<ConcretePropagator> Constraint for ConcretePropagator
 where
-    ConcretePropagator: PropagatorConstructor + 'static,
+    ConcretePropagator: ReifiablePropagatorConstructor + 'static,
 {
     fn post(self, solver: &mut Solver) {
         let _ = solver.add_propagator(self);
     }
 
     fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
-        let _ = solver.add_propagator(ReifiedPropagatorArgs {
-            propagator: self,
-            reification_literal,
-        });
+        let _ = solver.add_propagator(self.into_implied_by(reification_literal));
     }
 }
 

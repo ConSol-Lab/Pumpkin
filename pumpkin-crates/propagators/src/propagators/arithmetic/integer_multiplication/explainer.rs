@@ -8,6 +8,7 @@ use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::ExplanationContext;
 use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::Reification;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::shared::compute_quotient_bound_ext;
@@ -42,6 +43,7 @@ impl IntegerMultiplicationExplainer {
         a: &VA,
         b: &VB,
         c: &VC,
+        reification: impl Reification,
     ) -> LazyExplanation<'_> {
         let bound = payload.bound();
 
@@ -91,6 +93,8 @@ impl IntegerMultiplicationExplainer {
                 compute_quotient_bound_ext,
             ),
         }
+
+        reification.add_to_explanation(&mut self.reason_buffer);
 
         LazyExplanation {
             predicates: self.reason_buffer.as_slice(),

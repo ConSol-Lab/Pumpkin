@@ -3,13 +3,12 @@
 //! Every test is written once as a function which is generic over the propagator under test; the
 //! [`time_table_tests`] and [`synchronisation_tests`] macros instantiate them for each propagator.
 use pumpkin_core::conjunction;
-use pumpkin_core::options::ReifiedPropagatorArgs;
+use pumpkin_core::constraints::ReifiablePropagatorConstructor;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::propagation::CurrentNogood;
-use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::State;
 use pumpkin_core::variables::DomainId;
@@ -32,7 +31,7 @@ enum TimeTableStrategy {
 }
 
 /// A time-table propagator which can be tested by the shared test suite.
-trait TimeTableTestCase: PropagatorConstructor<PropagatorImpl: 'static> + Sized {
+trait TimeTableTestCase: ReifiablePropagatorConstructor<PropagatorImpl: 'static> + Sized {
     const STRATEGY: TimeTableStrategy;
 
     fn construct(
@@ -218,10 +217,7 @@ fn propagator_propagates_after_assignment<P: TimeTableTestCase>() {
 
 /// Regression test: the incremental propagators would lose updates which were not yet processed
 /// (because the reification literal was not true) when backtracking with an empty time-table.
-fn reified_propagator_propagates_after_backtracking<P: TimeTableTestCase>()
-where
-    P::PropagatorImpl: Clone,
-{
+fn reified_propagator_propagates_after_backtracking<P: TimeTableTestCase>() {
     let mut state = State::default();
     let s1 = state.new_interval_variable(0, 10, None);
     let s2 = state.new_interval_variable(0, 9, None);
@@ -240,10 +236,10 @@ where
         },
     ];
     let constraint_tag = state.new_constraint_tag();
-    let _ = state.add_propagator(ReifiedPropagatorArgs {
-        propagator: P::construct(&tasks, 1, Default::default(), constraint_tag),
-        reification_literal,
-    });
+    let _ = state.add_propagator(
+        P::construct(&tasks, 1, Default::default(), constraint_tag)
+            .into_implied_by(reification_literal),
+    );
     state.propagate_to_fixed_point().expect("No conflict");
 
     // Create the (empty) time-table by propagating while the reification literal is true

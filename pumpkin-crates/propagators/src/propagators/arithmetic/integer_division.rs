@@ -4,31 +4,41 @@ use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::IntExt;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conjunction;
+use pumpkin_core::constraints::ReifiablePropagatorConstructor;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::EventsToRegister;
+use pumpkin_core::propagation::ImpliedBy;
 use pumpkin_core::propagation::LocalId;
+use pumpkin_core::propagation::NotReified;
+use pumpkin_core::propagation::NotificationContext;
+use pumpkin_core::propagation::OpaqueDomainEvent;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::REIFICATION_LOCAL_ID;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::Reification;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
+use pumpkin_core::variables::Literal;
 
 /// The [`PropagatorConstructor`] for the [`DivisionPropagator`].
 #[derive(Clone, Debug)]
-pub struct DivisionArgs<VA, VB, VC> {
+pub struct DivisionArgs<VA, VB, VC, R = NotReified> {
     pub numerator: VA,
     pub denominator: VB,
     pub rhs: VC,
     pub constraint_tag: ConstraintTag,
+    pub reification: R,
 }
 
 const ID_NUMERATOR: LocalId = LocalId::from(0);
@@ -37,13 +47,33 @@ const ID_RHS: LocalId = LocalId::from(2);
 
 declare_inference_label!(Division);
 
-impl<VA, VB, VC> PropagatorConstructor for DivisionArgs<VA, VB, VC>
+impl<VA, VB, VC> ReifiablePropagatorConstructor for DivisionArgs<VA, VB, VC>
 where
     VA: IntegerVariable + 'static,
     VB: IntegerVariable + 'static,
     VC: IntegerVariable + 'static,
 {
-    type PropagatorImpl = DivisionPropagator<VA, VB, VC>;
+    type ImpliedBy = DivisionArgs<VA, VB, VC, ImpliedBy>;
+
+    fn into_implied_by(self, reification_literal: Literal) -> Self::ImpliedBy {
+        DivisionArgs {
+            numerator: self.numerator,
+            denominator: self.denominator,
+            rhs: self.rhs,
+            constraint_tag: self.constraint_tag,
+            reification: ImpliedBy(reification_literal),
+        }
+    }
+}
+
+impl<VA, VB, VC, R> PropagatorConstructor for DivisionArgs<VA, VB, VC, R>
+where
+    VA: IntegerVariable + 'static,
+    VB: IntegerVariable + 'static,
+    VC: IntegerVariable + 'static,
+    R: Reification,
+{
+    type PropagatorImpl = DivisionPropagator<VA, VB, VC, R>;
 
     fn create(self, context: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let DivisionArgs {
@@ -51,6 +81,7 @@ where
             denominator,
             rhs,
             constraint_tag,
+            reification,
         } = self;
 
         pumpkin_assert_simple!(
@@ -58,11 +89,12 @@ where
             "Denominator cannot contain 0"
         );
 
-        let registration = EventsToRegister::builder()
+        let mut registration = EventsToRegister::builder()
             .add(&numerator, DomainEvents::BOUNDS, ID_NUMERATOR)
             .add(&denominator, DomainEvents::BOUNDS, ID_DENOMINATOR)
             .add(&rhs, DomainEvents::BOUNDS, ID_RHS)
             .build();
+        reification.register(&mut registration);
 
         let mut checkers = RuntimeCheckers::builder();
         let inference_code = checkers.add_inference_checker(
@@ -80,11 +112,12 @@ where
             denominator,
             rhs,
             inference_code,
+            reification,
         };
 
         PropagatorSpec {
             registration,
-            checkers: checkers.build(),
+            checkers: checkers.build().reified(reification),
             propagator,
         }
     }
@@ -97,19 +130,37 @@ where
 ///
 /// The implementation is ported from [OR-tools](https://github.com/google/or-tools/blob/870edf6f7bff6b8ff0d267d936be7e331c5b8c2d/ortools/sat/integer_expr.cc#L1209C1-L1209C19).
 #[derive(Clone, Debug)]
-pub struct DivisionPropagator<VA, VB, VC> {
+pub struct DivisionPropagator<VA, VB, VC, R = NotReified> {
     numerator: VA,
     denominator: VB,
     rhs: VC,
     inference_code: InferenceCode,
+
+    /// Whether the propagator is half-reified.
+    reification: R,
 }
 
-impl<VA: 'static, VB: 'static, VC: 'static> Propagator for DivisionPropagator<VA, VB, VC>
+impl<VA: 'static, VB: 'static, VC: 'static, R> Propagator for DivisionPropagator<VA, VB, VC, R>
 where
     VA: IntegerVariable,
     VB: IntegerVariable,
     VC: IntegerVariable,
+    R: Reification,
 {
+    fn notify(
+        &mut self,
+        mut context: NotificationContext,
+        local_id: LocalId,
+        _event: OpaqueDomainEvent,
+    ) -> EnqueueDecision {
+        if local_id == REIFICATION_LOCAL_ID {
+            return EnqueueDecision::Enqueue;
+        }
+
+        self.reification
+            .filter_enqueue_decision(&mut context, EnqueueDecision::Enqueue, |_| None)
+    }
+
     fn priority(&self) -> Priority {
         Priority::High
     }
@@ -118,7 +169,24 @@ where
         "Division"
     }
 
-    fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+        if !self.reification.should_propagate(&mut context, |_| None)? {
+            return Ok(());
+        }
+
+        self.reification
+            .add_to_conflict(self.propagate_from_scratch_enforced(context))
+    }
+}
+
+impl<VA: 'static, VB: 'static, VC: 'static, R> DivisionPropagator<VA, VB, VC, R>
+where
+    VA: IntegerVariable,
+    VB: IntegerVariable,
+    VC: IntegerVariable,
+    R: Reification,
+{
+    fn propagate_from_scratch_enforced(&self, context: PropagationContext) -> PropagationStatusCP {
         perform_propagation(
             context,
             &self.numerator,
@@ -492,6 +560,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_core::propagation::NotReified;
     use pumpkin_core::state::State;
 
     use super::*;
@@ -509,6 +578,7 @@ mod tests {
             denominator,
             rhs,
             constraint_tag,
+            reification: NotReified,
         });
 
         let _ = state.propagate_to_fixed_point().unwrap_err();

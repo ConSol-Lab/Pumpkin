@@ -6,12 +6,15 @@ use std::rc::Rc;
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::asserts::pumpkin_assert_extreme;
 use pumpkin_core::conjunction;
+use pumpkin_core::constraints::ReifiablePropagatorConstructor;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
+use pumpkin_core::propagation::ImpliedBy;
 use pumpkin_core::propagation::LocalId;
+use pumpkin_core::propagation::NotReified;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
 use pumpkin_core::propagation::Priority;
@@ -20,10 +23,13 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::REIFICATION_LOCAL_ID;
+use pumpkin_core::propagation::Reification;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::propagator_conflict;
 use pumpkin_core::variables::IntegerVariable;
+use pumpkin_core::variables::Literal;
 
 use crate::cumulative::ArgTask;
 use crate::cumulative::CumulativeParameters;
@@ -75,7 +81,7 @@ use crate::propagators::cumulative::time_table::time_table_util::should_enqueue;
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug, Clone)]
 
-pub struct TimeTablePerPointIncrementalPropagator<Var, const SYNCHRONISE: bool> {
+pub struct TimeTablePerPointIncrementalPropagator<Var, const SYNCHRONISE: bool, R = NotReified> {
     /// The key `t` (representing a time-point) holds the mandatory resource consumption of
     /// [`Task`]s at that time (stored in a [`ResourceProfile`]); the [`ResourceProfile`]s are
     /// sorted based on start time and they are assumed to be non-overlapping
@@ -101,10 +107,32 @@ pub struct TimeTablePerPointIncrementalPropagator<Var, const SYNCHRONISE: bool> 
     // of work in this module and I don't know enough about it to not break it.
     constraint_tag: ConstraintTag,
     inference_code: Option<InferenceCode>,
+
+    /// Whether the propagator is half-reified.
+    reification: R,
 }
 
-impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> PropagatorConstructor
+impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> ReifiablePropagatorConstructor
     for TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE>
+{
+    type ImpliedBy = TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE, ImpliedBy>;
+
+    fn into_implied_by(self, reification_literal: Literal) -> Self::ImpliedBy {
+        TimeTablePerPointIncrementalPropagator {
+            time_table: self.time_table,
+            parameters: self.parameters,
+            updatable_structures: self.updatable_structures,
+            found_previous_conflict: self.found_previous_conflict,
+            is_time_table_outdated: self.is_time_table_outdated,
+            constraint_tag: self.constraint_tag,
+            inference_code: self.inference_code,
+            reification: ImpliedBy(reification_literal),
+        }
+    }
+}
+
+impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool, R: Reification>
+    PropagatorConstructor for TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE, R>
 {
     type PropagatorImpl = Self;
 
@@ -112,7 +140,8 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         mut self,
         mut context: PropagatorConstructorContext,
     ) -> PropagatorSpec<Self::PropagatorImpl> {
-        let registration = register_tasks(&self.parameters.tasks, context.reborrow(), true);
+        let mut registration = register_tasks(&self.parameters.tasks, context.reborrow(), true);
+        self.reification.register(&mut registration);
         self.updatable_structures
             .reset_all_bounds_and_remove_fixed(context.domains(), &self.parameters);
 
@@ -142,7 +171,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 
         PropagatorSpec {
             registration,
-            checkers: checkers.build(),
+            checkers: checkers.build().reified(self.reification),
             propagator: self,
         }
     }
@@ -168,9 +197,14 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
             is_time_table_outdated: false,
             constraint_tag,
             inference_code: None,
+            reification: NotReified,
         }
     }
+}
 
+impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool, R: Reification>
+    TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE, R>
+{
     /// Adds the added parts in the provided [`MandatoryPartAdjustments`] to the time-table; note
     /// that all of the adjustments are applied even if a conflict is found.
     ///
@@ -419,44 +453,25 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
     }
 }
 
-impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
-    for TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE>
+impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool, R: Reification> Propagator
+    for TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE, R>
 {
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
-        pumpkin_assert_advanced!(
-            check_bounds_equal_at_propagation(
-                context.domains(),
-                &self.parameters.tasks,
-                self.updatable_structures.get_stored_bounds(),
-            ),
-            "Bound were not equal when propagating"
-        );
-
-        if self.parameters.is_infeasible {
-            return propagator_conflict(conjunction!(), self.inference_code.as_ref().unwrap());
+        if !self.reification.should_propagate(&mut context, |_| None)? {
+            return Ok(());
         }
 
-        // We update the time-table based on the stored updates
-        self.update_time_table(&mut context)?;
+        let reification = self.reification;
+        reification.add_to_conflict(self.propagate_enforced(context))
+    }
 
-        pumpkin_assert_extreme!(debug::time_tables_are_the_same_point::<Var, SYNCHRONISE>(
-            context.domains(),
-            self.inference_code.as_ref().unwrap(),
-            &self.time_table,
-            &self.parameters
-        ));
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+        if !self.reification.should_propagate(&mut context, |_| None)? {
+            return Ok(());
+        }
 
-        // We pass the entirety of the table to check due to the fact that the propagation of the
-        // current profile could lead to the propagation across multiple profiles
-        // For example, if we have updated 1 ResourceProfile which caused a propagation then this
-        // could cause another propagation by a profile which has not been updated
-        propagate_based_on_timetable(
-            &mut context,
-            self.inference_code.as_ref().unwrap(),
-            self.time_table.values(),
-            &self.parameters,
-            &mut self.updatable_structures,
-        )
+        self.reification
+            .add_to_conflict(self.propagate_from_scratch_enforced(context))
     }
 
     fn notify(
@@ -465,6 +480,10 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
+        if local_id == REIFICATION_LOCAL_ID {
+            return EnqueueDecision::Enqueue;
+        }
+
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
         // Note that we do not take into account the fact that the time-table could be outdated
         // here; the time-table can only become outdated due to backtracking which means that if the
@@ -497,7 +516,8 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
             self.updatable_structures.fix_task(&updated_task);
         }
 
-        result.decision
+        self.reification
+            .filter_enqueue_decision(&mut context, result.decision, |_| None)
     }
 
     fn notify_backtrack(
@@ -557,8 +577,52 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
     fn name(&self) -> &str {
         "CumulativeTimeTablePerPointIncremental"
     }
+}
 
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool, R: Reification>
+    TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE, R>
+{
+    fn propagate_enforced(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        pumpkin_assert_advanced!(
+            check_bounds_equal_at_propagation(
+                context.domains(),
+                &self.parameters.tasks,
+                self.updatable_structures.get_stored_bounds(),
+            ),
+            "Bound were not equal when propagating"
+        );
+
+        if self.parameters.is_infeasible {
+            return propagator_conflict(conjunction!(), self.inference_code.as_ref().unwrap());
+        }
+
+        // We update the time-table based on the stored updates
+        self.update_time_table(&mut context)?;
+
+        pumpkin_assert_extreme!(debug::time_tables_are_the_same_point::<Var, SYNCHRONISE>(
+            context.domains(),
+            self.inference_code.as_ref().unwrap(),
+            &self.time_table,
+            &self.parameters
+        ));
+
+        // We pass the entirety of the table to check due to the fact that the propagation of the
+        // current profile could lead to the propagation across multiple profiles
+        // For example, if we have updated 1 ResourceProfile which caused a propagation then this
+        // could cause another propagation by a profile which has not been updated
+        propagate_based_on_timetable(
+            &mut context,
+            self.inference_code.as_ref().unwrap(),
+            self.time_table.values(),
+            &self.parameters,
+            &mut self.updatable_structures,
+        )
+    }
+
+    fn propagate_from_scratch_enforced(
+        &self,
+        mut context: PropagationContext,
+    ) -> PropagationStatusCP {
         // Use the same debug propagator from `TimeTablePerPoint`
         propagate_from_scratch_time_table_point(
             &mut context,

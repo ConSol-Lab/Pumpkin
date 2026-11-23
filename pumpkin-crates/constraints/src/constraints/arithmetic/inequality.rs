@@ -2,6 +2,7 @@ use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::propagation::NotReified;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Literal;
 use pumpkin_propagators::arithmetic::LinearLessOrEqualPropagatorArgs;
@@ -111,6 +112,7 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
             x: self.terms,
             c: self.rhs,
             constraint_tag: self.constraint_tag,
+            reification: NotReified,
         }
         .post(solver)
     }
@@ -120,6 +122,7 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
             x: self.terms,
             c: self.rhs,
             constraint_tag: self.constraint_tag,
+            reification: NotReified,
         }
         .implied_by(solver, reification_literal)
     }

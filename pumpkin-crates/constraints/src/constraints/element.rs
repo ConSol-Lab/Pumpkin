@@ -1,5 +1,6 @@
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::propagation::NotReified;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_propagators::element::ElementArgs;
 
@@ -15,5 +16,6 @@ pub fn element<ElementVar: IntegerVariable + 'static>(
         index,
         rhs,
         constraint_tag,
+        reification: NotReified,
     }
 }

@@ -72,6 +72,7 @@ mod domains;
 mod event_registration;
 mod local_id;
 mod propagator;
+mod reification;
 mod runtime_checkers;
 
 pub(crate) mod propagator_id;
@@ -99,6 +100,7 @@ pub use propagator::*;
 pub use propagator_id::PropagatorId;
 pub(crate) use propagator_var_id::PropagatorVarId;
 pub use reexports::*;
+pub use reification::*;
 
 #[cfg(doc)]
 use crate::Solver;

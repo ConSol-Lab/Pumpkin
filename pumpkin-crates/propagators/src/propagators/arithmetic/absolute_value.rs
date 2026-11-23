@@ -3,51 +3,81 @@ use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::IntExt;
 use pumpkin_core::conjunction;
+use pumpkin_core::constraints::ReifiablePropagatorConstructor;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::EventsToRegister;
+use pumpkin_core::propagation::ImpliedBy;
 use pumpkin_core::propagation::LocalId;
+use pumpkin_core::propagation::NotReified;
+use pumpkin_core::propagation::NotificationContext;
+use pumpkin_core::propagation::OpaqueDomainEvent;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::REIFICATION_LOCAL_ID;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::Reification;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
+use pumpkin_core::variables::Literal;
 
 declare_inference_label!(AbsoluteValue);
 
 #[derive(Clone, Debug)]
-pub struct AbsoluteValueArgs<VA, VB> {
+pub struct AbsoluteValueArgs<VA, VB, R = NotReified> {
     pub signed: VA,
     pub absolute: VB,
     pub constraint_tag: ConstraintTag,
+    pub reification: R,
 }
 
-impl<VA, VB> PropagatorConstructor for AbsoluteValueArgs<VA, VB>
+impl<VA, VB> ReifiablePropagatorConstructor for AbsoluteValueArgs<VA, VB>
 where
     VA: IntegerVariable + 'static,
     VB: IntegerVariable + 'static,
 {
-    type PropagatorImpl = AbsoluteValuePropagator<VA, VB>;
+    type ImpliedBy = AbsoluteValueArgs<VA, VB, ImpliedBy>;
+
+    fn into_implied_by(self, reification_literal: Literal) -> Self::ImpliedBy {
+        AbsoluteValueArgs {
+            signed: self.signed,
+            absolute: self.absolute,
+            constraint_tag: self.constraint_tag,
+            reification: ImpliedBy(reification_literal),
+        }
+    }
+}
+
+impl<VA, VB, R> PropagatorConstructor for AbsoluteValueArgs<VA, VB, R>
+where
+    VA: IntegerVariable + 'static,
+    VB: IntegerVariable + 'static,
+    R: Reification,
+{
+    type PropagatorImpl = AbsoluteValuePropagator<VA, VB, R>;
 
     fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let AbsoluteValueArgs {
             signed,
             absolute,
             constraint_tag,
+            reification,
         } = self;
 
-        let registration = EventsToRegister::builder()
+        let mut registration = EventsToRegister::builder()
             .add(&signed, DomainEvents::BOUNDS, LocalId::from(0))
             .add(&absolute, DomainEvents::BOUNDS, LocalId::from(1))
             .build();
+        reification.register(&mut registration);
 
         let mut checkers = RuntimeCheckers::builder();
         let inference_code = checkers.add_inference_checker(
@@ -63,11 +93,12 @@ where
             signed,
             absolute,
             inference_code,
+            reification,
         };
 
         PropagatorSpec {
             registration,
-            checkers: checkers.build(),
+            checkers: checkers.build().reified(reification),
             propagator,
         }
     }
@@ -78,17 +109,35 @@ where
 /// The propagator is bounds consistent wrt signed. That means that if `signed \in {-2, -1, 1, 2}`,
 /// the propagator will not propagate `[absolute >= 1]`.
 #[derive(Clone, Debug)]
-pub struct AbsoluteValuePropagator<VA, VB> {
+pub struct AbsoluteValuePropagator<VA, VB, R = NotReified> {
     signed: VA,
     absolute: VB,
     inference_code: InferenceCode,
+
+    /// Whether the propagator is half-reified.
+    reification: R,
 }
 
-impl<VA, VB> Propagator for AbsoluteValuePropagator<VA, VB>
+impl<VA, VB, R> Propagator for AbsoluteValuePropagator<VA, VB, R>
 where
     VA: IntegerVariable + 'static,
     VB: IntegerVariable + 'static,
+    R: Reification,
 {
+    fn notify(
+        &mut self,
+        mut context: NotificationContext,
+        local_id: LocalId,
+        _event: OpaqueDomainEvent,
+    ) -> EnqueueDecision {
+        if local_id == REIFICATION_LOCAL_ID {
+            return EnqueueDecision::Enqueue;
+        }
+
+        self.reification
+            .filter_enqueue_decision(&mut context, EnqueueDecision::Enqueue, |_| None)
+    }
+
     fn priority(&self) -> Priority {
         Priority::High
     }
@@ -98,6 +147,25 @@ where
     }
 
     fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+        if !self.reification.should_propagate(&mut context, |_| None)? {
+            return Ok(());
+        }
+
+        self.reification
+            .add_to_conflict(self.propagate_from_scratch_enforced(context))
+    }
+}
+
+impl<VA, VB, R> AbsoluteValuePropagator<VA, VB, R>
+where
+    VA: IntegerVariable + 'static,
+    VB: IntegerVariable + 'static,
+    R: Reification,
+{
+    fn propagate_from_scratch_enforced(
+        &self,
+        mut context: PropagationContext,
+    ) -> PropagationStatusCP {
         // The bound of absolute may be tightened further during propagation, but it is at least
         // zero at the root.
         context.post(
@@ -228,6 +296,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_core::propagation::NotReified;
     use pumpkin_core::state::State;
 
     use super::*;
@@ -245,6 +314,7 @@ mod tests {
             signed,
             absolute,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
@@ -263,6 +333,7 @@ mod tests {
             signed,
             absolute,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
@@ -281,6 +352,7 @@ mod tests {
             signed,
             absolute,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
@@ -299,6 +371,7 @@ mod tests {
             signed,
             absolute,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
@@ -317,6 +390,7 @@ mod tests {
             signed,
             absolute,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
@@ -335,6 +409,7 @@ mod tests {
             signed,
             absolute,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 

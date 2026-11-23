@@ -3,46 +3,75 @@ use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::IntExt;
 use pumpkin_core::conjunction;
+use pumpkin_core::constraints::ReifiablePropagatorConstructor;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::EventsToRegister;
+use pumpkin_core::propagation::ImpliedBy;
 use pumpkin_core::propagation::LocalId;
+use pumpkin_core::propagation::NotReified;
+use pumpkin_core::propagation::NotificationContext;
+use pumpkin_core::propagation::OpaqueDomainEvent;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::REIFICATION_LOCAL_ID;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::Reification;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
+use pumpkin_core::variables::Literal;
 
 #[derive(Clone, Debug)]
-pub struct MaximumArgs<ElementVar, Rhs> {
+pub struct MaximumArgs<ElementVar, Rhs, R = NotReified> {
     pub array: Box<[ElementVar]>,
     pub rhs: Rhs,
     pub constraint_tag: ConstraintTag,
+    pub reification: R,
 }
 
 declare_inference_label!(Maximum);
 
-impl<ElementVar, Rhs> PropagatorConstructor for MaximumArgs<ElementVar, Rhs>
+impl<ElementVar, Rhs> ReifiablePropagatorConstructor for MaximumArgs<ElementVar, Rhs>
 where
     ElementVar: IntegerVariable + 'static,
     Rhs: IntegerVariable + 'static,
 {
-    type PropagatorImpl = MaximumPropagator<ElementVar, Rhs>;
+    type ImpliedBy = MaximumArgs<ElementVar, Rhs, ImpliedBy>;
+
+    fn into_implied_by(self, reification_literal: Literal) -> Self::ImpliedBy {
+        MaximumArgs {
+            array: self.array,
+            rhs: self.rhs,
+            constraint_tag: self.constraint_tag,
+            reification: ImpliedBy(reification_literal),
+        }
+    }
+}
+
+impl<ElementVar, Rhs, R> PropagatorConstructor for MaximumArgs<ElementVar, Rhs, R>
+where
+    ElementVar: IntegerVariable + 'static,
+    Rhs: IntegerVariable + 'static,
+    R: Reification,
+{
+    type PropagatorImpl = MaximumPropagator<ElementVar, Rhs, R>;
 
     fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let MaximumArgs {
             array,
             rhs,
             constraint_tag,
+            reification,
         } = self;
 
         let mut registration = EventsToRegister::builder();
@@ -70,11 +99,15 @@ where
             array,
             rhs,
             inference_code,
+            reification,
         };
 
+        let mut registration = registration.build();
+        reification.register(&mut registration);
+
         PropagatorSpec {
-            registration: registration.build(),
-            checkers: checkers.build(),
+            registration,
+            checkers: checkers.build().reified(reification),
             propagator,
         }
     }
@@ -83,15 +116,32 @@ where
 /// Bounds-consistent propagator which enforces `max(array) = rhs`. Can be constructed through
 /// [`MaximumArgs`].
 #[derive(Clone, Debug)]
-pub struct MaximumPropagator<ElementVar, Rhs> {
+pub struct MaximumPropagator<ElementVar, Rhs, R = NotReified> {
     array: Box<[ElementVar]>,
     rhs: Rhs,
     inference_code: InferenceCode,
+
+    /// Whether the propagator is half-reified.
+    reification: R,
 }
 
-impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Propagator
-    for MaximumPropagator<ElementVar, Rhs>
+impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static, R: Reification>
+    Propagator for MaximumPropagator<ElementVar, Rhs, R>
 {
+    fn notify(
+        &mut self,
+        mut context: NotificationContext,
+        local_id: LocalId,
+        _event: OpaqueDomainEvent,
+    ) -> EnqueueDecision {
+        if local_id == REIFICATION_LOCAL_ID {
+            return EnqueueDecision::Enqueue;
+        }
+
+        self.reification
+            .filter_enqueue_decision(&mut context, EnqueueDecision::Enqueue, |_| None)
+    }
+
     fn priority(&self) -> Priority {
         Priority::High
     }
@@ -101,6 +151,22 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
     }
 
     fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+        if !self.reification.should_propagate(&mut context, |_| None)? {
+            return Ok(());
+        }
+
+        self.reification
+            .add_to_conflict(self.propagate_from_scratch_enforced(context))
+    }
+}
+
+impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static, R: Reification>
+    MaximumPropagator<ElementVar, Rhs, R>
+{
+    fn propagate_from_scratch_enforced(
+        &self,
+        mut context: PropagationContext,
+    ) -> PropagationStatusCP {
         // This is the constraint that is being propagated:
         // max(a_0, a_1, ..., a_{n-1}) = rhs
 
@@ -236,6 +302,7 @@ mod tests {
     use pumpkin_core::predicates::Predicate;
     use pumpkin_core::predicates::PropositionalConjunction;
     use pumpkin_core::propagation::CurrentNogood;
+    use pumpkin_core::propagation::NotReified;
     use pumpkin_core::state::State;
 
     use super::*;
@@ -256,6 +323,7 @@ mod tests {
             array: [a, b, c].into(),
             rhs,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("no empty domain");
 
@@ -286,6 +354,7 @@ mod tests {
             array: [a, b, c].into(),
             rhs,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("no empty domain");
 
@@ -316,6 +385,7 @@ mod tests {
             array: array.clone(),
             rhs,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("no empty domain");
 
@@ -348,6 +418,7 @@ mod tests {
             array: array.clone(),
             rhs,
             constraint_tag,
+            reification: NotReified,
         });
         state.propagate_to_fixed_point().expect("no empty domain");
 

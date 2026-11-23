@@ -2,24 +2,33 @@ use std::cmp::Reverse;
 use std::cmp::min;
 
 use pumpkin_core::asserts::pumpkin_assert_simple;
+use pumpkin_core::constraints::ReifiablePropagatorConstructor;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::EventsToRegister;
+use pumpkin_core::propagation::ImpliedBy;
 use pumpkin_core::propagation::LocalId;
+use pumpkin_core::propagation::NotReified;
+use pumpkin_core::propagation::NotificationContext;
+use pumpkin_core::propagation::OpaqueDomainEvent;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::PropagatorSpec;
+use pumpkin_core::propagation::REIFICATION_LOCAL_ID;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::Reification;
 use pumpkin_core::propagation::RuntimeCheckers;
 use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::propagator_conflict;
 use pumpkin_core::variables::IntegerVariable;
+use pumpkin_core::variables::Literal;
 
 use super::disjunctive_task::ArgDisjunctiveTask;
 use super::disjunctive_task::DisjunctiveTask;
@@ -46,7 +55,7 @@ use crate::propagators::disjunctive::DisjunctiveEdgeFinding;
 /// - \[2\] R. A. Vasile, ‘Evaluating the Impact of Explanations on the Performance of an
 ///   Edge-Finding Propagator’.
 #[derive(Debug, Clone)]
-pub struct DisjunctivePropagator<Var: IntegerVariable> {
+pub struct DisjunctivePropagator<Var: IntegerVariable, R = NotReified> {
     /// The tasks which serve as the input to the disjunctive constraint
     tasks: Box<[DisjunctiveTask<Var>]>,
     /// An additional list of tasks which allows us to sort them (we require [`Disjunctive::tasks`]
@@ -58,12 +67,16 @@ pub struct DisjunctivePropagator<Var: IntegerVariable> {
     theta_lambda_tree: ThetaLambdaTree<Var>,
 
     inference_code: InferenceCode,
+
+    /// Whether the propagator is half-reified.
+    reification: R,
 }
 
 #[derive(Debug)]
-pub struct DisjunctiveConstructor<Var> {
+pub struct DisjunctiveConstructor<Var, R = NotReified> {
     constraint_tag: ConstraintTag,
     tasks: Vec<ArgDisjunctiveTask<Var>>,
+    reification: R,
 }
 
 impl<Var> DisjunctiveConstructor<Var> {
@@ -74,12 +87,29 @@ impl<Var> DisjunctiveConstructor<Var> {
         Self {
             constraint_tag,
             tasks: tasks.into_iter().collect(),
+            reification: NotReified,
         }
     }
 }
 
-impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstructor<Var> {
-    type PropagatorImpl = DisjunctivePropagator<Var>;
+impl<Var: IntegerVariable + 'static> ReifiablePropagatorConstructor
+    for DisjunctiveConstructor<Var>
+{
+    type ImpliedBy = DisjunctiveConstructor<Var, ImpliedBy>;
+
+    fn into_implied_by(self, reification_literal: Literal) -> Self::ImpliedBy {
+        DisjunctiveConstructor {
+            constraint_tag: self.constraint_tag,
+            tasks: self.tasks,
+            reification: ImpliedBy(reification_literal),
+        }
+    }
+}
+
+impl<Var: IntegerVariable + 'static, R: Reification> PropagatorConstructor
+    for DisjunctiveConstructor<Var, R>
+{
+    type PropagatorImpl = DisjunctivePropagator<Var, R>;
 
     fn create(self, _: PropagatorConstructorContext) -> PropagatorSpec<Self::PropagatorImpl> {
         let tasks = self
@@ -120,22 +150,60 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
             theta_lambda_tree,
 
             inference_code,
+            reification: self.reification,
         };
 
+        let mut registration = registration.build();
+        self.reification.register(&mut registration);
+
         PropagatorSpec {
-            registration: registration.build(),
-            checkers: checkers.build(),
+            registration,
+            checkers: checkers.build().reified(self.reification),
             propagator,
         }
     }
 }
 
-impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
+impl<Var: IntegerVariable + 'static, R: Reification> Propagator for DisjunctivePropagator<Var, R> {
+    fn notify(
+        &mut self,
+        mut context: NotificationContext,
+        local_id: LocalId,
+        _event: OpaqueDomainEvent,
+    ) -> EnqueueDecision {
+        if local_id == REIFICATION_LOCAL_ID {
+            return EnqueueDecision::Enqueue;
+        }
+
+        self.reification
+            .filter_enqueue_decision(&mut context, EnqueueDecision::Enqueue, |_| None)
+    }
+
     fn name(&self) -> &str {
         "DisjunctiveStrict"
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        if !self.reification.should_propagate(&mut context, |_| None)? {
+            return Ok(());
+        }
+
+        let reification = self.reification;
+        reification.add_to_conflict(self.propagate_enforced(context))
+    }
+
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+        if !self.reification.should_propagate(&mut context, |_| None)? {
+            return Ok(());
+        }
+
+        self.reification
+            .add_to_conflict(self.propagate_from_scratch_enforced(context))
+    }
+}
+
+impl<Var: IntegerVariable + 'static, R: Reification> DisjunctivePropagator<Var, R> {
+    fn propagate_enforced(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         edge_finding(
             &mut self.theta_lambda_tree,
             &mut context,
@@ -145,7 +213,10 @@ impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
         )
     }
 
-    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+    fn propagate_from_scratch_enforced(
+        &self,
+        mut context: PropagationContext,
+    ) -> PropagationStatusCP {
         let mut sorted_tasks = self.sorted_tasks.clone();
         let mut theta_lambda_tree = self.theta_lambda_tree.clone();
         edge_finding(
