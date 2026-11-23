@@ -247,6 +247,7 @@ pub(crate) fn check_statistic_equality(
         .filter(|line| {
             line.starts_with("%%%mzn-stat")
                 && !line.contains("Time")
+                && !line.to_lowercase().contains("seconds")
                 && !line.contains("propagations")
         })
         .collect::<Vec<&str>>();
@@ -255,6 +256,7 @@ pub(crate) fn check_statistic_equality(
         .filter(|line| {
             line.starts_with("%%%mzn-stat")
                 && !line.contains("Time")
+                && !line.to_lowercase().contains("seconds")
                 && !line.contains("propagations")
         })
         .collect::<Vec<&str>>();
