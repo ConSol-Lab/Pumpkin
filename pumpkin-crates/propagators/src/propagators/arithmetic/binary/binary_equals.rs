@@ -429,32 +429,46 @@ where
         _: &[Atomic],
         _: Option<&Atomic>,
     ) -> bool {
-        // We apply the domain of variable 2 to variable 1. If the state remains consistent, then
+        // We apply the domain of each variable to the other. If the state remains consistent, then
         // the step is unsound!
-        let mut consistent = true;
-
-        if let IntExt::Int(value) = self.rhs.induced_upper_bound(&state) {
-            let atomic = self.lhs.atomic_less_than(value);
-            consistent &= state.apply(&atomic);
-        }
-
-        if let IntExt::Int(value) = self.rhs.induced_lower_bound(&state) {
-            let atomic = self.lhs.atomic_greater_than(value);
-            consistent &= state.apply(&atomic);
-        }
-
-        for value in self.rhs.induced_holes(&state).collect::<Vec<_>>() {
-            let atomic = self.lhs.atomic_not_equal(value);
-            consistent &= state.apply(&atomic);
-        }
+        //
+        // Both directions are needed since the domain of one of the variables can be unbounded
+        // (and thus have no holes which can be listed) while its holes are implied by the other
+        // variable; e.g., `[a == 3]` with `b = 2x` and no premises.
+        let consistent = apply_domain(&mut state, &self.rhs, &self.lhs)
+            && apply_domain(&mut state, &self.lhs, &self.rhs);
 
         !consistent
     }
 }
 
+/// Applies the domain of `from` to `to` in `state`, returning whether `state` is still consistent.
+fn apply_domain<Atomic: AtomicConstraint>(
+    state: &mut pumpkin_checking::VariableState<Atomic>,
+    from: &impl CheckerVariable<Atomic>,
+    to: &impl CheckerVariable<Atomic>,
+) -> bool {
+    let mut consistent = true;
+
+    if let IntExt::Int(value) = from.induced_upper_bound(state) {
+        consistent &= state.apply(&to.atomic_less_than(value));
+    }
+
+    if let IntExt::Int(value) = from.induced_lower_bound(state) {
+        consistent &= state.apply(&to.atomic_greater_than(value));
+    }
+
+    for value in from.induced_holes(state).collect::<Vec<_>>() {
+        consistent &= state.apply(&to.atomic_not_equal(value));
+    }
+
+    consistent
+}
+
 #[cfg(test)]
 mod tests {
     use pumpkin_core::state::State;
+    use pumpkin_core::variables::TransformableVariable;
 
     use crate::StateExt;
     use crate::propagators::arithmetic::BinaryEqualsPropagatorArgs;
@@ -475,6 +489,121 @@ mod tests {
 
         state.assert_bounds(a, 3, 5);
         state.assert_bounds(b, 3, 5);
+    }
+
+    #[test]
+    fn checker_handles_scaled_view() {
+        let mut state = State::default();
+        let a = state.new_interval_variable(1, 7, None);
+        let x = state.new_interval_variable(0, 5, None);
+        let b = x.scaled(2);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.assert_bounds(a, 2, 6);
+        state.assert_bounds(x, 1, 3);
+
+        // `b = 2x` cannot take odd values, so neither can `a`.
+        assert!(!state.contains(a, 3));
+        assert!(!state.contains(a, 5));
+    }
+
+    #[test]
+    fn negatively_scaled_view_as_lhs() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 5, None);
+        let a = x.scaled(-2);
+        let b = state.new_interval_variable(-7, -1, None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.assert_bounds(x, 1, 3);
+        let b_domain = (-7..=-1)
+            .filter(|&value| state.contains(b, value))
+            .collect::<Vec<_>>();
+        assert_eq!(b_domain, vec![-6, -4, -2]);
+    }
+
+    #[test]
+    fn negatively_scaled_and_offset_view_as_rhs() {
+        let mut state = State::default();
+        let a = state.new_interval_variable(-10, 10, None);
+        let x = state.new_interval_variable(0, 3, None);
+        let b = x.scaled(-3).offset(2);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.assert_bounds(x, 0, 3);
+        let a_domain = (-10..=10)
+            .filter(|&value| state.contains(a, value))
+            .collect::<Vec<_>>();
+        assert_eq!(a_domain, vec![-7, -4, -1, 2]);
+    }
+
+    #[test]
+    fn negated_view_propagates_holes() {
+        let mut state = State::default();
+        let x = state.new_sparse_variable(vec![1, 3, 4], None);
+        let a = x.scaled(-1);
+        let b = state.new_interval_variable(-5, 0, None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        let b_domain = (-5..=0)
+            .filter(|&value| state.contains(b, value))
+            .collect::<Vec<_>>();
+        assert_eq!(b_domain, vec![-4, -3, -1]);
+    }
+
+    #[test]
+    fn two_scaled_views_only_keep_common_multiples() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(-6, 6, None);
+        let y = state.new_interval_variable(-4, 4, None);
+        let a = x.scaled(2);
+        let b = y.scaled(-3);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        // `2x == -3y` only holds for multiples of 6.
+        let x_domain = (-6..=6)
+            .filter(|&value| state.contains(x, value))
+            .collect::<Vec<_>>();
+        assert_eq!(x_domain, vec![-6, -3, 0, 3, 6]);
+        let y_domain = (-4..=4)
+            .filter(|&value| state.contains(y, value))
+            .collect::<Vec<_>>();
+        assert_eq!(y_domain, vec![-4, -2, 0, 2, 4]);
     }
 
     #[test]

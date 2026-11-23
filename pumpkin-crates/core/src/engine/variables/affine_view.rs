@@ -173,14 +173,26 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
     where
         'this: 'state,
     {
-        if self.scale == 1 || self.scale == -1 {
-            return self
-                .inner
-                .induced_holes(variable_state)
-                .map(|value| self.map(value));
-        }
+        // With a scale other than 1 or -1, every value between the bounds that is not of the form
+        // `scale * x + offset` is a hole as well; e.g., if `x \in [1, 3]` then the domain of `2x`
+        // is `{2, 4, 6}` and its holes are `{3, 5}`. These are disjoint from the mapped holes of
+        // the inner variable, which are all of that form. Without finite bounds they cannot be
+        // listed.
+        let unrepresentable_values = match (
+            self.scale.abs() == 1,
+            self.induced_lower_bound(variable_state),
+            self.induced_upper_bound(variable_state),
+        ) {
+            (false, IntExt::Int(lower_bound), IntExt::Int(upper_bound)) => {
+                lower_bound + 1..upper_bound
+            }
+            _ => 0..0,
+        };
 
-        todo!("how to iterate holes of a scaled domain");
+        self.inner
+            .induced_holes(variable_state)
+            .map(|value| self.map(value))
+            .chain(unrepresentable_values.filter(|&value| (value - self.offset) % self.scale != 0))
     }
 
     fn iter_induced_domain<'this, 'state>(
@@ -313,15 +325,28 @@ where
         &self,
         assignments: &Assignments,
     ) -> impl Iterator<Item = i32> {
+        // The values which are not of the form `scale * x + offset` are holes at every decision
+        // level, so they are not created at the current one; only the holes of `inner` are.
         self.inner
             .get_holes_at_current_checkpoint(assignments)
             .map(|value| self.map(value))
     }
 
     fn get_holes(&self, assignments: &Assignments) -> impl Iterator<Item = i32> {
+        // With a scale other than 1 or -1, every value between the bounds that is not of the form
+        // `scale * x + offset` is a hole as well; e.g., if `x \in [1, 3]` then the domain of `2x`
+        // is `{2, 4, 6}` and its holes are `{3, 5}`. These are disjoint from the mapped holes of
+        // the inner variable, which are all of that form.
+        let unrepresentable_values = if self.scale.abs() == 1 {
+            0..0
+        } else {
+            self.lower_bound(assignments) + 1..self.upper_bound(assignments)
+        };
+
         self.inner
             .get_holes(assignments)
             .map(|value| self.map(value))
+            .chain(unrepresentable_values.filter(|&value| (value - self.offset) % self.scale != 0))
     }
 }
 
@@ -459,5 +484,107 @@ mod tests {
 
         assert_eq!(predicate!(view <= -3), predicate!(domain >= 2));
         assert_eq!(predicate!(view >= 5), predicate!(domain <= -3));
+    }
+
+    #[test]
+    fn the_holes_of_a_scaled_view_are_the_values_it_skips() {
+        let mut state = crate::state::State::default();
+        let domain = state.new_interval_variable(0, 3, None);
+        let view = domain.scaled(2).offset(1);
+
+        let domains = pumpkin_checking::VariableState::prepare_for_conflict_check(
+            [
+                predicate!(domain >= 0),
+                predicate!(domain <= 3),
+                predicate!(domain != 1),
+            ],
+            None,
+        )
+        .expect("the predicates are consistent");
+
+        // The view takes the values 1, 5 and 7.
+        let mut holes = view.induced_holes(&domains).collect::<Vec<_>>();
+        holes.sort();
+        assert_eq!(holes, vec![2, 3, 4, 6]);
+    }
+
+    #[test]
+    fn get_holes_of_a_scaled_view_includes_unrepresentable_values() {
+        let mut state = crate::state::State::default();
+        let domain = state.new_interval_variable(0, 3, None);
+        let _ = state
+            .post(predicate!(domain != 1))
+            .expect("non-empty domain");
+        let view = domain.scaled(2).offset(1);
+
+        // The view takes the values 1, 5 and 7.
+        let mut holes = view.get_holes(&state.assignments).collect::<Vec<_>>();
+        holes.sort();
+        assert_eq!(holes, vec![2, 3, 4, 6]);
+    }
+
+    #[test]
+    fn get_holes_of_a_negatively_scaled_view_includes_unrepresentable_values() {
+        let mut state = crate::state::State::default();
+        let domain = state.new_interval_variable(0, 3, None);
+        let _ = state
+            .post(predicate!(domain != 1))
+            .expect("non-empty domain");
+        let view = domain.scaled(-2).offset(1);
+
+        // The view takes the values -5, -3 and 1.
+        let mut holes = view.get_holes(&state.assignments).collect::<Vec<_>>();
+        holes.sort();
+        assert_eq!(holes, vec![-4, -2, -1, 0]);
+    }
+
+    #[test]
+    fn get_holes_of_a_scaled_view_over_negative_values_includes_unrepresentable_values() {
+        let mut state = crate::state::State::default();
+        let domain = state.new_interval_variable(-2, 1, None);
+        let view = domain.scaled(3).offset(-1);
+
+        // The view takes the values -7, -4, -1 and 2.
+        let mut holes = view.get_holes(&state.assignments).collect::<Vec<_>>();
+        holes.sort();
+        assert_eq!(holes, vec![-6, -5, -3, -2, 0, 1]);
+    }
+
+    #[test]
+    fn get_holes_of_a_negated_view_are_the_negated_holes() {
+        let mut state = crate::state::State::default();
+        let domain = state.new_interval_variable(0, 3, None);
+        let _ = state
+            .post(predicate!(domain != 1))
+            .expect("non-empty domain");
+        let view = domain.scaled(-1).offset(2);
+
+        // The view takes the values -1, 0 and 2.
+        assert_eq!(
+            view.get_holes(&state.assignments).collect::<Vec<_>>(),
+            vec![1]
+        );
+    }
+
+    #[test]
+    fn the_holes_of_a_negatively_scaled_view_are_the_values_it_skips() {
+        let mut state = crate::state::State::default();
+        let domain = state.new_interval_variable(0, 3, None);
+        let view = domain.scaled(-2).offset(1);
+
+        let domains = pumpkin_checking::VariableState::prepare_for_conflict_check(
+            [
+                predicate!(domain >= 0),
+                predicate!(domain <= 3),
+                predicate!(domain != 1),
+            ],
+            None,
+        )
+        .expect("the predicates are consistent");
+
+        // The view takes the values -5, -3 and 1.
+        let mut holes = view.induced_holes(&domains).collect::<Vec<_>>();
+        holes.sort();
+        assert_eq!(holes, vec![-4, -2, -1, 0]);
     }
 }
