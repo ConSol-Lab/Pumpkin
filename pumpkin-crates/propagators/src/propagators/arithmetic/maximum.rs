@@ -366,15 +366,13 @@ mod tests {
         let rhs = state.new_interval_variable(0, 10, None);
         let constraint_tag = state.new_constraint_tag();
 
-        let prop = state.add_propagator(MaximumArgs {
+        let propagator_handle = state.add_propagator(MaximumArgs {
             array: array.clone(),
             rhs,
             constraint_tag,
         });
 
-        state
-            .propagate(prop.propagator_id())
-            .expect("no empty domain");
+        state.propagate(propagator_handle).expect("no empty domain");
         state.assert_bounds(*array.last().unwrap(), 0, 9);
         state.assert_bounds(rhs, 0, 9);
     }

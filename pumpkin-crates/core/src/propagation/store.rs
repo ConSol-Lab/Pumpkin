@@ -32,7 +32,7 @@ impl<P> PropagatorHandle<P> {
     }
 
     /// Get the type-erased [`PropagatorId`] of the propagator.
-    pub fn propagator_id(self) -> PropagatorId {
+    pub(crate) fn propagator_id(self) -> PropagatorId {
         self.id
     }
 }
