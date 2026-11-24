@@ -635,7 +635,14 @@ impl State {
     ///
     /// Once the [`State`] is conflicting, then the only operation that is defined is
     /// [`State::restore_to`]. All other operations and queries on the state are undetermined.
-    fn propagate(&mut self, propagator_id: PropagatorId) -> Result<(), Conflict> {
+    pub fn propagate<P>(&mut self, propagator_handle: PropagatorHandle<P>) -> Result<(), Conflict> {
+        self.propagate_by_id(propagator_handle.propagator_id())
+    }
+
+    /// Performs the internal propagation based on the [`PropagatorId`].
+    ///
+    /// See [`State::Propagate`] for documentation.
+    fn propagate_by_id(&mut self, propagator_id: PropagatorId) -> Result<(), Conflict> {
         self.statistics.num_propagators_called += 1;
 
         let num_trail_entries_before = self.assignments.num_trail_entries();
@@ -780,7 +787,7 @@ impl State {
 
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
         while let Some(propagator_id) = self.propagator_queue.pop() {
-            self.propagate(propagator_id)?;
+            self.propagate_by_id(propagator_id)?;
         }
 
         // Only check fixed point propagation if there was no reported conflict,

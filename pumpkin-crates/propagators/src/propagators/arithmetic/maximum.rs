@@ -105,7 +105,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
         // max(a_0, a_1, ..., a_{n-1}) = rhs
 
         let rhs_ub = context.upper_bound(&self.rhs);
-        let mut max_ub = context.upper_bound(&self.array[0]);
+        let mut max_ub = i32::MIN;
         let mut max_lb = context.lower_bound(&self.array[0]);
         let mut lb_reason = predicate![self.array[0] >= max_lb];
         for var in self.array.iter() {
@@ -353,5 +353,27 @@ mod tests {
 
         state.assert_bounds(*array.last().unwrap(), 45, 51);
         state.assert_bounds(rhs, 45, 51);
+    }
+
+    #[test]
+    fn rule_3_propagates_due_to_rule_1_within_one_propagation() {
+        let mut state = State::default();
+
+        let array = (1..=5)
+            .map(|_| state.new_sparse_variable(vec![0, 9, 11], None))
+            .collect::<Box<_>>();
+
+        let rhs = state.new_interval_variable(0, 10, None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let propagator_handle = state.add_propagator(MaximumArgs {
+            array: array.clone(),
+            rhs,
+            constraint_tag,
+        });
+
+        state.propagate(propagator_handle).expect("no empty domain");
+        state.assert_bounds(*array.last().unwrap(), 0, 9);
+        state.assert_bounds(rhs, 0, 9);
     }
 }
