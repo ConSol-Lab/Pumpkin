@@ -333,6 +333,60 @@ impl IterativeMinimiser {
         }
     }
 
+    /// Returns the semantically minimal predicates describing the domain induced by the predicates
+    /// over `domain` in the nogood (excluding the root-level predicates).
+    ///
+    /// The predicates over a variable in the nogood are not guaranteed to be minimal, since a
+    /// replacement is not performed if the new predicate would be the next to be resolved upon
+    /// (see [`ProcessingResult::PossiblyReplacedWithNew`]); e.g., `[x >= 5] /\ [x != 5]` is
+    /// returned as `[x >= 6]`.
+    ///
+    /// Panics if no predicates over `domain` have been applied.
+    pub(crate) fn minimal_predicates<'a>(
+        &'a self,
+        domain: DomainId,
+        context: &mut ConflictAnalysisContext,
+    ) -> impl Iterator<Item = Predicate> + use<'a> {
+        let entry = &self.domains[&domain];
+
+        Self::log_root_inferences(context, domain, entry);
+
+        let (lower_bound, upper_bound) = entry.bounds();
+        let is_fixed = lower_bound == upper_bound;
+
+        // The bounds implied by the root-level predicates do not need to be part of the nogood.
+        let root_domain = &entry.root_domain;
+        let mut root_lower_bound = root_domain.root_lower_bound;
+        while root_domain.root_holes.contains(&root_lower_bound) {
+            root_lower_bound += 1;
+        }
+        let mut root_upper_bound = root_domain.root_upper_bound;
+        while root_domain.root_holes.contains(&root_upper_bound) {
+            root_upper_bound -= 1;
+        }
+
+        // If the domain is fixed, then the minimal form is an equality; otherwise, it consists of
+        // the bounds which are tighter than the root-level bounds and the holes in between.
+        is_fixed
+            .then(|| predicate!(domain == lower_bound))
+            .into_iter()
+            .chain(
+                (!is_fixed && lower_bound > root_lower_bound)
+                    .then(|| predicate!(domain >= lower_bound)),
+            )
+            .chain(
+                (!is_fixed && upper_bound < root_upper_bound)
+                    .then(|| predicate!(domain <= upper_bound)),
+            )
+            .chain(
+                entry
+                    .not_equals
+                    .iter()
+                    .filter(move |&&hole| lower_bound < hole && hole < upper_bound)
+                    .map(move |&hole| predicate!(domain != hole)),
+            )
+    }
+
     /// Logs the root-level inferences to the proof.
     fn log_root_inferences(
         context: &mut ConflictAnalysisContext<'_>,
