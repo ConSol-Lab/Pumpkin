@@ -12,7 +12,6 @@ use pumpkin_core::variables::IntegerVariable;
 
 use super::shared::compute_quotient_bound_ext;
 use super::shared::product_bound_ext;
-use crate::arithmetic::integer_multiplication::propagator::saturate_i64_to_i32;
 
 /// Builds the lazy explanation for a propagation performed by
 /// [`super::propagator::IntegerMultiplicationPropagator`], minimizing which domain bounds are
@@ -160,15 +159,14 @@ fn minimize_reason(
     // The bounds are the ones which were used to perform the propagation, so recomputing the
     // propagated value from them yields the value that was propagated (saturated to `i32` in the
     // same way as by the propagator).
-    let propagated_value = saturate_i64_to_i32(
-        match bound_fn(values[0], values[1], values[2], values[3]) {
-            Some((lo, _)) if is_lower => lo,
-            Some((_, hi)) => hi,
-            None => unreachable!("a propagation took place using these bounds"),
-        }
-        .as_int()
-        .expect("all bounds are finite, so the propagated value is finite too"),
-    );
+    let propagated_value = match bound_fn(values[0], values[1], values[2], values[3]) {
+        Some((lo, _)) if is_lower => lo,
+        Some((_, hi)) => hi,
+        None => unreachable!("a propagation took place using these bounds"),
+    }
+    .as_int()
+    .expect("all bounds are finite, so the propagated value is finite too")
+    .clamp(i32::MIN as i64, i32::MAX as i64);
 
     // Iterate through the values, and determine which ones can be removed. Results in a subset
     // minimal explanation, not a minimum explanation.
@@ -185,9 +183,9 @@ fn minimize_reason(
             };
 
         let propagates_weaker = if is_lower {
-            propagated_value_with_relaxed_bound >= IntExt::Int(propagated_value as i64)
+            propagated_value_with_relaxed_bound >= IntExt::Int(propagated_value)
         } else {
-            propagated_value_with_relaxed_bound <= IntExt::Int(propagated_value as i64)
+            propagated_value_with_relaxed_bound <= IntExt::Int(propagated_value)
         };
 
         if !propagates_weaker {

@@ -1266,6 +1266,33 @@ impl NogoodPropagator {
         //
         // The preprocessing ensures that all predicates are unassigned.
         else {
+            // When checking propagations, the stored nogood is used to construct reasons which are
+            // checked against the input nogood. Hence, the predicates of the input nogood which
+            // are true at the root (and thus removed by the preprocessing) are added to the
+            // preprocessed nogood. Since these predicates are true, they are ignored by the
+            // propagation, which therefore sees the same (semantically minimal) nogood as without
+            // checking propagations; extended nogood propagation relies on this.
+            //
+            // The semantic minimiser can also weaken an equality predicate based on the initial
+            // domain (e.g., `[y == 1]` becomes `[y >= 1]` if the initial domain of `y` is
+            // `{0, 1}`); the half of such an equality which is true at the root (`[y <= 1]`) is
+            // added as well.
+            #[cfg(feature = "check-propagations")]
+            {
+                for index in 0..input_nogood.len() {
+                    let predicate = input_nogood[index];
+                    if predicate.is_equality_predicate() {
+                        let domain = predicate.get_domain();
+                        let value = predicate.get_right_hand_side();
+                        input_nogood.push(predicate!(domain >= value));
+                        input_nogood.push(predicate!(domain <= value));
+                    }
+                }
+                input_nogood
+                    .retain(|&predicate| context.evaluate_predicate(predicate) == Some(true));
+                input_nogood.extend_from_slice(&nogood);
+            }
+
             self.propagation_mode.add_permanent_nogood_non_unit(
                 nogood,
                 &input_nogood,
@@ -2192,5 +2219,143 @@ mod tests {
         state.propagate_to_fixed_point().expect("no conflict");
 
         assert!(!state.contains(x4, 2));
+    }
+
+    /// Under extended nogood propagation, a nogood which is the reason of an entry on the trail
+    /// should be reported as propagating, also when the watchers have moved a predicate of
+    /// another variable to position 0. Otherwise, the database clean-up removes a nogood which
+    /// is still a reason.
+    ///
+    /// Nogood: [x >= 3] /\ [x != 5] /\ [a == 1] /\ [b == 1], x in 0..10.
+    /// - Checkpoint 1: a == 1. Checkpoint 2: b == 1; the nogood removes 3, 4, 6, ..., 10 from x.
+    /// - Checkpoint 3: x >= 3 (so x == 5). The watchers are updated and [b == 1] moves to position
+    ///   0.
+    ///
+    /// The removals of checkpoint 2 are still on the trail with this nogood as their reason, so
+    /// the nogood must be reported as propagating.
+    #[test]
+    fn nogood_which_is_a_reason_is_reported_as_propagating_under_extended_propagation() {
+        let mut state = State::default();
+        let nogood_handle = state.add_propagator(NogoodPropagatorConstructor::new(
+            0,
+            LearningOptions::default(),
+            PropagationMode::ExtendedNogoodPropagation,
+            Priority::High,
+        ));
+        let a = state.new_interval_variable(0, 1, None);
+        let b = state.new_interval_variable(0, 1, None);
+        let x = state.new_interval_variable(0, 10, None);
+
+        let nogood = vec![
+            predicate!(x >= 3),
+            predicate!(x != 5),
+            predicate!(a == 1),
+            predicate!(b == 1),
+        ];
+        let constraint_tag = state.new_constraint_tag();
+        let inference_code = state.add_inference_checker(
+            constraint_tag,
+            NogoodLabel,
+            NogoodChecker {
+                nogood: nogood.clone().into(),
+            },
+        );
+        {
+            let (nogood_propagator, mut context) =
+                state.get_propagator_mut_with_context(nogood_handle);
+            nogood_propagator
+                .expect("the handle refers to the nogood propagator")
+                .add_nogood(nogood, inference_code, &mut context);
+        }
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.new_checkpoint();
+        let _ = state.post(predicate!(a == 1)).expect("in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.new_checkpoint();
+        let _ = state.post(predicate!(b == 1)).expect("in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        // The nogood has removed every value of x from 3 on, except 5.
+        assert!(!state.contains(x, 3) && !state.contains(x, 4) && !state.contains(x, 6));
+        assert!(state.contains(x, 5));
+        assert!(is_propagating(&mut state, nogood_handle));
+
+        state.new_checkpoint();
+        let _ = state.post(predicate!(x >= 3)).expect("in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        // The removals of checkpoint 2 are still on the trail and the nogood is their reason.
+        assert!(
+            is_propagating(&mut state, nogood_handle),
+            "the nogood is the reason of [x != 3], [x != 4], [x != 6], ... on the trail, \
+             but it is reported as not propagating"
+        );
+    }
+
+    fn is_propagating(
+        state: &mut State,
+        nogood_handle: crate::state::PropagatorHandle<NogoodPropagator>,
+    ) -> bool {
+        let (nogood_propagator, context) = state.get_propagator_mut_with_context(nogood_handle);
+        let nogood_propagator: &mut NogoodPropagator =
+            nogood_propagator.expect("the handle refers to the nogood propagator");
+        let id = nogood_propagator
+            .nogood_predicates
+            .nogoods_ids()
+            .next()
+            .expect("one nogood was added");
+        let stored = nogood_propagator.nogood_predicates.get_nogood(id).to_vec();
+        nogood_propagator.propagation_mode.is_nogood_propagating(
+            nogood_propagator.handle,
+            &stored,
+            context.assignments,
+            context.reason_store,
+            id,
+            context.notification_engine,
+        )
+    }
+    /// A nogood added from the model is semantically minimised before it is stored; extended
+    /// nogood propagation relies on this. This should also hold when the original nogood is kept
+    /// for the proof (with the `check-propagations` feature).
+    ///
+    /// Nogood: [x >= 3] /\ [x != 3] /\ [y == 1], which is minimised to [x >= 4] /\ [y == 1].
+    /// After [y == 1], extended nogood propagation should propagate [x <= 3].
+    #[test]
+    fn non_minimal_nogood_from_the_model_is_minimised_under_extended_propagation() {
+        let mut state = State::default();
+        let nogood_handle = state.add_propagator(NogoodPropagatorConstructor::new(
+            0,
+            LearningOptions::default(),
+            PropagationMode::ExtendedNogoodPropagation,
+            Priority::High,
+        ));
+        let x = state.new_interval_variable(0, 10, None);
+        let y = state.new_interval_variable(0, 1, None);
+
+        let nogood = vec![predicate!(x >= 3), predicate!(x != 3), predicate!(y == 1)];
+        let constraint_tag = state.new_constraint_tag();
+        let inference_code = state.add_inference_checker(
+            constraint_tag,
+            NogoodLabel,
+            NogoodChecker {
+                nogood: nogood.clone().into(),
+            },
+        );
+        let (nogood_propagator, mut context) = state.get_propagator_mut_with_context(nogood_handle);
+        nogood_propagator
+            .expect("the handle refers to the nogood propagator")
+            .add_nogood(nogood, inference_code, &mut context);
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.new_checkpoint();
+        let _ = state
+            .post(predicate!(y == 1))
+            .expect("the value is in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        assert_eq!(state.upper_bound(x), 3);
+        assert!((0..=3).all(|value| state.contains(x, value)));
     }
 }
