@@ -97,7 +97,12 @@ impl PredicateIdAssignments {
                 self.satisfied_predicates.push(predicate_id)
             }
             self.predicate_values[predicate_id] = value;
-            self.trail.push(predicate_id)
+
+            // Changes at the root are never undone (`synchronise` only drains entries after the
+            // first checkpoint), so there is no need to record them on the trail.
+            if self.trail.get_checkpoint() > 0 {
+                self.trail.push(predicate_id)
+            }
         }
     }
 
@@ -233,5 +238,32 @@ impl PredicateIdAssignments {
                 };
                 self.store_predicate(predicate_id, value);
             });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn root_level_stores_are_not_trailed() {
+        let mut predicate_id_assignments = PredicateIdAssignments::default();
+        let root_id = PredicateId::create_from_index(0);
+        let non_root_id = PredicateId::create_from_index(1);
+
+        predicate_id_assignments.store_predicate(root_id, PredicateValue::AssignedTrue);
+        assert!(predicate_id_assignments.trail.is_empty());
+
+        predicate_id_assignments.new_checkpoint();
+        predicate_id_assignments.store_predicate(non_root_id, PredicateValue::AssignedFalse);
+        assert_eq!(predicate_id_assignments.trail.len(), 1);
+
+        predicate_id_assignments.synchronise(0);
+        assert_eq!(
+            predicate_id_assignments.predicate_values[root_id],
+            PredicateValue::AssignedTrue
+        );
+        assert!(predicate_id_assignments.is_unknown(non_root_id));
+        assert!(predicate_id_assignments.trail.is_empty());
     }
 }
