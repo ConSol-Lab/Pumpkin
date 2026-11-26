@@ -191,9 +191,7 @@ impl WorkingNogood {
             .iter()
             .position(|predicate| *predicate == removed_predicate)
         {
-            // If we can find the position, then we remove it from the processed noogod predicates;
-            // the order of these predicates is irrelevant, so we do not need to shift the elements
-            // after it.
+            // If we can find the position, then we remove it from the processed nogood predicates
             let _ = self.processed_nogood_predicates.swap_remove(position);
 
             // If we are performing iterative minimisation, then we also remove it from the

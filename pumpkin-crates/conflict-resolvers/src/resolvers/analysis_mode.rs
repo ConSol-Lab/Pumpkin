@@ -119,8 +119,9 @@ impl AnalysisMode {
     /// loop). For example, replacing `[x >= 5] /\ [x != 5]` with `[x >= 6]` and then resolving
     /// upon `[x >= 6]` would add its reason `[x >= 5] /\ [x != 5]` back to the nogood.
     ///
-    /// The exception is CPIP-based analysis which stops right after the replacement; then
-    /// `new_predicate` is never resolved upon, so the replacement is always possible.
+    /// In this example, it could be that CPIP-based analysis stops directly after the replacement,
+    /// meaning that the replacement is possible, even if it would be the next predicate to be
+    /// resolved upon.
     pub(crate) fn can_replace(
         &self,
         element: Predicate,
@@ -288,7 +289,9 @@ impl AnalysisMode {
                 }
 
                 // Then we check which of the bounds are described by a predicate from the current
-                // checkpoint; the holes do not influence whether a bound can be propagated.
+                // checkpoint; whether a hole is present does not influence whether a bound can be
+                // propagated as this is solely determined by whether both a lower-bound and
+                // upper-bound predicate are present.
                 let is_current = |predicate: Predicate| {
                     context.get_checkpoint_for_predicate(predicate)
                         == Some(context.get_checkpoint())
