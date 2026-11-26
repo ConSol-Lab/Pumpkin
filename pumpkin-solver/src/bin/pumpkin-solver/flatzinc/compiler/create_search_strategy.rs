@@ -111,13 +111,10 @@ fn create_from_search_strategy(
                     .collect::<Vec<_>>(),
             ),
         Search::Unspecified => {
-                assert!(
-                    append_default_search,
-                    "when no search is specified, we must add a default search"
-                );
-
-                // The default search will be added below, so we give an empty brancher here.
-                DynamicBrancher::new(vec![])
+                // We add the default search and then instantly return it.
+                return Ok(DynamicBrancher::new(vec![Box::new(DefaultBrancher::default_over_all_variables(
+                    context.solver,
+                ))]));
             }
         Search::WarmStartInt { variables, values } => {
                 match variables {
