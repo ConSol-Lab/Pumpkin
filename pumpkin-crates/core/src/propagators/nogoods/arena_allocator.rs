@@ -1,30 +1,33 @@
+use std::cmp::max;
 use std::ops::Range;
 
 use crate::basic_types::PredicateId;
-use crate::containers::HashMap;
+use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::propagators::nogoods::NogoodId;
+use crate::pumpkin_assert_eq_simple;
 
 /// An arena allocator for storing nogoods.
 ///
 /// The idea is to avoid double indirection by storing one large structure with [`PredicateId`]s.
 ///
-/// Currently, deleting nogoods is not supported.
+/// Nogoods are always appended to the end of the arena. The space of removed nogoods is reclaimed
+/// by compacting the arena (see [`ArenaAllocator::compact`]), which moves the remaining nogoods
+/// to the front of the arena.
+///
+/// The nogoods are stored in the arena in the order of their [`NogoodIndex`].
 #[derive(Clone, Default, Debug)]
 pub(crate) struct ArenaAllocator {
     /// A list of [`PredicateId`]s representing the nogoods.
     ///
     /// If there is a [`NogoodId`] with value `i`, then the [`PredicateId`] at position `i` will
-    /// contain the length `x` of the nogood and the [`PredicateId`] at position `i + 1` will
-    /// contain the last-traversed watcher index. The next `i + 2 + x` elements are then the nogood
-    /// pointed to by the [`NogoodId`] with value `i`.
+    /// contain the length `x` of the nogood, the [`PredicateId`] at position `i + 1` will contain
+    /// its [`NogoodIndex`], and the [`PredicateId`] at position `i + 2` will contain the
+    /// last-traversed watcher index. The next `x` elements are then the nogood pointed to by the
+    /// [`NogoodId`] with value `i`.
     pub(crate) nogoods: Vec<PredicateId>,
-    /// Maps each [`NogoodId`] to an index; this is to prevent unnecessary allocations for other
-    /// structures such as the [`NogoodInfo`] which use direct hashing for storing information
-    /// about nogoods.
-    pub(crate) nogood_id_to_index: HashMap<NogoodId, NogoodIndex>,
-    /// The current index for the next [`NogoodId`] which is entered; see
-    /// [`ArenaAllocator::nogood_id_to_index`].
+    /// The [`NogoodIndex`] of the next nogood which is inserted; see
+    /// [`ArenaAllocator::get_nogood_index`].
     current_index: u32,
     /// The number of elements (i.e., [`PredicateId`]s), that are created when the arena is
     /// initialised.
@@ -38,7 +41,7 @@ pub(crate) struct ArenaAllocator {
 /// begin.
 ///
 /// See [`ArenaAllocator::nogoods`] for more information.
-const OFFSET: usize = 2;
+const OFFSET: usize = 3;
 
 #[derive(Clone, Copy, Debug, Hash)]
 pub(crate) struct NogoodIndex(u32);
@@ -57,7 +60,6 @@ impl ArenaAllocator {
     pub(crate) fn new(capacity: usize) -> Self {
         Self {
             nogoods: Vec::default(),
-            nogood_id_to_index: HashMap::default(),
             current_index: 0,
             initial_capacity: capacity,
         }
@@ -72,15 +74,14 @@ impl ArenaAllocator {
 
         let nogood_id = NogoodId::create_from_index(self.nogoods.len());
 
-        // We store the NogoodId with its index.
-        let _ = self
-            .nogood_id_to_index
-            .insert(nogood_id, NogoodIndex(self.current_index));
-        self.current_index += 1;
-
         // We push a PredicateId which stores the length of the nogood
         self.nogoods
             .push(PredicateId::create_from_index(nogood.len()));
+        // We push a PredicateId which stores the index of the nogood
+        self.nogoods.push(PredicateId {
+            id: self.current_index,
+        });
+        self.current_index += 1;
         // We also push a PredicateId which stores the last-traversed watcher (defaults to the
         // first non-watcher element)
         self.nogoods.push(PredicateId::create_from_index(2));
@@ -94,10 +95,85 @@ impl ArenaAllocator {
     /// In other words, if the nogood with ID [`NogoodId`] was the `n`th nogood to be inserted then
     /// this method will return `n`.
     pub(crate) fn get_nogood_index(&self, nogood_id: &NogoodId) -> NogoodIndex {
-        *self
-            .nogood_id_to_index
-            .get(nogood_id)
-            .expect("Expected nogood predicate to exist")
+        NogoodIndex(self.nogoods[nogood_id.index() + 1].id)
+    }
+
+    /// Returns the [`NogoodId`] which each nogood will have *after* compacting the arena (see
+    /// [`ArenaAllocator::compact`]), indexed by its current [`NogoodIndex`].
+    ///
+    /// A nogood is only kept if `keep` returns true for its [`NogoodIndex`]; otherwise, its new
+    /// [`NogoodId`] is [`None`].
+    ///
+    /// Note that this does not change the arena; this allows the references to the nogoods to be
+    /// updated before the nogoods are moved.
+    pub(crate) fn compute_compacted_ids(
+        &self,
+        keep: impl Fn(NogoodIndex) -> bool,
+    ) -> KeyedVec<NogoodIndex, Option<NogoodId>> {
+        let mut compacted_ids = KeyedVec::default();
+        let mut compacted_len = 0;
+
+        for nogood_id in self.nogoods_ids() {
+            let nogood_index = self.get_nogood_index(&nogood_id);
+            pumpkin_assert_eq_simple!(nogood_index.index(), compacted_ids.len());
+
+            let compacted_id = keep(nogood_index).then(|| {
+                let compacted_id = NogoodId::create_from_index(compacted_len);
+                compacted_len += OFFSET + self.len_of_nogood(nogood_id);
+                compacted_id
+            });
+            let _ = compacted_ids.push(compacted_id);
+        }
+
+        compacted_ids
+    }
+
+    /// Compacts the arena by removing the nogoods which do not have a new [`NogoodId`] in
+    /// `compacted_ids` (see [`ArenaAllocator::compute_compacted_ids`]), and moving the remaining
+    /// nogoods to their new [`NogoodId`].
+    ///
+    /// The remaining nogoods are given consecutive [`NogoodIndex`]s in the same order; i.e., a
+    /// nogood with [`NogoodIndex`] `i` gets the [`NogoodIndex`] `j` if `j` of the nogoods with a
+    /// [`NogoodIndex`] smaller than `i` are kept.
+    pub(crate) fn compact(&mut self, compacted_ids: &KeyedVec<NogoodIndex, Option<NogoodId>>) {
+        let mut compacted_len = 0;
+        let mut compacted_index = 0;
+
+        // We go over each nogood in the arena.
+        let mut start = 0;
+        while start < self.nogoods.len() {
+            // Calculate its new NogoodId
+            let nogood_id = NogoodId::create_from_index(start);
+            let end = start + OFFSET + self.len_of_nogood(nogood_id);
+
+            // Next, we check that it has not been removed.
+            //
+            // Note that the nogood is only moved towards the front, so the nogoods after it have
+            // not been overwritten yet.
+            if let Some(compacted_id) = compacted_ids[self.get_nogood_index(&nogood_id)] {
+                pumpkin_assert_eq_simple!(compacted_id.index(), compacted_len);
+
+                // Update its NogoodIndex in place, and copy over the nogood into the arena.
+                self.nogoods[start + 1] = PredicateId {
+                    id: compacted_index,
+                };
+                self.nogoods.copy_within(start..end, compacted_len);
+
+                compacted_len += end - start;
+                compacted_index += 1;
+            }
+
+            start = end;
+        }
+
+        self.nogoods.truncate(compacted_len);
+        self.current_index = compacted_index;
+
+        // Similar to kissat, we release memory if the arena is mostly unused.
+        if self.nogoods.len() < self.nogoods.capacity() / 4 {
+            self.nogoods
+                .shrink_to(max(2 * self.nogoods.len(), self.initial_capacity));
+        }
     }
 
     /// Returns a list of all the present [`NogoodId`]s.
@@ -180,5 +256,62 @@ impl Iterator for NogoodIdIterator<'_> {
         self.current_index += self.nogoods[self.current_index].id as usize + OFFSET;
 
         Some(id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nogood_index_is_stored_in_header() {
+        let mut arena = ArenaAllocator::new(10);
+        let first = arena.insert(vec![PredicateId { id: 1 }, PredicateId { id: 2 }]);
+        let second = arena.insert(vec![PredicateId { id: 3 }, PredicateId { id: 4 }]);
+
+        assert_eq!(arena.get_nogood_index(&first).index(), 0);
+        assert_eq!(arena.get_nogood_index(&second).index(), 1);
+        assert_eq!(
+            arena.get_nogood(second),
+            [PredicateId { id: 3 }, PredicateId { id: 4 }]
+        );
+        assert_eq!(arena.nogoods_ids().collect::<Vec<_>>(), [first, second]);
+    }
+
+    #[test]
+    fn compacting_moves_kept_nogoods_to_the_front_with_consecutive_indices() {
+        let mut arena = ArenaAllocator::new(20);
+        let _ = arena.insert(vec![PredicateId { id: 1 }, PredicateId { id: 2 }]);
+        let second = arena.insert(vec![PredicateId { id: 3 }, PredicateId { id: 4 }]);
+        let _ = arena.insert(vec![PredicateId { id: 5 }, PredicateId { id: 6 }]);
+        let fourth = arena.insert(vec![
+            PredicateId { id: 7 },
+            PredicateId { id: 8 },
+            PredicateId { id: 9 },
+        ]);
+        let keep = [false, true, false, true];
+
+        let compacted_ids = arena.compute_compacted_ids(|nogood_index| keep[nogood_index.index()]);
+        let new_second = compacted_ids[arena.get_nogood_index(&second)].unwrap();
+        let new_fourth = compacted_ids[arena.get_nogood_index(&fourth)].unwrap();
+        arena.compact(&compacted_ids);
+
+        assert_eq!(
+            arena.nogoods_ids().collect::<Vec<_>>(),
+            [new_second, new_fourth]
+        );
+        assert_eq!(arena.get_nogood_index(&new_second).index(), 0);
+        assert_eq!(arena.get_nogood_index(&new_fourth).index(), 1);
+        assert_eq!(
+            arena.get_nogood(new_fourth),
+            [
+                PredicateId { id: 7 },
+                PredicateId { id: 8 },
+                PredicateId { id: 9 }
+            ]
+        );
+
+        let fifth = arena.insert(vec![PredicateId { id: 10 }, PredicateId { id: 11 }]);
+        assert_eq!(arena.get_nogood_index(&fifth).index(), 2);
     }
 }

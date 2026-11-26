@@ -201,7 +201,7 @@ fn expect_finite(value: IntExt<i64>) -> i64 {
 }
 
 /// Clamps `value` into the range representable by `i32`.
-fn saturate_i64_to_i32(value: i64) -> i32 {
+pub(super) fn saturate_i64_to_i32(value: i64) -> i32 {
     value.clamp(i32::MIN as i64, i32::MAX as i64) as i32
 }
 

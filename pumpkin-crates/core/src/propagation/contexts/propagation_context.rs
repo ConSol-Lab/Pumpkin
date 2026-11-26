@@ -202,6 +202,8 @@ impl<'a> PropagationContext<'a> {
     }
 
     /// Returns the position of the last entry on the trail.
+    ///
+    /// If the trail is empty, then this will return 0.
     pub fn trail_position(&self) -> usize {
         self.assignments.num_trail_entries().saturating_sub(1)
     }
