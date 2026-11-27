@@ -330,7 +330,11 @@ mod tests {
         predicate_id_assignments.store_predicate(non_root_id, PredicateValue::AssignedFalse);
         assert_eq!(predicate_id_assignments.trail.len(), 1);
 
-        predicate_id_assignments.synchronise(0);
+        predicate_id_assignments.synchronise(
+            0,
+            &Assignments::default(),
+            &PredicateIdGenerator::default(),
+        );
         assert_eq!(
             predicate_id_assignments.predicate_values[root_id],
             PredicateValue::AssignedTrue

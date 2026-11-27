@@ -136,6 +136,24 @@ impl NotificationEngine {
         self.predicate_notifier.get_predicate(predicate_id)
     }
 
+    /// Returns the number of times that `propagator_id` is registered to be notified (through
+    /// [`Propagator::notify_predicate_id_satisfied`]) when `predicate_id` becomes satisfied.
+    pub(crate) fn debug_num_predicate_id_registrations(
+        &self,
+        predicate_id: PredicateId,
+        propagator_id: PropagatorId,
+    ) -> usize {
+        self.watch_list_predicate_id
+            .get(predicate_id)
+            .map(|watchers| {
+                watchers
+                    .iter()
+                    .filter(|&&watcher| watcher == PredicateWatcher::Propagator(propagator_id))
+                    .count()
+            })
+            .unwrap_or(0)
+    }
+
     pub(crate) fn register(
         &mut self,
         domain: DomainId,
