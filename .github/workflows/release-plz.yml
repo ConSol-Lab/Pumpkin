@@ -40,7 +40,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Log in to the Container registry
         if: contains(fromJSON(steps.release_plz.outputs.releases).*.package_name, 'pumpkin-solver')
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}

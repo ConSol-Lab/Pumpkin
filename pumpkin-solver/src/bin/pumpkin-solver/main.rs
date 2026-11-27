@@ -120,6 +120,39 @@ struct Args {
     )]
     all_solutions: bool,
 
+    /// Reports intermediate solutions (optimisation).
+    ///
+    /// For optimisation problems, solutions of increasing quality are reported as they are found.
+    /// Has no effect on satisfaction problems.
+    ///
+    /// See the MiniZinc specification (<https://docs.minizinc.dev/en/stable/fzn-spec.html#cmdoption-i>)
+    /// for more information.
+    #[arg(
+        help_heading = "Output",
+        short = 'i',
+        long = "intermediate-solutions",
+        verbatim_doc_comment
+    )]
+    intermediate_solutions: bool,
+
+    /// Stops after reporting the given number of solutions.
+    ///
+    /// For satisfaction problems, the solver reports solutions until this many have been found or
+    /// the search space is exhausted. For optimisation problems, the solver reports solutions of
+    /// increasing quality until this many have been found or optimality is proven.
+    ///
+    /// See the MiniZinc specification (<https://docs.minizinc.dev/en/stable/fzn-spec.html#cmdoption-n>)
+    /// for more information.
+    #[arg(
+        help_heading = "Output",
+        short = 'n',
+        long = "num-solutions",
+        verbatim_doc_comment,
+        value_name = "u64",
+        value_parser = clap::value_parser!(u64).range(1..)
+    )]
+    num_solutions: Option<u64>,
+
     /// Enables log message output from the solver.
     ///
     /// For printing statistics see the option "--log-statistics", and for printing all solutions
@@ -753,6 +786,8 @@ fn run() -> PumpkinResult<()> {
                 FlatZincOptions {
                     free_search: args.free_search,
                     all_solutions: args.all_solutions,
+                    intermediate_solutions: args.intermediate_solutions,
+                    num_solutions: args.num_solutions,
                     cumulative_options: CumulativeOptions::new(
                         args.cumulative_allow_holes,
                         args.cumulative_explanation_type,
@@ -773,6 +808,8 @@ fn run() -> PumpkinResult<()> {
                 FlatZincOptions {
                     free_search: args.free_search,
                     all_solutions: args.all_solutions,
+                    intermediate_solutions: args.intermediate_solutions,
+                    num_solutions: args.num_solutions,
                     cumulative_options: CumulativeOptions::new(
                         args.cumulative_allow_holes,
                         args.cumulative_explanation_type,
@@ -797,6 +834,8 @@ fn run() -> PumpkinResult<()> {
                 FlatZincOptions {
                     free_search: args.free_search,
                     all_solutions: args.all_solutions,
+                    intermediate_solutions: args.intermediate_solutions,
+                    num_solutions: args.num_solutions,
                     cumulative_options: CumulativeOptions::new(
                         args.cumulative_allow_holes,
                         args.cumulative_explanation_type,
@@ -821,6 +860,8 @@ fn run() -> PumpkinResult<()> {
                 FlatZincOptions {
                     free_search: args.free_search,
                     all_solutions: args.all_solutions,
+                    intermediate_solutions: args.intermediate_solutions,
+                    num_solutions: args.num_solutions,
                     cumulative_options: CumulativeOptions::new(
                         args.cumulative_allow_holes,
                         args.cumulative_explanation_type,
@@ -845,6 +886,8 @@ fn run() -> PumpkinResult<()> {
                 FlatZincOptions {
                     free_search: args.free_search,
                     all_solutions: args.all_solutions,
+                    intermediate_solutions: args.intermediate_solutions,
+                    num_solutions: args.num_solutions,
                     cumulative_options: CumulativeOptions::new(
                         args.cumulative_allow_holes,
                         args.cumulative_explanation_type,

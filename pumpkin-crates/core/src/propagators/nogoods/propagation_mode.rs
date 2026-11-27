@@ -201,7 +201,18 @@ impl PropagationMode {
         match self {
             PropagationMode::ExtendedNogoodPropagation => {
                 // We maintain the invariant that the first two predicates in a learned clause
-                // point to different variables; if this does not hold, then it is a "unit" nogood
+                // point to different variables; if this does not hold, then it is a "unit" nogood.
+                //
+                // Note that this is checked first since the predicates of a "unit" nogood are
+                // unassigned after backtracking to the root-level.
+                if nogood[0].get_domain() == nogood[1].get_domain() {
+                    pumpkin_assert_moderate!(
+                        context.get_checkpoint() == 0,
+                        "A unit nogood should have backtracked to the root-level"
+                    );
+                    return true;
+                }
+
                 pumpkin_assert_moderate!(
                     context.get_checkpoint_for_predicate(nogood[1]).unwrap()
                         >= nogood
@@ -214,13 +225,6 @@ impl PropagationMode {
                             .max()
                             .unwrap_or(0),
                 );
-                if nogood[0].get_domain() == nogood[1].get_domain() {
-                    pumpkin_assert_moderate!(
-                        context.get_checkpoint() == 0,
-                        "A unit nogood should have backtracked to the root-level"
-                    );
-                    return true;
-                }
             }
             PropagationMode::UnitPropagation => {}
         }
@@ -269,16 +273,25 @@ impl PropagationMode {
     ) -> bool {
         match self {
             PropagationMode::ExtendedNogoodPropagation => {
-                let potential_domain = notification_engine.get_predicate(nogood[0]).get_domain();
+                // The nogood can be propagating if all of the predicates which are not true are
+                // over a single variable (i.e., the propagated variable).
+                //
+                // Note that the propagated variable is not necessarily the variable of the
+                // predicate at position 0; when a predicate over the propagated variable becomes
+                // true, the watchers can be updated such that a predicate over another variable is
+                // placed at position 0.
+                let mut propagated_domain = None;
                 for predicate_id in nogood {
-                    let predicate = notification_engine.get_predicate(*predicate_id);
-                    if predicate.get_domain() == potential_domain {
+                    if notification_engine.evaluate_predicate_id(*predicate_id, assignments)
+                        == Some(true)
+                    {
                         continue;
                     }
 
-                    if notification_engine.evaluate_predicate_id(*predicate_id, assignments)
-                        != Some(true)
-                    {
+                    let domain = notification_engine
+                        .get_predicate(*predicate_id)
+                        .get_domain();
+                    if *propagated_domain.get_or_insert(domain) != domain {
                         return false;
                     }
                 }
