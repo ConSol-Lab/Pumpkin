@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use pumpkin_core::branching::Brancher;
 use pumpkin_core::branching::BrancherEvent;
 use pumpkin_core::branching::SelectionContext;
@@ -46,6 +47,8 @@ impl<Strategy: AlternatingStrategy> AlternatingStrategy for UntilSolution<Strate
         vec![BrancherEvent::Solution]
             .into_iter()
             .chain(self.strategy_before_solution.subscribe_to_events())
+            // The other strategy could also subscribe to solution events
+            .unique()
             .collect()
     }
 
@@ -88,15 +91,27 @@ mod tests {
     use pumpkin_core::Solver;
     use pumpkin_core::branching::Brancher;
     use pumpkin_core::branching::SelectionContext;
+    use pumpkin_core::containers::HashSet;
     use pumpkin_core::results::Solution;
     use pumpkin_core::state::State;
 
     use crate::DefaultBrancher;
     use crate::branching::alternating::AlternatingBrancher;
+    use crate::branching::alternating::AlternatingStrategy;
     use crate::branching::alternating::every_x_restarts::EveryXRestarts;
+    use crate::branching::alternating::every_x_solutions::EveryXSolutions;
     use crate::branching::alternating::other_only::OtherOnly;
     use crate::branching::alternating::until_solution::UntilSolution;
     use crate::testing::TestRandom;
+
+    #[test]
+    fn subscribed_events_are_unique() {
+        let strategy = UntilSolution::new(EveryXSolutions::new(1));
+
+        let events = strategy.subscribe_to_events();
+        let unique_events = events.iter().copied().collect::<HashSet<_>>();
+        assert_eq!(events.len(), unique_events.len());
+    }
 
     #[test]
     fn test_switch_to_default_after_first_solution() {
