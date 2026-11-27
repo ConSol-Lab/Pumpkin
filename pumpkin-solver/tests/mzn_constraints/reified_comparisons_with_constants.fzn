@@ -1,0 +1,33 @@
+int: c = 2;
+var 0..3: x :: output_var;
+var 0..3: y :: output_var;
+var 0..1: i :: output_var;
+var bool: a :: output_var;
+var bool: b :: output_var;
+var bool: d :: output_var;
+var bool: e :: output_var;
+var bool: f :: output_var = a;
+array [1..3] of var bool: bs :: output_array([1..3]) = [a, b, e];
+
+% `a <-> [x <= 1]`, which defines `a` (and the equivalent `f`) as a literal.
+constraint int_le_reif(x, 1, a);
+% `b <-> [2 <= y]`, with the constant on the left.
+constraint int_le_reif(2, y, b);
+% `d <-> [x < c]` with an integer parameter, and a second definition `d <-> [y != 3]`.
+constraint int_lt_reif(x, c, d);
+constraint int_ne_reif(y, 3, d);
+% `e <-> [x == 2]`, where `e` is merged with the integer `i`.
+constraint int_eq_reif(x, 2, e);
+constraint bool2int(e, i);
+% A reified comparison with a constant boolean: `y != 1`.
+constraint int_eq_reif(y, 1, false);
+
+% Half-reified comparisons.
+constraint int_ge_imp(x, 1, b);
+constraint int_gt_imp(3, y, a);
+constraint int_lt_imp(x, 3, b);
+constraint int_ne_imp(y, 0, e);
+constraint int_eq_imp(x, 0, f);
+constraint int_le_imp(y, 2, d);
+
+solve satisfy;

@@ -34,7 +34,9 @@ pub(crate) fn run(
                     }
                 };
 
-                context.equivalences.create_equivalence_class(id, lb, ub);
+                context
+                    .equivalences
+                    .create_boolean_equivalence_class(id, lb, ub);
             }
 
             SingleVarDecl::IntInRange {

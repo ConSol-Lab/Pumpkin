@@ -22,6 +22,7 @@ use pumpkin_solver::core::results::SolutionReference;
 use pumpkin_solver::core::termination::Indefinite;
 use pumpkin_solver::core::termination::TerminationCondition;
 use pumpkin_solver::core::termination::TimeBudget;
+use pyo3::exceptions::PyDeprecationWarning;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -135,8 +136,7 @@ impl Model {
             self.solver.new_literal()
         };
 
-        self.brancher
-            .add_domain(literal.get_true_predicate().get_domain());
+        self.brancher.add_domain(literal.get_domain());
 
         Ok(literal.into())
     }
@@ -158,7 +158,7 @@ impl Model {
 
     /// Get the value of the given Boolean expression
     fn evaluate(&self, expression: BoolExpression) -> Option<bool> {
-        self.solver.get_literal_value(expression.0)
+        self.solver.get_predicate_value(expression.0)
     }
 
     /// Create a new constraint tag.
@@ -179,45 +179,28 @@ impl Model {
         self.solver.is_inconsistent()
     }
 
-    /// Get an integer variable for the given boolean.
+    /// Get the boolean expression which is true if and only if the predicate is true.
     ///
-    /// The integer is 1 if the boolean is `true`, and 0 if the boolean is `false`.
-    ///
-    /// This is deprecated as of 0.3.0. Prefer to use `BoolExpression.as_integer`.
-    fn boolean_as_integer(&mut self, boolean: BoolExpression) -> IntExpression {
-        boolean.as_integer()
-    }
-
-    /// Reify a predicate as an explicit boolean expression.
-    ///
-    /// A tag should be provided for this link to be identifiable in the proof.
-    #[pyo3(signature = (predicate, tag, name=None))]
+    /// No new variable is created for the boolean, so the `tag` and `name` are unused. They are
+    /// deprecated and only kept for backwards compatibility.
+    #[pyo3(signature = (predicate, tag=None, name=None))]
     fn predicate_as_boolean(
         &mut self,
+        py: Python<'_>,
         predicate: Predicate,
-        tag: Tag,
+        tag: Option<Tag>,
         name: Option<&str>,
     ) -> PyResult<BoolExpression> {
-        if self.solver.is_inconsistent() {
-            return Err(PyValueError::new_err(
-                "Cannot reify predicate: solver is in an infeasible state",
-            ));
+        if tag.is_some() || name.is_some() {
+            PyErr::warn(
+                py,
+                &py.get_type::<PyDeprecationWarning>(),
+                c"the `tag` and `name` arguments of `predicate_as_boolean` are unused and deprecated",
+                1,
+            )?;
         }
 
-        let solver_predicate = predicate.into_solver_predicate();
-        let Tag(tag) = tag;
-
-        let literal = if let Some(name) = name {
-            self.solver
-                .new_named_literal_for_predicate(solver_predicate, tag, name)
-        } else {
-            self.solver.new_literal_for_predicate(solver_predicate, tag)
-        };
-
-        self.brancher
-            .add_domain(*literal.get_integer_variable().inner());
-
-        Ok(literal.into())
+        Ok(BoolExpression(predicate.into_solver_predicate()))
     }
 
     /// Add the given constraint to the model.

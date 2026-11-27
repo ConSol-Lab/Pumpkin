@@ -225,7 +225,7 @@ where
     let mut state = State::default();
     let s1 = state.new_interval_variable(0, 10, None);
     let s2 = state.new_interval_variable(0, 9, None);
-    let reification_literal = state.new_literal(None);
+    let reification_predicate = state.new_literal(None);
 
     let tasks = [
         ArgTask {
@@ -242,15 +242,13 @@ where
     let constraint_tag = state.new_constraint_tag();
     let _ = state.add_propagator(ReifiedPropagatorArgs {
         propagator: P::construct(&tasks, 1, Default::default(), constraint_tag),
-        reification_literal,
+        reification_predicate,
     });
     state.propagate_to_fixed_point().expect("No conflict");
 
     // Create the (empty) time-table by propagating while the reification literal is true
     state.new_checkpoint();
-    let _ = state
-        .post(reification_literal.get_true_predicate())
-        .expect("No empty domain");
+    let _ = state.post(reification_predicate).expect("No empty domain");
     state.propagate_to_fixed_point().expect("No conflict");
     let _ = state.restore_to(0);
 
@@ -266,9 +264,7 @@ where
     state.propagate_to_fixed_point().expect("No conflict");
     let _ = state.restore_to(1);
 
-    let _ = state
-        .post(reification_literal.get_true_predicate())
-        .expect("No empty domain");
+    let _ = state.post(reification_predicate).expect("No empty domain");
     state.propagate_to_fixed_point().expect("No conflict");
     state.assert_bounds(s2, 0, 4);
 }

@@ -1,8 +1,8 @@
 use log::warn;
 use pumpkin_core::branching::BrancherEvent;
 use pumpkin_core::branching::SelectionContext;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_core::variables::DomainId;
-use pumpkin_core::variables::Literal;
 
 use crate::variable_selection::VariableSelector;
 
@@ -41,11 +41,11 @@ impl VariableSelector<DomainId> for InputOrder<DomainId> {
     }
 }
 
-impl VariableSelector<Literal> for InputOrder<Literal> {
-    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<Literal> {
+impl VariableSelector<Predicate> for InputOrder<Predicate> {
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
         self.variables
             .iter()
-            .find(|&variable| !context.is_predicate_assigned(variable.get_true_predicate()))
+            .find(|&&variable| !context.is_predicate_assigned(variable))
             .copied()
     }
 

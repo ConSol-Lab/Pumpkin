@@ -2115,17 +2115,11 @@ impl NogoodPropagator {
     /// Checks that each predicate which is watched by a nogood is registered exactly once with the
     /// notification engine, and that the other predicates are not registered.
     fn debug_is_properly_registered(&self, context: &PropagationContext) -> bool {
-        let registered_watch_lists = &context.notification_engine.watch_list_predicate_id;
         for index in 0..self.watch_lists.len() {
             let predicate_id = PredicateId::create_from_index(index);
-            let num_registrations = if index < registered_watch_lists.len() {
-                registered_watch_lists[predicate_id]
-                    .iter()
-                    .filter(|&&propagator_id| propagator_id == self.handle.propagator_id())
-                    .count()
-            } else {
-                0
-            };
+            let num_registrations = context
+                .notification_engine
+                .debug_num_predicate_id_registrations(predicate_id, self.handle.propagator_id());
             let expected = usize::from(!self.watch_lists[predicate_id].is_empty());
             assert_eq!(
                 num_registrations, expected,

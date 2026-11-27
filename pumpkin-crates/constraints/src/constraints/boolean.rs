@@ -1,9 +1,10 @@
 use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::AffineView;
+use pumpkin_core::variables::AnyInteger;
 use pumpkin_core::variables::DomainId;
-use pumpkin_core::variables::Literal;
 use pumpkin_core::variables::TransformableVariable;
 
 use super::equals;
@@ -12,7 +13,7 @@ use super::less_than_or_equals;
 /// Creates the [`Constraint`] `∑ weights_i * bools_i <= rhs`.
 pub fn boolean_less_than_or_equals(
     weights: impl Into<Box<[i32]>>,
-    bools: impl Into<Box<[Literal]>>,
+    bools: impl Into<Box<[Predicate]>>,
     rhs: i32,
     constraint_tag: ConstraintTag,
 ) -> impl Constraint {
@@ -27,7 +28,7 @@ pub fn boolean_less_than_or_equals(
 /// Creates the [`Constraint`] `∑ weights_i * bools_i == rhs`.
 pub fn boolean_equals(
     weights: impl Into<Box<[i32]>>,
-    bools: impl Into<Box<[Literal]>>,
+    bools: impl Into<Box<[Predicate]>>,
     rhs: DomainId,
     constraint_tag: ConstraintTag,
 ) -> impl Constraint {
@@ -41,7 +42,7 @@ pub fn boolean_equals(
 
 struct BooleanLessThanOrEqual {
     weights: Box<[i32]>,
-    bools: Box<[Literal]>,
+    bools: Box<[Predicate]>,
     rhs: i32,
     constraint_tag: ConstraintTag,
 }
@@ -53,27 +54,27 @@ impl Constraint for BooleanLessThanOrEqual {
         less_than_or_equals(domains, self.rhs, self.constraint_tag).post(solver)
     }
 
-    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
+    fn implied_by(self, solver: &mut Solver, reification_predicate: Predicate) {
         let domains = self.create_domains();
 
         less_than_or_equals(domains, self.rhs, self.constraint_tag)
-            .implied_by(solver, reification_literal)
+            .implied_by(solver, reification_predicate)
     }
 }
 
 impl BooleanLessThanOrEqual {
-    fn create_domains(&self) -> Vec<AffineView<DomainId>> {
+    fn create_domains(&self) -> Vec<AffineView<Predicate>> {
         self.bools
             .iter()
             .enumerate()
-            .map(|(index, bool)| bool.get_integer_variable().scaled(self.weights[index]))
+            .map(|(index, bool)| bool.scaled(self.weights[index]))
             .collect()
     }
 }
 
 struct BooleanEqual {
     weights: Box<[i32]>,
-    bools: Box<[Literal]>,
+    bools: Box<[Predicate]>,
     rhs: DomainId,
     constraint_tag: ConstraintTag,
 }
@@ -85,20 +86,20 @@ impl Constraint for BooleanEqual {
         equals(domains, 0, self.constraint_tag).post(solver)
     }
 
-    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
+    fn implied_by(self, solver: &mut Solver, reification_predicate: Predicate) {
         let domains = self.create_domains();
 
-        equals(domains, 0, self.constraint_tag).implied_by(solver, reification_literal)
+        equals(domains, 0, self.constraint_tag).implied_by(solver, reification_predicate)
     }
 }
 
 impl BooleanEqual {
-    fn create_domains(&self) -> Vec<AffineView<DomainId>> {
+    fn create_domains(&self) -> Vec<AffineView<AnyInteger>> {
         self.bools
             .iter()
             .enumerate()
-            .map(|(index, bool)| bool.get_integer_variable().scaled(self.weights[index]))
-            .chain(std::iter::once(self.rhs.scaled(-1)))
+            .map(|(index, &bool)| AnyInteger::from(bool).scaled(self.weights[index]))
+            .chain(std::iter::once(AnyInteger::from(self.rhs).scaled(-1)))
             .collect()
     }
 }

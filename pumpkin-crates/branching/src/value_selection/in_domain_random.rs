@@ -3,7 +3,6 @@ use pumpkin_core::branching::SelectionContext;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::variables::DomainId;
-use pumpkin_core::variables::Literal;
 
 use crate::value_selection::ValueSelector;
 
@@ -36,16 +35,16 @@ impl ValueSelector<DomainId> for InDomainRandom {
     }
 }
 
-impl ValueSelector<Literal> for InDomainRandom {
+impl ValueSelector<Predicate> for InDomainRandom {
     fn select_value(
         &mut self,
         context: &mut SelectionContext,
-        decision_variable: Literal,
+        decision_variable: Predicate,
     ) -> Predicate {
         if context.random().generate_bool(0.5) {
-            decision_variable.get_true_predicate()
+            decision_variable
         } else {
-            (!decision_variable).get_true_predicate()
+            !decision_variable
         }
     }
 

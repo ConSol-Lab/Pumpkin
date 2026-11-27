@@ -24,10 +24,10 @@ macro_rules! declare_constraints {
             pub(crate) fn implied_by(
                 self,
                 solver: &mut pumpkin_solver::Solver,
-                reification_literal: pumpkin_solver::core::variables::Literal,
+                reification_predicate: pumpkin_solver::core::predicates::Predicate,
             ) {
                 match self {
-                    $($name::$constraint(cns) => cns.implied_by(solver, reification_literal)),+
+                    $($name::$constraint(cns) => cns.implied_by(solver, reification_predicate)),+
                 }
             }
         }

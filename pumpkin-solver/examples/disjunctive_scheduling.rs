@@ -49,7 +49,7 @@ fn main() {
         .map(|i| solver.new_bounded_integer(0, (horizon - processing_times[i]) as i32))
         .collect::<Vec<_>>();
 
-    // Literal which indicates precedence (i.e. precedence_literals[x][y] <=> x ends before y
+    // Predicate which indicates precedence (i.e. precedence_literals[x][y] <=> x ends before y
     // starts)
     let precedence_literals = (0..n_tasks)
         .map(|_| {
@@ -78,13 +78,7 @@ fn main() {
             .reify(&mut solver, literal);
 
             // Either x starts before y or y start before x
-            solver.add_clause(
-                [
-                    literal.get_true_predicate(),
-                    precedence_literals[y][x].get_true_predicate(),
-                ],
-                constraint_tag,
-            );
+            solver.add_clause([literal, precedence_literals[y][x]], constraint_tag);
         }
     }
 

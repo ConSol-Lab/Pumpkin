@@ -11,7 +11,6 @@ use crate::engine::State;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::variables::Literal;
 use crate::options::LearningOptions;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
@@ -92,9 +91,8 @@ impl TestSolver {
         self.state.new_sparse_variable(values, None)
     }
 
-    pub fn new_literal(&mut self) -> Literal {
-        let domain_id = self.new_variable(0, 1);
-        Literal::new(domain_id)
+    pub fn new_literal(&mut self) -> Predicate {
+        self.state.new_literal(None)
     }
 
     pub fn new_propagator<Constructor>(
@@ -205,10 +203,10 @@ impl TestSolver {
         }
     }
 
-    pub fn is_literal_false(&self, literal: Literal) -> bool {
+    pub fn is_literal_false(&self, predicate: Predicate) -> bool {
         self.state
             .assignments
-            .evaluate_predicate(literal.get_true_predicate())
+            .evaluate_predicate(predicate)
             .is_some_and(|truth_value| !truth_value)
     }
 
@@ -222,19 +220,17 @@ impl TestSolver {
         Ok(())
     }
 
-    pub fn set_literal(&mut self, literal: Literal, truth_value: bool) -> Result<(), EmptyDomain> {
-        let _ = match truth_value {
-            true => self.state.assignments.post_predicate(
-                literal.get_true_predicate(),
-                None,
-                &mut self.state.notification_engine,
-            )?,
-            false => self.state.assignments.post_predicate(
-                (!literal).get_true_predicate(),
-                None,
-                &mut self.state.notification_engine,
-            )?,
-        };
+    pub fn set_literal(
+        &mut self,
+        predicate: Predicate,
+        truth_value: bool,
+    ) -> Result<(), EmptyDomain> {
+        let predicate = if truth_value { predicate } else { !predicate };
+        let _ = self.state.assignments.post_predicate(
+            predicate,
+            None,
+            &mut self.state.notification_engine,
+        )?;
 
         Ok(())
     }
@@ -315,12 +311,12 @@ impl TestSolver {
 
     pub fn get_reason_bool(
         &mut self,
-        literal: Literal,
+        predicate: Predicate,
         truth_value: bool,
     ) -> PropositionalConjunction {
         let predicate = match truth_value {
-            true => literal.get_true_predicate(),
-            false => (!literal).get_true_predicate(),
+            true => predicate,
+            false => !predicate,
         };
         self.get_reason_int(predicate)
     }

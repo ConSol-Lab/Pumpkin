@@ -4,9 +4,9 @@ use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_core::predicate;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
-use pumpkin_core::variables::Literal;
 
 /// Create the [table](https://sofdem.github.io/gccat/gccat/Cin_relation.html#uid22830) [`NegatableConstraint`].
 ///
@@ -61,7 +61,7 @@ struct Table<Var> {
 }
 
 impl<Var: IntegerVariable> Table<Var> {
-    fn encode(self, solver: &mut Solver, reification_literal: Option<Literal>) {
+    fn encode(self, solver: &mut Solver, reification_predicate: Option<Predicate>) {
         // 1. Create a variable `y_i` that selects the row from the table which is chosen.
         let ys: Vec<_> = (0..self.table.len())
             .map(|_| solver.new_literal())
@@ -86,21 +86,21 @@ impl<Var: IntegerVariable> Table<Var> {
                 let condition = predicate![x_col == value];
 
                 // For every `support in supports`: `support -> condition`
-                for support in supports.iter() {
-                    let mut clause = vec![support.get_false_predicate(), condition];
+                for &support in supports.iter() {
+                    let mut clause = vec![!support, condition];
 
                     // Account for possible reification.
                     // l -> clause
-                    clause.extend(reification_literal.iter().map(|l| l.get_false_predicate()));
+                    clause.extend(reification_predicate.iter().map(|&l| !l));
 
                     solver.add_clause(clause, self.constraint_tag);
                 }
 
                 // `condition -> (\/ supports)`
                 let mut clause = vec![!condition];
-                clause.extend(supports.iter().map(|l| l.get_true_predicate()));
+                clause.extend(supports.iter().copied());
                 // Account for possible reification.
-                clause.extend(reification_literal.iter().map(|l| l.get_false_predicate()));
+                clause.extend(reification_predicate.iter().map(|&l| !l));
 
                 solver.add_clause(clause, self.constraint_tag);
             }
@@ -108,7 +108,7 @@ impl<Var: IntegerVariable> Table<Var> {
 
         // 4. Enforce at least one `y` to be true.
         let poster = solver.add_constraint(crate::constraints::clause(ys, self.constraint_tag));
-        if let Some(literal) = reification_literal {
+        if let Some(literal) = reification_predicate {
             poster.implied_by(literal);
         } else {
             poster.post();
@@ -121,8 +121,8 @@ impl<Var: IntegerVariable> Constraint for Table<Var> {
         self.encode(solver, None)
     }
 
-    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
-        self.encode(solver, Some(reification_literal))
+    fn implied_by(self, solver: &mut Solver, reification_predicate: Predicate) {
+        self.encode(solver, Some(reification_predicate))
     }
 }
 
@@ -162,14 +162,14 @@ impl<Var: IntegerVariable> Constraint for NegativeTable<Var> {
         }
     }
 
-    fn implied_by(self, solver: &mut Solver, reification_literal: Literal) {
+    fn implied_by(self, solver: &mut Solver, reification_predicate: Predicate) {
         for row in self.table {
             let clause: Vec<_> = self
                 .xs
                 .iter()
                 .zip(row)
                 .map(|(x, value)| predicate![x != value])
-                .chain(std::iter::once(reification_literal.get_false_predicate()))
+                .chain(std::iter::once(!reification_predicate))
                 .collect();
 
             solver.add_clause(clause, self.constraint_tag);

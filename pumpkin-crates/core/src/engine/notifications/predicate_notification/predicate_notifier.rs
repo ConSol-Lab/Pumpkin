@@ -1,6 +1,7 @@
 use bit_set::BitSet;
 
 use super::PredicateIdAssignments;
+use super::PredicateValue;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyedVec;
@@ -122,11 +123,15 @@ impl PredicateNotifier {
 
     /// This method will extend the scope of [`PredicateNotifier`] by adding the provided
     /// [`Predicate`] to its scope.
+    ///
+    /// The updates of the [`Assignments`] before `last_notified_trail_index` have already been
+    /// processed by [`PredicateNotifier::on_update`].
     pub(crate) fn track_predicate(
         &mut self,
         id: PredicateId,
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
+        last_notified_trail_index: usize,
     ) {
         if !self.is_tracked.insert(id.index()) {
             // The predicate is already in the scope of its tracker
@@ -153,5 +158,28 @@ impl PredicateNotifier {
         let added =
             self.domain_id_to_predicate_tracker[predicate.get_domain()].track(predicate, id);
         pumpkin_assert_simple!(added, "Expected {predicate:?} to not be tracked yet");
+
+        // A predicate which was assigned by an update that has already been processed is not
+        // reported as satisfied, since it did not become true now; its value is stored so that
+        // the tracker does not report it later either.
+        //
+        // A predicate which was assigned by an update that has not been processed yet is reported
+        // when that update is processed.
+        if let Some(is_true) = assignments.evaluate_predicate(predicate) {
+            let true_predicate = if is_true { predicate } else { !predicate };
+            let is_processed = assignments
+                .get_trail_position(&true_predicate)
+                .is_none_or(|trail_position| trail_position < last_notified_trail_index);
+
+            if is_processed {
+                let value = if is_true {
+                    PredicateValue::AssignedTrue
+                } else {
+                    PredicateValue::AssignedFalse
+                };
+                self.predicate_id_assignments
+                    .store_assigned_predicate(id, value);
+            }
+        }
     }
 }

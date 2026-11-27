@@ -7,9 +7,10 @@ use log::warn;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::containers::HashMap;
 use pumpkin_solver::core::containers::HashSet;
+use pumpkin_solver::core::predicate;
+use pumpkin_solver::core::predicates::Predicate;
 use pumpkin_solver::core::proof::ConstraintTag;
 use pumpkin_solver::core::variables::DomainId;
-use pumpkin_solver::core::variables::Literal;
 
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::instance::Output;
@@ -33,20 +34,20 @@ pub(crate) struct CompilationContext<'a> {
     /// A mapping from model variables to solver domains.
     ///
     /// Both boolean and integer variables are represented here. If a variable is a boolean,
-    /// then it should be converted to a [`Literal`] as late as possible (e.g. when the constraint
-    /// is posted or an array is created).
+    /// then it should be converted to a [`Predicate`] as late as possible (e.g. when the
+    /// constraint is posted or an array is created).
     pub(crate) variable_map: HashMap<Rc<str>, DomainId>,
+    /// The boolean variables (by the representative of their equivalence class) which are
+    /// defined as the predicate over a comparison, e.g. `r` in `int_le_reif(x, 5, r)`. These do
+    /// not get a domain of their own.
+    pub(crate) boolean_predicates: HashMap<Rc<str>, Predicate>,
 
-    /// Literal which is always true
-    pub(crate) true_literal: Literal,
-    /// Literal which is always false
-    pub(crate) false_literal: Literal,
     /// All boolean parameters.
     pub(crate) boolean_parameters: HashMap<Rc<str>, bool>,
     /// All boolean array parameters.
     pub(crate) boolean_array_parameters: HashMap<Rc<str>, Rc<[bool]>>,
-    /// A mapping from boolean variable array identifiers to slices of literals.
-    pub(crate) boolean_variable_arrays: HashMap<Rc<str>, Rc<[Literal]>>,
+    /// A mapping from boolean variable array identifiers to slices of predicates.
+    pub(crate) boolean_variable_arrays: HashMap<Rc<str>, Rc<[Predicate]>>,
     /// All integer parameters.
     pub(crate) integer_parameters: HashMap<Rc<str>, i32>,
     /// All integer array parameters.
@@ -75,9 +76,6 @@ pub(crate) enum Set {
 
 impl CompilationContext<'_> {
     pub(crate) fn new(solver: &mut Solver) -> CompilationContext<'_> {
-        let true_literal = solver.get_true_literal();
-        let false_literal = solver.get_false_literal();
-
         CompilationContext {
             solver,
             identifiers: Default::default(),
@@ -85,14 +83,13 @@ impl CompilationContext<'_> {
             outputs: Default::default(),
             equivalences: Default::default(),
 
-            true_literal,
-            false_literal,
             boolean_parameters: Default::default(),
             boolean_array_parameters: Default::default(),
             boolean_variable_arrays: Default::default(),
             integer_parameters: Default::default(),
             integer_array_parameters: Default::default(),
             variable_map: Default::default(),
+            boolean_predicates: Default::default(),
             constant_domain_ids: Default::default(),
             integer_variable_arrays: Default::default(),
 
@@ -117,16 +114,10 @@ impl CompilationContext<'_> {
     pub(crate) fn resolve_bool_variable(
         &self,
         expr: &flatzinc::Expr,
-    ) -> Result<Literal, FlatZincError> {
+    ) -> Result<Predicate, FlatZincError> {
         match expr {
             flatzinc::Expr::VarParIdentifier(id) => self.resolve_bool_variable_from_identifier(id),
-            flatzinc::Expr::Bool(value) => {
-                if *value {
-                    Ok(self.solver.get_true_literal())
-                } else {
-                    Ok(self.solver.get_false_literal())
-                }
-            }
+            flatzinc::Expr::Bool(value) => Ok(bool_constant(*value)),
             _ => Err(FlatZincError::UnexpectedExpr),
         }
     }
@@ -134,22 +125,16 @@ impl CompilationContext<'_> {
     pub(crate) fn resolve_bool_variable_from_identifier(
         &self,
         identifier: &str,
-    ) -> Result<Literal, FlatZincError> {
-        if let Some(domain_id) = self
-            .variable_map
-            .get(&self.equivalences.representative(identifier))
-        {
-            Ok(Literal::new(*domain_id))
+    ) -> Result<Predicate, FlatZincError> {
+        let representative = self.equivalences.representative(identifier);
+        if let Some(predicate) = self.boolean_predicates.get(&representative) {
+            Ok(*predicate)
+        } else if let Some(domain_id) = self.variable_map.get(&representative) {
+            Ok(predicate![domain_id >= 1])
         } else {
             self.boolean_parameters
-                .get(&self.equivalences.representative(identifier))
-                .map(|value| {
-                    if *value {
-                        self.solver.get_true_literal()
-                    } else {
-                        self.solver.get_false_literal()
-                    }
-                })
+                .get(&representative)
+                .map(|value| bool_constant(*value))
                 .ok_or_else(|| FlatZincError::InvalidIdentifier {
                     identifier: identifier.into(),
                     expected_type: "bool variable".into(),
@@ -160,26 +145,15 @@ impl CompilationContext<'_> {
     pub(crate) fn resolve_bool_variable_array(
         &self,
         expr: &flatzinc::Expr,
-    ) -> Result<Rc<[Literal]>, FlatZincError> {
+    ) -> Result<Rc<[Predicate]>, FlatZincError> {
         match expr {
             flatzinc::Expr::VarParIdentifier(id) => {
-                if let Some(literal) = self.boolean_variable_arrays.get(id.as_str()) {
-                    Ok(Rc::clone(literal))
+                if let Some(predicates) = self.boolean_variable_arrays.get(id.as_str()) {
+                    Ok(Rc::clone(predicates))
                 } else {
                     self.boolean_array_parameters
                         .get(id.as_str())
-                        .map(|array| {
-                            array
-                                .iter()
-                                .map(|value| {
-                                    if *value {
-                                        self.solver.get_true_literal()
-                                    } else {
-                                        self.solver.get_false_literal()
-                                    }
-                                })
-                                .collect()
-                        })
+                        .map(|array| array.iter().map(|value| bool_constant(*value)).collect())
                         .ok_or_else(|| FlatZincError::InvalidIdentifier {
                             identifier: id.as_str().into(),
                             expected_type: "boolean variable array".into(),
@@ -192,8 +166,7 @@ impl CompilationContext<'_> {
                     flatzinc::BoolExpr::VarParIdentifier(id) => {
                         self.resolve_bool_variable_from_identifier(id)
                     }
-                    flatzinc::BoolExpr::Bool(true) => Ok(self.solver.get_true_literal()),
-                    flatzinc::BoolExpr::Bool(false) => Ok(self.solver.get_false_literal()),
+                    flatzinc::BoolExpr::Bool(value) => Ok(bool_constant(*value)),
                 })
                 .collect(),
             flatzinc::Expr::ArrayOfInt(array) => array
@@ -516,6 +489,8 @@ pub(super) struct EquivalenceClass {
     variables: BTreeSet<Rc<str>>,
     /// The domain to associate with these variables.
     domain: Domain,
+    /// Whether any of the variables is an integer variable (rather than a boolean variable).
+    contains_integer: bool,
 }
 
 impl VariableEquivalences {
@@ -530,6 +505,8 @@ impl VariableEquivalences {
         let equiv_2 = Rc::clone(&self.classes[&variable_2]);
 
         let merged_domain = equiv_1.borrow().domain.merge(&equiv_2.borrow().domain);
+        let contains_integer =
+            equiv_1.borrow().contains_integer || equiv_2.borrow().contains_integer;
         let merged_variables: BTreeSet<Rc<str>> = equiv_1
             .borrow()
             .variables
@@ -541,6 +518,7 @@ impl VariableEquivalences {
         let new_equivalence_class = Rc::new(RefCell::new(EquivalenceClass {
             variables: merged_variables.clone(),
             domain: merged_domain,
+            contains_integer,
         }));
 
         // Update the equivalence class for all the variables in the class.
@@ -551,28 +529,45 @@ impl VariableEquivalences {
         }
     }
 
-    /// Create a new equivalence class with the given representative.
+    /// Create a new equivalence class for the integer variable `representative`.
     pub(crate) fn create_equivalence_class(&mut self, representative: Rc<str>, lb: i32, ub: i32) {
-        let equivalence_class = Rc::new(RefCell::new(EquivalenceClass {
-            variables: [Rc::clone(&representative)].into_iter().collect(),
-            domain: Domain::IntervalDomain { lb, ub },
-        }));
-
-        let _ = self.classes.insert(representative, equivalence_class);
+        self.insert_class(representative, Domain::IntervalDomain { lb, ub }, true);
     }
 
-    /// Create a new equivalence class with the given representative.
+    /// Create a new equivalence class for the integer variable `representative`.
     pub(crate) fn create_equivalence_class_sparse(
         &mut self,
         representative: Rc<str>,
         values: Vec<i32>,
     ) {
+        self.insert_class(representative, Domain::SparseDomain { values }, true);
+    }
+
+    /// Create a new equivalence class for the boolean variable `representative`.
+    pub(crate) fn create_boolean_equivalence_class(
+        &mut self,
+        representative: Rc<str>,
+        lb: i32,
+        ub: i32,
+    ) {
+        self.insert_class(representative, Domain::IntervalDomain { lb, ub }, false);
+    }
+
+    fn insert_class(&mut self, representative: Rc<str>, domain: Domain, contains_integer: bool) {
         let equivalence_class = Rc::new(RefCell::new(EquivalenceClass {
             variables: [Rc::clone(&representative)].into_iter().collect(),
-            domain: Domain::SparseDomain { values },
+            domain,
+            contains_integer,
         }));
 
         let _ = self.classes.insert(representative, equivalence_class);
+    }
+
+    /// Returns whether the equivalence class of the given variable contains an integer variable
+    /// (e.g. a boolean merged with an integer through `bool2int`).
+    /// If the variable doesn't belong to an equivalence class, this method panics.
+    pub(crate) fn contains_integer(&self, variable: &str) -> bool {
+        self.classes[variable].borrow().contains_integer
     }
 
     /// Get the name of the representative variable of the equivalence class the given variable
@@ -698,6 +693,15 @@ impl Domain {
             Domain::IntervalDomain { lb, ub } => solver.new_named_bounded_integer(lb, ub, name),
             Domain::SparseDomain { values } => solver.new_named_sparse_integer(values, name),
         }
+    }
+}
+
+/// Returns the trivially true or trivially false [`Predicate`] corresponding to `value`.
+pub(crate) fn bool_constant(value: bool) -> Predicate {
+    if value {
+        Predicate::trivially_true()
+    } else {
+        Predicate::trivially_false()
     }
 }
 

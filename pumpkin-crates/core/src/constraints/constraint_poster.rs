@@ -3,7 +3,7 @@ use log::warn;
 use super::Constraint;
 use super::NegatableConstraint;
 use crate::Solver;
-use crate::variables::Literal;
+use crate::predicates::Predicate;
 
 /// A structure which is responsible for adding the created [`Constraint`]s to the
 /// [`Solver`]. For an example on how to use this, see [`crate::constraints`].
@@ -29,23 +29,23 @@ impl<ConstraintImpl: Constraint> ConstraintPoster<'_, ConstraintImpl> {
     }
 
     /// Add the half-reified version of the [`Constraint`] to the [`Solver`]; i.e. post the
-    /// constraint `r -> constraint` where `r` is a reification literal.
-    pub fn implied_by(mut self, reification_literal: Literal) {
+    /// constraint `r -> constraint` where `r` is a reification predicate.
+    pub fn implied_by(mut self, reification_predicate: Predicate) {
         self.constraint
             .take()
             .unwrap()
-            .implied_by(self.solver, reification_literal)
+            .implied_by(self.solver, reification_predicate)
     }
 }
 
 impl<ConstraintImpl: NegatableConstraint> ConstraintPoster<'_, ConstraintImpl> {
     /// Add the reified version of the [`Constraint`] to the [`Solver`]; i.e. post the constraint
-    /// `r <-> constraint` where `r` is a reification literal.
-    pub fn reify(mut self, reification_literal: Literal) {
+    /// `r <-> constraint` where `r` is a reification predicate.
+    pub fn reify(mut self, reification_predicate: Predicate) {
         self.constraint
             .take()
             .unwrap()
-            .reify(self.solver, reification_literal)
+            .reify(self.solver, reification_predicate)
     }
 }
 

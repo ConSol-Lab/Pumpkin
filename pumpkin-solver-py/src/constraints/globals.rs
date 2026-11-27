@@ -39,12 +39,12 @@ macro_rules! python_constraint {
             pub(crate) fn implied_by(
                 self,
                 solver: &mut pumpkin_solver::Solver,
-                reification_literal: pumpkin_solver::core::variables::Literal,
+                reification_predicate: pumpkin_solver::core::predicates::Predicate,
             ) {
                 pumpkin_constraints::$constraint_func(
                     $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field)),+ ,
                     self.constraint_tag.0,
-                ).implied_by(solver, reification_literal)
+                ).implied_by(solver, reification_predicate)
             }
         }
     };
