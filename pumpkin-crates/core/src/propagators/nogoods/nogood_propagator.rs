@@ -318,17 +318,14 @@ impl Propagator for NogoodPropagator {
     )]
     fn propagate(&mut self, mut context: PropagationContext) -> Result<(), Conflict> {
         pumpkin_assert_moderate!(self.debug_is_properly_watched());
+        pumpkin_assert_moderate!(self.debug_is_properly_registered(&context));
 
         self.propagation_buffer
             .propagate_buffer(&mut context, &mut self.statistics)?;
 
         // First we perform nogood management to ensure that the database does not grow excessively
         // large with "bad" nogoods
-        self.clean_up_learned_nogoods_if_needed(
-            context.assignments,
-            context.reason_store,
-            context.notification_engine,
-        );
+        self.clean_up_learned_nogoods_if_needed(&mut context);
 
         if self.watch_lists.len() <= context.num_predicate_ids() {
             self.watch_lists
@@ -356,15 +353,18 @@ impl Propagator for NogoodPropagator {
                 // We retrieve the index of the last-traversed watcher and the nogood itself.
                 //
                 // We do it in this convoluted way to avoid borrow issues later.
-                let (last_traversed_watcher, nogood_predicates) = {
+                let (nogood_index, last_traversed_watcher, nogood_predicates) = {
                     let nogood_id = watcher.nogood_id;
+                    let nogood_index = self.nogood_predicates.get_nogood_index(&nogood_id);
                     let nogood_range = self
                         .nogood_predicates
                         .calculate_range_of_nogood_including_last_traversed(nogood_id);
 
                     self.nogood_predicates.nogoods[nogood_range]
                         .split_first_mut()
-                        .map(|(last_traversed, nogood)| (&mut last_traversed.id, nogood))
+                        .map(|(last_traversed, nogood)| {
+                            (nogood_index, &mut last_traversed.id, nogood)
+                        })
                         .expect("Expected nogood to be at least of length two")
                 };
 
@@ -485,11 +485,6 @@ impl Propagator for NogoodPropagator {
                 }
 
                 // Now we perform the propagation
-                let nogood_index = *self
-                    .nogood_predicates
-                    .nogood_id_to_index
-                    .get(&watcher.nogood_id)
-                    .expect("Expected nogood predicate to exist");
                 self.propagation_mode.perform_propagation(
                     &mut context,
                     nogood_predicates,
@@ -1266,6 +1261,33 @@ impl NogoodPropagator {
         //
         // The preprocessing ensures that all predicates are unassigned.
         else {
+            // When checking propagations, the stored nogood is used to construct reasons which are
+            // checked against the input nogood. Hence, the predicates of the input nogood which
+            // are true at the root (and thus removed by the preprocessing) are added to the
+            // preprocessed nogood. Since these predicates are true, they are ignored by the
+            // propagation, which therefore sees the same (semantically minimal) nogood as without
+            // checking propagations; extended nogood propagation relies on this.
+            //
+            // The semantic minimiser can also weaken an equality predicate based on the initial
+            // domain (e.g., `[y == 1]` becomes `[y >= 1]` if the initial domain of `y` is
+            // `{0, 1}`); the half of such an equality which is true at the root (`[y <= 1]`) is
+            // added as well.
+            #[cfg(feature = "check-propagations")]
+            {
+                for index in 0..input_nogood.len() {
+                    let predicate = input_nogood[index];
+                    if predicate.is_equality_predicate() {
+                        let domain = predicate.get_domain();
+                        let value = predicate.get_right_hand_side();
+                        input_nogood.push(predicate!(domain >= value));
+                        input_nogood.push(predicate!(domain <= value));
+                    }
+                }
+                input_nogood
+                    .retain(|&predicate| context.evaluate_predicate(predicate) == Some(true));
+                input_nogood.extend_from_slice(&nogood);
+            }
+
             self.propagation_mode.add_permanent_nogood_non_unit(
                 nogood,
                 &input_nogood,
@@ -1408,12 +1430,7 @@ impl NogoodPropagator {
     /// - \[2\] Kochemazov, S. (2020). Improving implementation of SAT competitions 2017--2019
     ///   winners. International Conference on Theory and Applications of Satisfiability Testing,
     ///   139–148. Springer.
-    fn clean_up_learned_nogoods_if_needed(
-        &mut self,
-        assignments: &Assignments,
-        reason_store: &ReasonStore,
-        notification_engine: &mut NotificationEngine,
-    ) {
+    fn clean_up_learned_nogoods_if_needed(&mut self, context: &mut PropagationContext) {
         // The clean-up procedure is divided into four stages (for simplicity of implementation).
         //
         // For each tier, if the number of nogoods exceeds the predefined threshold for that tier:
@@ -1424,7 +1441,8 @@ impl NogoodPropagator {
         //    - Criteria for low-lbd nogoods: LBD, and tie-break on size (lower LBD and size better)
         //  3. Remove the "worst" half of the nogoods, skipping nogoods which are currently
         //     propagating. This only removes the nogood IDs from their respective tier.
-        //  4. Finally, after all of the previous stages, remove deleted nogoods from the watchers.
+        //  4. Finally, after all of the previous stages, remove deleted nogoods from the watchers,
+        //     and reclaim their space by compacting the nogood database.
         //
         // Note: in other works, instead of deleting nogoods, they get demoted to the previous tier.
         // The rational for our choice is that demoting many nogoods will likely trigger clean up
@@ -1456,9 +1474,9 @@ impl NogoodPropagator {
                 &mut self.learned_nogood_ids.high_lbd,
                 &mut self.nogood_info,
                 &self.nogood_predicates,
-                assignments,
-                reason_store,
-                notification_engine,
+                context.assignments,
+                context.reason_store,
+                context.notification_engine,
                 self.propagation_mode,
             );
         }
@@ -1480,9 +1498,9 @@ impl NogoodPropagator {
                 &mut self.learned_nogood_ids.mid_lbd,
                 &mut self.nogood_info,
                 &self.nogood_predicates,
-                assignments,
-                reason_store,
-                notification_engine,
+                context.assignments,
+                context.reason_store,
+                context.notification_engine,
                 self.propagation_mode,
             );
         }
@@ -1502,16 +1520,105 @@ impl NogoodPropagator {
                 &mut self.learned_nogood_ids.low_lbd,
                 &mut self.nogood_info,
                 &self.nogood_predicates,
-                assignments,
-                reason_store,
-                notification_engine,
+                context.assignments,
+                context.reason_store,
+                context.notification_engine,
                 self.propagation_mode,
             );
         }
 
         if removed_at_least_one_nogood {
-            self.remove_deleted_nogoods_from_watchers(assignments, notification_engine);
+            self.remove_deleted_nogoods_from_watchers(context);
+            self.compact_nogood_database(context.reason_store);
         }
+    }
+
+    /// Removes the deleted nogoods from the nogood database and moves the remaining nogoods to the
+    /// front of the [`ArenaAllocator`] (similar to the garbage collection of kissat); all
+    /// references to the moved nogoods are updated accordingly, including the lazy reasons in the
+    /// [`ReasonStore`].
+    ///
+    /// A deleted nogood which is still the reason for a propagation is kept (but stays deleted),
+    /// since its explanation could still be required (e.g., for proof logging); it can be removed
+    /// by a later compaction once it is not a reason anymore.
+    ///
+    /// Assumes that the deleted nogoods have been removed from the watchers and the tiers.
+    fn compact_nogood_database(&mut self, reason_store: &mut ReasonStore) {
+        let propagator_id = self.handle.propagator_id();
+
+        // First, protect the nogoods which are reasons; these should be kept, even if deleted.
+        //
+        // Note that the lazy codes of both unit propagation and extended nogood propagation can
+        // be interpreted as a `LazyNogoodExplanation`.
+        for code in reason_store.lazy_codes(propagator_id) {
+            let nogood_id = LazyNogoodExplanation::from_bits(code).nogood_id();
+            self.nogood_info[self.nogood_predicates.get_nogood_index(&nogood_id)].is_protected =
+                true;
+        }
+
+        // We compute the new ids for each nogood.
+        //
+        // The provided function checks whether the nogood should be kept, based on:
+        // 1. Is it deleted?
+        // 2. Is it a reason for a propagation?
+        let compacted_ids = self
+            .nogood_predicates
+            .compute_compacted_ids(|nogood_index| {
+                let nogood_info = &self.nogood_info[nogood_index];
+                !nogood_info.is_deleted || nogood_info.is_protected
+            });
+        let compacted_id = |nogood_id: NogoodId| {
+            compacted_ids[self.nogood_predicates.get_nogood_index(&nogood_id)]
+                .expect("Referenced nogoods should be kept")
+        };
+
+        // The new ids depend on all kept nogoods, so the reasons can only be updated after
+        // computing them. Once a reason is updated, it does not need to be protected anymore.
+        reason_store.update_lazy_codes(propagator_id, |code| {
+            let reason = LazyNogoodExplanation::from_bits(*code);
+            let nogood_index = self.nogood_predicates.get_nogood_index(&reason.nogood_id());
+            self.nogood_info[nogood_index].is_protected = false;
+
+            *code = reason
+                .with_nogood_id(compacted_id(reason.nogood_id()))
+                .into_bits();
+        });
+
+        // We update the watchers to use the new ids.
+        for watcher in self.watch_lists.iter_mut().flatten() {
+            watcher.nogood_id = compacted_id(watcher.nogood_id);
+        }
+
+        // We update the nogood ids in the tier to point to the correct nogood.
+        for nogood_id in self
+            .learned_nogood_ids
+            .low_lbd
+            .iter_mut()
+            .chain(self.learned_nogood_ids.mid_lbd.iter_mut())
+            .chain(self.learned_nogood_ids.high_lbd.iter_mut())
+        {
+            *nogood_id = compacted_id(*nogood_id);
+        }
+
+        // A bumped nogood could have been deleted; it then does not need to be unblocked anymore.
+        self.bumped_nogoods.retain_mut(|nogood_id| {
+            match compacted_ids[self.nogood_predicates.get_nogood_index(nogood_id)] {
+                Some(compacted_id) => {
+                    *nogood_id = compacted_id;
+                    true
+                }
+                None => false,
+            }
+        });
+
+        // Next, we compact the nogood predicates
+        self.nogood_predicates.compact(&compacted_ids);
+
+        // And finally, we update the retained nogood info and inference codes.
+        self.nogood_info
+            .retain_keys(|nogood_index| compacted_ids[nogood_index].is_some());
+        self.inference_codes
+            .retain_keys(|nogood_index| compacted_ids[nogood_index].is_some());
     }
 
     fn has_a_watched_predicate_falsified_at_root_level(
@@ -1542,11 +1649,11 @@ impl NogoodPropagator {
     /// Note: the function is implemented as going through all watchers. If we only store few
     /// learned nogoods, but have many permanent nogoods, then this function will be called often
     /// and may be a bottleneck.
-    fn remove_deleted_nogoods_from_watchers(
-        &mut self,
-        assignments: &Assignments,
-        notification_engine: &mut NotificationEngine,
-    ) {
+    ///
+    /// If all of the watchers of a predicate are removed, then the predicate is unregistered (see
+    /// [`PropagationContext::unregister_predicate`]), mirroring
+    /// [`NogoodPropagator::remove_watcher`].
+    fn remove_deleted_nogoods_from_watchers(&mut self, context: &mut PropagationContext) {
         // The idea is to go through the watchers and remove watchers that contain deleted nogoods.
         //
         // On the way, if we detect that a nogood is trivially falsified at the root level, or if
@@ -1575,6 +1682,9 @@ impl NogoodPropagator {
         // We now go over all of the watchers
         for i in 0..self.watch_lists.len() {
             let index = PredicateId::create_from_index(i);
+            let was_watched = !self.watch_lists[index].is_empty();
+            let assignments = &*context.assignments;
+            let notification_engine = &mut *context.notification_engine;
             self.watch_lists[index].retain(|watcher| {
                 let info_index = self.nogood_predicates.get_nogood_index(&watcher.nogood_id);
                 // If the nogood has been deleted, do not keep this watcher
@@ -1610,6 +1720,10 @@ impl NogoodPropagator {
                     true
                 }
             });
+
+            if was_watched && self.watch_lists[index].is_empty() {
+                context.unregister_predicate(index);
+            }
         }
 
         // If another pass is needed, then we go over all of the watch lists and ensure that the
@@ -1617,11 +1731,16 @@ impl NogoodPropagator {
         if another_pass_needed {
             for i in 0..self.watch_lists.len() {
                 let index = PredicateId::create_from_index(i);
+                let was_watched = !self.watch_lists[index].is_empty();
                 self.watch_lists[index].retain(|watcher| {
                     let info_index = self.nogood_predicates.get_nogood_index(&watcher.nogood_id);
                     // If the nogood has been deleted, do not keep this watcher
                     !self.nogood_info[info_index].is_deleted
                 });
+
+                if was_watched && self.watch_lists[index].is_empty() {
+                    context.unregister_predicate(index);
+                }
             }
         }
 
@@ -1993,6 +2112,29 @@ impl NogoodPropagator {
     }
 
     /// Checks for each nogood whether the first two predicates in the nogood are being watched
+    /// Checks that each predicate which is watched by a nogood is registered exactly once with the
+    /// notification engine, and that the other predicates are not registered.
+    fn debug_is_properly_registered(&self, context: &PropagationContext) -> bool {
+        let registered_watch_lists = &context.notification_engine.watch_list_predicate_id;
+        for index in 0..self.watch_lists.len() {
+            let predicate_id = PredicateId::create_from_index(index);
+            let num_registrations = if index < registered_watch_lists.len() {
+                registered_watch_lists[predicate_id]
+                    .iter()
+                    .filter(|&&propagator_id| propagator_id == self.handle.propagator_id())
+                    .count()
+            } else {
+                0
+            };
+            let expected = usize::from(!self.watch_lists[predicate_id].is_empty());
+            assert_eq!(
+                num_registrations, expected,
+                "Expected {predicate_id:?} to be registered {expected} times"
+            );
+        }
+        true
+    }
+
     fn debug_is_properly_watched(&self) -> bool {
         let is_watching = |predicate_id: PredicateId, nogood_id: NogoodId| -> bool {
             self.watch_lists[predicate_id]
@@ -2192,5 +2334,143 @@ mod tests {
         state.propagate_to_fixed_point().expect("no conflict");
 
         assert!(!state.contains(x4, 2));
+    }
+
+    /// Under extended nogood propagation, a nogood which is the reason of an entry on the trail
+    /// should be reported as propagating, also when the watchers have moved a predicate of
+    /// another variable to position 0. Otherwise, the database clean-up removes a nogood which
+    /// is still a reason.
+    ///
+    /// Nogood: [x >= 3] /\ [x != 5] /\ [a == 1] /\ [b == 1], x in 0..10.
+    /// - Checkpoint 1: a == 1. Checkpoint 2: b == 1; the nogood removes 3, 4, 6, ..., 10 from x.
+    /// - Checkpoint 3: x >= 3 (so x == 5). The watchers are updated and [b == 1] moves to position
+    ///   0.
+    ///
+    /// The removals of checkpoint 2 are still on the trail with this nogood as their reason, so
+    /// the nogood must be reported as propagating.
+    #[test]
+    fn nogood_which_is_a_reason_is_reported_as_propagating_under_extended_propagation() {
+        let mut state = State::default();
+        let nogood_handle = state.add_propagator(NogoodPropagatorConstructor::new(
+            0,
+            LearningOptions::default(),
+            PropagationMode::ExtendedNogoodPropagation,
+            Priority::High,
+        ));
+        let a = state.new_interval_variable(0, 1, None);
+        let b = state.new_interval_variable(0, 1, None);
+        let x = state.new_interval_variable(0, 10, None);
+
+        let nogood = vec![
+            predicate!(x >= 3),
+            predicate!(x != 5),
+            predicate!(a == 1),
+            predicate!(b == 1),
+        ];
+        let constraint_tag = state.new_constraint_tag();
+        let inference_code = state.add_inference_checker(
+            constraint_tag,
+            NogoodLabel,
+            NogoodChecker {
+                nogood: nogood.clone().into(),
+            },
+        );
+        {
+            let (nogood_propagator, mut context) =
+                state.get_propagator_mut_with_context(nogood_handle);
+            nogood_propagator
+                .expect("the handle refers to the nogood propagator")
+                .add_nogood(nogood, inference_code, &mut context);
+        }
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.new_checkpoint();
+        let _ = state.post(predicate!(a == 1)).expect("in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.new_checkpoint();
+        let _ = state.post(predicate!(b == 1)).expect("in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        // The nogood has removed every value of x from 3 on, except 5.
+        assert!(!state.contains(x, 3) && !state.contains(x, 4) && !state.contains(x, 6));
+        assert!(state.contains(x, 5));
+        assert!(is_propagating(&mut state, nogood_handle));
+
+        state.new_checkpoint();
+        let _ = state.post(predicate!(x >= 3)).expect("in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        // The removals of checkpoint 2 are still on the trail and the nogood is their reason.
+        assert!(
+            is_propagating(&mut state, nogood_handle),
+            "the nogood is the reason of [x != 3], [x != 4], [x != 6], ... on the trail, \
+             but it is reported as not propagating"
+        );
+    }
+
+    fn is_propagating(
+        state: &mut State,
+        nogood_handle: crate::state::PropagatorHandle<NogoodPropagator>,
+    ) -> bool {
+        let (nogood_propagator, context) = state.get_propagator_mut_with_context(nogood_handle);
+        let nogood_propagator: &mut NogoodPropagator =
+            nogood_propagator.expect("the handle refers to the nogood propagator");
+        let id = nogood_propagator
+            .nogood_predicates
+            .nogoods_ids()
+            .next()
+            .expect("one nogood was added");
+        let stored = nogood_propagator.nogood_predicates.get_nogood(id).to_vec();
+        nogood_propagator.propagation_mode.is_nogood_propagating(
+            nogood_propagator.handle,
+            &stored,
+            context.assignments,
+            context.reason_store,
+            id,
+            context.notification_engine,
+        )
+    }
+    /// A nogood added from the model is semantically minimised before it is stored; extended
+    /// nogood propagation relies on this. This should also hold when the original nogood is kept
+    /// for the proof (with the `check-propagations` feature).
+    ///
+    /// Nogood: [x >= 3] /\ [x != 3] /\ [y == 1], which is minimised to [x >= 4] /\ [y == 1].
+    /// After [y == 1], extended nogood propagation should propagate [x <= 3].
+    #[test]
+    fn non_minimal_nogood_from_the_model_is_minimised_under_extended_propagation() {
+        let mut state = State::default();
+        let nogood_handle = state.add_propagator(NogoodPropagatorConstructor::new(
+            0,
+            LearningOptions::default(),
+            PropagationMode::ExtendedNogoodPropagation,
+            Priority::High,
+        ));
+        let x = state.new_interval_variable(0, 10, None);
+        let y = state.new_interval_variable(0, 1, None);
+
+        let nogood = vec![predicate!(x >= 3), predicate!(x != 3), predicate!(y == 1)];
+        let constraint_tag = state.new_constraint_tag();
+        let inference_code = state.add_inference_checker(
+            constraint_tag,
+            NogoodLabel,
+            NogoodChecker {
+                nogood: nogood.clone().into(),
+            },
+        );
+        let (nogood_propagator, mut context) = state.get_propagator_mut_with_context(nogood_handle);
+        nogood_propagator
+            .expect("the handle refers to the nogood propagator")
+            .add_nogood(nogood, inference_code, &mut context);
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        state.new_checkpoint();
+        let _ = state
+            .post(predicate!(y == 1))
+            .expect("the value is in the domain");
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        assert_eq!(state.upper_bound(x), 3);
+        assert!((0..=3).all(|value| state.contains(x, value)));
     }
 }

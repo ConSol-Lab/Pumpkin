@@ -339,6 +339,7 @@ impl Solver {
         {
             CSPSolverExecutionFlag::Feasible => {
                 brancher.on_solution(self.satisfaction_solver.get_solution_reference());
+                termination.on_solution(self.satisfaction_solver.get_solution_reference());
 
                 SatisfactionResult::Satisfiable(Satisfiable::new(self, brancher, resolver))
             }
@@ -409,6 +410,7 @@ impl Solver {
             CSPSolverExecutionFlag::Feasible => {
                 // Reset the state whenever we return a result
                 brancher.on_solution(self.satisfaction_solver.get_solution_reference());
+                termination.on_solution(self.satisfaction_solver.get_solution_reference());
                 SatisfactionResultUnderAssumptions::Satisfiable(Satisfiable::new(
                     self, brancher, resolver,
                 ))
